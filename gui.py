@@ -68,7 +68,7 @@ class Application(ttk.Window):
         log_frame = ttk.Labelframe(self, text="运行日志", padding=10)
         log_frame.grid(row=3, column=0, padx=10, pady=5, sticky="nsew") 
         log_frame.columnconfigure(0, weight=1); log_frame.rowconfigure(0, weight=1)
-        self.log_text = scrolledtext.ScrolledText(log_frame, wrap=ttk.WORD, state='disabled', font=("Microsoft YaHei UI", 9))
+        self.log_text = scrolledtext.ScrolledText(log_frame, wrap=ttk.WORD, state='disabled', font=("TkDefaultFont", 9))
         self.log_text.grid(row=0, column=0, sticky="nsew")
         
         # --- 操作区 ---
@@ -165,11 +165,19 @@ class Application(ttk.Window):
         self.progress_bar.config(mode='indeterminate')
         self.progress_bar.start()
 
-        threading.Thread(
-            target=self.task_wrapper, 
-            args=(bvid, self.full_file_path, sessdata, bili_jct, min_delay, max_delay),
-            daemon=True
-        ).start()
+        try:
+            thread = threading.Thread(
+                target=self.task_wrapper, 
+                args=(bvid, self.full_file_path, sessdata, bili_jct, min_delay, max_delay),
+                daemon=True
+            )
+            thread.start()
+        except Exception as e:
+            self.log_to_gui(f"【程序崩溃】无法启动后台任务线程: {e}")
+            # 同时恢复UI状态，因为任务没有开始
+            self.start_button.config(state='normal', text="开始任务")
+            self.select_button.config(state='normal')
+            self.progress_bar.stop()
 
 
 if __name__ == "__main__":

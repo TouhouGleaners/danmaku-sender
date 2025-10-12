@@ -149,16 +149,3 @@ class BiliDanmakuSender:
         except ET.ParseError as e:
             self.log(f"错误: 解析XML文件时发生错误: {e}")
             return []
-        
-
-if __name__ == '__main__':
-    # Test
-    SESSDATA = "你的SESSDATA"
-    BILI_JCT = "你的BILI_JCT"
-    BVID = "你的BV号"
-    XML_FILE_PATH = "你的弹幕文件.xml"
-    try:
-        sender = BiliDanmakuSender(SESSDATA, BILI_JCT, BVID)
-        sender.send_danmaku_from_xml(XML_FILE_PATH, 5.0, 10.0) 
-    except Exception as e:
-         print(f"\n程序运行出错: {e}")
