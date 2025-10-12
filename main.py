@@ -3,19 +3,19 @@ import random
 import requests
 import xml.etree.ElementTree as ET
 
-from config import *
 from wbi_signer import WbiSigner
+
 
 class BiliDanmakuSender:
     """B站弹幕发送器"""
     def __init__(self, sessdata: str, bili_jct, bvid: str):
         if not all([sessdata, bili_jct, bvid]):
-            raise ValueError("错误: SESSDATA, BILI_JCT 和 BVID 不能为空 请检查 config.py")
+            raise ValueError("错误: SESSDATA, BILI_JCT 和 BVID 不能为空")
         self.bvid = bvid
         self.bili_jct = bili_jct
         self.session = self._create_session(sessdata, bili_jct)
-
         self.wbi_keys = WbiSigner.get_wbi_keys()
+        self.log = print  # 默认属性为print，在无GUI时也能运行
 
     def _create_session(self, sessdata: str, bili_jct: str) -> requests.Session:
         session = requests.Session()
@@ -41,7 +41,7 @@ class BiliDanmakuSender:
 
             if data['code'] == 0:
                 cid = data['data']['cid']
-                print(f"成功获取到BV号 {self.bvid} 的信息: 视频标题='{data['data']['title']}', CID={cid}")
+                self.log(f"成功获取到BV号 {self.bvid} 的信息: 视频标题='{data['data']['title']}', CID={cid}")
                 return cid
             else:
                 raise RuntimeError(f"错误: 获取CID失败, B站返回信息: {data.get('message', '未知错误')}")
@@ -74,19 +74,19 @@ class BiliDanmakuSender:
             response.raise_for_status()
             result = response.json()
             if result['code'] == 0:
-                print(f"✅ 发送成功! 内容: '{danmaku['msg']}'")
+                self.log(f"✅ 发送成功! 内容: '{danmaku['msg']}'")
                 return True
             else:
-                print(f"❌ 发送失败! 内容: '{danmaku['msg']}', code={result['code']}, 原因: {result.get('message', '未知错误')}")
+                self.log(f"❌ 发送失败! 内容: '{danmaku['msg']}', code={result['code']}, 原因: {result.get('message', '未知错误')}")
                 if result['code'] == 36703:
-                    print("检测到弹幕发送过于频繁，将额外等待10秒...")
+                    self.log("检测到弹幕发送过于频繁，将额外等待10秒...")
                     time.sleep(10)
                 return False
         except Exception as e:
-            print(f"❌ 发送异常! 内容: '{danmaku['msg']}', 错误: {e}")
+            self.log(f"❌ 发送异常! 内容: '{danmaku['msg']}', 错误: {e}")
             return False
         
-    def send_danmaku_from_xml(self, xml_path: str):
+    def send_danmaku_from_xml(self, xml_path: str, min_delay: float, max_delay: float):
         """从XML文件中读取弹幕并发送"""
         danmakus = self.parse_danmaku_xml(xml_path)
         if not danmakus:
@@ -94,27 +94,26 @@ class BiliDanmakuSender:
         try:
             cid = self.get_cid()
         except RuntimeError as e:
-            print(f"错误: {e}")
+            self.log(f"错误: {e}")
             return
         
         total = len(danmakus)
         success_count = 0
 
         for i, dm in enumerate(danmakus):
-            print(f"[{i+1}/{total}] 准备发送: {dm['msg']}")
+            self.log(f"[{i+1}/{total}] 准备发送: {dm['msg']}")
             if self._send_single_danmaku(cid, dm):
                 success_count += 1
 
             if i < total - 1:
-                delay = random.uniform(MIN_DELAY, MAX_DELAY)
-                print(f"等待 {delay:.2f} 秒...")
+                delay = random.uniform(min_delay, max_delay)
+                self.log(f"等待 {delay:.2f} 秒...")
                 time.sleep(delay)
 
-        print("\n--- 发送任务完成 ---")
-        print(f"总计: {total} 条, 成功: {success_count} 条, 失败: {total - success_count} 条。") 
+        self.log("\n--- 发送任务完成 ---")
+        self.log(f"总计: {total} 条, 成功: {success_count} 条, 失败: {total - success_count} 条。") 
 
-    @staticmethod
-    def parse_danmaku_xml(xml_path: str) -> list:
+    def parse_danmaku_xml(self,xml_path: str) -> list:
         """解析XML文件"""
         danmakus = []
         try:
@@ -141,23 +140,25 @@ class BiliDanmakuSender:
                     }
                     danmakus.append(danmaku)
                 except (IndexError, ValueError) as e:
-                    print(f"警告: 解析弹幕失败, 跳过此条. 内容: '{d_tag.text}', 错误: {e}")
-            print(f'成功从 {xml_path} 解析出 {len(danmakus)} 条弹幕')
+                    self.log(f"警告: 解析弹幕失败, 跳过此条. 内容: '{d_tag.text}', 错误: {e}")
+            self.log(f'成功从 {xml_path} 解析出 {len(danmakus)} 条弹幕')
             return danmakus
         except FileNotFoundError:
-            print(f"错误: 文件 '{xml_path}' 不存在")
+            self.log(f"错误: 文件 '{xml_path}' 不存在")
             return []
         except ET.ParseError as e:
-            print(f"错误: 解析XML文件时发生错误: {e}")
+            self.log(f"错误: 解析XML文件时发生错误: {e}")
             return []
         
-def main():
-    try:
-        sender = BiliDanmakuSender(SESSDATA, BILI_JCT, BVID)
-        sender.send_danmaku_from_xml(XML_FILE_PATH)
-    except (ValueError, RuntimeError, Exception) as e:
-        print(f"\n程序运行出错: {e}")
-
 
 if __name__ == '__main__':
-    main()
+    # Test
+    SESSDATA = "你的SESSDATA"
+    BILI_JCT = "你的BILI_JCT"
+    BVID = "你的BV号"
+    XML_FILE_PATH = "你的弹幕文件.xml"
+    try:
+        sender = BiliDanmakuSender(SESSDATA, BILI_JCT, BVID)
+        sender.send_danmaku_from_xml(XML_FILE_PATH, 5.0, 10.0) 
+    except Exception as e:
+         print(f"\n程序运行出错: {e}")
