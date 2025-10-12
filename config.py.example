@@ -1,8 +1,0 @@
-SESSDATA = ""
-BILI_JCT = ""
-
-BVID = ""
-XML_FILE_PATH = ".xml"
-
-MIN_DELAY = 5
-MAX_DELAY = 10
