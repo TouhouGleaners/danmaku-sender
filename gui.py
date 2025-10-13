@@ -11,7 +11,7 @@ from config_manager import load_config, save_config
 class Application(ttk.Window):
     def __init__(self):
         super().__init__(themename="litera")
-        self.title("B站弹幕补档工具 v0.3.3")
+        self.title("B站弹幕补档工具 v0.3.4")
         self.geometry("750x700")
         
         self.full_file_path = "" 
@@ -50,13 +50,15 @@ class Application(ttk.Window):
         ttk.Label(settings_frame, text="BV号:").grid(row=0, column=0, sticky="w", padx=5, pady=8)
         self.bvid_entry = ttk.Entry(settings_frame)
         self.bvid_entry.grid(row=0, column=1, columnspan=2, sticky="ew")
-
-        ttk.Label(settings_frame, text="选择分P:").grid(row=1, column=0, sticky="w", padx=5, pady=8)
-        self.part_option_menu = ttk.OptionMenu(settings_frame, self.part_var, "请先获取分P", *["请先获取分P"], bootstyle="secondary-outline")
-        self.part_option_menu.grid(row=1, column=1, columnspan=2, sticky="ew", padx=(0, 5))
-        self.part_option_menu.config(state="disabled")
         self.get_parts_button = ttk.Button(settings_frame, text="获取分P", command=self.fetch_video_parts)
         self.get_parts_button.grid(row=0, column=2)
+
+        ttk.Label(settings_frame, text="选择分P:").grid(row=1, column=0, sticky="w", padx=5, pady=8)
+        self.part_combobox = ttk.Combobox(settings_frame, textvariable=self.part_var, state="readonly", bootstyle="secondary")
+        self.part_combobox.grid(row=1, column=1, columnspan=2, sticky="ew", padx=(0, 5))
+        self.part_combobox.bind("<<ComboboxSelected>>", lambda _: (self.focus(), self.part_combobox.selection_clear()))
+        self.part_combobox.set("请先获取分P")
+        self.part_combobox.config(state="disabled")
 
         ttk.Label(settings_frame, text="弹幕文件:").grid(row=2, column=0, sticky="w", padx=5, pady=8)
         self.file_path_label = ttk.Label(settings_frame, text="请选择弹幕XML文件...", style="secondary.TLabel")
@@ -117,6 +119,7 @@ class Application(ttk.Window):
 
     def select_file(self):
         """打开文件选择对话框，让用户选择弹幕XML文件。"""
+        self.focus()  # 移除按钮焦点
         file_path_str = filedialog.askopenfilename(
             title="选择弹幕XML文件", filetypes=(("XML files", "*.xml"), ("All files", "*.*"))
         )
@@ -128,6 +131,7 @@ class Application(ttk.Window):
 
     def fetch_video_parts(self):
         """获取并填充视频分P列表"""
+        self.focus()  # 移除按钮焦点
         bvid = self.bvid_entry.get().strip()
         sessdata = self.sessdata_entry.get().strip()
         bili_jct = self.bili_jct_entry.get().strip()
@@ -137,7 +141,7 @@ class Application(ttk.Window):
         self.log_to_gui(f"正在获取 {bvid} 的分P列表...")
         self.get_parts_button.config(state='disabled')
         self.part_var.set('正在获取中...')
-        self.part_option_menu.config(state="disabled")
+        self.part_combobox.config(state="disabled")
 
         threading.Thread(target=self._fetch_parts_worker, args=(bvid, sessdata, bili_jct), daemon=True).start()
     
@@ -155,19 +159,13 @@ class Application(ttk.Window):
             def _update_ui_success():
                 if self.display_parts:
                     self.log_to_gui(f"✅ 成功获取到 {len(self.display_parts)} 个分P，已为您选中第一个")
+                    self.part_combobox['values'] = self.display_parts
                     self.part_var.set(self.display_parts[0])
-
-                    menu = self.part_option_menu["menu"]
-                    menu.delete(0, "end")
-
-                    for part_str in self.display_parts:
-                        menu.add_command(label=part_str, command=lambda p=part_str: self.part_var.set(p))
-
-                    self.part_option_menu.config(state="normal")
+                    self.part_combobox.config(state="readonly")
                     self.parts_loaded = True  # 成功加载后，设置标志为 True
                 else:
-                    self.part_var.set("未找到任何分P")
-                    self.part_option_menu.config(state="disabled")
+                    self.part_combobox['values'] = []
+                    self.part_var.set("未找到任何分P" if self.video_pages is not None else "获取失败")
                     self.parts_loaded = False  # 没有分P，也算加载失败
                 
                 self.get_parts_button.config(state='normal')
@@ -177,7 +175,8 @@ class Application(ttk.Window):
             def _update_ui_fail():
                 self.get_parts_button.config(state="normal")
                 self.part_var.set("获取失败, 请检查BV号")
-                self.part_option_menu.config(state="disabled")  # 保持禁用状态
+                self.part_combobox['values'] = []
+                self.part_combobox.config(state="disabled")  # 保持禁用状态
                 self.parts_loaded = False  # 失败后，明确设置标志为 False
             self.after(0, _update_ui_fail)
 
@@ -209,6 +208,7 @@ class Application(ttk.Window):
 
     def start_task(self):
         """点击“开始任务”按钮时的主函数。"""
+        self.focus()  # 移除按钮焦点
         bvid = self.bvid_entry.get().strip()
         sessdata = self.sessdata_entry.get().strip()
         bili_jct = self.bili_jct_entry.get().strip()
