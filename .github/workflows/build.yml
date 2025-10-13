@@ -1,0 +1,36 @@
+name: Build Application EXE
+on:
+  release:
+    types: [created]
+jobs:
+   build:
+    runs-on: windows-latest
+    steps:
+    - name: Check out repository code
+      uses: actions/checkout@v4
+    - name: Set up Python 3.12
+      uses: actions/setup-python@v5
+      with:
+        python-version: '3.12'
+    - name: Install dependencies
+      run: |
+        python -m pip install --upgrade pip
+        pip install -r requirements.txt
+        pip install pyinstaller
+    - name: Build with Pyinstaller
+      run: |
+        $ttkbootstrap_path = (Get-Command pip).path | Split-Path | Join-Path -ChildPath "..\Lib\site-packages\ttkbootstrap"
+        pyinstaller --noconfirm --onefile --windowed --name "B站弹幕补档工具" `
+          --icon="assets/icon.ico" `
+          --add-data "$ttkbootstrap_path;ttkbootstrap" `
+          gui.py
+          
+    - name: Upload EXE artifact
+      uses: actions/upload-release-asset@v1
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      with:
+        upload_url: ${{ github.event.release.upload_url }} 
+        asset_name: B站弹幕补档工具-v${{ github.ref_name }}.exe
+        asset_path: ./dist/B站弹幕补档工具.exe
+        asset_content_type: application/vnd.microsoft.portable-executable
