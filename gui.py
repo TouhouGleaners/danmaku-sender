@@ -11,10 +11,12 @@ from config_manager import load_config, save_config
 class Application(ttk.Window):
     def __init__(self):
         super().__init__(themename="litera")
-        self.title("B站弹幕补档工具 v0.3.1")
+        self.title("B站弹幕补档工具 v0.3.2")
         self.geometry("750x700")
         
         self.full_file_path = "" 
+        self.part_var = ttk.StringVar()
+        self.display_parts = []
 
         self.columnconfigure(0, weight=1)
         self.rowconfigure(3, weight=1) 
@@ -49,8 +51,9 @@ class Application(ttk.Window):
         self.bvid_entry.grid(row=0, column=1, columnspan=2, sticky="ew")
 
         ttk.Label(settings_frame, text="选择分P:").grid(row=1, column=0, sticky="w", padx=5, pady=8)
-        self.part_combobox = ttk.Combobox(settings_frame, state="disabled")
-        self.part_combobox.grid(row=1, column=1, columnspan=2, sticky="ew", padx=(0, 5))
+        self.part_option_menu = ttk.OptionMenu(settings_frame, self.part_var, "请先获取分P", *["请先获取分P"], bootstyle="secondary-outline")
+        self.part_option_menu.grid(row=1, column=1, columnspan=2, sticky="ew", padx=(0, 5))
+        self.part_option_menu.config(state="disabled")
         self.get_parts_button = ttk.Button(settings_frame, text="获取分P", command=self.fetch_video_parts)
         self.get_parts_button.grid(row=0, column=2)
 
@@ -132,8 +135,8 @@ class Application(ttk.Window):
             return
         self.log_to_gui(f"正在获取 {bvid} 的分P列表...")
         self.get_parts_button.config(state='disabled')
-        self.part_combobox.set('')  # 清空
-        self.part_combobox.config(state="disabled")
+        self.part_var.set('正在获取中...')
+        self.part_option_menu.config(state="disabled")
 
         threading.Thread(target=self._fetch_parts_worker, args=(bvid, sessdata, bili_jct), daemon=True).start()
     
@@ -146,27 +149,31 @@ class Application(ttk.Window):
             self.video_pages = video_info['pages']
             
             # 创建用于显示的列表
-            display_parts = [f"P{p['page']} - {p['part']}" for p in self.video_pages]
+            self.display_parts = [f"P{p['page']} - {p['part']}" for p in self.video_pages]
 
             def _update_ui_success():
-                self.part_combobox['values'] = display_parts
-                if len(display_parts) > 1:
-                    self.log_to_gui(f"✅ 成功获取到 {len(display_parts)} 个分P，请在下拉框中选择。")
-                    self.part_combobox.current(0)  # 默认选中第一个
-                    self.part_combobox.config(state="readonly")
+                if self.display_parts:
+                    self.log_to_gui(f"✅ 成功获取到 {len(self.display_parts)} 个分P，已为您选中第一个")
+                    self.part_var.set(self.display_parts[0])
+
+                    menu = self.part_option_menu["menu"]
+                    menu.delete(0, "end")
+
+                    for part_str in self.display_parts:
+                        menu.add_command(label=part_str, command=lambda p=part_str: self.part_var.set(p))
+
+                    self.part_option_menu.config(state="normal")
                 else:
-                    self.log_to_gui("✅ 这是一个单P视频，已自动为您选中。")
-                    self.part_combobox.current(0)
-                    self.part_combobox.config(state="readonly")
+                    self.part_var.set("未找到任何分P")
+                    self.part_option_menu.config(state="disabled")
                 self.get_parts_button.config(state='normal')
             self.after(0, _update_ui_success)
         except Exception as e:
             self.log_to_gui(f"❌ 获取分P失败: {e}")
             def _update_ui_fail():
                 self.get_parts_button.config(state="normal")
-                self.part_combobox.set("获取失败, 请检查BV号是否填写正确")
-                self.part_combobox['values'] = []  # 明确清空内部列表
-                self.part_combobox.config(state="disabled")  # 保持禁用状态
+                self.part_var.set("获取失败, 请检查BV号")
+                self.part_option_menu.config(state="disabled")  # 保持禁用状态
             self.after(0, _update_ui_fail)
 
     def log_to_gui(self, message):
@@ -218,13 +225,22 @@ class Application(ttk.Window):
             self.log_to_gui("❌【操作错误】请先点击“获取分P”并选择一个分P！")
             return
         
-        selected_index = self.part_combobox.current()
-        if selected_index == -1: # 用户没有选择任何项
+        selected_part_str = self.part_var.get()
+        # 检查是否选择了有效分P，而不是占位符文本
+        if not selected_part_str or "获取" in selected_part_str or "请先" in selected_part_str:
             self.log_to_gui("❌【操作错误】请选择一个有效的分P！")
             return
         
+        try:
+            # 通过显示文本，在self.display_parts中反查出索引
+            selected_index = self.display_parts.index(selected_part_str)
+        except ValueError:
+            # 如果文本不在列表中，说明状态不同步，给出错误提示
+            self.log_to_gui("❌【程序错误】选择的分P与列表不匹配，请重新获取分P。")
+            return
+        
         selected_cid = self.video_pages[selected_index]['cid']
-        self.log_to_gui(f"已选择目标分P: {self.part_combobox.get()}, CID: {selected_cid}")
+        self.log_to_gui(f"已选择目标分P: {selected_part_str}, CID: {selected_cid}")
 
         self.start_button.config(state='disabled', text="正在运行...")
         self.select_button.config(state='disabled')
