@@ -1,6 +1,6 @@
 import ttkbootstrap as ttk
 from ttkbootstrap.constants import *
-from ttkbootstrap.tooltip import ToolTip  # <--- 修正第1步：导入 ToolTip 类
+from ttkbootstrap.tooltip import ToolTip
 from tkinter import filedialog, scrolledtext
 import threading
 from pathlib import Path
@@ -11,7 +11,7 @@ from config_manager import load_config, save_config
 class Application(ttk.Window):
     def __init__(self):
         super().__init__(themename="litera")
-        self.title("B站弹幕补档工具 v0.2.1")
+        self.title("B站弹幕补档工具 v0.3.0")
         self.geometry("750x700")
         
         self.full_file_path = "" 
@@ -35,11 +35,17 @@ class Application(ttk.Window):
         self.bvid_entry = ttk.Entry(settings_frame)
         self.bvid_entry.grid(row=0, column=1, columnspan=2, sticky="ew")
 
-        ttk.Label(settings_frame, text="弹幕文件:").grid(row=1, column=0, sticky="w", padx=5, pady=8)
+        ttk.Label(settings_frame, text="选择分P:").grid(row=1, column=0, sticky="w", padx=5, pady=8)
+        self.part_combobox = ttk.Combobox(settings_frame, state="disabled")
+        self.part_combobox.grid(row=1, column=1, sticky="ew", padx=(0, 5))
+        self.get_parts_button = ttk.Button(settings_frame, text="获取分P", command=self.fetch_video_parts)
+        self.get_parts_button.grid(row=0, column=2)
+
+        ttk.Label(settings_frame, text="弹幕文件:").grid(row=2, column=0, sticky="w", padx=5, pady=8)
         self.file_path_label = ttk.Label(settings_frame, text="请选择弹幕XML文件...", style="secondary.TLabel")
-        self.file_path_label.grid(row=1, column=1, sticky="ew", padx=(0, 5))
+        self.file_path_label.grid(row=2, column=1, sticky="ew", padx=(0, 5))
         self.select_button = ttk.Button(settings_frame, text="选择文件", command=self.select_file, style="info.TButton")
-        self.select_button.grid(row=1, column=2, sticky="e")
+        self.select_button.grid(row=2, column=2, sticky="e")
         self.file_path_tooltip = ToolTip(self.file_path_label, text="") 
 
         # --- 身份凭证输入区 ---
@@ -112,6 +118,50 @@ class Application(ttk.Window):
             self.file_path_label.config(text=file_path.name)
             self.file_path_tooltip.text = str(file_path)
 
+    def fetch_video_parts(self):
+        """获取并填充视频分P列表"""
+        bvid = self.bvid_entry.get().strip()
+        sessdata = self.sessdata_entry.get().strip()
+        bili_jct = self.bili_jct_entry.get().strip()
+        if not all([bvid, sessdata, bili_jct]):
+            self.log_to_gui("❌【输入错误】请确保 BV号、SESSDATA 和 BILI_JCT 均已填写！")
+            return
+        self.log_to_gui(f"正在获取 {bvid} 的分P列表...")
+        self.get_parts_button.config(state='disabled')
+        self.part_combobox.set('')  # 清空
+        self.part_combobox.config(state="disabled")
+
+        threading.Thread(target=self._fetch_parts_worker, args=(bvid, sessdata, bili_jct), daemon=True).start()
+    
+    def _fetch_parts_worker(self, bvid, sessdata, bili_jct):
+        """在工作线程中执行API调用"""
+        try:
+            sender = BiliDanmakuSender(sessdata, bili_jct, bvid)
+            sender.log = self.log_to_gui
+            video_info = sender.get_video_info()
+            self.video_pages = video_info['pages']
+            
+            # 创建用于显示的列表
+            display_parts = [f"P{p['page']} - {p['part']}" for p in self.video_pages]
+
+            def _update_ui_success():
+                self.part_combobox['values'] = display_parts
+                if len(display_parts) > 1:
+                    self.log_to_gui(f"✅ 成功获取到 {len(display_parts)} 个分P，请在下拉框中选择。")
+                    self.part_combobox.current(0) # 默认选中第一个
+                    self.part_combobox.config(state="readonly")
+                else:
+                    self.log_to_gui("✅ 这是一个单P视频，已自动为您选中。")
+                    self.part_combobox.current(0)
+                    self.part_combobox.config(state="readonly")
+                self.get_parts_button.config(state='normal')
+            self.after(0, _update_ui_success)
+        except Exception as e:
+            self.log_to_gui(f"❌ 获取分P失败: {e}")
+            def _update_ui_fail():
+                self.get_parts_button.config(state="normal")
+            self.after(0, _update_ui_fail)
+
     def log_to_gui(self, message):
         """将消息安全地发送到GUI的日志区域（线程安全）"""
         def _update():
@@ -121,12 +171,12 @@ class Application(ttk.Window):
             self.log_text.config(state='disabled')
         self.after(0, _update)
 
-    def task_wrapper(self, bvid, xml_path, sessdata, bili_jct, min_delay, max_delay):
+    def task_wrapper(self, bvid, xml_path, sessdata, bili_jct, min_delay, max_delay, cid):
         """在单独的线程中执行弹幕发送任务的包裹函数。"""
         try:
             sender = BiliDanmakuSender(sessdata, bili_jct, bvid)
             sender.log = self.log_to_gui
-            sender.send_danmaku_from_xml(xml_path, min_delay, max_delay)
+            sender.send_danmaku_from_xml(cid, xml_path, min_delay, max_delay)
         except Exception as e:
             self.log_to_gui(f"【程序崩溃】发生未捕获的严重错误: {e}")
         finally:
@@ -156,6 +206,18 @@ class Application(ttk.Window):
         if not all([bvid, self.full_file_path, sessdata, bili_jct]):
             self.log_to_gui("❌【输入错误】请确保 BV号、弹幕文件、SESSDATA 和 BILI_JCT 都已填写！")
             return
+        
+        if not hasattr(self, 'video_pages') or not self.video_pages:
+            self.log_to_gui("❌【操作错误】请先点击“获取分P”并选择一个分P！")
+            return
+        
+        selected_index = self.part_combobox.current()
+        if selected_index == -1: # 用户没有选择任何项
+            self.log_to_gui("❌【操作错误】请选择一个有效的分P！")
+            return
+        
+        selected_cid = self.video_pages[selected_index]['cid']
+        self.log_to_gui(f"已选择目标分P: {self.part_combobox.get()}, CID: {selected_cid}")
 
         self.start_button.config(state='disabled', text="正在运行...")
         self.select_button.config(state='disabled')
@@ -168,7 +230,7 @@ class Application(ttk.Window):
         try:
             thread = threading.Thread(
                 target=self.task_wrapper, 
-                args=(bvid, self.full_file_path, sessdata, bili_jct, min_delay, max_delay),
+                args=(bvid, self.full_file_path, sessdata, bili_jct, min_delay, max_delay, selected_cid),
                 daemon=True
             )
             thread.start()

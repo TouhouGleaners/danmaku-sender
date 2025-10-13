@@ -8,7 +8,7 @@ from wbi_signer import WbiSigner
 
 class BiliDanmakuSender:
     """B站弹幕发送器"""
-    def __init__(self, sessdata: str, bili_jct, bvid: str):
+    def __init__(self, sessdata: str, bili_jct: str, bvid: str):
         if not all([sessdata, bili_jct, bvid]):
             raise ValueError("错误: SESSDATA, BILI_JCT 和 BVID 不能为空")
         self.bvid = bvid
@@ -30,8 +30,8 @@ class BiliDanmakuSender:
 
         return session
         
-    def get_cid(self) -> int:
-        """根据BVID获取CID"""
+    def get_video_info(self) -> dict:
+        """根据BVID获取视频详细信息，包括所有分P的CID和标题"""
         url = "http://api.bilibili.com/x/web-interface/view"
         params = {'bvid': self.bvid}
         try:
@@ -40,13 +40,27 @@ class BiliDanmakuSender:
             data = response.json()
 
             if data['code'] == 0:
-                cid = data['data']['cid']
-                self.log(f"成功获取到BV号 {self.bvid} 的信息: 视频标题='{data['data']['title']}', CID={cid}")
-                return cid
+                video_data = data['data']
+                pages_info = [
+                    {
+                        'cid': p['cid'],
+                        'page': p['page'],
+                        'part': p['part']
+                    }
+                    for p in video_data['pages']
+                ]
+
+                info = {
+                    'title': video_data['title'],
+                    'pages': pages_info
+                }
+                
+                self.log(f"成功获取到视频《{info['title']}》的信息，共 {len(info['pages'])} 个分P")
+                return info
             else:
-                raise RuntimeError(f"错误: 获取CID失败, B站返回信息: {data.get('message', '未知错误')}")
+                raise RuntimeError(f"错误: 获取视频信息失败, B站返回信息: {data.get('message', '未知错误')}")
         except Exception as e:
-            raise RuntimeError(f"错误: 请求获取CID时发生异常: {e}")
+            raise RuntimeError(f"错误: 请求视频信息时发生异常: {e}")
     
     def _send_single_danmaku(self, cid: int, danmaku: dict):
         """发送单条弹幕"""
@@ -86,15 +100,10 @@ class BiliDanmakuSender:
             self.log(f"❌ 发送异常! 内容: '{danmaku['msg']}', 错误: {e}")
             return False
         
-    def send_danmaku_from_xml(self, xml_path: str, min_delay: float, max_delay: float):
-        """从XML文件中读取弹幕并发送"""
+    def send_danmaku_from_xml(self, cid: int, xml_path: str, min_delay: float, max_delay: float):
+        """从XML文件中读取弹幕并发送至指定的CID"""
         danmakus = self.parse_danmaku_xml(xml_path)
         if not danmakus:
-            return
-        try:
-            cid = self.get_cid()
-        except RuntimeError as e:
-            self.log(f"错误: {e}")
             return
         
         total = len(danmakus)
