@@ -1,0 +1,7 @@
+certifi==2025.10.5
+charset-normalizer==3.4.3
+idna==3.11
+pillow==11.3.0
+requests==2.32.5
+ttkbootstrap==1.14.7
+urllib3==2.5.0
