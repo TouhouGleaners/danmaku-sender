@@ -11,12 +11,13 @@ from config_manager import load_config, save_config
 class Application(ttk.Window):
     def __init__(self):
         super().__init__(themename="litera")
-        self.title("B站弹幕补档工具 v0.3.2")
+        self.title("B站弹幕补档工具 v0.3.3")
         self.geometry("750x700")
         
         self.full_file_path = "" 
         self.part_var = ttk.StringVar()
         self.display_parts = []
+        self.parts_loaded = False  # 状态标志
 
         self.columnconfigure(0, weight=1)
         self.rowconfigure(3, weight=1) 
@@ -163,9 +164,12 @@ class Application(ttk.Window):
                         menu.add_command(label=part_str, command=lambda p=part_str: self.part_var.set(p))
 
                     self.part_option_menu.config(state="normal")
+                    self.parts_loaded = True  # 成功加载后，设置标志为 True
                 else:
                     self.part_var.set("未找到任何分P")
                     self.part_option_menu.config(state="disabled")
+                    self.parts_loaded = False  # 没有分P，也算加载失败
+                
                 self.get_parts_button.config(state='normal')
             self.after(0, _update_ui_success)
         except Exception as e:
@@ -174,6 +178,7 @@ class Application(ttk.Window):
                 self.get_parts_button.config(state="normal")
                 self.part_var.set("获取失败, 请检查BV号")
                 self.part_option_menu.config(state="disabled")  # 保持禁用状态
+                self.parts_loaded = False  # 失败后，明确设置标志为 False
             self.after(0, _update_ui_fail)
 
     def log_to_gui(self, message):
@@ -221,22 +226,17 @@ class Application(ttk.Window):
             self.log_to_gui("❌【输入错误】请确保 BV号、弹幕文件、SESSDATA 和 BILI_JCT 都已填写！")
             return
         
-        if not hasattr(self, 'video_pages') or not self.video_pages:
-            self.log_to_gui("❌【操作错误】请先点击“获取分P”并选择一个分P！")
+        if not self.parts_loaded:
+            self.log_to_gui("❌【操作错误】请先成功获取并选择一个分P！")
             return
         
         selected_part_str = self.part_var.get()
-        # 检查是否选择了有效分P，而不是占位符文本
-        if not selected_part_str or "获取" in selected_part_str or "请先" in selected_part_str:
-            self.log_to_gui("❌【操作错误】请选择一个有效的分P！")
-            return
-        
+
         try:
             # 通过显示文本，在self.display_parts中反查出索引
             selected_index = self.display_parts.index(selected_part_str)
         except ValueError:
-            # 如果文本不在列表中，说明状态不同步，给出错误提示
-            self.log_to_gui("❌【程序错误】选择的分P与列表不匹配，请重新获取分P。")
+            self.log_to_gui("❌【程序错误】选择的分P与列表不匹配，请重新获取分P")
             return
         
         selected_cid = self.video_pages[selected_index]['cid']
