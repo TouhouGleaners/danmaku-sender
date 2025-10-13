@@ -11,7 +11,7 @@ from config_manager import load_config, save_config
 class Application(ttk.Window):
     def __init__(self):
         super().__init__(themename="litera")
-        self.title("B站弹幕补档工具 v0.3.0")
+        self.title("B站弹幕补档工具 v0.3.1")
         self.geometry("750x700")
         
         self.full_file_path = "" 
@@ -25,10 +25,23 @@ class Application(ttk.Window):
 
     def create_widgets(self):
         """创建并布局窗口中的所有UI控件"""
+
+        # --- 身份凭证输入区 ---
+        auth_frame = ttk.Labelframe(self, text="身份凭证 (Cookie)", padding=15)
+        auth_frame.grid(row=0, column=0, padx=10, pady=5, sticky="ew")
+        auth_frame.columnconfigure(1, weight=1)
+
+        ttk.Label(auth_frame, text="SESSDATA:").grid(row=0, column=0, sticky="w", padx=5, pady=8)
+        self.sessdata_entry = ttk.Entry(auth_frame, show="*")
+        self.sessdata_entry.grid(row=0, column=1, sticky="ew")
+
+        ttk.Label(auth_frame, text="BILI_JCT:").grid(row=1, column=0, sticky="w",padx=5, pady=8)
+        self.bili_jct_entry = ttk.Entry(auth_frame, show="*")
+        self.bili_jct_entry.grid(row=1, column=1, sticky="ew")
         
         # --- 设置区 ---
         settings_frame = ttk.Labelframe(self, text="参数设置", padding=15)
-        settings_frame.grid(row=0, column=0, padx=10, pady=(10, 5), sticky="ew")
+        settings_frame.grid(row=1, column=0, padx=10, pady=(10, 5), sticky="ew")
         settings_frame.columnconfigure(1, weight=1)
 
         ttk.Label(settings_frame, text="BV号:").grid(row=0, column=0, sticky="w", padx=5, pady=8)
@@ -37,7 +50,7 @@ class Application(ttk.Window):
 
         ttk.Label(settings_frame, text="选择分P:").grid(row=1, column=0, sticky="w", padx=5, pady=8)
         self.part_combobox = ttk.Combobox(settings_frame, state="disabled")
-        self.part_combobox.grid(row=1, column=1, sticky="ew", padx=(0, 5))
+        self.part_combobox.grid(row=1, column=1, columnspan=2, sticky="ew", padx=(0, 5))
         self.get_parts_button = ttk.Button(settings_frame, text="获取分P", command=self.fetch_video_parts)
         self.get_parts_button.grid(row=0, column=2)
 
@@ -47,25 +60,16 @@ class Application(ttk.Window):
         self.select_button = ttk.Button(settings_frame, text="选择文件", command=self.select_file, style="info.TButton")
         self.select_button.grid(row=2, column=2, sticky="e")
         self.file_path_tooltip = ToolTip(self.file_path_label, text="") 
-
-        # --- 身份凭证输入区 ---
-        auth_frame = ttk.Labelframe(self, text="身份凭证 (Cookie)", padding=15)
-        auth_frame.grid(row=1, column=0, padx=10, pady=5, sticky="ew")
-        auth_frame.columnconfigure(1, weight=1)
-        ttk.Label(auth_frame, text="SESSDATA:").grid(row=0, column=0, sticky="w", padx=5, pady=8)
-        self.sessdata_entry = ttk.Entry(auth_frame, show="*")
-        self.sessdata_entry.grid(row=0, column=1, sticky="ew")
-        ttk.Label(auth_frame, text="BILI_JCT:").grid(row=1, column=0, sticky="w",padx=5, pady=8)
-        self.bili_jct_entry = ttk.Entry(auth_frame, show="*")
-        self.bili_jct_entry.grid(row=1, column=1, sticky="ew")
         
         # --- 高级设置 (延迟) ---
         advanced_frame = ttk.Labelframe(self, text="高级设置", padding=15)
         advanced_frame.grid(row=2, column=0, padx=10, pady=5, sticky="ew")
         advanced_frame.columnconfigure(1, weight=1); advanced_frame.columnconfigure(3, weight=1)
+
         ttk.Label(advanced_frame, text="最小延迟(秒):").grid(row=0, column=0, sticky="w", padx=5, pady=5)
         self.min_delay_entry = ttk.Entry(advanced_frame, width=10)
         self.min_delay_entry.grid(row=0, column=1)
+
         ttk.Label(advanced_frame, text="最大延迟(秒):").grid(row=0, column=2, sticky="w", padx=(20, 5), pady=5)
         self.max_delay_entry = ttk.Entry(advanced_frame, width=10)
         self.max_delay_entry.grid(row=0, column=3)
@@ -148,7 +152,7 @@ class Application(ttk.Window):
                 self.part_combobox['values'] = display_parts
                 if len(display_parts) > 1:
                     self.log_to_gui(f"✅ 成功获取到 {len(display_parts)} 个分P，请在下拉框中选择。")
-                    self.part_combobox.current(0) # 默认选中第一个
+                    self.part_combobox.current(0)  # 默认选中第一个
                     self.part_combobox.config(state="readonly")
                 else:
                     self.log_to_gui("✅ 这是一个单P视频，已自动为您选中。")
@@ -160,6 +164,9 @@ class Application(ttk.Window):
             self.log_to_gui(f"❌ 获取分P失败: {e}")
             def _update_ui_fail():
                 self.get_parts_button.config(state="normal")
+                self.part_combobox.set("获取失败, 请检查BV号是否填写正确")
+                self.part_combobox['values'] = []  # 明确清空内部列表
+                self.part_combobox.config(state="disabled")  # 保持禁用状态
             self.after(0, _update_ui_fail)
 
     def log_to_gui(self, message):
