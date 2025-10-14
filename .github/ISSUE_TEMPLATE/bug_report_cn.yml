@@ -1,0 +1,65 @@
+name: "错误报告 (Bug Report)"
+description: "创建一个错误报告来帮助我们改进项目"
+title: "[BUG] "
+labels: ["Status: Triage", "Bug: Minor"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        感谢你花时间填写这份错误报告！
+  - type: textarea
+    id: description
+    attributes:
+      label: "问题描述 (Description)"
+      description: "请清晰并简洁地描述你遇到的问题是什么。"
+      placeholder: "例如：当程序尝试获取一个不存在的用户视频列表时，它崩溃了，而不是提示用户不存在。"
+    validations:
+      required: true
+  - type: textarea
+    id: current-behavior
+    attributes:
+      label: "当前行为 (Current Behavior)"
+      description: "具体发生了什么？请附上相关的日志、截图或错误信息。"
+      placeholder: "例如：程序输出了 'NoneType' object is not subscriptable 错误，并且没有给出明确的原因。"
+    validations:
+      required: true
+      
+  - type: textarea
+    id: expected-behavior
+    attributes:
+      label: "期望行为 (Expected Behavior)"
+      description: "你认为应该发生什么？"
+      placeholder: "例如：程序应该记录一条清晰的错误日志，说明 API 请求失败，并正常跳过该用户，而不是因为 TypeError 而崩溃。"
+    validations:
+      required: true
+  - type: textarea
+    id: reproduction-steps
+    attributes:
+      label: "复现步骤 (Steps to Reproduce)"
+      description: "请一步步告诉我们如何复现这个问题。"
+      placeholder: |
+        1. 运行 '...'
+        2. 输入 '...'
+        3. 观察到 '...' 错误
+    validations:
+      required: true
+  - type: textarea
+    id: environment
+    attributes:
+      label: "运行环境 (Environment)"
+      description: "请提供你的运行环境信息，这有助于我们定位问题。"
+      value: |
+        - 操作系统 (OS): 
+        - Python 版本: 
+        - 依赖库版本: 
+      render: markdown
+    validations:
+      required: false
+      
+  - type: textarea
+    id: additional-context
+    attributes:
+      label: "补充信息 (Additional Context)"
+      description: "还有其他任何关于这个问题的补充信息吗？比如你尝试过的解决方案。"
+    validations:
+      required: false
