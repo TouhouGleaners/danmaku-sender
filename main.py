@@ -5,6 +5,7 @@ import xml.etree.ElementTree as ET
 from threading import Event
 
 from wbi_signer import WbiSigner
+from bili_danmaku_utils import BiliDmErrorCode, DanmakuSendResult
 
 
 class BiliDanmakuSender:
@@ -59,11 +60,18 @@ class BiliDanmakuSender:
                 self.log(f"成功获取到视频《{info['title']}》的信息，共 {len(info['pages'])} 个分P")
                 return info
             else:
-                raise RuntimeError(f"错误: 获取视频信息失败, B站返回信息: {data.get('message', '未知错误')}")
+                # 获取视频信息失败，尝试从错误枚举中查找或使用B站原始消息
+                error_code = data.get('code', BiliDmErrorCode.GENERIC_FAILURE.value)
+                raw_message = data.get('message', '未知错误')
+                enum_member = BiliDmErrorCode.from_code(error_code)
+                display_message = enum_member.description if enum_member else raw_message
+                raise RuntimeError(f"错误: 获取视频信息失败, Code: {error_code}, 信息: {display_message} (原始: {raw_message})")
+        except requests.exceptions.RequestException as req_e:
+            raise RuntimeError(f"错误: 请求视频信息时发生网络异常: {req_e}")
         except Exception as e:
             raise RuntimeError(f"错误: 请求视频信息时发生异常: {e}")
     
-    def _send_single_danmaku(self, cid: int, danmaku: dict):
+    def _send_single_danmaku(self, cid: int, danmaku: dict) -> DanmakuSendResult:
         """发送单条弹幕"""
         url = "https://api.bilibili.com/x/v2/dm/post"
         img_key, sub_key = self.wbi_keys
@@ -87,19 +95,37 @@ class BiliDanmakuSender:
         try:
             response = self.session.post(url, data=singed_params)
             response.raise_for_status()
-            result = response.json()
-            if result['code'] == 0:
-                self.log(f"✅ 发送成功! 内容: '{danmaku['msg']}'")
-                return True
+            result_json = response.json()
+
+            # 从B站API响应中获取错误码和原始消息
+            code = result_json.get('code', BiliDmErrorCode.GENERIC_FAILURE.value) 
+            raw_message = result_json.get('message', '无B站原始消息')
+
+            # 尝试从枚举中获取友好提示
+            enum_member = BiliDmErrorCode.from_code(code)
+            display_msg = enum_member.description if enum_member else raw_message
+
+            # 如果 B站原始消息为假且 code 不是成功，并且枚举也未提供描述，则使用通用提示
+            if not display_msg and code != BiliDmErrorCode.SUCCESS.value:
+                display_msg = "未知错误，请联系开发者或稍后再试。"
+            if code == BiliDmErrorCode.SUCCESS.value:
+                return DanmakuSendResult(code=code, success=True, message=raw_message, display_message=BiliDmErrorCode.SUCCESS.description)
             else:
-                self.log(f"❌ 发送失败! 内容: '{danmaku['msg']}', code={result['code']}, 原因: {result.get('message', '未知错误')}")
-                if result['code'] == 36703:
-                    self.log("检测到弹幕发送过于频繁，将额外等待10秒...")
-                    time.sleep(10)
-                return False
+                # 特殊处理发送频率过快的错误
+                if code == BiliDmErrorCode.FREQ_LIMIT.value:
+                    self.log(f"检测到弹幕发送过于频繁 (Code: {code}: {display_msg})，将额外等待10秒...")
+                    time.sleep(10)  # 内部处理等待，但仍返回失败结果
+                return DanmakuSendResult(code=code, success=False, message=raw_message, display_message=display_msg)
+        except requests.exceptions.RequestException as e:
+            # 网络或请求异常，HTTP 状态码非 2xx 或网络连接问题
+            error_msg = f"发送弹幕时发生网络或请求异常: {e}"
+            self.log(f"❌ 发送异常! 内容: '{danmaku['msg']}', 错误: {error_msg}")
+            return DanmakuSendResult(code=BiliDmErrorCode.NETWORK_ERROR.value, success=False, message=str(e), display_message=error_msg)
         except Exception as e:
-            self.log(f"❌ 发送异常! 内容: '{danmaku['msg']}', 错误: {e}")
-            return False
+            # 其他未知异常
+            error_msg = f"发送弹幕时发生未知异常: {e}"
+            self.log(f"❌ 发送异常! 内容: '{danmaku['msg']}', 错误: {error_msg}")
+            return DanmakuSendResult(code=BiliDmErrorCode.UNKNOWN_ERROR.value, success=False, message=str(e), display_message=error_msg)
         
     def send_danmaku_from_xml(self, cid: int, xml_path: str, min_delay: float, max_delay: float, stop_event: Event):
         """从XML文件中读取弹幕并发送至指定的CID，并响应停止事件"""
@@ -109,6 +135,7 @@ class BiliDanmakuSender:
         
         total = len(danmakus)
         success_count = 0
+        fatal_error_occurred = False
 
         for i, dm in enumerate(danmakus):
             # 核心检查：在每次循环开始时，检查是否需要停止
@@ -117,26 +144,53 @@ class BiliDanmakuSender:
                 break
 
             self.log(f"[{i+1}/{total}] 准备发送: {dm['msg']}")
-            if self._send_single_danmaku(cid, dm):
-                success_count += 1
+            result = self._send_single_danmaku(cid, dm)
+            self.log(str(result))  # 打印发送结果
+            
+            match result.code:
+                case BiliDmErrorCode.SUCCESS.value:
+                    success_count += 1
+
+                # 定义为致命错误，遇到则中断任务
+                case BiliDmErrorCode.UNAUTHORIZED.value | \
+                     BiliDmErrorCode.ACCOUNT_BANNED.value | \
+                     BiliDmErrorCode.CSRF_FAILED.value | \
+                     BiliDmErrorCode.NETWORK_ERROR.value | \
+                     BiliDmErrorCode.UNKNOWN_ERROR.value | \
+                     BiliDmErrorCode.SYSTEM_UPGRADING.value | \
+                     BiliDmErrorCode.VIDEO_DANMAKU_FORBIDDEN.value: # 视频禁止发弹幕，视为致命错误
+                    self.log(f"❌ 遭遇致命错误 (Code: {result.code}: {result.display_message})，任务将中断。")
+                    fatal_error_occurred = True
+                    break
+
+                case BiliDmErrorCode.FREQ_LIMIT.value:
+                    pass
+
+                case _:  # 其他所有失败情况 (例如，参数错误、内容违规、等级不足等，这些错误不中断任务，而是跳过当前弹幕)
+                    pass
 
             # 再次检查，如果发送非常耗时，用户可能在此期间点击了停止
             if stop_event.is_set():
                 self.log("任务被用户手动停止。")
                 break 
 
-            if i < total - 1:
+            if i < total - 1:  # 如果不是最后一条弹幕，则等待
                 delay = random.uniform(min_delay, max_delay)
                 self.log(f"等待 {delay:.2f} 秒...")
                 if stop_event.wait(timeout=delay):
                     self.log("在等待期间接收到停止信号，立即终止。")
                     break
         
-        attempted_count = i + 1 if danmakus else 0
+        # 统计信息的计算和打印
+        attempted_count = i + 1 if danmakus and i is not None else 0
 
         self.log("\n--- 发送任务结束 ---")
         if stop_event.is_set():
             self.log("原因：任务被用户手动停止。")
+        elif fatal_error_occurred:
+            self.log("原因：任务因致命错误中断。请检查配置或网络！")
+        elif total == 0:
+            self.log("原因：没有弹幕可发送。")
         else:
             self.log("原因：所有弹幕已发送完毕。")
 
@@ -172,12 +226,12 @@ class BiliDanmakuSender:
                     }
                     danmakus.append(danmaku)
                 except (IndexError, ValueError) as e:
-                    self.log(f"警告: 解析弹幕失败, 跳过此条. 内容: '{d_tag.text}', 错误: {e}")
-            self.log(f'成功从 {xml_path} 解析出 {len(danmakus)} 条弹幕')
+                    self.log(f"⚠️ 警告: 解析弹幕失败, 跳过此条. 内容: '{d_tag.text}', 错误: {e}")
+            self.log(f'📦 成功从 {xml_path} 解析出 {len(danmakus)} 条弹幕')
             return danmakus
         except FileNotFoundError:
-            self.log(f"错误: 文件 '{xml_path}' 不存在")
+            self.log(f"❌ 错误: 文件 '{xml_path}' 不存在")
             return []
         except ET.ParseError as e:
-            self.log(f"错误: 解析XML文件时发生错误: {e}")
+            self.log(f"❌ 错误: 解析XML文件时发生错误: {e}")
             return []
