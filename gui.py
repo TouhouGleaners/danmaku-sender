@@ -4,6 +4,7 @@ from ttkbootstrap.tooltip import ToolTip
 from tkinter import filedialog, scrolledtext
 import threading
 from pathlib import Path
+import sys
 
 from main import BiliDanmakuSender
 from config_manager import load_config, save_config
@@ -100,14 +101,14 @@ class Application(ttk.Window):
 
     def load_and_populate_config(self):
         """加载配置并填充到UI控件中。"""
-        config = load_config()
+        credentials = load_config()
         
-        self.sessdata_entry.insert(0, config.get('SESSDATA', ''))
-        self.bili_jct_entry.insert(0, config.get('BILI_JCT', ''))
+        self.sessdata_entry.insert(0, credentials.get('SESSDATA', ''))
+        self.bili_jct_entry.insert(0, credentials.get('BILI_JCT', ''))
         
         self.bvid_entry.insert(0, '')
-        self.min_delay_entry.insert(0, str(config.get('MIN_DELAY', '5.0')))
-        self.max_delay_entry.insert(0, str(config.get('MAX_DELAY', '10.0')))
+        self.min_delay_entry.insert(0, '5.0')
+        self.max_delay_entry.insert(0, '10.0')
         
         self.full_file_path = ""
         self.file_path_label.config(text="请选择弹幕XML文件...")
@@ -115,7 +116,10 @@ class Application(ttk.Window):
 
     def on_closing(self):
         """窗口关闭时被调用，只收集并保存凭证信息。"""
-        credentials_to_save = {'SESSDATA': self.sessdata_entry.get(), 'BILI_JCT': self.bili_jct_entry.get()}
+        credentials_to_save = {
+            'SESSDATA': self.sessdata_entry.get(),
+            'BILI_JCT': self.bili_jct_entry.get()
+        }
         save_config(credentials_to_save)
         self.destroy()
 

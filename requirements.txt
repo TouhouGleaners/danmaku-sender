@@ -1,7 +1,17 @@
 certifi==2025.10.5
+cffi==2.0.0
 charset-normalizer==3.4.3
+cryptography==46.0.2
 idna==3.11
+jaraco.classes==3.4.0
+jaraco.context==6.0.1
+jaraco.functools==4.3.0
+keyring==25.6.0
+more-itertools==10.8.0
 pillow==11.3.0
+platformdirs==4.5.0
+pycparser==2.23
+pywin32-ctypes==0.2.3
 requests==2.32.5
 ttkbootstrap==1.14.7
 urllib3==2.5.0
