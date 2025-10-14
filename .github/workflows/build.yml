@@ -5,11 +5,6 @@ on:
 jobs:
    build:
     runs-on: windows-latest
-    # 强制在整个 job 中使用 PowerShell Core (pwsh)
-    # 这通常对中文字符支持最好
-    defaults:
-      run:
-        shell: pwsh
     permissions:
       contents: write
     steps:
@@ -25,31 +20,22 @@ jobs:
         pip install -r requirements.txt
         pip install pyinstaller
     - name: Build with Pyinstaller
-      # 尝试使用中文名
       run: |
         $ttkbootstrap_path = (Get-Command pip).path | Split-Path | Join-Path -ChildPath "..\Lib\site-packages\ttkbootstrap"
-        # 注意：这里需要确保你的 shell 能够正确处理传递的中文参数
-        pyinstaller --noconfirm --onefile --windowed --name "B站弹幕补档工具" `
+        pyinstaller --noconfirm --onefile --windowed --name "BiliDanmakuSender" `
           --icon="assets/icon.ico" `
           --add-data "$ttkbootstrap_path;ttkbootstrap" `
           gui.py
-
-    # IMPORTANT: 增加一个调试步骤，查看 dist 目录下的文件
     - name: Debug - List contents of dist directory
       run: Get-ChildItem -Path ./dist
-      # 或者使用 dir ./dist 如果你的 shell 最终不是 pwsh
 
     - name: Upload EXE artifact
       uses: actions/upload-release-asset@v1
       env:
         GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
       with:
-        upload_url: ${{ github.event.release.upload_url }}
-        # 这里的 asset_name 是显示在 GitHub Release 页面上的名称
-        # 如果 PyInstaller 成功生成了中文名，这里也用中文名
-        asset_name: B站弹幕补档工具-v${{ github.ref_name }}.exe
-        # 这里的 asset_path 必须与 PyInstaller 实际生成的文件名完全匹配
-        # 这就是 Debug 步骤的关键所在
-        asset_path: ./dist/B站弹幕补档工具.exe
+        upload_url: ${{ github.event.release.upload_url }} 
+        asset_name: BiliDanmakuSender-${{ github.ref_name }}.exe
+        asset_path: ./dist/BiliDanmakuSender.exe
         asset_content_type: application/vnd.microsoft.portable-executable
 
