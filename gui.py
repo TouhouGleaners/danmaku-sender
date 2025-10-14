@@ -11,7 +11,7 @@ from config_manager import load_config, save_config
 class Application(ttk.Window):
     def __init__(self):
         super().__init__(themename="litera")
-        self.title("B站弹幕补档工具 v0.6.0")
+        self.title("B站弹幕补档工具 v0.6.3")
         self.geometry("750x700")
 
         self.stop_event = threading.Event()
