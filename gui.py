@@ -11,7 +11,7 @@ from config_manager import load_config, save_config
 class Application(ttk.Window):
     def __init__(self):
         super().__init__(themename="litera")
-        self.title("B站弹幕补档工具 v0.5.0")
+        self.title("B站弹幕补档工具 v0.5.1")
         self.geometry("750x700")
 
         self.stop_event = threading.Event()
@@ -256,6 +256,7 @@ class Application(ttk.Window):
         self.stop_event.clear()  # 每次开始新任务前，清除旧的停止信号
         self.start_button.config(text="紧急停止", command=self.stop_task, style="danger.TButton")
         self.select_button.config(state='disabled')
+        self.get_parts_button.config(state='disabled')
         self.log_text.config(state='normal')
         self.log_text.delete('1.0', ttk.END)
         self.log_text.config(state='disabled')
