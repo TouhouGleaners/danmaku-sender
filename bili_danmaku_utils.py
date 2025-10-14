@@ -37,44 +37,36 @@ class BiliDmErrorCode(Enum):
     UNKNOWN_ERROR = (-9998, "发送弹幕时发生未知异常，请联系开发者或稍后再试。", True)
     GENERIC_FAILURE = (-1, "操作失败，详见原始消息或尝试稍后再试。", False)  # 当B站返回code是-1或未识别的code时使用
 
-    def __init__(self, code: int, description: str, is_fatal: bool):
-        self._code = code
-        self._description = description
-        self._is_fatal = is_fatal
-
     @property
-    def value(self):
+    def code(self):
         """返回错误码的数值"""
-        return self._code
+        return self.value[0]
 
     @property
-    def description(self):
+    def description_str(self):
         """返回错误码的描述"""
-        return self._description
+        return self.value[1]
     
     @property
-    def is_fatal(self):
+    def is_fatal_error(self):
         """该错误是否是致命的（应中断任务）"""
-        return self._is_fatal
+        return self.value[2]
     
     @classmethod
     def from_code(cls, code: int):
         """通过数字错误码反向查找对应的枚举成员"""
-        for member in cls:
-            if member.value == code:
-                return member
-        return None # 如果没找到对应的枚举值，返回None
+        return next((member for member in cls if member.code == code), None)
     
     @staticmethod
     def resolve_bili_error(code: int, raw_message: str) -> tuple[int, str]:
         """根据B站返回的code和原始信息，解析出最终的code和用于显示的友好消息"""
         # 尝试从枚举中获取友好提示
         enum_member = BiliDmErrorCode.from_code(code)
-        display_msg = enum_member.description if enum_member else raw_message
+        display_msg = enum_member.description_str if enum_member else raw_message
 
         # 如果 B站原始消息为空且 code 不是成功，并且枚举也未提供描述，则使用通用提示
         if not display_msg and code != BiliDmErrorCode.SUCCESS.value:
-            display_msg = BiliDmErrorCode.UNKNOWN_ERROR.description
+            display_msg = BiliDmErrorCode.UNKNOWN_ERROR.description_str
             
         return code, display_msg
         
@@ -89,7 +81,7 @@ class DanmakuSendResult:
 
     def __str__(self):
         status = "成功" if self.success else "失败"
-        if self.code == BiliDmErrorCode.SUCCESS.value:
+        if self.code == BiliDmErrorCode.SUCCESS.code:
             return f"[发送结果: {status}] {self.display_message}"
         else:
             return f"[发送结果: {status}] Code: {self.code}, 消息: \"{self.display_message}\" (原始: \"{self.raw_message}\")"

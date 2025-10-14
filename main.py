@@ -61,7 +61,7 @@ class BiliDanmakuSender:
                 return info
             else:
                 # 获取视频信息失败，尝试从错误枚举中查找或使用B站原始消息
-                error_code = data.get('code', BiliDmErrorCode.GENERIC_FAILURE.value)
+                error_code = data.get('code', BiliDmErrorCode.GENERIC_FAILURE.code)
                 raw_message = data.get('message', '未知错误')
                 _, display_message = BiliDmErrorCode.resolve_bili_error(error_code, raw_message)
                 raise RuntimeError(f"错误: 获取视频信息失败, Code: {error_code}, 信息: {display_message} (原始: {raw_message})")
@@ -97,17 +97,18 @@ class BiliDanmakuSender:
             result_json = response.json()
 
             # 从B站API响应中获取错误码和原始消息
-            code = result_json.get('code', BiliDmErrorCode.GENERIC_FAILURE.value) 
+            code = result_json.get('code', BiliDmErrorCode.GENERIC_FAILURE.code) 
             raw_message = result_json.get('message', '无B站原始消息')
 
             # 尝试从枚举中获取友好提示
             _, display_msg = BiliDmErrorCode.resolve_bili_error(code, raw_message)
 
-            if code == BiliDmErrorCode.SUCCESS.value:
-                return DanmakuSendResult(code=code, success=True, message=raw_message, display_message=BiliDmErrorCode.SUCCESS.description)
+            if code == BiliDmErrorCode.SUCCESS.code:
+                self.log(f"✅ 成功发送: '{danmaku['msg']}'")
+                return DanmakuSendResult(code=code, success=True, message=raw_message, display_message=BiliDmErrorCode.SUCCESS.description_str)
             else:
                 # 特殊处理发送频率过快的错误
-                if code == BiliDmErrorCode.FREQ_LIMIT.value:
+                if code == BiliDmErrorCode.FREQ_LIMIT.code:
                     self.log(f"检测到弹幕发送过于频繁 (Code: {code}: {display_msg})，将额外等待10秒...")
                     time.sleep(10)  # 内部处理等待，但仍返回失败结果
                 return DanmakuSendResult(code=code, success=False, message=raw_message, display_message=display_msg)
@@ -115,12 +116,12 @@ class BiliDanmakuSender:
             # 网络或请求异常，HTTP 状态码非 2xx 或网络连接问题
             error_msg = f"发送弹幕时发生网络或请求异常: {e}"
             self.log(f"❌ 发送异常! 内容: '{danmaku['msg']}', 错误: {error_msg}")
-            return DanmakuSendResult(code=BiliDmErrorCode.NETWORK_ERROR.value, success=False, message=str(e), display_message=error_msg)
+            return DanmakuSendResult(code=BiliDmErrorCode.NETWORK_ERROR.code, success=False, message=str(e), display_message=error_msg)
         except Exception as e:
             # 其他未知异常
             error_msg = f"发送弹幕时发生未知异常: {e}"
             self.log(f"❌ 发送异常! 内容: '{danmaku['msg']}', 错误: {error_msg}")
-            return DanmakuSendResult(code=BiliDmErrorCode.UNKNOWN_ERROR.value, success=False, message=str(e), display_message=error_msg)
+            return DanmakuSendResult(code=BiliDmErrorCode.UNKNOWN_ERROR.code, success=False, message=str(e), display_message=error_msg)
         
     def send_danmaku_from_xml(self, cid: int, xml_path: str, min_delay: float, max_delay: float, stop_event: Event):
         """从XML文件中读取弹幕并发送至指定的CID，并响应停止事件"""
@@ -147,9 +148,13 @@ class BiliDanmakuSender:
             if result.success:
                 success_count += 1
             else:
-                # 使用 is_fatal 属性判断
+                # 使用 is_fatal_error 属性判断
                 error_enum = BiliDmErrorCode.from_code(result.code)
-                if error_enum and error_enum.is_fatal:
+                if error_enum is None:
+                    # 如果是未知的错误码，将其统一视为 UNKNOWN_ERROR，它本身就是致命的
+                    error_enum = BiliDmErrorCode.UNKNOWN_ERROR
+                    self.log(f"⚠️ 遇到未识别错误码 (Code: {result.code})，将其视为未知致命错误。消息: '{result.display_message}'")
+                if error_enum.is_fatal_error: # 注意这里是 is_fatal_error
                     self.log(f"❌ 遭遇致命错误 (Code: {result.code}: {result.display_message})，任务将中断。")
                     fatal_error_occurred = True
                     break
