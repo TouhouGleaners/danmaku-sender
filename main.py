@@ -131,9 +131,19 @@ class BiliDanmakuSender:
                 if stop_event.wait(timeout=delay):
                     self.log("在等待期间接收到停止信号，立即终止。")
                     break
+        
+        attempted_count = i + 1 if danmakus else 0
 
-        self.log("\n--- 发送任务完成 ---")
-        self.log(f"总计: {total} 条, 成功: {success_count} 条, 失败: {total - success_count} 条。") 
+        self.log("\n--- 发送任务结束 ---")
+        if stop_event.is_set():
+            self.log("原因：任务被用户手动停止。")
+        else:
+            self.log("原因：所有弹幕已发送完毕。")
+
+        self.log(f"弹幕总数: {total} 条")
+        self.log(f"尝试发送: {attempted_count} 条")
+        self.log(f"发送成功: {success_count} 条")
+        self.log(f"发送失败: {attempted_count - success_count} 条")
 
     def parse_danmaku_xml(self,xml_path: str) -> list:
         """解析XML文件"""
