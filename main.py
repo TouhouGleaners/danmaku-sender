@@ -2,6 +2,7 @@ import time
 import random
 import requests
 import xml.etree.ElementTree as ET
+from threading import Event
 
 from wbi_signer import WbiSigner
 
@@ -100,8 +101,8 @@ class BiliDanmakuSender:
             self.log(f"❌ 发送异常! 内容: '{danmaku['msg']}', 错误: {e}")
             return False
         
-    def send_danmaku_from_xml(self, cid: int, xml_path: str, min_delay: float, max_delay: float):
-        """从XML文件中读取弹幕并发送至指定的CID"""
+    def send_danmaku_from_xml(self, cid: int, xml_path: str, min_delay: float, max_delay: float, stop_event: Event):
+        """从XML文件中读取弹幕并发送至指定的CID，并响应停止事件"""
         danmakus = self.parse_danmaku_xml(xml_path)
         if not danmakus:
             return
@@ -110,17 +111,39 @@ class BiliDanmakuSender:
         success_count = 0
 
         for i, dm in enumerate(danmakus):
+            # 核心检查：在每次循环开始时，检查是否需要停止
+            if stop_event.is_set():
+                self.log("任务被用户手动停止。")
+                break
+
             self.log(f"[{i+1}/{total}] 准备发送: {dm['msg']}")
             if self._send_single_danmaku(cid, dm):
                 success_count += 1
 
+            # 再次检查，如果发送非常耗时，用户可能在此期间点击了停止
+            if stop_event.is_set():
+                self.log("任务被用户手动停止。")
+                break 
+
             if i < total - 1:
                 delay = random.uniform(min_delay, max_delay)
                 self.log(f"等待 {delay:.2f} 秒...")
-                time.sleep(delay)
+                if stop_event.wait(timeout=delay):
+                    self.log("在等待期间接收到停止信号，立即终止。")
+                    break
+        
+        attempted_count = i + 1 if danmakus else 0
 
-        self.log("\n--- 发送任务完成 ---")
-        self.log(f"总计: {total} 条, 成功: {success_count} 条, 失败: {total - success_count} 条。") 
+        self.log("\n--- 发送任务结束 ---")
+        if stop_event.is_set():
+            self.log("原因：任务被用户手动停止。")
+        else:
+            self.log("原因：所有弹幕已发送完毕。")
+
+        self.log(f"弹幕总数: {total} 条")
+        self.log(f"尝试发送: {attempted_count} 条")
+        self.log(f"发送成功: {success_count} 条")
+        self.log(f"发送失败: {attempted_count - success_count} 条")
 
     def parse_danmaku_xml(self,xml_path: str) -> list:
         """解析XML文件"""

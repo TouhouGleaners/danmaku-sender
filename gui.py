@@ -12,8 +12,10 @@ from config_manager import load_config, save_config
 class Application(ttk.Window):
     def __init__(self):
         super().__init__(themename="litera")
-        self.title("B站弹幕补档工具 v0.4.0")
+        self.title("B站弹幕补档工具 v0.5.1")
         self.geometry("750x700")
+
+        self.stop_event = threading.Event()
         
         self.full_file_path = "" 
         self.part_var = ttk.StringVar()
@@ -193,22 +195,31 @@ class Application(ttk.Window):
             self.log_text.config(state='disabled')
         self.after(0, _update)
 
-    def task_wrapper(self, bvid, xml_path, sessdata, bili_jct, min_delay, max_delay, cid):
+    def task_wrapper(self, bvid, xml_path, sessdata, bili_jct, min_delay, max_delay, cid, stop_event):
         """在单独的线程中执行弹幕发送任务的包裹函数。"""
         try:
             sender = BiliDanmakuSender(sessdata, bili_jct, bvid)
             sender.log = self.log_to_gui
-            sender.send_danmaku_from_xml(cid, xml_path, min_delay, max_delay)
+            sender.send_danmaku_from_xml(cid, xml_path, min_delay, max_delay, stop_event)
         except Exception as e:
             self.log_to_gui(f"【程序崩溃】发生未捕获的严重错误: {e}")
         finally:
-            def _restore_ui():
-                self.start_button.config(state='normal', text="开始任务")
-                self.select_button.config(state='normal')
-                self.progress_bar.stop()
-                self.progress_bar.config(mode='determinate')
-                self.progress_bar['value'] = 0
-            self.after(0, _restore_ui)
+            self.after(0, self._restore_ui)
+
+    def _restore_ui(self):
+        """恢复UI状态。"""
+        self.start_button.config(state='normal', text="开始任务", command=self.start_task, style="success.TButton")
+        self.select_button.config(state='normal')
+        self.get_parts_button.config(state='normal')
+        self.progress_bar.stop()
+        self.progress_bar.config(mode='determinate')
+        self.progress_bar['value'] = 0
+
+    def stop_task(self):
+        """设置停止事件，更新UI"""
+        self.log_to_gui("ℹ️ 用户请求停止任务，将在当前弹幕发送完毕后终止...")
+        self.stop_event.set()
+        self.start_button.config(state='disabled', text="正在停止")
 
     def start_task(self):
         """点击“开始任务”按钮时的主函数。"""
@@ -246,8 +257,10 @@ class Application(ttk.Window):
         selected_cid = self.video_pages[selected_index]['cid']
         self.log_to_gui(f"已选择目标分P: {selected_part_str}, CID: {selected_cid}")
 
-        self.start_button.config(state='disabled', text="正在运行...")
+        self.stop_event.clear()  # 每次开始新任务前，清除旧的停止信号
+        self.start_button.config(text="紧急停止", command=self.stop_task, style="danger.TButton")
         self.select_button.config(state='disabled')
+        self.get_parts_button.config(state='disabled')
         self.log_text.config(state='normal')
         self.log_text.delete('1.0', ttk.END)
         self.log_text.config(state='disabled')
@@ -257,16 +270,13 @@ class Application(ttk.Window):
         try:
             thread = threading.Thread(
                 target=self.task_wrapper, 
-                args=(bvid, self.full_file_path, sessdata, bili_jct, min_delay, max_delay, selected_cid),
+                args=(bvid, self.full_file_path, sessdata, bili_jct, min_delay, max_delay, selected_cid, self.stop_event),
                 daemon=True
             )
             thread.start()
         except Exception as e:
             self.log_to_gui(f"【程序崩溃】无法启动后台任务线程: {e}")
-            # 同时恢复UI状态，因为任务没有开始
-            self.start_button.config(state='normal', text="开始任务")
-            self.select_button.config(state='normal')
-            self.progress_bar.stop()
+            self._restore_ui()  # 同时恢复UI状态，因为任务没有开始
 
 
 if __name__ == "__main__":
