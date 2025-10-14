@@ -63,8 +63,7 @@ class BiliDanmakuSender:
                 # 获取视频信息失败，尝试从错误枚举中查找或使用B站原始消息
                 error_code = data.get('code', BiliDmErrorCode.GENERIC_FAILURE.value)
                 raw_message = data.get('message', '未知错误')
-                enum_member = BiliDmErrorCode.from_code(error_code)
-                display_message = enum_member.description if enum_member else raw_message
+                _, display_message = BiliDmErrorCode.resolve_bili_error(error_code, raw_message)
                 raise RuntimeError(f"错误: 获取视频信息失败, Code: {error_code}, 信息: {display_message} (原始: {raw_message})")
         except requests.exceptions.RequestException as req_e:
             raise RuntimeError(f"错误: 请求视频信息时发生网络异常: {req_e}")
@@ -102,12 +101,8 @@ class BiliDanmakuSender:
             raw_message = result_json.get('message', '无B站原始消息')
 
             # 尝试从枚举中获取友好提示
-            enum_member = BiliDmErrorCode.from_code(code)
-            display_msg = enum_member.description if enum_member else raw_message
+            _, display_msg = BiliDmErrorCode.resolve_bili_error(code, raw_message)
 
-            # 如果 B站原始消息为假且 code 不是成功，并且枚举也未提供描述，则使用通用提示
-            if not display_msg and code != BiliDmErrorCode.SUCCESS.value:
-                display_msg = "未知错误，请联系开发者或稍后再试。"
             if code == BiliDmErrorCode.SUCCESS.value:
                 return DanmakuSendResult(code=code, success=True, message=raw_message, display_message=BiliDmErrorCode.SUCCESS.description)
             else:
@@ -135,6 +130,7 @@ class BiliDanmakuSender:
         
         total = len(danmakus)
         success_count = 0
+        attempted_count = 0
         fatal_error_occurred = False
 
         for i, dm in enumerate(danmakus):
@@ -143,31 +139,20 @@ class BiliDanmakuSender:
                 self.log("任务被用户手动停止。")
                 break
 
+            attempted_count += 1
             self.log(f"[{i+1}/{total}] 准备发送: {dm['msg']}")
             result = self._send_single_danmaku(cid, dm)
             self.log(str(result))  # 打印发送结果
-            
-            match result.code:
-                case BiliDmErrorCode.SUCCESS.value:
-                    success_count += 1
 
-                # 定义为致命错误，遇到则中断任务
-                case BiliDmErrorCode.UNAUTHORIZED.value | \
-                     BiliDmErrorCode.ACCOUNT_BANNED.value | \
-                     BiliDmErrorCode.CSRF_FAILED.value | \
-                     BiliDmErrorCode.NETWORK_ERROR.value | \
-                     BiliDmErrorCode.UNKNOWN_ERROR.value | \
-                     BiliDmErrorCode.SYSTEM_UPGRADING.value | \
-                     BiliDmErrorCode.VIDEO_DANMAKU_FORBIDDEN.value: # 视频禁止发弹幕，视为致命错误
+            if result.success:
+                success_count += 1
+            else:
+                # 使用 is_fatal 属性判断
+                error_enum = BiliDmErrorCode.from_code(result.code)
+                if error_enum and error_enum.is_fatal:
                     self.log(f"❌ 遭遇致命错误 (Code: {result.code}: {result.display_message})，任务将中断。")
                     fatal_error_occurred = True
                     break
-
-                case BiliDmErrorCode.FREQ_LIMIT.value:
-                    pass
-
-                case _:  # 其他所有失败情况 (例如，参数错误、内容违规、等级不足等，这些错误不中断任务，而是跳过当前弹幕)
-                    pass
 
             # 再次检查，如果发送非常耗时，用户可能在此期间点击了停止
             if stop_event.is_set():
@@ -180,10 +165,8 @@ class BiliDanmakuSender:
                 if stop_event.wait(timeout=delay):
                     self.log("在等待期间接收到停止信号，立即终止。")
                     break
-        
-        # 统计信息的计算和打印
-        attempted_count = i + 1 if danmakus and i is not None else 0
 
+        # 任务结束，打印总结
         self.log("\n--- 发送任务结束 ---")
         if stop_event.is_set():
             self.log("原因：任务被用户手动停止。")
