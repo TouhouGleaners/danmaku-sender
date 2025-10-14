@@ -54,7 +54,7 @@ def load_config() -> dict:
         credentials = json.loads(decrypted_data.decode('utf-8'))
         print("Info: Credentials loaded and decrypted successfully.", file=sys.stderr)
         return credentials
-    except (InvalidToken, json.JSONDecodeError, FileNotFoundError, Exception) as e:
+    except (InvalidToken, json.JSONDecodeError, FileNotFoundError) as e:
         print(f"Warning: Could not load or decrypt credentials: {e}. Returning empty credentials.", file=sys.stderr)
         # 如果解密失败或文件损坏则删除它，以防下次出现同样问题
         if config_file.exists():
@@ -64,6 +64,11 @@ def load_config() -> dict:
             except OSError as del_e:
                 print(f"Error: Failed to remove corrupted config file: {del_e}", file=sys.stderr)
         return default_credentials
+    
+    # 捕获所有其他未知错误，记录后立即失败
+    except Exception as unexpected_e:
+        print(f"FATAL: An unexpected error occurred while loading credentials: {unexpected_e}", file=sys.stderr)
+        raise
     
 def save_config(data: dict):
     """将 SESSDATA 和 BILI_JCT 加密后写入 config.json 中。"""
