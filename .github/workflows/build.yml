@@ -26,7 +26,9 @@ jobs:
           --icon="assets/icon.ico" `
           --add-data "$ttkbootstrap_path;ttkbootstrap" `
           gui.py
-          
+    - name: Debug - List contents of dist directory
+      run: Get-ChildItem -Path ./dist
+
     - name: Upload EXE artifact
       uses: actions/upload-release-asset@v1
       env:
@@ -36,3 +38,4 @@ jobs:
         asset_name: BiliDanmakuSender-${{ github.ref_name }}.exe
         asset_path: ./dist/BiliDanmakuSender.exe
         asset_content_type: application/vnd.microsoft.portable-executable
+
