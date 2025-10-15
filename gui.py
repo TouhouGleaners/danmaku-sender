@@ -31,7 +31,7 @@ class GuiLoggingHandler(logging.Handler):
 class Application(ttk.Window):
     def __init__(self):
         super().__init__(themename="litera")
-        self.title("B站弹幕补档工具 v0.7.0")
+        self.title("B站弹幕补档工具 v0.7.1")
         self.geometry("750x700")
 
         self.stop_event = threading.Event()
@@ -45,6 +45,7 @@ class Application(ttk.Window):
         self.rowconfigure(3, weight=1) 
 
         self.create_widgets()
+        self.create_menu()
         self.setup_logging()
         self.load_and_populate_config()
         self.protocol("WM_DELETE_WINDOW", self.on_closing)
@@ -194,6 +195,79 @@ class Application(ttk.Window):
 
         threading.Thread(target=self._fetch_parts_worker, args=(bvid, sessdata, bili_jct), daemon=True).start()
     
+    def create_menu(self):
+        """创建顶部菜单栏"""
+        menu_bar = ttk.Menu(self)
+        self.config(menu=menu_bar)
+
+        # --- 文件菜单 ---
+        file_menu = ttk.Menu(menu_bar, tearoff=0)
+        menu_bar.add_cascade(label="文件", menu=file_menu)
+        file_menu.add_command(label="退出", command=self.on_closing)
+
+        # --- 帮助菜单 ---
+        help_menu = ttk.Menu(menu_bar, tearoff=0)
+        menu_bar.add_cascade(label="帮助", menu=help_menu)
+        help_menu.add_command(label="使用说明", command=self.show_help_window)
+        help_menu.add_separator()
+        help_menu.add_command(label="关于", command=self.show_about_window)
+
+    def show_help_window(self):
+        """显示使用说明窗口"""
+        help_win = ttk.Toplevel(self)
+        help_win.title("使用说明")
+        help_win.transient(self)
+        help_win.grab_set()
+
+        frame = ttk.Frame(help_win, padding=20)
+        frame.pack(fill=BOTH, expand=True)
+        help_text = """
+        要获取 SESSDATA 和 BILI_JCT，请按以下步骤操作：
+        1. 在你的浏览器（推荐Chrome/Edge）中登录Bilibili。
+        2. 访问B站任意一个页面，比如主页 www.bilibili.com。
+        3. 按 F12 打开“开发者工具”。
+        4. 切换到 "Application" (应用程序) 标签页。
+        5. 在左侧菜单中，找到 "Storage" (存储) -> "Cookies" -> "https://www.bilibili.com"。
+        6. 在右侧的列表中找到以下两项，并复制它们 "Value" (值) 列的内容：
+           - SESSDATA
+           - bili_jct
+        7. 将复制的内容粘贴到本工具对应的输入框中即可。
+        """
+
+        ttk.Label(frame, text="使用说明", font=("TkDefaultFont", 14, "bold")).pack(pady=(0, 15))
+        ttk.Label(frame, text=help_text, justify=LEFT).pack(pady=5)
+
+        # 让窗口大小自适应内容
+        help_win.update_idletasks()
+        x = self.winfo_x() + (self.winfo_width() // 2) - (help_win.winfo_width() // 2)
+        y = self.winfo_y() + (self.winfo_height() // 2) - (help_win.winfo_height() // 2)
+        help_win.geometry(f"+{x}+{y}")  # 窗口居中于主窗口
+        help_win.focus_force()
+        help_win.wait_window()
+
+    def show_about_window(self):
+        """显示关于窗口"""
+        about_win = ttk.Toplevel(self)
+        about_win.title("关于")
+        about_win.transient(self)
+        about_win.grab_set()
+        about_win.resizable(False, False)
+
+        frame = ttk.Frame(about_win, padding=20)
+        frame.pack(fill=BOTH, expand=True)
+
+        ttk.Label(frame, text="B站弹幕补档工具", font=("TkDefaultFont", 14, "bold")).pack(pady=(0, 10))
+        ttk.Label(frame, text="版本: 0.7.0").pack(pady=5)
+        ttk.Label(frame, text="作者: Miku_oso").pack(pady=5)
+
+        # 让窗口大小自适应内容
+        about_win.update_idletasks()
+        x = self.winfo_x() + (self.winfo_width() // 2) - (about_win.winfo_width() // 2)
+        y = self.winfo_y() + (self.winfo_height() // 2) - (about_win.winfo_height() // 2)
+        about_win.geometry(f"+{x}+{y}")  # 窗口居中于主窗口
+        about_win.focus_force()
+        about_win.wait_window() 
+
     def _fetch_parts_worker(self, bvid, sessdata, bili_jct):
         """在工作线程中执行API调用"""
         try:
