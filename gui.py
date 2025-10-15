@@ -257,7 +257,7 @@ class Application(ttk.Window):
         frame.pack(fill=BOTH, expand=True)
 
         ttk.Label(frame, text="B站弹幕补档工具", font=("TkDefaultFont", 14, "bold")).pack(pady=(0, 10))
-        ttk.Label(frame, text="版本: 0.7.0").pack(pady=5)
+        ttk.Label(frame, text="版本: 0.7.1").pack(pady=5)
         ttk.Label(frame, text="作者: Miku_oso").pack(pady=5)
 
         # 让窗口大小自适应内容
