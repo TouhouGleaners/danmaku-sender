@@ -1,3 +1,4 @@
+import logging
 import ttkbootstrap as ttk
 from ttkbootstrap.constants import *
 from ttkbootstrap.tooltip import ToolTip
@@ -8,10 +9,29 @@ from pathlib import Path
 from main import BiliDanmakuSender
 from config_manager import load_config, save_config
 
+
+class GuiLoggingHandler(logging.Handler):
+    """
+    一个将日志记录重定向到 Tkinter ScrolledText 控件的 Handler。
+    """
+    def __init__(self, text_widget_update_callable):
+        super().__init__()
+        # 存储一个可调用的函数，该函数用于线程安全地更新GUI
+        self.text_widget_update_callable = text_widget_update_callable
+
+    def emit(self, record):
+        """
+        处理一条日志记录。
+        这个方法会被 logging 模块在后台线程中调用。
+        """
+        msg = self.format(record)
+        self.text_widget_update_callable(msg)
+
+
 class Application(ttk.Window):
     def __init__(self):
         super().__init__(themename="litera")
-        self.title("B站弹幕补档工具 v0.6.3")
+        self.title("B站弹幕补档工具 v0.7.0")
         self.geometry("750x700")
 
         self.stop_event = threading.Event()
@@ -25,6 +45,7 @@ class Application(ttk.Window):
         self.rowconfigure(3, weight=1) 
 
         self.create_widgets()
+        self.setup_logging()
         self.load_and_populate_config()
         self.protocol("WM_DELETE_WINDOW", self.on_closing)
 
@@ -133,6 +154,29 @@ class Application(ttk.Window):
             self.full_file_path = str(file_path)
             self.file_path_label.config(text=file_path.name)
             self.file_path_tooltip.text = str(file_path)
+    
+    def setup_logging(self):
+        """配置logging，将日志输出到GUI的文本框中"""
+        logger = logging.getLogger()
+        logger.setLevel(logging.INFO)
+
+        gui_handler = GuiLoggingHandler(self.log_to_gui)
+
+        formatter = logging.Formatter(
+            '%(asctime)s - %(levelname)s - %(message)s',
+            datefmt='%H:%M:%S'
+        )
+        gui_handler.setFormatter(formatter)
+        logger.addHandler(gui_handler)
+
+    def log_to_gui(self, message):
+        """将消息安全地发送到GUI的日志区域（线程安全）"""
+        def _update():
+            self.log_text.config(state='normal')
+            self.log_text.insert(ttk.END, str(message) + '\n')
+            self.log_text.see(ttk.END)
+            self.log_text.config(state='disabled')
+        self.after(0, _update)
 
     def fetch_video_parts(self):
         """获取并填充视频分P列表"""
@@ -141,9 +185,9 @@ class Application(ttk.Window):
         sessdata = self.sessdata_entry.get().strip()
         bili_jct = self.bili_jct_entry.get().strip()
         if not all([bvid, sessdata, bili_jct]):
-            self.log_to_gui("❌【输入错误】请确保 BV号、SESSDATA 和 BILI_JCT 均已填写！")
+            logging.error("❌【输入错误】请确保 BV号、SESSDATA 和 BILI_JCT 均已填写！")
             return
-        self.log_to_gui(f"正在获取 {bvid} 的分P列表...")
+        logging.info(f"正在获取 {bvid} 的分P列表...")
         self.get_parts_button.config(state='disabled')
         self.part_var.set('正在获取中...')
         self.part_combobox.config(state="disabled")
@@ -154,7 +198,6 @@ class Application(ttk.Window):
         """在工作线程中执行API调用"""
         try:
             sender = BiliDanmakuSender(sessdata, bili_jct, bvid)
-            sender.log = self.log_to_gui
             video_info = sender.get_video_info()
             self.video_pages = video_info['pages']
             
@@ -163,7 +206,7 @@ class Application(ttk.Window):
 
             def _update_ui_success():
                 if self.display_parts:
-                    self.log_to_gui(f"✅ 成功获取到 {len(self.display_parts)} 个分P，已为您选中第一个")
+                    logging.info(f"✅ 成功获取到 {len(self.display_parts)} 个分P，已为您选中第一个")
                     self.part_combobox['values'] = self.display_parts
                     self.part_var.set(self.display_parts[0])
                     self.part_combobox.config(state="readonly")
@@ -176,7 +219,7 @@ class Application(ttk.Window):
                 self.get_parts_button.config(state='normal')
             self.after(0, _update_ui_success)
         except Exception as e:
-            self.log_to_gui(f"❌ 获取分P失败: {e}")
+            logging.error(f"❌ 获取分P失败: {e}")
             def _update_ui_fail():
                 self.get_parts_button.config(state="normal")
                 self.part_var.set("获取失败, 请检查BV号")
@@ -185,23 +228,13 @@ class Application(ttk.Window):
                 self.parts_loaded = False  # 失败后，明确设置标志为 False
             self.after(0, _update_ui_fail)
 
-    def log_to_gui(self, message):
-        """将消息安全地发送到GUI的日志区域（线程安全）"""
-        def _update():
-            self.log_text.config(state='normal')
-            self.log_text.insert(ttk.END, str(message) + '\n')
-            self.log_text.see(ttk.END)
-            self.log_text.config(state='disabled')
-        self.after(0, _update)
-
     def task_wrapper(self, bvid, xml_path, sessdata, bili_jct, min_delay, max_delay, cid, stop_event):
         """在单独的线程中执行弹幕发送任务的包裹函数。"""
         try:
             sender = BiliDanmakuSender(sessdata, bili_jct, bvid)
-            sender.log = self.log_to_gui
             sender.send_danmaku_from_xml(cid, xml_path, min_delay, max_delay, stop_event)
         except Exception as e:
-            self.log_to_gui(f"【程序崩溃】发生未捕获的严重错误: {e}")
+            logging.error(f"【程序崩溃】发生未捕获的严重错误: {e}")
         finally:
             self.after(0, self._restore_ui)
 
@@ -216,7 +249,7 @@ class Application(ttk.Window):
 
     def stop_task(self):
         """设置停止事件，更新UI"""
-        self.log_to_gui("ℹ️ 用户请求停止任务，将在当前弹幕发送完毕后终止...")
+        logging.info("ℹ️ 用户请求停止任务，将在当前弹幕发送完毕后终止...")
         self.stop_event.set()
         self.start_button.config(state='disabled', text="正在停止")
 
@@ -233,15 +266,15 @@ class Application(ttk.Window):
             if min_delay < 0 or max_delay < 0 or min_delay > max_delay:
                 raise ValueError("延迟时间必须为正数，且最小延迟不大于最大延迟")
         except (ValueError, TypeError):
-            self.log_to_gui("❌【输入错误】延迟时间设置不合法！")
+            logging.error("❌【输入错误】延迟时间设置不合法！")
             return
 
         if not all([bvid, self.full_file_path, sessdata, bili_jct]):
-            self.log_to_gui("❌【输入错误】请确保 BV号、弹幕文件、SESSDATA 和 BILI_JCT 都已填写！")
+            logging.error("❌【输入错误】请确保 BV号、弹幕文件、SESSDATA 和 BILI_JCT 都已填写！")
             return
         
         if not self.parts_loaded:
-            self.log_to_gui("❌【操作错误】请先成功获取并选择一个分P！")
+            logging.error("❌【操作错误】请先成功获取并选择一个分P！")
             return
         
         selected_part_str = self.part_var.get()
@@ -250,11 +283,11 @@ class Application(ttk.Window):
             # 通过显示文本，在self.display_parts中反查出索引
             selected_index = self.display_parts.index(selected_part_str)
         except ValueError:
-            self.log_to_gui("❌【程序错误】选择的分P与列表不匹配，请重新获取分P")
+            logging.error("❌【程序错误】选择的分P与列表不匹配，请重新获取分P")
             return
         
         selected_cid = self.video_pages[selected_index]['cid']
-        self.log_to_gui(f"已选择目标分P: {selected_part_str}, CID: {selected_cid}")
+        logging.info(f"已选择目标分P: {selected_part_str}, CID: {selected_cid}")
 
         self.stop_event.clear()  # 每次开始新任务前，清除旧的停止信号
         self.start_button.config(text="紧急停止", command=self.stop_task, style="danger.TButton")
@@ -274,7 +307,7 @@ class Application(ttk.Window):
             )
             thread.start()
         except Exception as e:
-            self.log_to_gui(f"【程序崩溃】无法启动后台任务线程: {e}")
+            logging.error(f"【程序崩溃】无法启动后台任务线程: {e}")
             self._restore_ui()  # 同时恢复UI状态，因为任务没有开始
 
 

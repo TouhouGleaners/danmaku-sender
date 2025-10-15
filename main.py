@@ -18,7 +18,6 @@ class BiliDanmakuSender:
         self.bvid = bvid
         self.bili_jct = bili_jct
         self.session = self._create_session(sessdata, bili_jct)
-        # Initialize logger instead of print
         self.logger = logging.getLogger(self.__class__.__name__)
         if not self.logger.handlers:
             # Configure basic logging if no handlers are set (e.g., when run standalone)
@@ -27,9 +26,6 @@ class BiliDanmakuSender:
             handler.setFormatter(formatter)
             self.logger.addHandler(handler)
             self.logger.setLevel(logging.INFO)
-
-        # WBI keys are static/cached by WbiSigner, so retrieving once is often sufficient.
-        # However, for robustness, WbiSigner.enc_wbi should handle refresh if keys expire.
         self.wbi_keys = WbiSigner.get_wbi_keys()
 
     def _create_session(self, sessdata: str, bili_jct: str) -> requests.Session:
@@ -47,8 +43,7 @@ class BiliDanmakuSender:
         
     def get_video_info(self) -> dict:
         """根据BVID获取视频详细信息，包括所有分P的CID和标题"""
-        # Changed to nav API as view API is deprecated or needs to handle wbi for some requests
-        url = "http://api.bilibili.com/x/web-interface/view" # Reverting to view API as nav API might not contain all details for video pages
+        url = "https://api.bilibili.com/x/web-interface/view"
         params = {'bvid': self.bvid}
         try:
             response = self.session.get(url, params=params)
@@ -63,7 +58,7 @@ class BiliDanmakuSender:
                         'page': p['page'],
                         'part': p['part']
                     }
-                    for p in video_data.get('pages', []) # Use .get with empty list for safety
+                    for p in video_data.get('pages', [])
                 ]
 
                 info = {
@@ -91,22 +86,21 @@ class BiliDanmakuSender:
         """
         处理发送弹幕时发生的各种异常，记录日志并返回统一的 DanmakuSendResult。
         """
-        # Construct detailed log message
+        # 构建详细的日志消息
         log_message = f"❌ 发送异常! 内容: '{danmaku.get('msg', 'N/A')}', 错误: {error_code.description_str} ({e.__class__.__name__}: {e})"
-        self.logger.error(log_message, exc_info=False) # exc_info=False to avoid redundant stack trace for known exception types
+        self.logger.error(log_message, exc_info=False)  # exc_info=False 用于避免已知异常类型的冗余堆栈跟踪
 
-        # Return DanmakuSendResult
         return DanmakuSendResult(
             code=error_code.code,
             success=False,
-            message=str(e), # Original exception string for raw_message
-            display_message=error_code.description_str # User-friendly description
+            message=str(e),  # 原始异常字符串，用于raw_message
+            display_message=error_code.description_str  # 用户友好的描述
         )
 
     def _send_single_danmaku(self, cid: int, danmaku: dict) -> DanmakuSendResult:
         """发送单条弹幕"""
         url = "https://api.bilibili.com/x/v2/dm/post"
-        img_key, sub_key = self.wbi_keys # Use cached keys
+        img_key, sub_key = self.wbi_keys
 
         base_params = {
             'type': '1',
@@ -122,7 +116,6 @@ class BiliDanmakuSender:
             'csrf': self.bili_jct
         }
 
-        # WbiSigner.enc_wbi should handle re-fetching keys if they are expired
         signed_params = WbiSigner.enc_wbi(params=base_params, img_key=img_key, sub_key=sub_key)
 
         try:
@@ -154,7 +147,6 @@ class BiliDanmakuSender:
         except RequestException as e:
             return self._handle_send_exception(danmaku, e, BiliDmErrorCode.NETWORK_ERROR)
         except Exception as e:
-            # Catch-all for any other unexpected exceptions during the request/response processing
             return self._handle_send_exception(danmaku, e, BiliDmErrorCode.UNKNOWN_ERROR)
 
     def _process_single_danmaku(self, cid: int, dm: dict, total: int, i: int, stop_event: Event) -> tuple[bool, bool]:
@@ -200,7 +192,7 @@ class BiliDanmakuSender:
 
     def _log_send_summary(self, total: int, attempted_count: int, success_count: int, stop_event: Event, fatal_error_occurred: bool):
         """记录弹幕发送任务的总结信息。"""
-        self.logger.info("\n--- 发送任务结束 ---")
+        self.logger.info("--- 发送任务结束 ---")
         if stop_event.is_set():
             self.logger.info("原因：任务被用户手动停止。")
         elif fatal_error_occurred:
@@ -274,7 +266,7 @@ class BiliDanmakuSender:
                         continue
                     
                     # 从 p_attr 提取所需的参数
-                    # Ensure p_attr has enough elements before accessing indices
+                    # 确保在访问索引前p_attr有足够的元素
                     if len(p_attr) < 4:
                         self.logger.warning(f"⚠️ 警告: 弹幕属性'p'不完整，跳过此条. 内容: '{text}', 属性: '{d_tag.attrib['p']}'")
                         continue
