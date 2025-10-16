@@ -106,11 +106,30 @@ class SenderTab(ttk.Frame):
         file_path_str = filedialog.askopenfilename(
             title="选择弹幕XML文件", filetypes=(("XML files", "*.xml"), ("All files", "*.*"))
         )
-        if file_path_str:
-            file_path = Path(file_path_str)
-            self.model.danmaku_xml_path.set(str(file_path))
-            self.file_path_label.config(text=file_path.name)
-            self.file_path_tooltip.text = str(file_path)
+        if not file_path_str:
+            return
+        file_path = Path(file_path_str)
+        self.model.danmaku_xml_path.set(str(file_path))
+        self.file_path_label.config(text=file_path.name)
+        self.file_path_tooltip.text = str(file_path)
+        logging.info(f"已选择文件: {file_path}")     
+        self.model.parsed_danmakus = []  # 清空旧的解析结果
+
+        try:
+            temp_sender = BiliDanmakuSender("dummy", "dummy", "dummy")
+            parsed_list = temp_sender.parse_danmaku_xml(str(file_path))
+
+            if parsed_list:
+                # 将解析成功的结果存入共享模型
+                self.model.parsed_danmakus = parsed_list
+                logging.info(f"✅ 文件解析成功，共 {len(parsed_list)} 条弹幕已准备就绪。")
+            else:
+                logging.warning("⚠️ 文件解析完成，但未找到有效弹幕。请检查文件内容。")
+        except Exception as e:
+            logging.error(f"❌ 文件解析失败: {e}")
+            # 解析失败，清空路径，防止用户使用错误的文件
+            self.model.danmaku_xml_path.set("")
+            self.file_path_label.config(text="解析失败，请重选")
 
     def fetch_video_parts(self):
         """获取视频分P列表"""
@@ -197,13 +216,18 @@ class SenderTab(ttk.Frame):
         except (ValueError, TypeError):
             logging.error("❌【输入错误】延迟时间设置不合法！")
             return
+        
+        if not self.model.danmaku_xml_path.get():
+            logging.error("❌【输入错误】请先选择一个弹幕文件！")
+            return
+        
         if not all([bvid, xml_path, sessdata, bili_jct]):
             logging.error("❌【输入错误】请确保 BV号、弹幕文件、SESSDATA 和 BILI_JCT 均已填写！")
             return
         
-        # 检查分P是否已加载
-        if not self.model.ordered_cids:
-            logging.error("❌【操作错误】请先成功获取并选择一个分P！")
+        # 直接检查模型中是否有解析好的弹幕
+        if not self.model.parsed_danmakus:
+            logging.error("❌【文件错误】未加载或解析到有效弹幕，请选择一个有效的弹幕文件！")
             return
             
         # --- 使用索引安全地获取 CID ---
@@ -226,9 +250,10 @@ class SenderTab(ttk.Frame):
         self.stop_event.clear()
 
         try:
+            danmakus_to_send = self.model.parsed_danmakus.copy()
             thread = threading.Thread(
                 target=self._task_worker, 
-                args=(bvid, xml_path, sessdata, bili_jct, min_delay, max_delay, selected_cid),
+                args=(bvid, danmakus_to_send, sessdata, bili_jct, min_delay, max_delay, selected_cid),
                 daemon=True
             )
             thread.start()
@@ -236,11 +261,11 @@ class SenderTab(ttk.Frame):
             logging.error(f"【程序崩溃】无法启动后台任务线程: {e}")
             self._restore_ui_after_task()
 
-    def _task_worker(self, bvid, xml_path, sessdata, bili_jct, min_delay, max_delay, cid):
+    def _task_worker(self, bvid, danmaku_list, sessdata, bili_jct, min_delay, max_delay, cid):
         """在工作线程中执行弹幕发送任务"""
         try:
             sender = BiliDanmakuSender(sessdata, bili_jct, bvid)
-            sender.send_danmaku_from_xml(cid, xml_path, min_delay, max_delay, self.stop_event)
+            sender.send_danmaku_from_list(cid, danmaku_list, min_delay, max_delay, self.stop_event)
         except Exception as e:
             logging.error(f"【程序崩溃】发生未捕获的严重错误: {e}")
         finally:

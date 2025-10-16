@@ -247,6 +247,37 @@ class BiliDanmakuSender:
         # 任务结束，打印总结
         self._log_send_summary(total, attempted_count, success_count, stop_event, fatal_error_occurred)
 
+    def send_danmaku_from_list(self, cid: int, danmakus: list, min_delay: float, max_delay: float, stop_event: Event):
+        """从一个弹幕字典列表发送弹幕，并响应停止事件"""
+        self.logger.info(f"开始从内存列表发送弹幕到 CID: {cid}")
+        if not danmakus:
+            self._log_send_summary(0, 0, 0, stop_event, False)
+            return
+        
+        total = len(danmakus)
+        success_count = 0
+        attempted_count = 0
+        fatal_error_occurred = False
+        for i, dm in enumerate(danmakus):
+            if stop_event.is_set():
+                self.logger.info("任务被用户手动停止。")
+                break
+            attempted_count += 1
+            sent_successfully, is_fatal = self._process_single_danmaku(cid, dm, total, i, stop_event)
+            if is_fatal:
+                fatal_error_occurred = True
+                break
+            if sent_successfully:
+                success_count += 1
+            
+            if stop_event.is_set():
+                self.logger.info("任务被用户手动停止。")
+                break
+            if i < total - 1:
+                if self._handle_delay_and_stop(min_delay, max_delay, stop_event):
+                    break
+        self._log_send_summary(total, attempted_count, success_count, stop_event, fatal_error_occurred)
+
     def parse_danmaku_xml(self, xml_path: str) -> list:
         """解析XML文件"""
         danmakus = []
