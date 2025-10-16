@@ -59,7 +59,7 @@ class SenderTab(ttk.Frame):
         ttk.Label(settings_frame, text="选择分P:").grid(row=1, column=0, sticky="w", padx=5, pady=8)
         self.part_combobox = ttk.Combobox(settings_frame, textvariable=self.model.part_var, state="readonly", bootstyle="secondary")
         self.part_combobox.grid(row=1, column=1, columnspan=2, sticky="ew", padx=(0, 5))
-        self.part_combobox.bind("<<ComboboxSelected>>", lambda _: (self.focus(), self.part_combobox.selection_clear(), self._on_part_selected))
+        self.part_combobox.bind("<<ComboboxSelected>>", lambda _: (self.focus(), self.part_combobox.selection_clear(), self._on_part_selected()))
         self.part_combobox.set("请先获取分P")
         self.part_combobox.config(state="disabled")
 

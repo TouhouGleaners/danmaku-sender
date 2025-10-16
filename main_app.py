@@ -43,7 +43,7 @@ class GuiLoggingHandler(logging.Handler):
 class Application(ttk.Window):
     def __init__(self):
         super().__init__(themename="litera")
-        self.title("B站弹幕发射器 v0.9.1")
+        self.title("B站弹幕发射器 v0.9.2")
         self.geometry("780x750")
         # --- 模型、控制器、视图的装配 ---
         self.shared_data = SharedDataModel()
@@ -186,7 +186,7 @@ class Application(ttk.Window):
         frame.pack(fill=BOTH, expand=True)
 
         ttk.Label(frame, text="B站弹幕补档工具", font=("TkDefaultFont", 14, "bold")).pack(pady=(0, 10))
-        ttk.Label(frame, text="版本: 0.9.1").pack(pady=5)
+        ttk.Label(frame, text="版本: 0.9.2").pack(pady=5)
         ttk.Label(frame, text="作者: Miku_oso").pack(pady=5)
 
         # 让窗口大小自适应内容
