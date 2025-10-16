@@ -25,7 +25,7 @@ jobs:
         pyinstaller --noconfirm --onefile --windowed --name "BiliDanmakuSender" `
           --icon="assets/icon.ico" `
           --add-data "$ttkbootstrap_path;ttkbootstrap" `
-          gui.py
+          main_app.py
     - name: Debug - List contents of dist directory
       run: Get-ChildItem -Path ./dist
 
