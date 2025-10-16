@@ -9,22 +9,41 @@ from monitor_tab import MonitorTab
 
 
 class GuiLoggingHandler(logging.Handler):
+    """
+    一个自定义的日志处理程序，将日志消息根据其来源路由到不同的GUI文本框。
+    它通过检查日志记录的名称(record.name)来决定目标。
+    """
     def __init__(self):
         super().__init__()
-        self.sender_log_callable = None
-        self.monitor_log_callable = None
+        # 存储不同日志目标的更新函数
+        self.output_targets = {
+            "sender_tab": None,
+            "monitor_tab": None,
+        }
 
     def emit(self, record):
+        """根据 record.name 将日志消息发送到正确的GUI组件。"""
         msg = self.format(record)
-        # TODO: 未来可以根据日志来源决定输出到哪个tab
-        # 目前所有日志都来自发射器，所以直接输出到发射器日志
-        if self.sender_log_callable:
-            self.sender_log_callable(msg)
+        
+        # 精确路由
+        if record.name == "sender_tab" and self.output_targets["sender_tab"]:
+            self.output_targets["sender_tab"](msg)
+        elif record.name == "monitor_tab" and self.output_targets["monitor_tab"]:
+            self.output_targets["monitor_tab"](msg)
+        # 关联路由: BiliDanmakuSender 的日志也应显示在发射器标签页
+        elif record.name == "BiliDanmakuSender" and self.output_targets["sender_tab"]:
+            self.output_targets["sender_tab"](msg)
+        # 备用 (Fallback) 路由: 对于未知来源的日志，默认输出到发射器日志框
+        else:
+            if self.output_targets["sender_tab"]:
+                # 为了区分，给这些通用日志加上来源名称作为前缀
+                self.output_targets["sender_tab"](f"[{record.name}] {msg}")
+
 
 class Application(ttk.Window):
     def __init__(self):
         super().__init__(themename="litera")
-        self.title("B站弹幕发射器 v0.8.4")
+        self.title("B站弹幕发射器 v0.9.0")
         self.geometry("780x750")
         # --- 模型、控制器、视图的装配 ---
         self.shared_data = SharedDataModel()
@@ -63,17 +82,36 @@ class Application(ttk.Window):
         self.destroy()
 
     def setup_logging(self):
-        """配置logging，将日志输出到GUI的文本框中"""
+        """
+        配置一个健壮的日志系统，能将不同模块的日志路由到对应的GUI界面。
+        """
         self.gui_handler = GuiLoggingHandler()
-        # 将发射器tab的日志更新方法注册到handler
-        log_widget = getattr(self.sender_tab_frame, 'log_text', None)
-        if log_widget:
-            self.gui_handler.sender_log_callable = self.log_to_gui_widget(log_widget)
-        logger = logging.getLogger()
-        logger.setLevel(logging.INFO)
         formatter = logging.Formatter('%(asctime)s - %(levelname)s - %(message)s', datefmt='%H:%M:%S')
         self.gui_handler.setFormatter(formatter)
-        logger.addHandler(self.gui_handler)
+
+        # 注册GUI输出目标
+        if hasattr(self.sender_tab_frame, 'log_text'):
+            self.gui_handler.output_targets["sender_tab"] = self.log_to_gui_widget(self.sender_tab_frame.log_text)
+        if hasattr(self.monitor_tab_frame, 'log_text'):
+            self.gui_handler.output_targets["monitor_tab"] = self.log_to_gui_widget(self.monitor_tab_frame.log_text)
+
+        # 配置各个模块的具名Logger
+        # 每个模块内部通过 logging.getLogger("模块名") 获取自己的logger实例
+        loggers_to_configure = ["sender_tab", "monitor_tab", "BiliDanmakuSender"]
+        for name in loggers_to_configure:
+            logger = logging.getLogger(name)
+            logger.setLevel(logging.INFO)
+            logger.propagate = False  # 阻止日志向上传播到根logger，避免重复处理
+            logger.addHandler(self.gui_handler)
+
+        # 配置根Logger，用于捕获所有其他未被专门处理的日志 (例如第三方库)
+        root_logger = logging.getLogger()
+        root_logger.setLevel(logging.INFO)
+
+        # 清理可能存在的旧handler，避免重复输出到控制台
+        for handler in root_logger.handlers[:]:
+            root_logger.removeHandler(handler)
+        root_logger.addHandler(self.gui_handler) # 让根Logger也使用我们的GUI Handler
 
     def log_to_gui_widget(self, text_widget):
         """返回一个用于更新特定ScrolledText控件的闭包函数"""
@@ -148,7 +186,7 @@ class Application(ttk.Window):
         frame.pack(fill=BOTH, expand=True)
 
         ttk.Label(frame, text="B站弹幕补档工具", font=("TkDefaultFont", 14, "bold")).pack(pady=(0, 10))
-        ttk.Label(frame, text="版本: 0.8.4").pack(pady=5)
+        ttk.Label(frame, text="版本: 0.9.0").pack(pady=5)
         ttk.Label(frame, text="作者: Miku_oso").pack(pady=5)
 
         # 让窗口大小自适应内容
@@ -158,6 +196,7 @@ class Application(ttk.Window):
         about_win.geometry(f"+{x}+{y}")  # 窗口居中于主窗口
         about_win.focus_force()
         about_win.wait_window()
+
 
 if __name__ == "__main__":
     app = Application()

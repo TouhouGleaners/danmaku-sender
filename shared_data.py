@@ -19,9 +19,7 @@ class SharedDataModel:
 
         self.cid_parts_map = {}  # 存储 {cid: 'title'} 的映射关系
         self.ordered_cids = []  # 存储一个与下拉框显示顺序完全对应的CID列表
-        
-        # --- 解析后的弹幕数据 ---
-        self.parsed_danmakus = []
+        self.selected_cid = None
 
         # --- 高级设置 (仅SenderTab使用) ---
         self.min_delay = ttk.StringVar(value="5.0")
@@ -30,8 +28,8 @@ class SharedDataModel:
 
         # --- 为监视器添加新变量 ---
         self.monitor_interval = ttk.StringVar(value="60")  # 刷新间隔，默认60秒
-        self.time_tolerance = ttk.StringVar(value="500") # 时间容差，默认500毫秒
-
+        self.time_tolerance = ttk.StringVar(value="500")  # 时间容差，默认500毫秒
+        self.monitor_progress_var = ttk.DoubleVar(value=0.0)
 
         # --- 状态信息 (用于状态栏显示) ---
         # 这些变量将由后台任务更新，并由状态栏显示

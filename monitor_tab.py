@@ -5,6 +5,7 @@ from tkinter import scrolledtext
 from datetime import timedelta
 import ttkbootstrap as ttk
 from ttkbootstrap.tooltip import ToolTip 
+from ttkbootstrap.dialogs import Messagebox
 
 
 class MonitorTab(ttk.Frame):
@@ -19,21 +20,19 @@ class MonitorTab(ttk.Frame):
         Args:
             parent: 父级Tkinter组件，通常是ttk.Notebook。
             model: 共享数据模型，包含BVID、文件路径、设置等，实现UI数据绑定。
-            app: 主应用实例，用于作为Messagebox等对话框的父窗口（尽管目前无Messagebox）。
+            app: 主应用实例，用于作为Messagebox等对话框的父窗口。
         """
         super().__init__(parent, padding=15)
         self.model = model
         self.app = app
+        self.logger = logging.getLogger("monitor_tab")
+        # 配置主Frame的列和行权重
+        self.columnconfigure(0, weight=1)
+        self.rowconfigure(2, weight=1)
+        self.monitor_thread = None
+        self.stop_monitor_event = threading.Event()
         
-        # 配置主Frame的列和行权重，确保内容区域随窗口调整大小
-        self.columnconfigure(0, weight=1) # 使内容区（唯一列）随窗口水平拉伸
-        self.rowconfigure(2, weight=1)    # 使日志区（row 2）随窗口垂直拉伸
-                                          # row 0, 1, 3 保持固定高度
-
-        self.monitor_thread = None         # 监视任务的线程实例
-        self.stop_monitor_event = threading.Event() # 用于控制监视线程停止的事件
-        
-        # 绑定来自共享数据模型的变量，以便UI组件自动响应数据变化
+        # 绑定来自共享数据模型的变量
         self.current_bvid = self.model.bvid 
         self.current_part = self.model.part_var  
         self.current_file = self.model.danmaku_xml_path 
@@ -109,39 +108,90 @@ class MonitorTab(ttk.Frame):
         self.status_label.grid(row=0, column=0, sticky="w")
 
         # 进度条：显示监视任务的进度
-        self.progress_bar = ttk.Progressbar(control_bar_frame, mode='determinate', style='success.Striped.TProgressbar')
+        self.progress_bar = ttk.Progressbar(control_bar_frame, mode='determinate', variable=self.model.monitor_progress_var, style='success.Striped.TProgressbar')
         self.progress_bar.grid(row=0, column=1, sticky="ew", padx=(10, 10)) # 左右各有10像素间距
 
         # 开始/停止监视按钮：控制监视任务的启动/停止
         self.start_button = ttk.Button(
             control_bar_frame, 
             text="开始监视", 
-            command=self.start_monitoring,
+            command=self.toggle_monitoring,
             style="primary.TButton", 
             width=12
         )
         self.start_button.grid(row=0, column=2, sticky="e")
 
-    def log(self, message):
-        """
-        向GUI的日志文本框和控制台输出信息。
-        TODO: 实现向 self.log_text 写入日志的功能。
-        """
-        print(message)
-    
-    def start_monitoring(self):
-        """
-        启动或停止监视任务的占位符方法。
-        根据当前状态切换按钮文本和样式，并更新本地状态标签。
-        TODO: 在此方法中实现实际的监视任务启动/停止逻辑。
-        """
-        current_status = self.model.monitor_status_text.get()
-        if "运行中" in current_status:
-            self.model.monitor_status_text.set("监视器：已停止")
-            self.log("【占位符】“停止监视”按钮被点击了！")
-            self.start_button.config(text="开始监视", style="primary.TButton")
+    def set_ui_state(self, is_enabled: bool):
+        """启用或禁用UI控件，防止任务运行时误操作。"""
+        state = 'normal' if is_enabled else 'disabled'
+        self.interval_entry.config(state=state)
+        self.tolerance_entry.config(state=state)
+
+    def toggle_monitoring(self):
+        """切换监视任务的启动/停止状态。"""
+        if self.monitor_thread and self.monitor_thread.is_alive():
+            self.stop_monitoring()
         else:
-            self.model.monitor_status_text.set("监视器：运行中...")
-            self.log("【占位符】“开始监视”按钮被点击了！")
-            self.start_button.config(text="停止监视", style="danger.TButton")
+            self.start_monitoring()
+
+    def start_monitoring(self):
+        """启动监视任务。"""
+        # 参数校验
+        cid = self.model.selected_cid
+        xml_path = self.model.danmaku_xml_path.get()
+        
+        if not all([cid, xml_path]):
+            Messagebox.show_warning("请先在“弹幕发射器”标签页加载视频并选择弹幕文件。", title="参数不足", parent=self.app)
+            return
+
+        try:
+            interval = int(self.model.monitor_interval.get())
+            tolerance = int(self.model.time_tolerance.get())
+            if interval <= 0 or tolerance < 0: raise ValueError
+        except ValueError:
+            Messagebox.show_error("检查间隔必须为正整数，时间容差必须为非负整数。", title="设置无效", parent=self.app)
+            return
+
+        # 更新UI状态
+        self.set_ui_state(False)
+        self.start_button.config(text="停止监视", style="danger.TButton")
+        self.model.monitor_status_text.set("监视器：启动中...")
+        self.model.monitor_progress_var.set(0) # 重置进度条
+        
+        # 启动后台线程
+        self.stop_monitor_event.clear()
+        self.monitor_thread = threading.Thread(
+            target=self._monitor_task,
+            args=(cid, xml_path, interval, tolerance),
+            daemon=True
+        )
+        self.monitor_thread.start()
+
+    def stop_monitoring(self):
+        """停止监视任务。"""
+        if self.monitor_thread and self.monitor_thread.is_alive():
+            self.logger.info("正在发送停止信号...")
+            self.stop_monitor_event.set()
+            self.model.monitor_status_text.set("监视器：正在停止...")
+
+    def _monitor_task(self, cid, xml_path, interval, tolerance):
+        """在后台线程中运行的监视核心逻辑。"""
+        from bili_monitor import BiliDanmakuMonitor # 延迟导入
+        monitor = BiliDanmakuMonitor(cid, xml_path, interval, tolerance)
+        
+        def progress_updater(matched_count, total_count):
+            if total_count > 0:
+                progress = (matched_count / total_count) * 100
+                status = f"监视器: 运行中... ({matched_count}/{total_count})"
+                self.app.after(0, lambda: (self.model.monitor_progress_var.set(progress), self.model.monitor_status_text.set(status)))
+
+        monitor.run(self.stop_monitor_event, progress_updater)
+        
+        self.app.after(0, self._reset_ui_after_task)
+        
+    def _reset_ui_after_task(self):
+        """任务结束后（正常完成或被停止），重置UI组件状态。"""
+        self.set_ui_state(True)
+        self.start_button.config(text="开始监视", style="primary.TButton")
+        self.model.monitor_status_text.set("监视器：已停止")
 

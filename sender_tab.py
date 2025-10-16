@@ -20,6 +20,7 @@ class SenderTab(ttk.Frame):
         super().__init__(parent, padding=15)
         self.model = model
         self.app = app  # 主应用实例，用于after调用
+        self.logger = logging.getLogger("sender_tab")
         self.columnconfigure(0, weight=1)
         self.rowconfigure(3, weight=1)
         # 状态变量
@@ -60,7 +61,7 @@ class SenderTab(ttk.Frame):
         ttk.Label(settings_frame, text="选择分P:").grid(row=1, column=0, sticky="w", padx=5, pady=8)
         self.part_combobox = ttk.Combobox(settings_frame, textvariable=self.model.part_var, state="readonly", bootstyle="secondary")
         self.part_combobox.grid(row=1, column=1, columnspan=2, sticky="ew", padx=(0, 5))
-        self.part_combobox.bind("<<ComboboxSelected>>", lambda _: (self.focus(), self.part_combobox.selection_clear()))
+        self.part_combobox.bind("<<ComboboxSelected>>", lambda _: (self.focus(), self.part_combobox.selection_clear(), self._on_part_selected))
         self.part_combobox.set("请先获取分P")
         self.part_combobox.config(state="disabled")
 
@@ -112,7 +113,7 @@ class SenderTab(ttk.Frame):
         self.model.danmaku_xml_path.set(str(file_path))
         self.file_path_label.config(text=file_path.name)
         self.file_path_tooltip.text = str(file_path)
-        logging.info(f"已选择文件: {file_path}")     
+        self.logger.info(f"已选择文件: {file_path}")     
         self.model.parsed_danmakus = []  # 清空旧的解析结果
 
         try:
@@ -122,14 +123,27 @@ class SenderTab(ttk.Frame):
             if parsed_list:
                 # 将解析成功的结果存入共享模型
                 self.model.parsed_danmakus = parsed_list
-                logging.info(f"✅ 文件解析成功，共 {len(parsed_list)} 条弹幕已准备就绪。")
+                self.logger.info(f"✅ 文件解析成功，共 {len(parsed_list)} 条弹幕已准备就绪。")
             else:
-                logging.warning("⚠️ 文件解析完成，但未找到有效弹幕。请检查文件内容。")
+                self.logger.warning("⚠️ 文件解析完成，但未找到有效弹幕。请检查文件内容。")
         except Exception as e:
-            logging.error(f"❌ 文件解析失败: {e}")
+            self.logger.error(f"❌ 文件解析失败: {e}")
             # 解析失败，清空路径，防止用户使用错误的文件
             self.model.danmaku_xml_path.set("")
             self.file_path_label.config(text="解析失败，请重选")
+    
+    def _on_part_selected(self, event=None):
+        """当用户从下拉框选择一个分P时，更新共享模型中的 selected_cid"""
+        self.app.focus()
+        selected_index = self.part_combobox.current()
+        if selected_index != -1:
+            try:
+                # 关键：将选中的CID存入共享模型
+                self.model.selected_cid = self.model.ordered_cids[selected_index]
+                self.logger.info(f"已选择目标分P: {self.model.part_var.get()}, CID: {self.model.selected_cid}")
+            except IndexError:
+                self.logger.error("程序错误：选择的索引超出了CID列表范围。")
+                self.model.selected_cid = None
 
     def fetch_video_parts(self):
         """获取视频分P列表"""
@@ -140,10 +154,10 @@ class SenderTab(ttk.Frame):
         bili_jct = self.model.bili_jct.get().strip()
 
         if not all([bvid, sessdata, bili_jct]):
-            logging.error("❌【输入错误】请确保 BV号、弹幕文件、SESSDATA 和 BILI_JCT 均已填写！")
+            self.logger.error("❌【输入错误】请确保 BV号、弹幕文件、SESSDATA 和 BILI_JCT 均已填写！")
             return
         
-        logging.info(f"正在获取 {bvid} 的分P列表...")
+        self.logger.info(f"正在获取 {bvid} 的分P列表...")
         self.get_parts_button.config(state='disabled')
         self.model.part_var.set('正在获取中...')
         self.part_combobox.config(state="disabled")
@@ -173,10 +187,11 @@ class SenderTab(ttk.Frame):
             def _update_ui_success():
                 # 这是一个在主线程中更新UI的回调函数
                 if display_parts:
-                    logging.info(f"✅ 成功获取到 {len(display_parts)} 个分P，已为您选中第一个")
+                    self.logger.info(f"✅ 成功获取到 {len(display_parts)} 个分P，已为您选中第一个")
                     self.part_combobox['values'] = display_parts
                     self.model.part_var.set(display_parts[0])  # 默认选中第一个
                     self.part_combobox.config(state="readonly")
+                    self._on_part_selected()
                 else:
                     self.part_combobox['values'] = []
                     self.model.part_var.set("未找到任何分P")
@@ -185,7 +200,7 @@ class SenderTab(ttk.Frame):
             
             self.app.after(0, _update_ui_success)
         except Exception as e:
-            logging.error(f"❌ 获取分P失败: {e}")
+            self.logger.error(f"❌ 获取分P失败: {e}")
             def _update_ui_fail():
                 self.get_parts_button.config(state="normal")
                 self.model.part_var.set("获取失败, 请检查BV号")
@@ -214,20 +229,20 @@ class SenderTab(ttk.Frame):
             if min_delay < 0 or max_delay < 0 or min_delay > max_delay:
                 raise ValueError("延迟时间必须为正数，且最小延迟不大于最大延迟")
         except (ValueError, TypeError):
-            logging.error("❌【输入错误】延迟时间设置不合法！")
+            self.logger.error("❌【输入错误】延迟时间设置不合法！")
             return
         
         if not self.model.danmaku_xml_path.get():
-            logging.error("❌【输入错误】请先选择一个弹幕文件！")
+            self.logger.error("❌【输入错误】请先选择一个弹幕文件！")
             return
         
         if not all([bvid, xml_path, sessdata, bili_jct]):
-            logging.error("❌【输入错误】请确保 BV号、弹幕文件、SESSDATA 和 BILI_JCT 均已填写！")
+            self.logger.error("❌【输入错误】请确保 BV号、弹幕文件、SESSDATA 和 BILI_JCT 均已填写！")
             return
         
         # 直接检查模型中是否有解析好的弹幕
         if not self.model.parsed_danmakus:
-            logging.error("❌【文件错误】未加载或解析到有效弹幕，请选择一个有效的弹幕文件！")
+            self.logger.error("❌【文件错误】未加载或解析到有效弹幕，请选择一个有效的弹幕文件！")
             return
             
         # --- 使用索引安全地获取 CID ---
@@ -237,12 +252,12 @@ class SenderTab(ttk.Frame):
             try:
                 # 使用索引从 ordered_cids 列表中获取，绝对不会出错
                 selected_cid = self.model.ordered_cids[selected_index]
-                logging.info(f"已选择目标分P: {self.model.part_var.get()}, CID: {selected_cid}")
+                self.logger.info(f"已选择目标分P: {self.model.part_var.get()}, CID: {selected_cid}")
             except IndexError:
-                logging.error("❌【程序错误】选择的索引超出了CID列表范围，请重新获取分P。")
+                self.logger.error("❌【程序错误】选择的索引超出了CID列表范围，请重新获取分P。")
                 return
         else:
-            logging.error("❌【操作错误】请在下拉框中选择一个分P！")
+            self.logger.error("❌【操作错误】请在下拉框中选择一个分P！")
             return
             
         # --- 更新UI并启动后台任务 ---
@@ -258,7 +273,7 @@ class SenderTab(ttk.Frame):
             )
             thread.start()
         except Exception as e:
-            logging.error(f"【程序崩溃】无法启动后台任务线程: {e}")
+            self.logger.error(f"【程序崩溃】无法启动后台任务线程: {e}")
             self._restore_ui_after_task()
 
     def _task_worker(self, bvid, danmaku_list, sessdata, bili_jct, min_delay, max_delay, cid):
@@ -267,13 +282,13 @@ class SenderTab(ttk.Frame):
             sender = BiliDanmakuSender(sessdata, bili_jct, bvid)
             sender.send_danmaku_from_list(cid, danmaku_list, min_delay, max_delay, self.stop_event)
         except Exception as e:
-            logging.error(f"【程序崩溃】发生未捕获的严重错误: {e}")
+            self.logger.error(f"【程序崩溃】发生未捕获的严重错误: {e}")
         finally:
             self.app.after(0, self._restore_ui_after_task)
             
     def stop_task(self):
         """停止发送弹幕任务的逻辑"""
-        logging.info("ℹ️ 用户请求停止任务，将在当前弹幕发送完毕后终止...")
+        self.logger.info("ℹ️ 用户请求停止任务，将在当前弹幕发送完毕后终止...")
         self.stop_event.set()
         self.start_button.config(state='disabled', text="正在停止")
 
