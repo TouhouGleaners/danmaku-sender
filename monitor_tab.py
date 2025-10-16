@@ -144,14 +144,14 @@ class MonitorTab(ttk.Frame):
         xml_path = self.model.danmaku_xml_path.get()
         local_danmakus_list = self.model.parsed_local_danmakus  # 获取预先解析好的本地弹幕列表，如果存在的话
         
-        if not all([cid, xml_path]):
-            Messagebox.show_warning("请先在“弹幕发射器”标签页加载视频并选择弹幕文件。", title="参数不足", parent=self.app)
+        # 统一检查是否有CID，以及是否有本地弹幕来源（要么有xml_path，要么有local_danmakus_list）
+        if not cid:
+            Messagebox.show_warning("请先在“弹幕发射器”标签页加载视频。", title="CID缺失", parent=self.app)
             return
-
-        # 确保至少有一种本地弹幕来源
-        if not xml_path and not local_danmakus_list: # <--- 修正此行：增加对 local_danmakus_list 的检查
+        if not xml_path and not local_danmakus_list:
             Messagebox.show_warning("请先在“弹幕发射器”标签页选择弹幕文件或确认已解析本地弹幕。", title="弹幕数据缺失", parent=self.app)
             return
+        
         try:
             interval = int(self.model.monitor_interval.get())
             tolerance = int(self.model.time_tolerance.get())
