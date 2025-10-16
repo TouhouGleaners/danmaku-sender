@@ -25,11 +25,11 @@ class SharedDataModel:
         self.min_delay = ttk.StringVar(value="5.0")
         self.max_delay = ttk.StringVar(value="10.0")
 
-
-        # --- 为监视器添加新变量 ---
+        # --- 高级设置 (仅MonitorTab使用) ---
         self.monitor_interval = ttk.StringVar(value="60")  # 刷新间隔，默认60秒
         self.time_tolerance = ttk.StringVar(value="500")  # 时间容差，默认500毫秒
         self.monitor_progress_var = ttk.DoubleVar(value=0.0)
+        self.parsed_local_danmakus = []  # 解析后的本地弹幕列表
 
         # --- 状态信息 (用于状态栏显示) ---
         # 这些变量将由后台任务更新，并由状态栏显示
