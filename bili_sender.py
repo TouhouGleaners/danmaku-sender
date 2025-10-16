@@ -340,7 +340,7 @@ class BiliDanmakuSender:
             response = self.session.get(url, timeout=10)
             response.raise_for_status()
             
-            return self.danmaku_parser.parse_xml_content(response.text, is_online_data=True)
+            return self.danmaku_parser.parse_xml_content(response.content.decode('utf-8'), is_online_data=True)
         except RequestException as e:
             self.logger.error(f"获取CID {cid} 的在线弹幕列表时发生网络错误: {e}")
             return []
