@@ -6,6 +6,7 @@ import ttkbootstrap as ttk
 from ttkbootstrap.tooltip import ToolTip
 
 from bili_sender import BiliDanmakuSender
+from bili_danmaku_utils import DanmakuParser
 
 
 class SenderTab(ttk.Frame):
@@ -23,11 +24,8 @@ class SenderTab(ttk.Frame):
         self.logger = logging.getLogger("sender_tab")
         self.columnconfigure(0, weight=1)
         self.rowconfigure(3, weight=1)
-        # 状态变量
         self.stop_event = threading.Event()
-        # self.video_pages = []
-        # self.display_parts = []
-        # self.parts_loaded = False
+        self.danmaku_parser = DanmakuParser()
 
         self._create_widgets()
 
@@ -114,22 +112,19 @@ class SenderTab(ttk.Frame):
         self.file_path_label.config(text=file_path.name)
         self.file_path_tooltip.text = str(file_path)
         self.logger.info(f"已选择文件: {file_path}")     
-        self.model.parsed_danmakus = []  # 清空旧的解析结果
+        self.model.parsed_local_danmakus = []  # 清空旧的解析结果
 
         try:
-            temp_sender = BiliDanmakuSender("dummy", "dummy", "dummy")
-            parsed_list = temp_sender.parse_danmaku_xml(str(file_path))
-
+            parsed_list = self.danmaku_parser.parse_xml_file(str(file_path))
             if parsed_list:
                 # 将解析成功的结果存入共享模型
-                self.model.parsed_danmakus = parsed_list
+                self.model.parsed_local_danmakus = parsed_list
                 self.logger.info(f"✅ 文件解析成功，共 {len(parsed_list)} 条弹幕已准备就绪。")
             else:
                 self.logger.warning("⚠️ 文件解析完成，但未找到有效弹幕。请检查文件内容。")
         except Exception as e:
             self.logger.error(f"❌ 文件解析失败: {e}")
-            # 解析失败，清空路径，防止用户使用错误的文件
-            self.model.danmaku_xml_path.set("")
+            self.model.danmaku_xml_path.set("")  # 解析失败，清空路径，防止用户使用错误的文件
             self.file_path_label.config(text="解析失败，请重选")
     
     def _on_part_selected(self, event=None):
@@ -241,7 +236,7 @@ class SenderTab(ttk.Frame):
             return
         
         # 直接检查模型中是否有解析好的弹幕
-        if not self.model.parsed_danmakus:
+        if not self.model.parsed_local_danmakus:
             self.logger.error("❌【文件错误】未加载或解析到有效弹幕，请选择一个有效的弹幕文件！")
             return
             
@@ -265,7 +260,7 @@ class SenderTab(ttk.Frame):
         self.stop_event.clear()
 
         try:
-            danmakus_to_send = self.model.parsed_danmakus.copy()
+            danmakus_to_send = self.model.parsed_local_danmakus.copy()
             thread = threading.Thread(
                 target=self._task_worker, 
                 args=(bvid, danmakus_to_send, sessdata, bili_jct, min_delay, max_delay, selected_cid),
