@@ -27,7 +27,13 @@ class SharedDataModel:
         self.min_delay = ttk.StringVar(value="5.0")
         self.max_delay = ttk.StringVar(value="10.0")
 
+
+        # --- 为监视器添加新变量 ---
+        self.monitor_interval = ttk.StringVar(value="60")  # 刷新间隔，默认60秒
+        self.time_tolerance = ttk.StringVar(value="500") # 时间容差，默认500毫秒
+
+
         # --- 状态信息 (用于状态栏显示) ---
         # 这些变量将由后台任务更新，并由状态栏显示
-        self.sender_status_text = ttk.StringVar(value="发送状态：待命")
-        self.verify_status_text = ttk.StringVar(value="校验状态：未开始")
+        self.sender_status_text = ttk.StringVar(value="发送器：待命")
+        self.monitor_status_text = ttk.StringVar(value="监视器：待命")
