@@ -1,4 +1,4 @@
-import tkinter as tk
+import ttkbootstrap as ttk
 
 
 class SharedDataModel:
@@ -9,23 +9,29 @@ class SharedDataModel:
     def __init__(self):
         # --- 身份凭证 ---
         # 这些变量将直接绑定到凭证输入框
-        self.sessdata = tk.StringVar()
-        self.bili_jct = tk.StringVar()
+        self.sessdata = ttk.StringVar()
+        self.bili_jct = ttk.StringVar()
 
         # --- 核心参数 ---
-        self.bvid = tk.StringVar()
-        self.part_var = tk.StringVar()
-        self.danmaku_xml_path = tk.StringVar()
-        
-        # --- 弹幕文件路径 ---
-        self.danmaku_xml_path = tk.StringVar()
+        self.bvid = ttk.StringVar()
+        self.part_var = ttk.StringVar()
+        self.danmaku_xml_path = ttk.StringVar()
 
-        # --- 高级设置 ---
-        # 这些将绑定到高级设置里的延迟输入框
-        self.min_delay = tk.StringVar(value="5.0")
-        self.max_delay = tk.StringVar(value="10.0")
+        self.cid_parts_map = {}  # 存储 {cid: 'title'} 的映射关系
+        self.ordered_cids = []  # 存储一个与下拉框显示顺序完全对应的CID列表
+        self.selected_cid = None
+
+        # --- 高级设置 (仅SenderTab使用) ---
+        self.min_delay = ttk.StringVar(value="5.0")
+        self.max_delay = ttk.StringVar(value="10.0")
+
+
+        # --- 为监视器添加新变量 ---
+        self.monitor_interval = ttk.StringVar(value="60")  # 刷新间隔，默认60秒
+        self.time_tolerance = ttk.StringVar(value="500")  # 时间容差，默认500毫秒
+        self.monitor_progress_var = ttk.DoubleVar(value=0.0)
 
         # --- 状态信息 (用于状态栏显示) ---
         # 这些变量将由后台任务更新，并由状态栏显示
-        self.sender_status_text = tk.StringVar(value="发送状态：待命")
-        self.verify_status_text = tk.StringVar(value="校验状态：未开始")
+        self.sender_status_text = ttk.StringVar(value="发送器：待命")
+        self.monitor_status_text = ttk.StringVar(value="监视器：待命")

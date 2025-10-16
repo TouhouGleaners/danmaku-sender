@@ -247,6 +247,37 @@ class BiliDanmakuSender:
         # 任务结束，打印总结
         self._log_send_summary(total, attempted_count, success_count, stop_event, fatal_error_occurred)
 
+    def send_danmaku_from_list(self, cid: int, danmakus: list, min_delay: float, max_delay: float, stop_event: Event):
+        """从一个弹幕字典列表发送弹幕，并响应停止事件"""
+        self.logger.info(f"开始从内存列表发送弹幕到 CID: {cid}")
+        if not danmakus:
+            self._log_send_summary(0, 0, 0, stop_event, False)
+            return
+        
+        total = len(danmakus)
+        success_count = 0
+        attempted_count = 0
+        fatal_error_occurred = False
+        for i, dm in enumerate(danmakus):
+            if stop_event.is_set():
+                self.logger.info("任务被用户手动停止。")
+                break
+            attempted_count += 1
+            sent_successfully, is_fatal = self._process_single_danmaku(cid, dm, total, i, stop_event)
+            if is_fatal:
+                fatal_error_occurred = True
+                break
+            if sent_successfully:
+                success_count += 1
+            
+            if stop_event.is_set():
+                self.logger.info("任务被用户手动停止。")
+                break
+            if i < total - 1:
+                if self._handle_delay_and_stop(min_delay, max_delay, stop_event):
+                    break
+        self._log_send_summary(total, attempted_count, success_count, stop_event, fatal_error_occurred)
+
     def parse_danmaku_xml(self, xml_path: str) -> list:
         """解析XML文件"""
         danmakus = []
@@ -293,4 +324,43 @@ class BiliDanmakuSender:
             return []
         except Exception as e:
             self.logger.critical(f"❌ 错误: 解析XML文件 '{xml_path}' 时发生意外异常: {e}", exc_info=True)
+            return []
+        
+    def get_online_danmaku_list(self, cid: int) -> list:
+        """获取指定CID的线上实时弹幕列表。
+        
+        Args:
+            cid: 目标视频分P的CID。
+        Returns:
+            一个包含弹幕字典的列表，例如 [{'progress': 12345, 'msg': '弹幕内容'}]。
+            如果失败则返回空列表。
+        """
+        url = f"https://api.bilibili.com/x/v1/dm/list.so?oid={cid}"
+        try:
+            response = self.session.get(url, timeout=10)
+            response.raise_for_status()
+            
+            root = ET.fromstring(response.content)
+            danmakus = []
+            for d_tag in root.findall('d'):
+                try:
+                    p_attr = d_tag.attrib['p'].split(',')
+                    # 我们只需要时间和文本来进行匹配
+                    danmaku = {
+                        'progress': int(float(p_attr[0]) * 1000), # 转换为毫秒
+                        'msg': d_tag.text.strip() if d_tag.text else ""
+                    }
+                    danmakus.append(danmaku)
+                except (IndexError, ValueError):
+                    # 忽略解析失败的弹幕
+                    continue
+            return danmakus
+        except RequestException as e:
+            self.logger.error(f"获取CID {cid} 的在线弹幕列表时发生网络错误: {e}")
+            return []
+        except ET.ParseError as e:
+            self.logger.error(f"解析CID {cid} 的在线弹幕XML时失败: {e}")
+            return []
+        except Exception as e:
+            self.logger.error(f"获取或解析在线弹幕时发生未知错误: {e}")
             return []
