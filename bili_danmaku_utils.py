@@ -60,26 +60,19 @@ class BiliDmErrorCode(Enum):
         return self.value[2]
     
     @classmethod
-    def from_code(cls, code: int):
+    def from_code(cls, code: int) -> 'BiliDmErrorCode':
         """通过数字错误码反向查找对应的枚举成员"""
         return next((member for member in cls if member.code == code), None)
     
     @staticmethod
     def resolve_bili_error(code: int, raw_message: str) -> tuple[int, str]:
         """根据B站返回的code和原始信息，解析出最终的code和用于显示的友好消息"""
-        # 尝试从枚举中获取友好提示
         enum_member = BiliDmErrorCode.from_code(code)
         if enum_member:
-            display_msg = enum_member.description_str
+            return code, enum_member.description_str
         else:
-            # 如果没有匹配的枚举成员，且B站返回的原始消息不为空，则使用原始消息，否则使用通用失败消息
-            display_msg = raw_message if raw_message and raw_message != "无B站原始消息" else BiliDmErrorCode.GENERIC_FAILURE.description_str
-
-        # 如果 B站原始消息为空且 code 不是成功，并且枚举也未提供描述，则使用通用提示
-        if not display_msg and code != BiliDmErrorCode.SUCCESS.code:
-            display_msg = BiliDmErrorCode.UNKNOWN_ERROR.description_str
-            
-        return code, display_msg
+            display_msg = raw_message or BiliDmErrorCode.GENERIC_FAILURE.description_str
+            return code, display_msg
         
 
 class DanmakuSendResult:
@@ -101,6 +94,7 @@ class DanmakuSendResult:
 class DanmakuParser:
     """
     一个专门用于解析Bilibili弹幕XML内容，并返回标准化弹幕字典列表的类。
+    唯一的弹幕解析来源，确保解析逻辑的一致性。
     """
     def __init__(self):
         # 获取一个独立的logger实例，用于该解析器类的日志
@@ -157,6 +151,7 @@ class DanmakuParser:
                             danmaku['mode'] = 1             # 默认值
                             danmaku['fontsize'] = 25        # 默认值
                             danmaku['color'] = 16777215     # 默认白色(#FFFFFF)
+
                     danmakus.append(danmaku)
                 except (ValueError, IndexError) as e:
                     self.logger.warning(f"⚠️ 警告: 解析单个弹幕失败, 跳过此条. 内容: '{d_tag.text}', 属性: '{p_attr_str}', 错误: {e}")
@@ -183,3 +178,19 @@ class DanmakuParser:
         except Exception as e:
             self.logger.critical(f"❌ 错误: 读取或解析本地弹幕文件 '{xml_path}' 时发生意外异常: {e}", exc_info=True)
             return []
+
+
+def format_ms_to_hhmmss(ms: int) -> str:
+    """将毫秒格式化为 HH:MM:SS / MM:SS 字符串。"""
+    if not isinstance(ms, (int, float)) or ms < 0:
+        return "-:--:--"
+    
+    total_seconds = int(ms // 1000)
+    hours = total_seconds // 3600
+    minutes = (total_seconds % 3600) // 60
+    seconds = total_seconds % 60
+
+    if hours > 0:
+        return f"{hours:02d}:{minutes:02d}:{seconds:02d}"
+    else:
+        return f"{minutes:02d}:{seconds:02d}"

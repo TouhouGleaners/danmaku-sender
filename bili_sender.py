@@ -206,47 +206,6 @@ class BiliDanmakuSender:
         self.logger.info(f"发送成功: {success_count} 条")
         self.logger.info(f"发送失败: {attempted_count - success_count} 条")
 
-    def send_danmaku_from_xml(self, cid: int, xml_path: str, min_delay: float, max_delay: float, stop_event: Event):
-        """从XML文件中读取弹幕并发送至指定的CID，并响应停止事件"""
-        self.logger.info(f"开始从 XML 文件 '{xml_path}' 发送弹幕到 CID: {cid}")
-        danmakus = self.parse_danmaku_xml(xml_path)
-        if not danmakus:
-            self._log_send_summary(0, 0, 0, stop_event, False)  # 如果没有弹幕，也打印总结
-            return
-        
-        total = len(danmakus)
-        success_count = 0
-        attempted_count = 0
-        fatal_error_occurred = False
-
-        for i, dm in enumerate(danmakus):
-            # 核心检查：在每次循环开始时，检查是否需要停止
-            if stop_event.is_set():
-                self.logger.info("任务被用户手动停止。")
-                break
-
-            attempted_count += 1
-            sent_successfully, is_fatal = self._process_single_danmaku(cid, dm, total, i, stop_event)
-
-            if is_fatal:
-                fatal_error_occurred = True
-                break  # 遇到致命错误，中断任务
-
-            if sent_successfully:
-                success_count += 1
-
-            # 再次检查，如果发送非常耗时，用户可能在此期间点击了停止
-            if stop_event.is_set():
-                self.logger.info("任务被用户手动停止。")
-                break 
-
-            if i < total - 1:  # 如果不是最后一条弹幕，则等待
-                if self._handle_delay_and_stop(min_delay, max_delay, stop_event):
-                    break
-
-        # 任务结束，打印总结
-        self._log_send_summary(total, attempted_count, success_count, stop_event, fatal_error_occurred)
-
     def send_danmaku_from_list(self, cid: int, danmakus: list, min_delay: float, max_delay: float, stop_event: Event):
         """从一个弹幕字典列表发送弹幕，并响应停止事件"""
         self.logger.info(f"开始从内存列表发送弹幕到 CID: {cid}")
@@ -277,54 +236,6 @@ class BiliDanmakuSender:
                 if self._handle_delay_and_stop(min_delay, max_delay, stop_event):
                     break
         self._log_send_summary(total, attempted_count, success_count, stop_event, fatal_error_occurred)
-
-    def parse_danmaku_xml(self, xml_path: str) -> list:
-        """解析XML文件"""
-        danmakus = []
-        try:
-            tree = ET.parse(xml_path)
-            root = tree.getroot()
-
-            # 寻找根节点下所有 <d> 标签
-            for d_tag in root.findall('d'):
-                try:
-                    # 获取 p 属性并用逗号分割成列表
-                    p_attr = d_tag.attrib['p'].split(',')
-                    text = d_tag.text
-                    # 检查弹幕是否为空或只包含空白字符
-                    if not text or not text.strip():
-                        self.logger.warning(f"⚠️ 警告: 检测到空弹幕或纯空白弹幕，跳过此条. XML内容片段: '{ET.tostring(d_tag, encoding='unicode').strip()}'")
-                        continue
-                    
-                    # 从 p_attr 提取所需的参数
-                    # 确保在访问索引前p_attr有足够的元素
-                    if len(p_attr) < 4:
-                        self.logger.warning(f"⚠️ 警告: 弹幕属性'p'不完整，跳过此条. 内容: '{text}', 属性: '{d_tag.attrib['p']}'")
-                        continue
-
-                    danmaku = {
-                        'progress': int(float(p_attr[0]) * 1000),
-                        'mode': int(p_attr[1]),
-                        'fontsize': int(p_attr[2]),
-                        'color': int(p_attr[3]),
-                        'msg': text.strip()
-                    }
-                    danmakus.append(danmaku)
-                except (IndexError, ValueError) as e:
-                    self.logger.warning(f"⚠️ 警告: 解析弹幕失败, 跳过此条. 内容: '{d_tag.text}', 错误: {e}")
-                except Exception as e:
-                    self.logger.error(f"❌ 错误: 解析单个弹幕时发生意外异常, 跳过此条. 内容: '{d_tag.text}', 错误: {e}", exc_info=True)
-            self.logger.info(f'📦 成功从 {xml_path} 解析出 {len(danmakus)} 条弹幕')
-            return danmakus
-        except FileNotFoundError:
-            self.logger.error(f"❌ 错误: 文件 '{xml_path}' 不存在")
-            return []
-        except ET.ParseError as e:
-            self.logger.error(f"❌ 错误: 解析XML文件 '{xml_path}' 时发生错误: {e}", exc_info=True)
-            return []
-        except Exception as e:
-            self.logger.critical(f"❌ 错误: 解析XML文件 '{xml_path}' 时发生意外异常: {e}", exc_info=True)
-            return []
         
     def get_online_danmaku_list(self, cid: int) -> list:
         """获取指定CID的线上实时弹幕列表。
