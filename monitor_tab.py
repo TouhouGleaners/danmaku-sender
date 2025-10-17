@@ -1,8 +1,6 @@
 import logging
 import threading
-import time
 from tkinter import scrolledtext
-from datetime import timedelta
 import ttkbootstrap as ttk
 from ttkbootstrap.tooltip import ToolTip 
 from ttkbootstrap.dialogs import Messagebox
@@ -48,7 +46,7 @@ class MonitorTab(ttk.Frame):
         """
         
         # --- 监视设置区 ---
-        monitor_settings_frame = ttk.Labelframe(self, text="监视设置", padding=15, bootstyle="primary")
+        monitor_settings_frame = ttk.Labelframe(self, text="监视设置", padding=15, bootstyle="secondary")
         monitor_settings_frame.grid(row=0, column=0, padx=10, pady=5, sticky="ew")
         monitor_settings_frame.columnconfigure(1, weight=1) # 允许第二列的显示内容占据更多空间
 
@@ -78,12 +76,12 @@ class MonitorTab(ttk.Frame):
 
         # 检查间隔设置
         ttk.Label(advanced_settings_frame, text="检查间隔(秒):").grid(row=0, column=0, sticky="w", padx=5, pady=8)
-        self.interval_entry = ttk.Entry(advanced_settings_frame, width=10, textvariable=self.model.monitor_interval)
+        self.interval_entry = ttk.Entry(advanced_settings_frame, width=10, textvariable=self.model.monitor_interval, takefocus=0)
         self.interval_entry.grid(row=0, column=1, sticky="w", padx=(0,10))
 
         # 时间容差设置
         ttk.Label(advanced_settings_frame, text="时间容差(ms):").grid(row=0, column=2, sticky="w", padx=5, pady=8)
-        self.tolerance_entry = ttk.Entry(advanced_settings_frame, width=10, textvariable=self.model.time_tolerance)
+        self.tolerance_entry = ttk.Entry(advanced_settings_frame, width=10, textvariable=self.model.time_tolerance, takefocus=0)
         self.tolerance_entry.grid(row=0, column=3, sticky="w")
     
         
@@ -118,7 +116,7 @@ class MonitorTab(ttk.Frame):
             control_bar_frame, 
             text="开始监视", 
             command=self.toggle_monitoring,
-            style="primary.TButton", 
+            style="success.TButton", 
             width=12
         )
         self.start_button.grid(row=0, column=2, sticky="e")
@@ -147,9 +145,11 @@ class MonitorTab(ttk.Frame):
         # 统一检查是否有CID，以及是否有本地弹幕来源（要么有xml_path，要么有local_danmakus_list）
         if not cid:
             Messagebox.show_warning("请先在“弹幕发射器”标签页加载视频。", title="CID缺失", parent=self.app)
+            self.logger.warning("CID缺失，无法开始监控。") 
             return
         if not xml_path and not local_danmakus_list:
             Messagebox.show_warning("请先在“弹幕发射器”标签页选择弹幕文件或确认已解析本地弹幕。", title="弹幕数据缺失", parent=self.app)
+            self.logger.warning("弹幕数据缺失，无法开始监控。")
             return
         
         try:
@@ -158,13 +158,10 @@ class MonitorTab(ttk.Frame):
             if interval <= 0 or tolerance < 0: raise ValueError
         except ValueError:
             Messagebox.show_error("检查间隔必须为正整数，时间容差必须为非负整数。", title="设置无效", parent=self.app)
+            self.logger.error("监控设置参数无效。")
             return
 
-        # 更新UI状态
-        self.set_ui_state(False)
-        self.start_button.config(text="停止监视", style="danger.TButton")
-        self.model.monitor_status_text.set("监视器：启动中...")
-        self.model.monitor_progress_var.set(0) # 重置进度条
+        self._set_ui_for_task_start()  # 更新UI状态
         
         # 启动后台线程
         self.stop_monitor_event.clear()
@@ -198,9 +195,19 @@ class MonitorTab(ttk.Frame):
         
         self.app.after(0, self._reset_ui_after_task)
         
+    def _set_ui_for_task_start(self):
+        """任务开始时更新UI状态。"""
+        self.set_ui_state(False)
+        self.start_button.config(text="停止监视", style="danger.TButton")
+        self.model.monitor_status_text.set("监视器：启动中...")
+        self.model.monitor_progress_var.set(0)  # 重置进度条
+        # 日志清理和初始日志记录
+        self.log_text.config(state='normal')
+        self.log_text.delete('1.0', 'end')
+        self.log_text.config(state='disabled')
+
     def _reset_ui_after_task(self):
         """任务结束后（正常完成或被停止），重置UI组件状态。"""
         self.set_ui_state(True)
-        self.start_button.config(text="开始监视", style="primary.TButton")
+        self.start_button.config(text="开始监视", style="success.TButton")
         self.model.monitor_status_text.set("监视器：已停止")
-
