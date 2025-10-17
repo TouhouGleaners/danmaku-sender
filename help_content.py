@@ -1,5 +1,5 @@
 # --- 版本常量 ---
-APP_VERSION = "0.9.5"
+APP_VERSION = "0.9.6"
 
 # --- 窗口标题常量 ---
 MAIN_WINDOW_TITLE_PREFIX = "B站弹幕补档工具" # 主窗口标题的前缀
