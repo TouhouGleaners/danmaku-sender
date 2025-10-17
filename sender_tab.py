@@ -53,7 +53,7 @@ class SenderTab(ttk.Frame):
         ttk.Label(settings_frame, text="BV号:").grid(row=0, column=0, sticky="w", padx=5, pady=8)
         self.bvid_entry = ttk.Entry(settings_frame, textvariable=self.model.bvid, takefocus=0)
         self.bvid_entry.grid(row=0, column=1, sticky="ew") 
-        self.get_parts_button = ttk.Button(settings_frame, text="获取分P", command=self.fetch_video_parts)
+        self.get_parts_button = ttk.Button(settings_frame, text="获取分P", command=self.fetch_video_parts, takefocus=0)
         self.get_parts_button.grid(row=0, column=2, padx=(5, 0))
 
         ttk.Label(settings_frame, text="选择分P:").grid(row=1, column=0, sticky="w", padx=5, pady=8)
@@ -245,7 +245,6 @@ class SenderTab(ttk.Frame):
         selected_index = self.part_combobox.current()
         if selected_index != -1:
             try:
-                # 使用索引从 ordered_cids 列表中获取，绝对不会出错
                 selected_cid = self.model.ordered_cids[selected_index]
                 self.logger.info(f"已选择目标分P: {self.model.part_var.get()}, CID: {selected_cid}")
             except IndexError:
