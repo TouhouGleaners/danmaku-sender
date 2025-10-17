@@ -22,8 +22,8 @@ class SharedDataModel:
         self.selected_cid = None
 
         # --- 高级设置 (仅SenderTab使用) ---
-        self.min_delay = ttk.StringVar(value="5.0")
-        self.max_delay = ttk.StringVar(value="10.0")
+        self.min_delay = ttk.StringVar(value="20.0")
+        self.max_delay = ttk.StringVar(value="25.0")
 
         # --- 高级设置 (仅MonitorTab使用) ---
         self.monitor_interval = ttk.StringVar(value="60")  # 刷新间隔，默认60秒
