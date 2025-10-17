@@ -30,8 +30,8 @@ class GuiLoggingHandler(logging.Handler):
             self.output_targets["sender_tab"](msg)
         elif record.name == "monitor_tab" and self.output_targets["monitor_tab"]:
             self.output_targets["monitor_tab"](msg)
-        # 关联路由: BiliDanmakuSender 的日志也应显示在发射器标签页
-        elif record.name == "BiliDanmakuSender" and self.output_targets["sender_tab"]:
+        # 关联路由: DanmakuSender 的日志也应显示在发射器标签页
+        elif record.name == "DanmakuSender" and self.output_targets["sender_tab"]:
             self.output_targets["sender_tab"](msg)
         # 备用 (Fallback) 路由: 对于未知来源的日志，默认输出到发射器日志框
         else:
@@ -97,7 +97,7 @@ class Application(ttk.Window):
 
         # 配置各个模块的具名Logger
         # 每个模块内部通过 logging.getLogger("模块名") 获取自己的logger实例
-        loggers_to_configure = ["sender_tab", "monitor_tab", "DanmakuSender", "DanmakuParser"]
+        loggers_to_configure = ["sender_tab", "monitor_tab", "DanmakuSender", "DanmakuParser", "BiliUtils"]
         for name in loggers_to_configure:
             logger = logging.getLogger(name)
             logger.setLevel(logging.INFO)
