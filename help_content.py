@@ -80,5 +80,5 @@ ABOUT_TEXT_ISSUE_LINK_LABEL = ">>> 前往 Issue 页面 <<<"
 
 
 # --- URL常量 ---
-GITHUB_REPO_URL = "https://github.com/TouhouGleaners/BiliDanmakuSender"
+GITHUB_REPO_URL = "https://github.com/TouhouGleaners/danmaku-sender"
 GITHUB_ISSUES_URL = f"{GITHUB_REPO_URL}/issues"
