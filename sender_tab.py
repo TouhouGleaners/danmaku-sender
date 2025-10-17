@@ -38,11 +38,11 @@ class SenderTab(ttk.Frame):
         auth_frame.columnconfigure(1, weight=1)
 
         ttk.Label(auth_frame, text="SESSDATA:").grid(row=0, column=0, sticky="w", padx=5, pady=8)
-        self.sessdata_entry = ttk.Entry(auth_frame, show="*", textvariable=self.model.sessdata)
+        self.sessdata_entry = ttk.Entry(auth_frame, show="*", textvariable=self.model.sessdata, takefocus=0)
         self.sessdata_entry.grid(row=0, column=1, sticky="ew")
 
         ttk.Label(auth_frame, text="BILI_JCT:").grid(row=1, column=0, sticky="w",padx=5, pady=8)
-        self.bili_jct_entry = ttk.Entry(auth_frame, show="*", textvariable=self.model.bili_jct)
+        self.bili_jct_entry = ttk.Entry(auth_frame, show="*", textvariable=self.model.bili_jct, takefocus=0)
         self.bili_jct_entry.grid(row=1, column=1, sticky="ew")
 
         # --- 设置区 ---
@@ -51,13 +51,13 @@ class SenderTab(ttk.Frame):
         settings_frame.columnconfigure(1, weight=1)
 
         ttk.Label(settings_frame, text="BV号:").grid(row=0, column=0, sticky="w", padx=5, pady=8)
-        self.bvid_entry = ttk.Entry(settings_frame, textvariable=self.model.bvid)
+        self.bvid_entry = ttk.Entry(settings_frame, textvariable=self.model.bvid, takefocus=0)
         self.bvid_entry.grid(row=0, column=1, sticky="ew") 
         self.get_parts_button = ttk.Button(settings_frame, text="获取分P", command=self.fetch_video_parts)
         self.get_parts_button.grid(row=0, column=2, padx=(5, 0))
 
         ttk.Label(settings_frame, text="选择分P:").grid(row=1, column=0, sticky="w", padx=5, pady=8)
-        self.part_combobox = ttk.Combobox(settings_frame, textvariable=self.model.part_var, state="readonly", bootstyle="secondary")
+        self.part_combobox = ttk.Combobox(settings_frame, textvariable=self.model.part_var, state="readonly", bootstyle="secondary", takefocus=0)
         self.part_combobox.grid(row=1, column=1, columnspan=2, sticky="ew", padx=(0, 5))
         self.part_combobox.bind("<<ComboboxSelected>>", lambda _: (self.focus(), self.part_combobox.selection_clear(), self._on_part_selected()))
         self.part_combobox.set("请先获取分P")
@@ -66,7 +66,7 @@ class SenderTab(ttk.Frame):
         ttk.Label(settings_frame, text="弹幕文件:").grid(row=2, column=0, sticky="w", padx=5, pady=8)
         self.file_path_label = ttk.Label(settings_frame, text="请选择弹幕XML文件...", style="secondary.TLabel")
         self.file_path_label.grid(row=2, column=1, sticky="ew", padx=(0, 5))
-        self.select_button = ttk.Button(settings_frame, text="选择文件", command=self.select_file, style="info.TButton")
+        self.select_button = ttk.Button(settings_frame, text="选择文件", command=self.select_file, style="info.TButton", takefocus=0)
         self.select_button.grid(row=2, column=2, sticky="e")
         self.file_path_tooltip = ToolTip(self.file_path_label, text="") 
         
@@ -76,11 +76,11 @@ class SenderTab(ttk.Frame):
         advanced_frame.columnconfigure(1, weight=1); advanced_frame.columnconfigure(3, weight=1)
 
         ttk.Label(advanced_frame, text="最小延迟(秒):").grid(row=0, column=0, sticky="w", padx=5, pady=5)
-        self.min_delay_entry = ttk.Entry(advanced_frame, width=10, textvariable=self.model.min_delay)
+        self.min_delay_entry = ttk.Entry(advanced_frame, width=10, textvariable=self.model.min_delay, takefocus=0)
         self.min_delay_entry.grid(row=0, column=1)
 
         ttk.Label(advanced_frame, text="最大延迟(秒):").grid(row=0, column=2, sticky="w", padx=(20, 5), pady=5)
-        self.max_delay_entry = ttk.Entry(advanced_frame, width=10, textvariable=self.model.max_delay)
+        self.max_delay_entry = ttk.Entry(advanced_frame, width=10, textvariable=self.model.max_delay, takefocus=0)
         self.max_delay_entry.grid(row=0, column=3)
         
         # --- 日志输出区 ---
@@ -96,7 +96,7 @@ class SenderTab(ttk.Frame):
         action_frame.columnconfigure(0, weight=1)
         self.progress_bar = ttk.Progressbar(action_frame, mode='determinate', style='success.Striped.TProgressbar')
         self.progress_bar.grid(row=0, column=0, sticky="ew", padx=(0, 10))
-        self.start_button = ttk.Button(action_frame, text="开始任务", command=self.start_task, style="success.TButton", width=12)
+        self.start_button = ttk.Button(action_frame, text="开始任务", command=self.start_task, style="success.TButton", width=12, takefocus=0)
         self.start_button.grid(row=0, column=1)
 
     def select_file(self):
