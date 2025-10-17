@@ -7,7 +7,7 @@ from threading import Event
 from requests.exceptions import Timeout, ConnectionError, RequestException
 
 from wbi_signer import WbiSigner
-from bili_danmaku_utils import BiliDmErrorCode, DanmakuSendResult
+from bili_danmaku_utils import BiliDmErrorCode, DanmakuSendResult, DanmakuParser
 
 
 class BiliDanmakuSender:
@@ -18,9 +18,9 @@ class BiliDanmakuSender:
         self.bvid = bvid
         self.bili_jct = bili_jct
         self.session = self._create_session(sessdata, bili_jct)
-        self.logger = logging.getLogger(self.__class__.__name__)
+        self.danmaku_parser = DanmakuParser()
+        self.logger = logging.getLogger("DanmakuSender")
         if not self.logger.handlers:
-            # Configure basic logging if no handlers are set (e.g., when run standalone)
             handler = logging.StreamHandler()
             formatter = logging.Formatter('%(asctime)s - %(name)s - %(levelname)s - %(message)s')
             handler.setFormatter(formatter)
@@ -340,26 +340,9 @@ class BiliDanmakuSender:
             response = self.session.get(url, timeout=10)
             response.raise_for_status()
             
-            root = ET.fromstring(response.content)
-            danmakus = []
-            for d_tag in root.findall('d'):
-                try:
-                    p_attr = d_tag.attrib['p'].split(',')
-                    # 我们只需要时间和文本来进行匹配
-                    danmaku = {
-                        'progress': int(float(p_attr[0]) * 1000), # 转换为毫秒
-                        'msg': d_tag.text.strip() if d_tag.text else ""
-                    }
-                    danmakus.append(danmaku)
-                except (IndexError, ValueError):
-                    # 忽略解析失败的弹幕
-                    continue
-            return danmakus
+            return self.danmaku_parser.parse_xml_content(response.content.decode('utf-8'), is_online_data=True)
         except RequestException as e:
             self.logger.error(f"获取CID {cid} 的在线弹幕列表时发生网络错误: {e}")
-            return []
-        except ET.ParseError as e:
-            self.logger.error(f"解析CID {cid} 的在线弹幕XML时失败: {e}")
             return []
         except Exception as e:
             self.logger.error(f"获取或解析在线弹幕时发生未知错误: {e}")

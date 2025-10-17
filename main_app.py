@@ -30,8 +30,8 @@ class GuiLoggingHandler(logging.Handler):
             self.output_targets["sender_tab"](msg)
         elif record.name == "monitor_tab" and self.output_targets["monitor_tab"]:
             self.output_targets["monitor_tab"](msg)
-        # 关联路由: BiliDanmakuSender 的日志也应显示在发射器标签页
-        elif record.name == "BiliDanmakuSender" and self.output_targets["sender_tab"]:
+        # 关联路由: DanmakuSender 的日志也应显示在发射器标签页
+        elif record.name == "DanmakuSender" and self.output_targets["sender_tab"]:
             self.output_targets["sender_tab"](msg)
         # 备用 (Fallback) 路由: 对于未知来源的日志，默认输出到发射器日志框
         else:
@@ -43,7 +43,7 @@ class GuiLoggingHandler(logging.Handler):
 class Application(ttk.Window):
     def __init__(self):
         super().__init__(themename="litera")
-        self.title("B站弹幕发射器 v0.9.0")
+        self.title("B站弹幕发射器 v0.9.2")
         self.geometry("780x750")
         # --- 模型、控制器、视图的装配 ---
         self.shared_data = SharedDataModel()
@@ -97,7 +97,7 @@ class Application(ttk.Window):
 
         # 配置各个模块的具名Logger
         # 每个模块内部通过 logging.getLogger("模块名") 获取自己的logger实例
-        loggers_to_configure = ["sender_tab", "monitor_tab", "BiliDanmakuSender"]
+        loggers_to_configure = ["sender_tab", "monitor_tab", "DanmakuSender", "DanmakuParser", "BiliUtils"]
         for name in loggers_to_configure:
             logger = logging.getLogger(name)
             logger.setLevel(logging.INFO)
@@ -186,7 +186,7 @@ class Application(ttk.Window):
         frame.pack(fill=BOTH, expand=True)
 
         ttk.Label(frame, text="B站弹幕补档工具", font=("TkDefaultFont", 14, "bold")).pack(pady=(0, 10))
-        ttk.Label(frame, text="版本: 0.9.0").pack(pady=5)
+        ttk.Label(frame, text="版本: 0.9.2").pack(pady=5)
         ttk.Label(frame, text="作者: Miku_oso").pack(pady=5)
 
         # 让窗口大小自适应内容

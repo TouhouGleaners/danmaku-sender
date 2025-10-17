@@ -7,6 +7,8 @@ import ttkbootstrap as ttk
 from ttkbootstrap.tooltip import ToolTip 
 from ttkbootstrap.dialogs import Messagebox
 
+from bili_monitor import BiliDanmakuMonitor
+
 
 class MonitorTab(ttk.Frame):
     """
@@ -137,13 +139,19 @@ class MonitorTab(ttk.Frame):
     def start_monitoring(self):
         """启动监视任务。"""
         # 参数校验
+        self.logger.debug(f"MonitorTab.start_monitoring: self.model.selected_cid={self.model.selected_cid}, type={type(self.model.selected_cid)}")
         cid = self.model.selected_cid
         xml_path = self.model.danmaku_xml_path.get()
+        local_danmakus_list = self.model.parsed_local_danmakus  # 获取预先解析好的本地弹幕列表，如果存在的话
         
-        if not all([cid, xml_path]):
-            Messagebox.show_warning("请先在“弹幕发射器”标签页加载视频并选择弹幕文件。", title="参数不足", parent=self.app)
+        # 统一检查是否有CID，以及是否有本地弹幕来源（要么有xml_path，要么有local_danmakus_list）
+        if not cid:
+            Messagebox.show_warning("请先在“弹幕发射器”标签页加载视频。", title="CID缺失", parent=self.app)
             return
-
+        if not xml_path and not local_danmakus_list:
+            Messagebox.show_warning("请先在“弹幕发射器”标签页选择弹幕文件或确认已解析本地弹幕。", title="弹幕数据缺失", parent=self.app)
+            return
+        
         try:
             interval = int(self.model.monitor_interval.get())
             tolerance = int(self.model.time_tolerance.get())
@@ -162,7 +170,7 @@ class MonitorTab(ttk.Frame):
         self.stop_monitor_event.clear()
         self.monitor_thread = threading.Thread(
             target=self._monitor_task,
-            args=(cid, xml_path, interval, tolerance),
+            args=(cid, xml_path, local_danmakus_list, interval, tolerance),
             daemon=True
         )
         self.monitor_thread.start()
@@ -174,16 +182,17 @@ class MonitorTab(ttk.Frame):
             self.stop_monitor_event.set()
             self.model.monitor_status_text.set("监视器：正在停止...")
 
-    def _monitor_task(self, cid, xml_path, interval, tolerance):
+    def _monitor_task(self, cid: int, xml_path: str, local_danmakus_list: list, interval: int, tolerance: int):
         """在后台线程中运行的监视核心逻辑。"""
-        from bili_monitor import BiliDanmakuMonitor # 延迟导入
-        monitor = BiliDanmakuMonitor(cid, xml_path, interval, tolerance)
+        monitor = BiliDanmakuMonitor(cid, xml_path, local_danmakus_list, interval, tolerance)
         
         def progress_updater(matched_count, total_count):
             if total_count > 0:
                 progress = (matched_count / total_count) * 100
                 status = f"监视器: 运行中... ({matched_count}/{total_count})"
                 self.app.after(0, lambda: (self.model.monitor_progress_var.set(progress), self.model.monitor_status_text.set(status)))
+            else: # 如果总数为0，进度条也应该为0并显示对应的状态
+                self.app.after(0, lambda: (self.model.monitor_progress_var.set(0), self.model.monitor_status_text.set("监视器：无弹幕可匹配")))
 
         monitor.run(self.stop_monitor_event, progress_updater)
         
