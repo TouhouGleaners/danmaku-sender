@@ -1,6 +1,7 @@
 from enum import Enum
 import xml.etree.ElementTree as ET
 import logging
+import uuid
 
 
 logger = logging.getLogger("BiliUtils")
@@ -146,7 +147,7 @@ class DanmakuParser:
                         if len(p_attr) > 7:
                             danmaku['id'] = p_attr[7]  # 在线弹幕的唯一ID
                         else:
-                            danmaku['id'] = f"{progress}_{msg}_{hash(xml_content) % 10000}"  # 生成一个伪ID
+                            danmaku['id'] = str(uuid.uuid4())  # 生成一个伪ID
                     else:
                         if len(p_attr) >= 4:
                             danmaku['mode'] = int(p_attr[1])
