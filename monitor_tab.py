@@ -117,7 +117,8 @@ class MonitorTab(ttk.Frame):
             text="开始监视", 
             command=self.toggle_monitoring,
             style="success.TButton", 
-            width=12
+            width=12,
+            takefocus=0
         )
         self.start_button.grid(row=0, column=2, sticky="e")
 
