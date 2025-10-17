@@ -1,11 +1,13 @@
 import logging
 import ttkbootstrap as ttk
 from ttkbootstrap.constants import *
+import webbrowser
 
 from config_manager import load_config, save_config
 from shared_data import SharedDataModel
 from sender_tab import SenderTab
 from monitor_tab import MonitorTab
+from help_content import *
 
 
 class GuiLoggingHandler(logging.Handler):
@@ -43,7 +45,7 @@ class GuiLoggingHandler(logging.Handler):
 class Application(ttk.Window):
     def __init__(self):
         super().__init__(themename="litera")
-        self.title("B站弹幕发射器 v0.9.4")
+        self.title(f"{MAIN_WINDOW_TITLE_PREFIX} v{APP_VERSION}")
         self.geometry("780x750")
         # --- 模型、控制器、视图的装配 ---
         self.shared_data = SharedDataModel()
@@ -137,47 +139,49 @@ class Application(ttk.Window):
         # --- 帮助菜单 ---
         help_menu = ttk.Menu(menu_bar, tearoff=0)
         menu_bar.add_cascade(label="帮助", menu=help_menu)
-        help_menu.add_command(label="使用说明", command=self.show_help_window)
+        help_menu.add_command(label=HELP_WINDOW_TITLE, command=self.show_help_window)
         help_menu.add_separator()
-        help_menu.add_command(label="关于", command=self.show_about_window)
+        help_menu.add_command(label=ABOUT_WINDOW_SHORT_TITLE, command=self.show_about_window)
 
     def show_help_window(self):
         """显示使用说明窗口"""
         help_win = ttk.Toplevel(self)
-        help_win.title("使用说明")
+        help_win.title(HELP_WINDOW_TITLE)
         help_win.transient(self)
         help_win.grab_set()
-
+        help_win.resizable(False, False)
         frame = ttk.Frame(help_win, padding=20)
         frame.pack(fill=BOTH, expand=True)
-        help_text = """
-        要获取 SESSDATA 和 BILI_JCT，请按以下步骤操作：
-        1. 在你的浏览器（推荐Chrome/Edge）中登录Bilibili。
-        2. 访问B站任意一个页面，比如主页 www.bilibili.com。
-        3. 按 F12 打开“开发者工具”。
-        4. 切换到 "Application" (应用程序) 标签页。
-        5. 在左侧菜单中，找到 "Storage" (存储) -> "Cookies" -> "https://www.bilibili.com"。
-        6. 在右侧的列表中找到以下两项，并复制它们 "Value" (值) 列的内容：
-           - SESSDATA
-           - bili_jct
-        7. 将复制的内容粘贴到本工具对应的输入框中即可。
-        """
-
-        ttk.Label(frame, text="使用说明", font=("TkDefaultFont", 14, "bold")).pack(pady=(0, 15))
-        ttk.Label(frame, text=help_text, justify=LEFT).pack(pady=5)
-
+        ttk.Label(frame, text="使用帮助", font=("TkDefaultFont", 14, "bold")).pack(pady=(0, 15))
+        # 创建Notebook用于切换不同帮助页面
+        help_notebook = ttk.Notebook(frame)
+        help_notebook.pack(fill=BOTH, expand=True, pady=10)
+        
+        # --- 发射器帮助页 ---
+        sender_help_frame = ttk.Frame(help_notebook, padding=10)
+        help_notebook.add(sender_help_frame, text="弹幕发射器帮助")
+        ttk.Label(sender_help_frame, text=SENDER_HELP_TEXT, justify=LEFT, wraplength=750).pack(pady=5, anchor=NW)
+        
+        # --- 监视器帮助页 ---
+        monitor_help_frame = ttk.Frame(help_notebook, padding=10)
+        help_notebook.add(monitor_help_frame, text="弹幕监视器帮助")
+        ttk.Label(monitor_help_frame, text=MONITOR_HELP_TEXT, justify=LEFT, wraplength=750).pack(pady=5, anchor=NW)
+        
         # 让窗口大小自适应内容
         help_win.update_idletasks()
-        x = self.winfo_x() + (self.winfo_width() // 2) - (help_win.winfo_width() // 2)
-        y = self.winfo_y() + (self.winfo_height() // 2) - (help_win.winfo_height() // 2)
-        help_win.geometry(f"+{x}+{y}")  # 窗口居中于主窗口
+        # 调整窗口大小，给notebook留出更多空间
+        help_win_width = 650
+        help_win_height = 750
+        x = self.winfo_x() + (self.winfo_width() // 2) - (help_win_width // 2)
+        y = self.winfo_y() + (self.winfo_height() // 2) - (help_win_height // 2)
+        help_win.geometry(f"{help_win_width}x{help_win_height}+{x}+{y}")  # 固定窗口大小并居中于主窗口
         help_win.focus_force()
         help_win.wait_window()
 
     def show_about_window(self):
         """显示关于窗口"""
         about_win = ttk.Toplevel(self)
-        about_win.title("关于")
+        about_win.title(ABOUT_WINDOW_SHORT_TITLE)
         about_win.transient(self)
         about_win.grab_set()
         about_win.resizable(False, False)
@@ -185,9 +189,19 @@ class Application(ttk.Window):
         frame = ttk.Frame(about_win, padding=20)
         frame.pack(fill=BOTH, expand=True)
 
-        ttk.Label(frame, text="B站弹幕补档工具", font=("TkDefaultFont", 14, "bold")).pack(pady=(0, 10))
-        ttk.Label(frame, text="版本: 0.9.4").pack(pady=5)
-        ttk.Label(frame, text="作者: Miku_oso").pack(pady=5)
+        ttk.Label(frame, text=ABOUT_TEXT_TOP, font=("TkDefaultFont", 14, "bold")).pack(pady=(0, 10))
+        ttk.Label(frame, text=ABOUT_TEXT_VERSION).pack(pady=5)
+        ttk.Label(frame, text=ABOUT_TEXT_AUTHOR).pack(pady=5)
+
+        # Github 仓库地址
+        ttk.Label(frame, text=ABOUT_TEXT_GITHUB_TITLE, font=("TkDefaultFont", 10, "bold")).pack(pady=(15, 0))
+        github_link = ttk.Label(frame, text=GITHUB_REPO_URL, foreground="blue", cursor="hand2")
+        github_link.pack(pady=(0, 5))
+        github_link.bind("<Button-1>", lambda _: webbrowser.open_new(GITHUB_REPO_URL))  # 点击链接打开网页
+        ttk.Label(frame, text=ABOUT_TEXT_FEEDBACK, justify=CENTER).pack(pady=(15, 0))
+        issue_link = ttk.Label(frame, text=ABOUT_TEXT_ISSUE_LINK_LABEL, foreground="blue", cursor="hand2")
+        issue_link.pack(pady=5)
+        issue_link.bind("<Button-1>", lambda _: webbrowser.open_new(GITHUB_ISSUES_URL))  # 点击链接打开Issue页面
 
         # 让窗口大小自适应内容
         about_win.update_idletasks()
