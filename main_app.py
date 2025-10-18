@@ -153,36 +153,47 @@ class Application(ttk.Window):
         help_win.transient(self)
         help_win.grab_set()
         help_win.resizable(False, False)
+        
         frame = ttk.Frame(help_win, padding=20)
         frame.pack(fill=BOTH, expand=True)
+        
         ttk.Label(frame, text="使用帮助", font=("TkDefaultFont", 14, "bold")).pack(pady=(0, 15))
-        # 创建Notebook用于切换不同帮助页面
+        
         help_notebook = ttk.Notebook(frame)
         help_notebook.pack(fill=BOTH, expand=True, pady=10)
         
-        # --- 发射器帮助页 ---
-        sender_help_frame = ttk.Frame(help_notebook, padding=10)
-        help_notebook.add(sender_help_frame, text="弹幕发射器帮助")
-        ttk.Label(sender_help_frame, text=SENDER_HELP_TEXT, justify=LEFT, wraplength=750).pack(pady=5, anchor=NW)
-        
-        # --- 校验器帮助页 ---
-        validator_help_frame = ttk.Frame(help_notebook, padding=10)
-        help_notebook.add(validator_help_frame, text="弹幕校验器帮助")
-        ttk.Label(validator_help_frame, text=VALIDATOR_HELP_TEXT, justify=LEFT, wraplength=750).pack(pady=5, anchor=NW)
-        
-        # --- 监视器帮助页 ---
-        monitor_help_frame = ttk.Frame(help_notebook, padding=10)
-        help_notebook.add(monitor_help_frame, text="弹幕监视器帮助")
-        ttk.Label(monitor_help_frame, text=MONITOR_HELP_TEXT, justify=LEFT, wraplength=750).pack(pady=5, anchor=NW)
-        
+        def create_scrollable_text_tab(parent_notebook, tab_text, content_text):
+            tab_frame = ttk.Frame(parent_notebook, padding=5)
+            parent_notebook.add(tab_frame, text=tab_text)
+            
+            tab_frame.grid_rowconfigure(0, weight=1)
+            tab_frame.grid_columnconfigure(0, weight=1)
+            
+            text_widget = ttk.Text(tab_frame, wrap='word', font=("Microsoft YaHei UI", 9), state='disabled') 
+            text_widget.grid(row=0, column=0, sticky="nsew", padx=5, pady=5)
+            
+            v_scrollbar = ttk.Scrollbar(tab_frame, orient=VERTICAL, command=text_widget.yview)
+            v_scrollbar.grid(row=0, column=1, sticky="ns")
+            
+            text_widget.config(yscrollcommand=v_scrollbar.set)
+            
+            text_widget.config(state='normal')
+            text_widget.insert(ttk.END, content_text)
+            text_widget.config(state='disabled')
+            
+            return tab_frame
+
+        create_scrollable_text_tab(help_notebook, "弹幕发射器帮助", SENDER_HELP_TEXT)
+        create_scrollable_text_tab(help_notebook, "弹幕校验器帮助", VALIDATOR_HELP_TEXT)
+        create_scrollable_text_tab(help_notebook, "弹幕监视器帮助", MONITOR_HELP_TEXT)
+
         # 让窗口大小自适应内容
         help_win.update_idletasks()
-        # 调整窗口大小，给notebook留出更多空间
-        help_win_width = 650
-        help_win_height = 750
+        help_win_width = 750
+        help_win_height = 650 
         x = self.winfo_x() + (self.winfo_width() // 2) - (help_win_width // 2)
         y = self.winfo_y() + (self.winfo_height() // 2) - (help_win_height // 2)
-        help_win.geometry(f"{help_win_width}x{help_win_height}+{x}+{y}")  # 固定窗口大小并居中于主窗口
+        help_win.geometry(f"{help_win_width}x{help_win_height}+{x}+{y}")
         help_win.focus_force()
         help_win.wait_window()
 
@@ -205,17 +216,17 @@ class Application(ttk.Window):
         ttk.Label(frame, text=ABOUT_TEXT_GITHUB_TITLE, font=("TkDefaultFont", 10, "bold")).pack(pady=(15, 0))
         github_link = ttk.Label(frame, text=GITHUB_REPO_URL, foreground="blue", cursor="hand2")
         github_link.pack(pady=(0, 5))
-        github_link.bind("<Button-1>", lambda _: webbrowser.open_new(GITHUB_REPO_URL))  # 点击链接打开网页
+        github_link.bind("<Button-1>", lambda _: webbrowser.open_new(GITHUB_REPO_URL))
         ttk.Label(frame, text=ABOUT_TEXT_FEEDBACK, justify=CENTER).pack(pady=(15, 0))
         issue_link = ttk.Label(frame, text=ABOUT_TEXT_ISSUE_LINK_LABEL, foreground="blue", cursor="hand2")
         issue_link.pack(pady=5)
-        issue_link.bind("<Button-1>", lambda _: webbrowser.open_new(GITHUB_ISSUES_URL))  # 点击链接打开Issue页面
+        issue_link.bind("<Button-1>", lambda _: webbrowser.open_new(GITHUB_ISSUES_URL))
 
         # 让窗口大小自适应内容
         about_win.update_idletasks()
         x = self.winfo_x() + (self.winfo_width() // 2) - (about_win.winfo_width() // 2)
         y = self.winfo_y() + (self.winfo_height() // 2) - (about_win.winfo_height() // 2)
-        about_win.geometry(f"+{x}+{y}")  # 窗口居中于主窗口
+        about_win.geometry(f"+{x}+{y}")
         about_win.focus_force()
         about_win.wait_window()
 
