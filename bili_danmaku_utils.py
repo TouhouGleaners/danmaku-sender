@@ -195,11 +195,11 @@ def format_ms_to_hhmmss(ms: int) -> str:
     else:
         return f"{minutes:02d}:{seconds:02d}"
     
-def validate_danmaku_list(danmaku_list: list, video_duration_ms: int) -> list:
+def validate_danmaku_list(danmaku_list: list, video_duration_ms: int = -1) -> list:
     """
     校验弹幕列表，找出不符合B站发送规则的弹幕。
     Args:
-        danmaku_list (list): 待校验的弹幕字典列表。
+        danmaku_list (list): 待校验的弹幕字典列表。添加'is_valid'键以标记是否有效。
         video_duration_ms (int): 视频总时长（毫秒）。如果为-1，则不检查时间戳是否超限。
     Returns:
         list: 一个包含问题弹幕信息的字典列表，每个字典包含：
@@ -209,32 +209,41 @@ def validate_danmaku_list(danmaku_list: list, video_duration_ms: int) -> list:
     for i, dm in enumerate(danmaku_list):
         msg = dm.get('msg', '')
         progress = dm.get('progress', 0)
-
+        
+        # 默认所有弹幕都是有效的
+        dm['is_valid'] = True
+        is_problematic = False
         # 换行符检查
         if '\n' in msg or '\r' in msg:
             problems.append({
                 'original_index': i,
                 'danmaku': dm,
-                'reason': '弹幕内容包含换行符'
+                'reason': '内容包含换行符'
             })
-            continue  # 已经有问题，跳过后续检查
+            is_problematic = True
 
         # 长度检查
         if len(msg) > 100:
-            problems.append({
-                'original_index': i,
-                'danmaku': dm,
-                'reason': '弹幕长度超过100字'
-            })
-            continue
+            if not is_problematic:
+                problems.append({
+                    'original_index': i,
+                    'danmaku': dm,
+                    'reason': '内容超过100个字符'
+                })
+            is_problematic = True
 
         # 时间戳检查
         if video_duration_ms > 0 and progress > video_duration_ms:
-            problems.append({
-                'original_index': i,
-                'danmaku': dm,
-                'reason': '弹幕时间戳超过视频总时长'
-            })
-            continue
+            if not is_problematic:
+                problems.append({
+                    'original_index': i,
+                    'danmaku': dm,
+                    'reason': '时间戳超出视频总时长'
+                })
+            is_problematic = True
+
+        # 如果发现任何问题，更新 'is_valid' 标记
+        if is_problematic:
+            dm['is_valid'] = False
     
     return problems

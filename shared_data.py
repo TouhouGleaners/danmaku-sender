@@ -20,6 +20,8 @@ class SharedDataModel:
         self.cid_parts_map = {}  # 存储 {cid: 'title'} 的映射关系
         self.ordered_cids = []  # 存储一个与下拉框显示顺序完全对应的CID列表
         self.selected_cid = None
+        self.ordered_durations = []         # 按顺序存储所有分P的时长（秒）
+        self.selected_part_duration_ms = 0
 
         # --- 高级设置 (仅SenderTab使用) ---
         self.min_delay = ttk.StringVar(value="20.0")

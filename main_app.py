@@ -7,6 +7,7 @@ from config_manager import load_config, save_config
 from shared_data import SharedDataModel
 from sender_tab import SenderTab
 from monitor_tab import MonitorTab
+from validator_tab import ValidatorTab
 from help_content import *
 
 
@@ -64,8 +65,10 @@ class Application(ttk.Window):
 
         # --- 创建并添加标签页 ---
         self.sender_tab_frame = SenderTab(notebook, self.shared_data, self)
+        self.validator_tab_frame = ValidatorTab(notebook, self.shared_data, self)
         self.monitor_tab_frame = MonitorTab(notebook, self.shared_data, self)
         notebook.add(self.sender_tab_frame, text="弹幕发射器")
+        notebook.add(self.validator_tab_frame, text="弹幕校验器")
         notebook.add(self.monitor_tab_frame, text="弹幕监视器")
 
     def load_and_populate_config(self):

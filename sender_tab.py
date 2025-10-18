@@ -133,12 +133,15 @@ class SenderTab(ttk.Frame):
         selected_index = self.part_combobox.current()
         if selected_index != -1:
             try:
-                # 关键：将选中的CID存入共享模型
+                # 更新分P信息
                 self.model.selected_cid = self.model.ordered_cids[selected_index]
-                self.logger.info(f"已选择目标分P: {self.model.part_var.get()}, CID: {self.model.selected_cid}")
+                duration_sec = self.model.ordered_durations[selected_index]
+                self.model.selected_part_duration_ms = duration_sec * 1000
+                self.logger.info(f"已选择目标分P: {self.model.part_var.get()}, CID: {self.model.selected_cid}, 时长: {duration_sec}秒")
             except IndexError:
                 self.logger.error("程序错误：选择的索引超出了CID列表范围。")
                 self.model.selected_cid = None
+                self.model.selected_part_duration_ms = 0
 
     def fetch_video_parts(self):
         """获取视频分P列表"""
@@ -166,17 +169,20 @@ class SenderTab(ttk.Frame):
             video_info = sender.get_video_info()
             pages = video_info.get('pages', [])
 
-            # 先清空模型中的旧数据
+            # 清空旧数据
             self.model.cid_parts_map = {}
             self.model.ordered_cids = []
+            self.model.ordered_durations = []
             display_parts = []
 
             # 遍历API返回结果，填充模型数据
             for p in pages:
                 cid = p['cid']
                 part_name = f"P{p['page']} - {p['part']}"
+                duration_sec = p.get('duration', 0)
                 self.model.cid_parts_map[cid] = part_name
                 self.model.ordered_cids.append(cid)
+                self.model.ordered_durations.append(duration_sec)
                 display_parts.append(part_name)
 
             def _update_ui_success():
@@ -202,9 +208,10 @@ class SenderTab(ttk.Frame):
                 self.part_combobox['values'] = []
                 self.part_combobox.config(state="disabled")
 
-                # 失败时也要清空模型
+                # 失败时清空模型
                 self.model.cid_parts_map = {}
                 self.model.ordered_cids = []
+                self.model.ordered_durations = []
 
             self.after(0, _update_ui_fail)
             
