@@ -1,10 +1,9 @@
 import logging
 import copy
-import tkinter as tk
 from tkinter import ttk, messagebox
 from ttkbootstrap.dialogs import Messagebox
 
-from bili_danmaku_utils import validate_danmaku_list
+from bili_danmaku_utils import validate_danmaku_list, format_ms_to_hhmmss
 from shared_data import SharedDataModel
 
 
@@ -18,26 +17,28 @@ class ValidatorTab(ttk.Frame):
         self.original_danmakus_snapshot = []
 
         self._create_widgets()
-        
+
     def _create_widgets(self):
         """创建并布局此标签页中的所有UI控件"""
         top_frame = ttk.Frame(self)
         top_frame.pack(fill="x", padx=10, pady=5)
-        self.run_validation_button = ttk.Button(top_frame, text="开始验证", command=self.run_validation)
+        self.run_validation_button = ttk.Button(top_frame, text="开始验证", command=self.run_validation, takefocus=0)
         self.run_validation_button.pack(side='left', padx=(0, 10))
         self.status_label = ttk.Label(top_frame, text="提示: 请先在“发射器”页面加载文件并选择分P。")
         self.status_label.pack(side='left', fill='x', expand=True)
         tree_frame = ttk.Labelframe(self, text="问题弹幕列表", padding=10)
         tree_frame.pack(expand=True, fill='both', padx=10, pady=5)
         
-        columns = ("#1", "#2", "#3")
+        columns = ("#1", "#2", "#3", "#4")
         self.tree = ttk.Treeview(tree_frame, columns=columns, show="headings")
         self.tree.heading("#1", text="原始行号")
-        self.tree.heading("#2", text="问题描述")
-        self.tree.heading("#3", text="弹幕内容 (双击可编辑)")
+        self.tree.heading("#2", text="弹幕时间")
+        self.tree.heading("#3", text="问题描述")
+        self.tree.heading("#4", text="弹幕内容 (双击可编辑)")
         self.tree.column("#1", width=80, stretch=False, anchor='center')
-        self.tree.column("#2", width=180, stretch=False)
-        self.tree.column("#3", width=400, stretch=True)
+        self.tree.column("#2", width=100, stretch=False, anchor='center')
+        self.tree.column("#3", width=140, stretch=False)
+        self.tree.column("#4", stretch=True)
         
         vsb = ttk.Scrollbar(tree_frame, orient="vertical", command=self.tree.yview)
         vsb.pack(side='right', fill='y')
@@ -48,10 +49,10 @@ class ValidatorTab(ttk.Frame):
         bottom_frame = ttk.Frame(self)
         bottom_frame.pack(fill='x', padx=10, pady=10)
         
-        self.delete_button = ttk.Button(bottom_frame, text="删除选中条目", command=self.delete_selected_item, bootstyle="danger")
+        self.delete_button = ttk.Button(bottom_frame, text="删除选中条目", command=self.delete_selected_item, bootstyle="danger", takefocus=0)
         self.delete_button.pack(side='left', padx=5)
         
-        self.apply_button = ttk.Button(bottom_frame, text="应用所有修改", command=self.apply_changes, bootstyle="success")
+        self.apply_button = ttk.Button(bottom_frame, text="应用所有修改", command=self.apply_changes, bootstyle="success", takefocus=0)
         self.apply_button.pack(side='right', padx=5)
 
     def run_validation(self):
@@ -80,6 +81,7 @@ class ValidatorTab(ttk.Frame):
             for issue in issues:
                 self.tree.insert("", "end", iid=str(issue['original_index']), values=(
                     issue['original_index'] + 1,
+                    format_ms_to_hhmmss(issue['danmaku'].get('progress', 0)),
                     issue['reason'],
                     issue['danmaku']['msg']
                 ))
@@ -87,25 +89,25 @@ class ValidatorTab(ttk.Frame):
     def on_tree_double_click(self, event):
         """处理双击事件以编辑弹幕内容"""
         region = self.tree.identify_region(event.x, event.y)
-        if region != "cell" or self.tree.identify_column(event.x) != "#3":
+        if region != "cell" or self.tree.identify_column(event.x) != "#4":
             return
         
         selected_iid = self.tree.focus()
         if not selected_iid:
             return
         
-        column_box = self.tree.bbox(selected_iid, "#3")
-        current_text = self.tree.item(selected_iid, "values")[2]
+        column_box = self.tree.bbox(selected_iid, "#4")
+        current_text = self.tree.item(selected_iid, "values")[3]
 
         entry_edit = ttk.Entry(self.tree, font=("TkDefaultFont", 9))
-        entry_edit.place(x=column_box[0], y=column_box[1], width=column_box[2], height=column_box[3])
+        entry_edit.place(x=column_box[0], y=column_box[1], width=column_box[2], height=column_box[3] + 8)
         entry_edit.insert(0, current_text)
         entry_edit.select_range(0, 'end')
         entry_edit.focus_set()
 
         def on_commit(event):
             new_text = entry_edit.get()
-            self.tree.set(selected_iid, "#3", new_text)
+            self.tree.set(selected_iid, "#4", new_text)
             entry_edit.destroy()
 
         entry_edit.bind("<FocusOut>", on_commit)
@@ -129,7 +131,7 @@ class ValidatorTab(ttk.Frame):
             return
         
         modified_issues = {
-            int(iid): self.tree.item(iid, "values")[2]
+            int(iid): self.tree.item(iid, "values")[3]
             for iid in self.tree.get_children()
         }
 
