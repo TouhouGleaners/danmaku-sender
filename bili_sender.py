@@ -56,13 +56,15 @@ class BiliDanmakuSender:
                     {
                         'cid': p['cid'],
                         'page': p['page'],
-                        'part': p['part']
+                        'part': p['part'],
+                        'duration': p.get('duration', 0)
                     }
                     for p in video_data.get('pages', [])
                 ]
 
                 info = {
                     'title': video_data.get('title', '未知标题'),
+                    'duration': video_data.get('duration', 0),
                     'pages': pages_info
                 }
                 
