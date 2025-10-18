@@ -60,11 +60,11 @@ class ValidatorTab(ttk.Frame):
         self.tree.delete(*self.tree.get_children())
 
         if not self.model.parsed_local_danmakus:
-            Messagebox.show_warning("错误", "请先在“发射器”页面加载弹幕文件。", parent=self.app)
+            Messagebox.show_warning("请先在“发射器”页面加载弹幕文件。", "错误", parent=self.app)
             return
         
         if self.model.selected_cid is None:
-            Messagebox.show_warning("错误", "请先在“发射器”页面选择一个分P。\n（需要分P时长来检查时间戳）", parent=self.app)
+            Messagebox.show_warning("请先在“发射器”页面选择一个分P。\n（需要分P时长来检查时间戳）", "错误", parent=self.app)
             return
         
         self.original_danmakus_snapshot = copy.deepcopy(self.model.parsed_local_danmakus)
