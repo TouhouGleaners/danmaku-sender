@@ -214,7 +214,7 @@ def validate_danmaku_list(danmaku_list: list, video_duration_ms: int = -1) -> li
         dm['is_valid'] = True
         is_problematic = False
         # 换行符检查
-        if '\n' in msg or '\r' in msg:
+        if '\\n' in msg or '/n' in msg:
             problems.append({
                 'original_index': i,
                 'danmaku': dm,
