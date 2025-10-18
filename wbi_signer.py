@@ -30,17 +30,23 @@ class WbiSigner:
         """为请求参数进行 wbi 签名"""
         mixin_key = WbiSigner.get_mixin_key(img_key + sub_key)
         curr_time = round(time.time())
-        params['wts'] = curr_time                                   # 添加 wts 字段
-        params = dict(sorted(params.items()))                       # 按照 key 重排参数
+
+        params_for_sign = params.copy()
+        params_for_sign['wts'] = curr_time                       # 添加 wts 字段
+        params_for_sign = dict(sorted(params_for_sign.items()))  # 按照 key 重排参数
         # 过滤 value 中的 "!'()*" 字符
-        params = {
+        params_for_sign_filtered = {
             k : ''.join(filter(lambda chr: chr not in "!'()*", str(v)))
             for k, v 
-            in params.items()
+            in params_for_sign.items()
         }
-        query = urllib.parse.urlencode(params)                      # 序列化参数
+
+        query = urllib.parse.urlencode(params_for_sign_filtered)    # 序列化参数
         wbi_sign = md5((query + mixin_key).encode()).hexdigest()    # 计算 w_rid
+
         params['w_rid'] = wbi_sign
+        params['wts'] = curr_time
+
         return params
 
     @classmethod
