@@ -165,6 +165,11 @@ class Application(ttk.Window):
         help_notebook.add(sender_help_frame, text="弹幕发射器帮助")
         ttk.Label(sender_help_frame, text=SENDER_HELP_TEXT, justify=LEFT, wraplength=750).pack(pady=5, anchor=NW)
         
+        # --- 校验器帮助页 ---
+        validator_help_frame = ttk.Frame(help_notebook, padding=10)
+        help_notebook.add(validator_help_frame, text="弹幕校验器帮助")
+        ttk.Label(validator_help_frame, text=VALIDATOR_HELP_TEXT, justify=LEFT, wraplength=750).pack(pady=5, anchor=NW)
+        
         # --- 监视器帮助页 ---
         monitor_help_frame = ttk.Frame(help_notebook, padding=10)
         help_notebook.add(monitor_help_frame, text="弹幕监视器帮助")
