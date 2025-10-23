@@ -1,0 +1,5 @@
+[project]
+name = "BiliDanmakuSender"
+version = "1.0.0-rc.1"
+authors = [{name: "Miku_oso"}]
+description = "一个用于B站弹幕补档、校验和监视的桌面工具。"
