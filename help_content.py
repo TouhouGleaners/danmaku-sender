@@ -1,5 +1,13 @@
-# --- 版本常量 ---
-APP_VERSION = "1.0.0-beta.1"
+from importlib import metadata
+
+
+# --- 项目元数据 ---
+try:
+    APP_VERSION = metadata.version("BiliDanmakuSender")
+    APP_AUTHOR = metadata.metadata("BiliDanmakuSender")["Author"]
+except metadata.PackageNotFoundError:
+    APP_VERSION = "0.0.0-dev"
+    APP_AUTHOR = "Miku_oso"
 
 # --- 窗口标题常量 ---
 MAIN_WINDOW_TITLE_PREFIX = "B站弹幕补档工具"
