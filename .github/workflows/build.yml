@@ -19,6 +19,7 @@ jobs:
         python -m pip install --upgrade pip
         pip install -r requirements.txt
         pip install pyinstaller
+        pip install .
     - name: Build with Pyinstaller
       run: |
         $ttkbootstrap_path = (Get-Command pip).path | Split-Path | Join-Path -ChildPath "..\Lib\site-packages\ttkbootstrap"
