@@ -21,12 +21,6 @@ class BiliDanmakuSender:
         self.session = self._create_session(sessdata, bili_jct)
         self.danmaku_parser = DanmakuParser()
         self.logger = logging.getLogger("DanmakuSender")
-        if not self.logger.handlers:
-            handler = logging.StreamHandler()
-            formatter = logging.Formatter('%(asctime)s - %(name)s - %(levelname)s - %(message)s')
-            handler.setFormatter(formatter)
-            self.logger.addHandler(handler)
-            self.logger.setLevel(logging.INFO)
         self.wbi_keys = WbiSigner.get_wbi_keys()
 
     def _create_session(self, sessdata: str, bili_jct: str) -> requests.Session:
