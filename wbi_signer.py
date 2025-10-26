@@ -64,16 +64,20 @@ class WbiSigner:
             'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/139.0.0.0 Safari/537.36 Edg/139.0.0.0',
             'Referer': 'https://www.bilibili.com/'
         }
-        resp = requests.get('https://api.bilibili.com/x/web-interface/nav', headers=headers)
-        resp.raise_for_status()
-        json_content = resp.json()
-        img_url: str = json_content['data']['wbi_img']['img_url']
-        sub_url: str = json_content['data']['wbi_img']['sub_url']
-        img_key = img_url.rsplit('/', 1)[1].split('.')[0]
-        sub_key = sub_url.rsplit('/', 1)[1].split('.')[0]
+        try:
+            resp = requests.get('https://api.bilibili.com/x/web-interface/nav', headers=headers, timeout=10)
+            resp.raise_for_status()
+            json_content = resp.json()
+            img_url: str = json_content['data']['wbi_img']['img_url']
+            sub_url: str = json_content['data']['wbi_img']['sub_url']
+            img_key = img_url.rsplit('/', 1)[1].split('.')[0]
+            sub_key = sub_url.rsplit('/', 1)[1].split('.')[0]
 
-        # 更新缓存
-        cls._cached_keys = (img_key, sub_key)
-        cls._cached_time = current_time
-        
-        return cls._cached_keys
+            # 更新缓存
+            cls._cached_keys = (img_key, sub_key)
+            cls._cached_time = current_time
+            
+            return cls._cached_keys
+        except (requests.RequestException, ValueError) as e:
+            print(f"FATAL: Failed to get WBI keys: {e}")
+            raise RuntimeError(f"获取B站签名密钥失败，请检查网络连接或稍后再试。错误: {e}") from e

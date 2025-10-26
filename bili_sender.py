@@ -46,7 +46,7 @@ class BiliDanmakuSender:
         url = "https://api.bilibili.com/x/web-interface/view"
         params = {'bvid': self.bvid}
         try:
-            response = self.session.get(url, params=params)
+            response = self.session.get(url, params=params, timeout=10)
             response.raise_for_status()
             data = response.json()
 
@@ -77,6 +77,9 @@ class BiliDanmakuSender:
                 _, display_message = BiliDmErrorCode.resolve_bili_error(error_code, raw_message)
                 self.logger.error(f"错误: 获取视频信息失败, Code: {error_code}, 信息: {display_message} (原始: {raw_message})")
                 raise RuntimeError(f"错误: 获取视频信息失败, Code: {error_code}, 信息: {display_message} (原始: {raw_message})")
+        except Timeout as e:
+            self.logger.error(f"错误: 请求视频信息时发生超时异常: {e}", exc_info=True)
+            raise RuntimeError(f"错误: 请求视频信息时发生超时异常: {e}") from e
         except RequestException as req_e:
             self.logger.error(f"错误: 请求视频信息时发生网络异常: {req_e}", exc_info=True)
             raise RuntimeError(f"错误: 请求视频信息时发生网络异常: {req_e}") from req_e
@@ -121,7 +124,7 @@ class BiliDanmakuSender:
         signed_params = WbiSigner.enc_wbi(params=base_params, img_key=img_key, sub_key=sub_key)
 
         try:
-            response = self.session.post(url, data=signed_params)
+            response = self.session.post(url, data=signed_params, timeout=10)
             response.raise_for_status()
             result_json = response.json()
 
