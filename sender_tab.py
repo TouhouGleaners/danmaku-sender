@@ -193,11 +193,17 @@ class SenderTab(ttk.Frame):
             def _update_ui_success():
                 # 这是一个在主线程中更新UI的回调函数
                 if display_parts:
-                    self.logger.info(f"✅ 成功获取到 {len(display_parts)} 个分P，已为您选中第一个")
                     self.part_combobox['values'] = display_parts
-                    self.model.part_var.set(display_parts[0])  # 默认选中第一个
                     self.part_combobox.config(state="readonly")
-                    self._on_part_selected()
+
+                    if len(display_parts) == 1:
+                        self.logger.info(f"✅ 成功获取到 1 个分P，已为您自动选中。")
+                        self.model.part_var.set(display_parts[0])
+                    else:
+                        self.logger.info(f"✅ 成功获取到 {len(display_parts)} 个分P，请手动选择。")
+                        self.model.part_var.set("请在下拉框中选择一个分P")
+
+                    self._on_part_selected()  # 自动选择或提示后，都触发一次更新逻辑
                 else:
                     self.part_combobox['values'] = []
                     self.model.part_var.set("未找到任何分P")
