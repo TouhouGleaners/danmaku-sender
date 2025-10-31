@@ -1,3 +1,4 @@
+import re
 import logging
 import threading
 from tkinter import filedialog, scrolledtext
@@ -151,6 +152,10 @@ class SenderTab(ttk.Frame):
         sessdata = self.model.sessdata.get().strip()
         bili_jct = self.model.bili_jct.get().strip()
 
+        if not re.match(r'^BV[0-9A-Za-z]{10}$', bvid):
+            self.logger.error("❌【输入错误】BV号格式不正确！应为BV开头的12位字符。")
+            return
+        
         if not all([bvid, sessdata, bili_jct]):
             self.logger.error("❌【输入错误】请确保 BV号、弹幕文件、SESSDATA 和 BILI_JCT 均已填写！")
             return
