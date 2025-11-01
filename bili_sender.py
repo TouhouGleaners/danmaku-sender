@@ -165,6 +165,8 @@ class BiliDanmakuSender:
         _, display_msg = BiliDmErrorCode.resolve_bili_error(code, raw_message)
 
         if code == BiliDmErrorCode.SUCCESS.code:
+            if attempt > 0:
+                self.logger.info(f"🔁 弹幕发送重试成功 (第 {attempt + 1} 次尝试)。")
             self.logger.info(f"✅ 成功发送: '{danmaku['msg']}'")
             return DanmakuSendResult(code=code, success=True, message=raw_message, display_message=BiliDmErrorCode.SUCCESS.description_str)
         else:
