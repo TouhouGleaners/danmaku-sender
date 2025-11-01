@@ -16,6 +16,7 @@ class BiliDanmakuSender:
         if not all([sessdata, bili_jct, bvid]):
             raise ValueError("错误: SESSDATA, BILI_JCT 和 BVID 不能为空")
         self.bvid = bvid
+        self.sessdata = sessdata
         self.bili_jct = bili_jct
         self.session = self._create_session(sessdata, bili_jct)
         self.danmaku_parser = DanmakuParser()
@@ -40,7 +41,15 @@ class BiliDanmakuSender:
         })
 
         return session
-        
+    
+    def _recreate_session(self):
+        """关闭旧会话并根据已保存的凭证创建一个新会话"""
+        self.logger.warning("会话连接可能已失效，正在尝试重建会话...")
+        if self.session:
+            self.session.close()
+        self.session = self._create_session(self.sessdata, self.bili_jct)
+        self.logger.info("会话重建成功。")
+
     def get_video_info(self) -> dict:
         """根据BVID获取视频详细信息，包括所有分P的CID和标题"""
         url = "https://api.bilibili.com/x/web-interface/view"
@@ -123,37 +132,51 @@ class BiliDanmakuSender:
 
         signed_params = WbiSigner.enc_wbi(params=base_params, img_key=img_key, sub_key=sub_key)
 
-        try:
-            response = self.session.post(url, data=signed_params, timeout=10)
-            response.raise_for_status()
-            result_json = response.json()
+        for attempt in range(2):
+            try:
+                response = self.session.post(url, data=signed_params, timeout=15)
+                response.raise_for_status()
+                result_json = response.json()
+                break
+            except Timeout as e:
+                self.logger.warning(f"发送请求超时 (第 {attempt + 1} 次尝试)。")
+                if attempt == 0:
+                    self._recreate_session()
+                    continue
+                else:
+                    return self._handle_send_exception(danmaku, e, BiliDmErrorCode.TIMEOUT_ERROR)
+            except ConnectionError as e:
+                self.logger.warning(f"发生连接错误 (第 {attempt + 1} 次尝试): {e}")
+                if attempt == 0:
+                    self._recreate_session()
+                    continue
+                else:
+                    return self._handle_send_exception(danmaku, e, BiliDmErrorCode.CONNECTION_ERROR)
+            except RequestException as e:
+                return self._handle_send_exception(danmaku, e, BiliDmErrorCode.NETWORK_ERROR)
+            except Exception as e:
+                return self._handle_send_exception(danmaku, e, BiliDmErrorCode.UNKNOWN_ERROR)
+        
+        # 从B站API响应中获取错误码和原始消息
+        code = result_json.get('code', BiliDmErrorCode.GENERIC_FAILURE.code) 
+        raw_message = result_json.get('message', '无B站原始消息')
 
-            # 从B站API响应中获取错误码和原始消息
-            code = result_json.get('code', BiliDmErrorCode.GENERIC_FAILURE.code) 
-            raw_message = result_json.get('message', '无B站原始消息')
+        # 尝试从枚举中获取友好提示
+        _, display_msg = BiliDmErrorCode.resolve_bili_error(code, raw_message)
 
-            # 尝试从枚举中获取友好提示
-            _, display_msg = BiliDmErrorCode.resolve_bili_error(code, raw_message)
-
-            if code == BiliDmErrorCode.SUCCESS.code:
-                self.logger.info(f"✅ 成功发送: '{danmaku['msg']}'")
-                return DanmakuSendResult(code=code, success=True, message=raw_message, display_message=BiliDmErrorCode.SUCCESS.description_str)
-            else:
-                # 特殊处理发送频率过快的错误
-                if code == BiliDmErrorCode.FREQ_LIMIT.code:
-                    self.logger.warning(f"检测到弹幕发送过于频繁 (Code: {code}: {display_msg})，将额外等待10秒...")
-                    time.sleep(10)  # 内部处理等待，但仍返回失败结果
-                self.logger.warning(f"发送失败 (API响应)! 内容: '{danmaku['msg']}', Code: {code}, 消息: {display_msg} (原始: {raw_message})")
-                return DanmakuSendResult(code=code, success=False, message=raw_message, display_message=display_msg)
-        except Timeout as e:
-            return self._handle_send_exception(danmaku, e, BiliDmErrorCode.TIMEOUT_ERROR)
-        except ConnectionError as e:
-            return self._handle_send_exception(danmaku, e, BiliDmErrorCode.CONNECTION_ERROR)
-        except RequestException as e:
-            return self._handle_send_exception(danmaku, e, BiliDmErrorCode.NETWORK_ERROR)
-        except Exception as e:
-            return self._handle_send_exception(danmaku, e, BiliDmErrorCode.UNKNOWN_ERROR)
-
+        if code == BiliDmErrorCode.SUCCESS.code:
+            if attempt > 0:
+                self.logger.info(f"🔁 弹幕发送重试成功 (第 {attempt + 1} 次尝试)。")
+            self.logger.info(f"✅ 成功发送: '{danmaku['msg']}'")
+            return DanmakuSendResult(code=code, success=True, message=raw_message, display_message=BiliDmErrorCode.SUCCESS.description_str)
+        else:
+            # 特殊处理发送频率过快的错误
+            if code == BiliDmErrorCode.FREQ_LIMIT.code:
+                self.logger.warning(f"检测到弹幕发送过于频繁 (Code: {code}: {display_msg})，将额外等待10秒...")
+                time.sleep(10)  # 内部处理等待，但仍返回失败结果
+            self.logger.warning(f"发送失败 (API响应)! 内容: '{danmaku['msg']}', Code: {code}, 消息: {display_msg} (原始: {raw_message})")
+            return DanmakuSendResult(code=code, success=False, message=raw_message, display_message=display_msg)
+                
     def _process_single_danmaku(self, cid: int, dm: dict, total: int, i: int, stop_event: Event) -> tuple[bool, bool]:
         """
         处理单条弹幕的发送逻辑，包括日志、发送请求和致命错误判断。
