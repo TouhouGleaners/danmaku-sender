@@ -22,7 +22,7 @@ class SenderTab(ttk.Frame):
         super().__init__(parent, padding=15)
         self.model = model
         self.app = app  # 主应用实例，用于after调用
-        self.logger = logging.getLogger("sender_tab")
+        self.logger = logging.getLogger("SenderTab")
         self.columnconfigure(0, weight=1)
         self.rowconfigure(3, weight=1)
         self.stop_event = threading.Event()

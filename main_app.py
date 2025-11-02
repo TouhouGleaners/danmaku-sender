@@ -9,38 +9,7 @@ from sender_tab import SenderTab
 from monitor_tab import MonitorTab
 from validator_tab import ValidatorTab
 from help_content import *
-
-
-class GuiLoggingHandler(logging.Handler):
-    """
-    一个自定义的日志处理程序，将日志消息根据其来源路由到不同的GUI文本框。
-    它通过检查日志记录的名称(record.name)来决定目标。
-    """
-    def __init__(self):
-        super().__init__()
-        # 存储不同日志目标的更新函数
-        self.output_targets = {
-            "sender_tab": None,
-            "monitor_tab": None,
-        }
-
-    def emit(self, record):
-        """根据 record.name 将日志消息发送到正确的GUI组件。"""
-        msg = self.format(record)
-        
-        # 精确路由
-        if record.name == "sender_tab" and self.output_targets["sender_tab"]:
-            self.output_targets["sender_tab"](msg)
-        elif record.name == "monitor_tab" and self.output_targets["monitor_tab"]:
-            self.output_targets["monitor_tab"](msg)
-        # 关联路由: DanmakuSender 的日志也应显示在发射器标签页
-        elif record.name == "DanmakuSender" and self.output_targets["sender_tab"]:
-            self.output_targets["sender_tab"](msg)
-        # 备用 (Fallback) 路由: 对于未知来源的日志，默认输出到发射器日志框
-        else:
-            if self.output_targets["sender_tab"]:
-                # 为了区分，给这些通用日志加上来源名称作为前缀
-                self.output_targets["sender_tab"](f"[{record.name}] {msg}")
+from log_utils import GuiLoggingHandler
 
 
 class Application(ttk.Window):
@@ -91,7 +60,7 @@ class Application(ttk.Window):
         配置一个健壮的日志系统，能将不同模块的日志路由到对应的GUI界面。
         """
         self.gui_handler = GuiLoggingHandler()
-        formatter = logging.Formatter('%(asctime)s - %(levelname)s - %(message)s', datefmt='%H:%M:%S')
+        formatter = logging.Formatter('%(asctime)s [%(name)s] %(levelname)s - %(message)s', datefmt='%H:%M:%S')
         self.gui_handler.setFormatter(formatter)
 
         # 注册GUI输出目标
@@ -100,9 +69,7 @@ class Application(ttk.Window):
         if hasattr(self.monitor_tab_frame, 'log_text'):
             self.gui_handler.output_targets["monitor_tab"] = self.log_to_gui_widget(self.monitor_tab_frame.log_text)
 
-        # 配置各个模块的具名Logger
-        # 每个模块内部通过 logging.getLogger("模块名") 获取自己的logger实例
-        loggers_to_configure = ["sender_tab", "monitor_tab", "DanmakuSender", "DanmakuParser", "BiliUtils"]
+        loggers_to_configure = ["SenderTab", "MonitorTab", "ValidatorTab", "DanmakuSender", "DanmakuParser", "BiliUtils"]
         for name in loggers_to_configure:
             logger = logging.getLogger(name)
             logger.setLevel(logging.INFO)
@@ -113,10 +80,9 @@ class Application(ttk.Window):
         root_logger = logging.getLogger()
         root_logger.setLevel(logging.INFO)
 
-        # 清理可能存在的旧handler，避免重复输出到控制台
         for handler in root_logger.handlers[:]:
             root_logger.removeHandler(handler)
-        root_logger.addHandler(self.gui_handler) # 让根Logger也使用我们的GUI Handler
+        root_logger.addHandler(self.gui_handler)
 
     def log_to_gui_widget(self, text_widget):
         """返回一个用于更新特定ScrolledText控件的闭包函数"""

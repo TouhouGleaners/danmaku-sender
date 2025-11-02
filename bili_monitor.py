@@ -28,7 +28,7 @@ class BiliDanmakuMonitor:
         self.interval = interval
         self.time_tolerance = time_tolerance
         self.danmaku_parser = DanmakuParser()
-        self.logger = logging.getLogger("monitor_tab")
+        self.logger = logging.getLogger("MonitorTab")
         
         # 确保 local_danmakus 始终是一个列表
         self.local_danmakus = local_danmakus_list if local_danmakus_list is not None else []  
