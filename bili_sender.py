@@ -8,6 +8,7 @@ from requests.exceptions import Timeout, ConnectionError, RequestException
 
 from wbi_signer import WbiSigner
 from bili_danmaku_utils import BiliDmErrorCode, DanmakuSendResult, DanmakuParser
+from notification_utils import send_windows_notification
 
 
 class BiliDanmakuSender:
@@ -227,6 +228,22 @@ class BiliDanmakuSender:
         self.logger.info(f"尝试发送: {attempted_count} 条")
         self.logger.info(f"发送成功: {success_count} 条")
         self.logger.info(f"发送失败: {attempted_count - success_count} 条")
+
+        notification_title = "弹幕发送任务已结束"
+        summary_message = (f"成功: {success_count} / 尝试: {attempted_count} / 总计: {total}")
+
+        if stop_event.is_set():
+            notification_message = f"任务已被手动停止。\n{summary_message}"
+        elif fatal_error_occurred:
+            notification_message = f"任务因致命错误而中断！\n{summary_message}"
+        elif total == 0:
+            notification_message = "没有需要发送的弹幕。"
+        elif success_count == attempted_count:
+            notification_message = f"任务已完成！\n所有 {success_count} 条弹幕均已成功发送。"
+        else:
+            notification_message = f"任务已完成。\n{summary_message}"
+            
+        send_windows_notification(notification_title, notification_message)
 
     def send_danmaku_from_list(self, cid: int, danmakus: list, min_delay: float, max_delay: float, stop_event: Event):
         """从一个弹幕字典列表发送弹幕，并响应停止事件"""
