@@ -40,9 +40,9 @@ def _send_notification_wrapper(title: str, message: str):
             icon=ICON_PATH,
             app_id=AppInfo.NAME
         )
-        logger.info(f"成功发送通知: '{title}'")
+        logger.info(f"成功发送通知: {title}")
     except Exception as e:
-        logger.error(f"发送通知 '{title}' 时发生未知错误: {e}。", exc_info=True)
+        logger.error(f"发送通知 {title} 时发生未知错误: {e}。", exc_info=True)
 
 def send_windows_notification(title: str, message: str):
     """
@@ -56,5 +56,4 @@ def send_windows_notification(title: str, message: str):
         args=(title, message)
     )
     notification_thread.daemon = True
-    
     notification_thread.start()

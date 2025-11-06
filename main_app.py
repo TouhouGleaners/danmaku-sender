@@ -167,7 +167,7 @@ class Application(ttk.Window):
     def show_about_window(self):
         """显示关于窗口"""
         about_win = ttk.Toplevel(self)
-        about_win.title(UI.ABOUT_WINDOW_SHORT_TITLE)
+        about_win.title(UI.ABOUT_WINDOW_TITLE)
         about_win.transient(self)
         about_win.grab_set()
         about_win.resizable(False, False)
