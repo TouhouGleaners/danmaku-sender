@@ -1,0 +1,19 @@
+class AppInfo:
+    """存放应用元数据"""
+    NAME = "B站弹幕补档工具"
+    AUTHOR = "Miku_oso"
+    VERSION = "1.0.1"
+
+
+class UI:
+    """存放所有UI相关的静态配置"""
+    MAIN_WINDOW_TITLE = f"{AppInfo.NAME} v{AppInfo.VERSION}"
+    HELP_WINDOW_TITLE = "使用说明"
+    ABOUT_WINDOW_SHORT_TITLE = "关于"
+    ABOUT_WINDOW_TITLE = f"关于 {AppInfo.NAME}"
+
+
+class Links:
+    """存放所有外部URL"""
+    GITHUB_REPO = "https://github.com/TouhouGleaners/danmaku-sender"
+    GITHUB_ISSUES = f"{GITHUB_REPO}/issues"

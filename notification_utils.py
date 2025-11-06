@@ -1,55 +1,59 @@
 import sys
 import logging
-from pathlib import Path
+import platform
 import threading
+from pathlib import Path
+
+from app_config import AppInfo
 
 
-logger = logging.getLogger("NotificationService")
-
-APP_NAME = "B站弹幕补档工具"
-IS_WINDOWS = sys.platform == "win32"
-ICON_PATH = ""
+logger = logging.getLogger("NotificationUtils")
 
 try:
-    icon_file = Path(__file__).parent / 'assets' / 'icon.ico'
-    if icon_file.exists():
-        ICON_PATH = str(icon_file.resolve())
-except Exception:
-    pass
+    base_path = Path(sys._MEIPASS)
+except AttributeError:
+    base_path = Path(__file__).resolve().parent
 
-if IS_WINDOWS:
-    try:
-        from win11toast import toast
-    except ImportError:
-        IS_WINDOWS = False
-        toast = None
+ICON_PATH = base_path / 'assets' / 'icon.ico'
+
+if not ICON_PATH.is_file():
+    logger.warning(f"图标文件未找到: {ICON_PATH}。通知将可能没有图标。")
+    ICON_PATH = ""
 else:
-    toast = None
+    ICON_PATH = str(ICON_PATH)
 
-def _send_in_thread(title: str, message: str):
+try:
+    from win11toast import toast
+except ImportError:
+    toast = None
+    logger.warning("未能导入 'win11toast' 库。桌面通知功能将被禁用。")
+
+
+def _send_notification_wrapper(title: str, message: str):
+    """
+    一个内部包装函数，用于在独立的线程中安全地调用 toast 并处理异常。
+    """
     try:
         toast(
-            title, 
-            message, 
-            icon=ICON_PATH, 
-            app_id=APP_NAME
+            title=title,
+            body=message,
+            icon=ICON_PATH,
+            app_id=AppInfo.NAME
         )
-        logger.info(f"成功发送通知 (后台线程): '{title}'")
+        logger.info(f"成功发送通知: {title}")
     except Exception as e:
-        logger.error(f"在后台线程发送通知时发生错误: {e}", exc_info=True)
+        logger.error(f"发送通知 {title} 时发生未知错误: {e}。", exc_info=True)
 
 def send_windows_notification(title: str, message: str):
-    if not IS_WINDOWS or not toast:
+    """
+    在后台启动一个线程来发送 Windows 桌面通知。
+    """
+    if toast is None or platform.system() != "Windows":
+        logger.debug(f"跳过通知 (依赖缺失或非Windows系统): {title}")
         return
-
     notification_thread = threading.Thread(
-        target=_send_in_thread, 
+        target=_send_notification_wrapper,
         args=(title, message)
     )
+    notification_thread.daemon = True
     notification_thread.start()
-    logger.info(f"已创建后台线程来发送通知: '{title}'")
-
-if IS_WINDOWS and toast:
-    logger.info("成功初始化 Windows 通知服务 (win11toast, 异步模式)。")
-elif IS_WINDOWS and not toast:
-    logger.warning("当前为 Windows 系统，但 win11toast 库导入失败，通知功能将不可用。")

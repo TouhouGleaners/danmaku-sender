@@ -8,14 +8,15 @@ from shared_data import SharedDataModel
 from sender_tab import SenderTab
 from monitor_tab import MonitorTab
 from validator_tab import ValidatorTab
-from help_content import *
+from app_config import AppInfo, UI, Links
+from app_content import HelpText, AboutText
 from log_utils import GuiLoggingHandler
 
 
 class Application(ttk.Window):
     def __init__(self):
         super().__init__(themename="litera")
-        self.title(f"{MAIN_WINDOW_TITLE_PREFIX} v{APP_VERSION}")
+        self.title(UI.MAIN_WINDOW_TITLE)
         self.geometry("780x750")
         # --- 模型、控制器、视图的装配 ---
         self.shared_data = SharedDataModel()
@@ -108,14 +109,14 @@ class Application(ttk.Window):
         # --- 帮助菜单 ---
         help_menu = ttk.Menu(menu_bar, tearoff=0)
         menu_bar.add_cascade(label="帮助", menu=help_menu)
-        help_menu.add_command(label=HELP_WINDOW_TITLE, command=self.show_help_window)
+        help_menu.add_command(label=UI.HELP_WINDOW_TITLE, command=self.show_help_window)
         help_menu.add_separator()
-        help_menu.add_command(label=ABOUT_WINDOW_SHORT_TITLE, command=self.show_about_window)
+        help_menu.add_command(label=UI.ABOUT_WINDOW_SHORT_TITLE, command=self.show_about_window)
 
     def show_help_window(self):
         """显示使用说明窗口"""
         help_win = ttk.Toplevel(self)
-        help_win.title(HELP_WINDOW_TITLE)
+        help_win.title(UI.HELP_WINDOW_TITLE)
         help_win.transient(self)
         help_win.grab_set()
         help_win.resizable(False, False)
@@ -149,9 +150,9 @@ class Application(ttk.Window):
             
             return tab_frame
 
-        create_scrollable_text_tab(help_notebook, "弹幕发射器帮助", SENDER_HELP_TEXT)
-        create_scrollable_text_tab(help_notebook, "弹幕校验器帮助", VALIDATOR_HELP_TEXT)
-        create_scrollable_text_tab(help_notebook, "弹幕监视器帮助", MONITOR_HELP_TEXT)
+        create_scrollable_text_tab(help_notebook, "弹幕发射器帮助", HelpText.SENDER)
+        create_scrollable_text_tab(help_notebook, "弹幕校验器帮助", HelpText.VALIDATOR)
+        create_scrollable_text_tab(help_notebook, "弹幕监视器帮助", HelpText.MONITOR)
 
         # 让窗口大小自适应内容
         help_win.update_idletasks()
@@ -166,7 +167,7 @@ class Application(ttk.Window):
     def show_about_window(self):
         """显示关于窗口"""
         about_win = ttk.Toplevel(self)
-        about_win.title(ABOUT_WINDOW_SHORT_TITLE)
+        about_win.title(UI.ABOUT_WINDOW_TITLE)
         about_win.transient(self)
         about_win.grab_set()
         about_win.resizable(False, False)
@@ -174,19 +175,19 @@ class Application(ttk.Window):
         frame = ttk.Frame(about_win, padding=20)
         frame.pack(fill=BOTH, expand=True)
 
-        ttk.Label(frame, text=ABOUT_TEXT_TOP, font=("TkDefaultFont", 14, "bold")).pack(pady=(0, 10))
-        ttk.Label(frame, text=ABOUT_TEXT_VERSION).pack(pady=5)
-        ttk.Label(frame, text=ABOUT_TEXT_AUTHOR).pack(pady=5)
+        ttk.Label(frame, text=AboutText.TOP, font=("TkDefaultFont", 14, "bold")).pack(pady=(0, 10))
+        ttk.Label(frame, text=f"版本: {AppInfo.VERSION}").pack(pady=5)
+        ttk.Label(frame, text=AboutText.AUTHOR).pack(pady=5)
 
         # Github 仓库地址
-        ttk.Label(frame, text=ABOUT_TEXT_GITHUB_TITLE, font=("TkDefaultFont", 10, "bold")).pack(pady=(15, 0))
-        github_link = ttk.Label(frame, text=GITHUB_REPO_URL, foreground="blue", cursor="hand2")
+        ttk.Label(frame, text=AboutText.GITHUB_TITLE, font=("TkDefaultFont", 10, "bold")).pack(pady=(15, 0))
+        github_link = ttk.Label(frame, text=Links.GITHUB_REPO, foreground="blue", cursor="hand2")
         github_link.pack(pady=(0, 5))
-        github_link.bind("<Button-1>", lambda _: webbrowser.open_new(GITHUB_REPO_URL))
-        ttk.Label(frame, text=ABOUT_TEXT_FEEDBACK, justify=CENTER).pack(pady=(15, 0))
-        issue_link = ttk.Label(frame, text=ABOUT_TEXT_ISSUE_LINK_LABEL, foreground="blue", cursor="hand2")
+        github_link.bind("<Button-1>", lambda _: webbrowser.open_new(Links.GITHUB_REPO))
+        ttk.Label(frame, text=AboutText.FEEDBACK, justify=CENTER).pack(pady=(15, 0))
+        issue_link = ttk.Label(frame, text=AboutText.ISSUE_LINK_LABEL, foreground="blue", cursor="hand2")
         issue_link.pack(pady=5)
-        issue_link.bind("<Button-1>", lambda _: webbrowser.open_new(GITHUB_ISSUES_URL))
+        issue_link.bind("<Button-1>", lambda _: webbrowser.open_new(Links.GITHUB_ISSUES))
 
         # 让窗口大小自适应内容
         about_win.update_idletasks()
