@@ -61,11 +61,8 @@ class BiliDanmakuSender:
                 self.logger.warning(f"发送失败 (API响应)! 内容: '{danmaku['msg']}', Code: {code}, 消息: {display_msg} (原始: {raw_message})")
                 return DanmakuSendResult(code=code, success=False, message=raw_message, display_message=display_msg)
         except BiliApiException as e:
-            # 处理网络层面的异常
-            error_code_enum = BiliDmErrorCode.NETWORK_ERROR
-            if e.code == -999:  # 映射到自定义错误码
-                error_code_enum = BiliDmErrorCode.CONNECTION_ERROR
-                
+            error_code_enum = BiliDmErrorCode.from_api_exception(e)
+            
             log_message = f"❌ 发送异常! 内容: '{danmaku.get('msg', 'N/A')}', 错误: {e.message}"
             self.logger.error(log_message)
             return DanmakuSendResult(

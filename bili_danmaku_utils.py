@@ -3,6 +3,8 @@ import xml.etree.ElementTree as ET
 import logging
 import uuid
 
+from bili_api_client import BiliApiException
+
 
 logger = logging.getLogger("BiliUtils")
 
@@ -73,6 +75,23 @@ class BiliDmErrorCode(Enum):
         else:
             display_msg = raw_message or BiliDmErrorCode.GENERIC_FAILURE.description_str
             return code, display_msg
+        
+    @classmethod
+    def from_api_exception(cls, e: 'BiliApiException') -> 'BiliDmErrorCode':
+        """根据 BiliApiException 转换到合适的 BiliDmErrorCode"""
+        if not e.is_network_error:
+            # 如果不是网络错误，可能是一个未处理的API错误，返回通用失败
+            return cls.GENERIC_FAILURE
+        
+        # -999 连接超时/错误
+        if e.code == -999:
+            return cls.CONNECTION_ERROR
+        # -998 通用请求错误
+        elif e.code == -998:
+            return cls.NETWORK_ERROR
+        # ...可以扩展其他网络错误码的映射
+        else:
+            return cls.NETWORK_ERROR # 默认返回通用网络错误
         
 
 class DanmakuSendResult:
