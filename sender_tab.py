@@ -6,6 +6,7 @@ from pathlib import Path
 import ttkbootstrap as ttk
 from ttkbootstrap.tooltip import ToolTip
 
+from bili_api_client import BiliApiClient, BiliApiException
 from bili_sender import BiliDanmakuSender
 from bili_danmaku_utils import DanmakuParser
 
@@ -170,8 +171,9 @@ class SenderTab(ttk.Frame):
     def _fetch_parts_worker(self, bvid, sessdata, bili_jct):
         """在工作线程中执行获取分P的API调用"""
         try:
-            sender = BiliDanmakuSender(sessdata, bili_jct)
-            video_info = sender.get_video_info(bvid)
+            with BiliApiClient(sessdata, bili_jct) as api_client:
+                sender = BiliDanmakuSender(api_client)
+                video_info = sender.get_video_info(bvid)
             pages = video_info.get('pages', [])
 
             # 清空旧数据
@@ -211,7 +213,7 @@ class SenderTab(ttk.Frame):
                 self.get_parts_button.config(state='normal')
             
             self.app.after(0, _update_ui_success)
-        except Exception as e:
+        except (BiliApiException, ValueError, RuntimeError) as e:
             self.logger.error(f"❌ 获取分P失败: {e}")
             def _update_ui_fail():
                 self.get_parts_button.config(state="normal")
@@ -291,8 +293,11 @@ class SenderTab(ttk.Frame):
     def _task_worker(self, bvid, danmaku_list, sessdata, bili_jct, min_delay, max_delay, cid):
         """在工作线程中执行弹幕发送任务"""
         try:
-            sender = BiliDanmakuSender(sessdata, bili_jct)
-            sender.send_danmaku_from_list(bvid, cid, danmaku_list, min_delay, max_delay, self.stop_event)
+            with BiliApiClient(sessdata, bili_jct) as api_client:
+                sender = BiliDanmakuSender(api_client)
+                sender.send_danmaku_from_list(bvid, cid, danmaku_list, min_delay, max_delay, self.stop_event)
+        except (BiliApiException, ValueError) as e:
+            self.logger.error(f"【任务启动失败】无法初始化API客户端: {e}")
         except Exception as e:
             self.logger.error(f"【程序崩溃】发生未捕获的严重错误: {e}")
         finally:

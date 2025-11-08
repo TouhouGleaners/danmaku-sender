@@ -10,14 +10,9 @@ from notification_utils import send_windows_notification
 
 class BiliDanmakuSender:
     """B站弹幕发送器"""
-    def __init__(self, sessdata: str, bili_jct: str):
+    def __init__(self, api_client: BiliApiClient):
         self.logger = logging.getLogger("DanmakuSender")
-        try:
-            self.api_client = BiliApiClient(sessdata, bili_jct)
-        except BiliApiException as e:
-            self.logger.critical(f"API客户端初始化失败: {e}")
-            raise ValueError(f"凭证或网络初始化失败: {e.message}") from e
-        
+        self.api_client = api_client
         self.danmaku_parser = DanmakuParser()
 
     def get_video_info(self, bvid: str) -> dict:

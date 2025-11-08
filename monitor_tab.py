@@ -186,19 +186,18 @@ class MonitorTab(ttk.Frame):
         try:
             sessdata = self.model.sessdata.get()
             bili_jct = self.model.bili_jct.get()
-            api_client = BiliApiClient(sessdata, bili_jct)
-
-            monitor = BiliDanmakuMonitor(api_client, cid, source_filepath, loaded_danmakus, interval, tolerance)
+            with BiliApiClient(sessdata, bili_jct) as api_client:
+                monitor = BiliDanmakuMonitor(api_client, cid, source_filepath, loaded_danmakus, interval, tolerance)
         
-            def progress_updater(matched_count, total_count):
-                if total_count > 0:
-                    progress = (matched_count / total_count) * 100
-                    status = f"监视器: 运行中... ({matched_count}/{total_count})"
-                    self.app.after(0, lambda: (self.model.monitor_progress_var.set(progress), self.model.monitor_status_text.set(status)))
-                else: # 如果总数为0，进度条也应该为0并显示对应的状态
-                    self.app.after(0, lambda: (self.model.monitor_progress_var.set(0), self.model.monitor_status_text.set("监视器：无弹幕可匹配")))
+                def progress_updater(matched_count, total_count):
+                    if total_count > 0:
+                        progress = (matched_count / total_count) * 100
+                        status = f"监视器: 运行中... ({matched_count}/{total_count})"
+                        self.app.after(0, lambda: (self.model.monitor_progress_var.set(progress), self.model.monitor_status_text.set(status)))
+                    else: # 如果总数为0，进度条也应该为0并显示对应的状态
+                        self.app.after(0, lambda: (self.model.monitor_progress_var.set(0), self.model.monitor_status_text.set("监视器：无弹幕可匹配")))
 
-            monitor.run(self.stop_monitor_event, progress_updater)
+                monitor.run(self.stop_monitor_event, progress_updater)
         except (ValueError, BiliApiException) as e:
             self.logger.error(f"无法启动监视任务，API客户端初始化失败: {e}")
         finally:

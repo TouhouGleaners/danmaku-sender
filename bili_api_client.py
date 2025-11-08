@@ -52,8 +52,17 @@ class BiliApiClient:
     def close(self):
         """关闭会话"""
         if self.session:
+            self.logger.debug("Closing BiliApiClient session.")
             self.session.close()
+
+    def __enter__(self):
+        self.logger.debug("BiliApiClient session entered.")
+        return self
     
+    def __exit__(self, exc_type, exc_value, traceback):
+        self.logger.debug("Exiting BiliApiClient session context.")
+        self.close()
+        
     def _request(self, method: str, url: str, **kwargs) -> dict:
         """
         通用的JSON API请求方法，包含重试和错误处理逻辑。
