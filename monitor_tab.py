@@ -5,6 +5,7 @@ import ttkbootstrap as ttk
 from ttkbootstrap.tooltip import ToolTip 
 from ttkbootstrap.dialogs import Messagebox
 
+from bili_api_client import BiliApiClient, BiliApiException
 from bili_monitor import BiliDanmakuMonitor
 
 
@@ -35,7 +36,7 @@ class MonitorTab(ttk.Frame):
         # 绑定来自共享数据模型的变量
         self.current_bvid = self.model.bvid 
         self.current_part = self.model.part_var  
-        self.current_file = self.model.danmaku_xml_path 
+        self.current_file = self.model.source_danmaku_filepath 
 
         self._create_widgets()
 
@@ -123,32 +124,32 @@ class MonitorTab(ttk.Frame):
         self.start_button.grid(row=0, column=2, sticky="e")
 
     def set_ui_state(self, is_enabled: bool):
-        """启用或禁用UI控件，防止任务运行时误操作。"""
+        """启用或禁用UI控件，防止任务运行时误操作"""
         state = 'normal' if is_enabled else 'disabled'
         self.interval_entry.config(state=state)
         self.tolerance_entry.config(state=state)
 
     def toggle_monitoring(self):
-        """切换监视任务的启动/停止状态。"""
+        """切换监视任务的启动/停止状态"""
         if self.monitor_thread and self.monitor_thread.is_alive():
             self.stop_monitoring()
         else:
             self.start_monitoring()
 
     def start_monitoring(self):
-        """启动监视任务。"""
+        """启动监视任务"""
         # 参数校验
         self.logger.debug(f"MonitorTab.start_monitoring: self.model.selected_cid={self.model.selected_cid}, type={type(self.model.selected_cid)}")
         cid = self.model.selected_cid
-        xml_path = self.model.danmaku_xml_path.get()
-        local_danmakus_list = self.model.parsed_local_danmakus  # 获取预先解析好的本地弹幕列表，如果存在的话
+        source_filepath = self.model.source_danmaku_filepath.get()
+        loaded_danmakus = self.model.loaded_danmakus  # 获取预先解析好的本地弹幕列表，如果存在的话
         
-        # 统一检查是否有CID，以及是否有本地弹幕来源（要么有xml_path，要么有local_danmakus_list）
+        # 统一检查是否有CID，以及是否有本地弹幕来源（要么有source_filepath，要么有loaded_danmakus）
         if not cid:
             Messagebox.show_warning("请先在“弹幕发射器”标签页加载视频。", title="CID缺失", parent=self.app)
             self.logger.warning("CID缺失，无法开始监控。") 
             return
-        if not xml_path and not local_danmakus_list:
+        if not source_filepath and not loaded_danmakus:
             Messagebox.show_warning("请先在“弹幕发射器”标签页选择弹幕文件或确认已解析本地弹幕。", title="弹幕数据缺失", parent=self.app)
             self.logger.warning("弹幕数据缺失，无法开始监控。")
             return
@@ -168,36 +169,43 @@ class MonitorTab(ttk.Frame):
         self.stop_monitor_event.clear()
         self.monitor_thread = threading.Thread(
             target=self._monitor_task,
-            args=(cid, xml_path, local_danmakus_list, interval, tolerance),
+            args=(cid, source_filepath, loaded_danmakus, interval, tolerance),
             daemon=True
         )
         self.monitor_thread.start()
 
     def stop_monitoring(self):
-        """停止监视任务。"""
+        """停止监视任务"""
         if self.monitor_thread and self.monitor_thread.is_alive():
             self.logger.info("正在发送停止信号...")
             self.stop_monitor_event.set()
             self.model.monitor_status_text.set("监视器：正在停止...")
 
-    def _monitor_task(self, cid: int, xml_path: str, local_danmakus_list: list, interval: int, tolerance: int):
-        """在后台线程中运行的监视核心逻辑。"""
-        monitor = BiliDanmakuMonitor(cid, xml_path, local_danmakus_list, interval, tolerance)
-        
-        def progress_updater(matched_count, total_count):
-            if total_count > 0:
-                progress = (matched_count / total_count) * 100
-                status = f"监视器: 运行中... ({matched_count}/{total_count})"
-                self.app.after(0, lambda: (self.model.monitor_progress_var.set(progress), self.model.monitor_status_text.set(status)))
-            else: # 如果总数为0，进度条也应该为0并显示对应的状态
-                self.app.after(0, lambda: (self.model.monitor_progress_var.set(0), self.model.monitor_status_text.set("监视器：无弹幕可匹配")))
+    def _monitor_task(self, cid: int, source_filepath: str, loaded_danmakus: list, interval: int, tolerance: int):
+        """在后台线程中运行的监视核心逻辑"""
+        try:
+            sessdata = self.model.sessdata.get()
+            bili_jct = self.model.bili_jct.get()
+            api_client = BiliApiClient(sessdata, bili_jct)
 
-        monitor.run(self.stop_monitor_event, progress_updater)
+            monitor = BiliDanmakuMonitor(api_client, cid, source_filepath, loaded_danmakus, interval, tolerance)
         
-        self.app.after(0, self._reset_ui_after_task)
+            def progress_updater(matched_count, total_count):
+                if total_count > 0:
+                    progress = (matched_count / total_count) * 100
+                    status = f"监视器: 运行中... ({matched_count}/{total_count})"
+                    self.app.after(0, lambda: (self.model.monitor_progress_var.set(progress), self.model.monitor_status_text.set(status)))
+                else: # 如果总数为0，进度条也应该为0并显示对应的状态
+                    self.app.after(0, lambda: (self.model.monitor_progress_var.set(0), self.model.monitor_status_text.set("监视器：无弹幕可匹配")))
+
+            monitor.run(self.stop_monitor_event, progress_updater)
+        except (ValueError, BiliApiException) as e:
+            self.logger.error(f"无法启动监视任务，API客户端初始化失败: {e}")
+        finally:
+            self.app.after(0, self._reset_ui_after_task)
         
     def _set_ui_for_task_start(self):
-        """任务开始时更新UI状态。"""
+        """任务开始时更新UI状态"""
         self.set_ui_state(False)
         self.start_button.config(text="停止监视", style="danger.TButton")
         self.model.monitor_status_text.set("监视器：启动中...")

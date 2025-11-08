@@ -59,7 +59,7 @@ class ValidatorTab(ttk.Frame):
         """运行弹幕验证并显示结果"""
         self.tree.delete(*self.tree.get_children())
 
-        if not self.model.parsed_local_danmakus:
+        if not self.model.loaded_danmakus:
             Messagebox.show_warning("请先在“发射器”页面加载弹幕文件。", "错误", parent=self.app)
             return
         
@@ -67,10 +67,10 @@ class ValidatorTab(ttk.Frame):
             Messagebox.show_warning("请先在“发射器”页面选择一个分P。\n（需要分P时长来检查时间戳）", "错误", parent=self.app)
             return
         
-        self.original_danmakus_snapshot = copy.deepcopy(self.model.parsed_local_danmakus)
+        self.original_danmakus_snapshot = copy.deepcopy(self.model.loaded_danmakus)
         duration_ms = self.model.selected_part_duration_ms
 
-        self.logger.info(f"开始验证弹幕，共 {len(self.model.parsed_local_danmakus)} 条，分P时长 {duration_ms / 1000} 秒。")
+        self.logger.info(f"开始验证弹幕，共 {len(self.model.loaded_danmakus)} 条，分P时长 {duration_ms / 1000} 秒。")
         
         issues = validate_danmaku_list(self.original_danmakus_snapshot, duration_ms)
         if not issues:
@@ -143,10 +143,10 @@ class ValidatorTab(ttk.Frame):
                 dm_snapshot['msg'] = modified_issues[idx]
                 new_danmaku_list.append(dm_snapshot)
         
-        original_count = len(self.model.parsed_local_danmakus)
+        original_count = len(self.model.loaded_danmakus)
         new_count = len(new_danmaku_list)
 
-        self.model.parsed_local_danmakus = new_danmaku_list
+        self.model.loaded_danmakus = new_danmaku_list
 
         self.logger.info(f"修改已应用。弹幕数量从 {original_count} 更新为 {new_count}。")
         Messagebox.show_info("应用成功", f"操作成功！\n原弹幕数: {original_count}\n处理后弹幕数: {new_count}", parent=self.app)

@@ -15,7 +15,7 @@ class SharedDataModel:
         # --- 核心参数 ---
         self.bvid = ttk.StringVar()
         self.part_var = ttk.StringVar()
-        self.danmaku_xml_path = ttk.StringVar()
+        self.source_danmaku_filepath = ttk.StringVar()
 
         self.cid_parts_map = {}  # 存储 {cid: 'title'} 的映射关系
         self.ordered_cids = []  # 存储一个与下拉框显示顺序完全对应的CID列表
@@ -31,7 +31,7 @@ class SharedDataModel:
         self.monitor_interval = ttk.StringVar(value="60")  # 刷新间隔，默认60秒
         self.time_tolerance = ttk.StringVar(value="500")  # 时间容差，默认500毫秒
         self.monitor_progress_var = ttk.DoubleVar(value=0.0)
-        self.parsed_local_danmakus = []  # 解析后的本地弹幕列表
+        self.loaded_danmakus = []  # 解析后的本地弹幕列表
 
         # --- 状态信息 (用于状态栏显示) ---
         # 这些变量将由后台任务更新，并由状态栏显示
