@@ -6,6 +6,7 @@ from pathlib import Path
 import ttkbootstrap as ttk
 from ttkbootstrap.tooltip import ToolTip
 
+from bili_api_client import BiliApiClient, BiliApiException
 from bili_sender import BiliDanmakuSender
 from bili_danmaku_utils import DanmakuParser
 
@@ -109,23 +110,23 @@ class SenderTab(ttk.Frame):
         if not file_path_str:
             return
         file_path = Path(file_path_str)
-        self.model.danmaku_xml_path.set(str(file_path))
+        self.model.source_danmaku_filepath.set(str(file_path))
         self.file_path_label.config(text=file_path.name)
         self.file_path_tooltip.text = str(file_path)
         self.logger.info(f"已选择文件: {file_path}")     
-        self.model.parsed_local_danmakus = []  # 清空旧的解析结果
+        self.model.loaded_danmakus = []  # 清空旧的解析结果
 
         try:
             parsed_list = self.danmaku_parser.parse_xml_file(str(file_path))
             if parsed_list:
                 # 将解析成功的结果存入共享模型
-                self.model.parsed_local_danmakus = parsed_list
+                self.model.loaded_danmakus = parsed_list
                 self.logger.info(f"✅ 文件解析成功，共 {len(parsed_list)} 条弹幕已准备就绪。")
             else:
                 self.logger.warning("⚠️ 文件解析完成，但未找到有效弹幕。请检查文件内容。")
         except Exception as e:
             self.logger.error(f"❌ 文件解析失败: {e}")
-            self.model.danmaku_xml_path.set("")  # 解析失败，清空路径，防止用户使用错误的文件
+            self.model.source_danmaku_filepath.set("")  # 解析失败，清空路径，防止用户使用错误的文件
             self.file_path_label.config(text="解析失败，请重选")
     
     def _on_part_selected(self, event=None):
@@ -170,8 +171,9 @@ class SenderTab(ttk.Frame):
     def _fetch_parts_worker(self, bvid, sessdata, bili_jct):
         """在工作线程中执行获取分P的API调用"""
         try:
-            sender = BiliDanmakuSender(sessdata, bili_jct, bvid)
-            video_info = sender.get_video_info()
+            with BiliApiClient(sessdata, bili_jct) as api_client:
+                sender = BiliDanmakuSender(api_client)
+                video_info = sender.get_video_info(bvid)
             pages = video_info.get('pages', [])
 
             # 清空旧数据
@@ -191,7 +193,7 @@ class SenderTab(ttk.Frame):
                 display_parts.append(part_name)
 
             def _update_ui_success():
-                # 这是一个在主线程中更新UI的回调函数
+                """在主线程中更新UI的回调函数"""
                 if display_parts:
                     self.part_combobox['values'] = display_parts
                     self.part_combobox.config(state="readonly")
@@ -211,7 +213,7 @@ class SenderTab(ttk.Frame):
                 self.get_parts_button.config(state='normal')
             
             self.app.after(0, _update_ui_success)
-        except Exception as e:
+        except (BiliApiException, ValueError, RuntimeError) as e:
             self.logger.error(f"❌ 获取分P失败: {e}")
             def _update_ui_fail():
                 self.get_parts_button.config(state="normal")
@@ -234,7 +236,7 @@ class SenderTab(ttk.Frame):
         bvid = self.model.bvid.get().strip()
         sessdata = self.model.sessdata.get().strip()
         bili_jct = self.model.bili_jct.get().strip()
-        xml_path = self.model.danmaku_xml_path.get()
+        xml_path = self.model.source_danmaku_filepath.get()
         
         try:
             min_delay = float(self.model.min_delay.get())
@@ -245,7 +247,7 @@ class SenderTab(ttk.Frame):
             self.logger.error("❌【输入错误】延迟时间设置不合法！")
             return
         
-        if not self.model.danmaku_xml_path.get():
+        if not self.model.source_danmaku_filepath.get():
             self.logger.error("❌【输入错误】请先选择一个弹幕文件！")
             return
         
@@ -254,7 +256,7 @@ class SenderTab(ttk.Frame):
             return
         
         # 直接检查模型中是否有解析好的弹幕
-        if not self.model.parsed_local_danmakus:
+        if not self.model.loaded_danmakus:
             self.logger.error("❌【文件错误】未加载或解析到有效弹幕，请选择一个有效的弹幕文件！")
             return
             
@@ -277,7 +279,7 @@ class SenderTab(ttk.Frame):
         self.stop_event.clear()
 
         try:
-            danmakus_to_send = self.model.parsed_local_danmakus.copy()
+            danmakus_to_send = self.model.loaded_danmakus.copy()
             thread = threading.Thread(
                 target=self._task_worker, 
                 args=(bvid, danmakus_to_send, sessdata, bili_jct, min_delay, max_delay, selected_cid),
@@ -291,8 +293,11 @@ class SenderTab(ttk.Frame):
     def _task_worker(self, bvid, danmaku_list, sessdata, bili_jct, min_delay, max_delay, cid):
         """在工作线程中执行弹幕发送任务"""
         try:
-            sender = BiliDanmakuSender(sessdata, bili_jct, bvid)
-            sender.send_danmaku_from_list(cid, danmaku_list, min_delay, max_delay, self.stop_event)
+            with BiliApiClient(sessdata, bili_jct) as api_client:
+                sender = BiliDanmakuSender(api_client)
+                sender.send_danmaku_from_list(bvid, cid, danmaku_list, min_delay, max_delay, self.stop_event)
+        except (BiliApiException, ValueError) as e:
+            self.logger.error(f"【任务启动失败】无法初始化API客户端: {e}")
         except Exception as e:
             self.logger.error(f"【程序崩溃】发生未捕获的严重错误: {e}")
         finally:
