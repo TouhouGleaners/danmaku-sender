@@ -1,8 +1,9 @@
 class AppInfo:
     """存放应用元数据"""
     NAME = "B站弹幕补档工具"
+    NAME_EN = "BiliDanmakuSender"
     AUTHOR = "Miku_oso"
-    VERSION = "1.0.1"
+    VERSION = "1.1.0"
 
 
 class UI:

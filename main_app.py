@@ -3,7 +3,7 @@ import ttkbootstrap as ttk
 from ttkbootstrap.constants import *
 import webbrowser
 
-from config_manager import load_config, save_config
+from credential_manager import load_credentials, save_credentials
 from shared_data import SharedDataModel
 from sender_tab import SenderTab
 from monitor_tab import MonitorTab
@@ -26,7 +26,7 @@ class Application(ttk.Window):
         self.create_widgets()
         self.create_menu()
         self.setup_logging()
-        self.load_and_populate_config()
+        self.load_and_populate_credentials()
         self.protocol("WM_DELETE_WINDOW", self.on_closing)
 
     def create_widgets(self):
@@ -41,9 +41,9 @@ class Application(ttk.Window):
         notebook.add(self.validator_tab_frame, text="弹幕校验器")
         notebook.add(self.monitor_tab_frame, text="弹幕监视器")
 
-    def load_and_populate_config(self):
-        """加载配置并填充到UI控件中。"""
-        credentials = load_config()
+    def load_and_populate_credentials(self):
+        """加载凭证并填充到UI控件中。"""
+        credentials = load_credentials()
         self.shared_data.sessdata.set(credentials.get('SESSDATA', ''))
         self.shared_data.bili_jct.set(credentials.get('BILI_JCT', ''))
 
@@ -53,7 +53,7 @@ class Application(ttk.Window):
             'SESSDATA': self.shared_data.sessdata.get(),
             'BILI_JCT': self.shared_data.bili_jct.get()
         }
-        save_config(credentials_to_save)
+        save_credentials(credentials_to_save)
         self.destroy()
 
     def setup_logging(self):
