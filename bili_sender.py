@@ -84,17 +84,21 @@ class BiliDanmakuSender:
             return False, False  # 失败，但不是致命错误
         return True, False  # 成功发送
     
-    def send_danmaku_from_list(self, bvid: str, cid: int, danmakus: list, min_delay: float, max_delay: float, stop_event: Event):
+    def send_danmaku_from_list(self, bvid: str, cid: int, danmakus: list, min_delay: float, max_delay: float, stop_event: Event, progress_callback=None):
         """从一个弹幕字典列表发送弹幕，并响应停止事件"""
         self.logger.info(f"开始从内存列表发送弹幕到 CID: {cid}")
         if not danmakus:
             self._log_send_summary(0, 0, 0, stop_event, False)
+            if progress_callback:
+                progress_callback(0, 0)
             return
         
         total = len(danmakus)
         success_count = 0
         attempted_count = 0
         fatal_error_occurred = False
+        if progress_callback:
+            progress_callback(0, total)
         for i, dm in enumerate(danmakus):
             if stop_event.is_set():
                 self.logger.info("任务被用户手动停止。")
@@ -104,6 +108,9 @@ class BiliDanmakuSender:
             self.logger.info(f"[{i+1}/{total}] 准备发送: {dm.get('msg', 'N/A')}")
             result = self._send_single_danmaku(cid, bvid, dm)
             self.logger.info(str(result))
+
+            if progress_callback:
+                progress_callback(attempted_count, total)
 
             sent_successfully, is_fatal = self._process_send_result(result)
             if is_fatal:

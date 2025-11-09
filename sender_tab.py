@@ -93,13 +93,17 @@ class SenderTab(ttk.Frame):
         self.log_text.grid(row=0, column=0, sticky="nsew")
         
         # --- 操作区 ---
-        action_frame = ttk.Frame(self, padding=(15, 10))
+        action_frame = ttk.Frame(self, padding=(10, 10))
         action_frame.grid(row=4, column=0, padx=10, pady=10, sticky="ew")
-        action_frame.columnconfigure(0, weight=1)
-        self.progress_bar = ttk.Progressbar(action_frame, mode='determinate', style='success.Striped.TProgressbar')
-        self.progress_bar.grid(row=0, column=0, sticky="ew", padx=(0, 10))
+        action_frame.columnconfigure(0, weight=0)
+        action_frame.columnconfigure(1, weight=1)
+        action_frame.columnconfigure(2, weight=0)
+        self.status_label = ttk.Label(action_frame, textvariable=self.model.sender_status_text, style="secondary.TLabel")
+        self.status_label.grid(row=0, column=0, sticky="w")
+        self.progress_bar = ttk.Progressbar(action_frame, mode='determinate', variable=self.model.sender_progress_var, style='success.Striped.TProgressbar')
+        self.progress_bar.grid(row=0, column=1, sticky="ew", padx=(10, 10))
         self.start_button = ttk.Button(action_frame, text="开始任务", command=self.start_task, style="success.TButton", width=12, takefocus=0)
-        self.start_button.grid(row=0, column=1)
+        self.start_button.grid(row=0, column=2, sticky="e")
 
     def select_file(self):
         """打开文件选择对话框，让用户选择弹幕XML文件。"""
@@ -295,7 +299,12 @@ class SenderTab(ttk.Frame):
         try:
             with BiliApiClient(sessdata, bili_jct) as api_client:
                 sender = BiliDanmakuSender(api_client)
-                sender.send_danmaku_from_list(bvid, cid, danmaku_list, min_delay, max_delay, self.stop_event)
+                def _progress_updater(attempted, total):
+                    """一个在后台线程被调用的函数，用于向主线程发送UI更新请求"""
+                    if total > 0:
+                        progress_percent = (attempted / total) * 100
+                        self.app.after(0, self.model.sender_progress_var.set, progress_percent)
+                sender.send_danmaku_from_list(bvid, cid, danmaku_list, min_delay, max_delay, self.stop_event, _progress_updater)
         except (BiliApiException, ValueError) as e:
             self.logger.error(f"【任务启动失败】无法初始化API客户端: {e}")
         except Exception as e:
@@ -317,8 +326,8 @@ class SenderTab(ttk.Frame):
         self.log_text.config(state='normal')
         self.log_text.delete('1.0', 'end')
         self.log_text.config(state='disabled')
-        self.progress_bar.config(mode='indeterminate')
-        self.progress_bar.start()
+        self.model.sender_progress_var.set(0)
+        self.model.sender_status_text.set("发送器：运行中...")
 
     def _restore_ui_after_task(self):
         """任务结束后恢复UI状态"""
@@ -328,3 +337,8 @@ class SenderTab(ttk.Frame):
         self.progress_bar.stop()
         self.progress_bar.config(mode='determinate')
         self.progress_bar['value'] = 0
+
+        final_progress = self.model.sender_progress_var.get()
+        if final_progress < 100:
+             self.app.after(1000, lambda: self.model.sender_progress_var.set(0))
+        self.model.sender_status_text.set("发送器：待命")
