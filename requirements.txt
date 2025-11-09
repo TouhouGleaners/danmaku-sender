@@ -1,4 +1,4 @@
-certifi==2025.10.5
+﻿certifi==2025.10.5
 cffi==2.0.0
 charset-normalizer==3.4.3
 cryptography==46.0.2
@@ -14,4 +14,19 @@ pycparser==2.23
 pywin32-ctypes==0.2.3
 requests==2.32.5
 ttkbootstrap==1.14.7
+typing_extensions==4.15.0
 urllib3==2.5.0
+win11toast==0.36.2
+winrt-runtime==3.2.1
+winrt-Windows.Data.Xml.Dom==3.2.1
+winrt-Windows.Foundation==3.2.1
+winrt-Windows.Foundation.Collections==3.2.1
+winrt-Windows.Globalization==3.2.1
+winrt-Windows.Graphics.Imaging==3.2.1
+winrt-Windows.Media.Core==3.2.1
+winrt-Windows.Media.Ocr==3.2.1
+winrt-Windows.Media.Playback==3.2.1
+winrt-Windows.Media.SpeechSynthesis==3.2.1
+winrt-Windows.Storage==3.2.1
+winrt-Windows.Storage.Streams==3.2.1
+winrt-Windows.UI.Notifications==3.2.1
