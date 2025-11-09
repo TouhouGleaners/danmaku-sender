@@ -75,11 +75,18 @@ def load_credentials() -> dict:
     
 def save_credentials(data: dict):
     """将 SESSDATA 和 BILI_JCT 加密后写入 credentials.json 中。"""
+    credentials_file = get_credentials_filepath()
     sessdata = data.get('SESSDATA', '').strip()
     bili_jct = data.get('BILI_JCT', '').strip()
     # 如果凭证为空，则不保存文件
     if not sessdata or not bili_jct:
         logger.info("凭证为空，不保存凭证文件。")
+        if credentials_file.exists():
+            try:
+                os.remove(credentials_file)
+                logger.info(f"已删除现有的凭证文件: {credentials_file}")
+            except OSError as e:
+                logger.error(f"删除凭证文件失败: {credentials_file}, 错误: {e}", exc_info=True)
         return
     credentials_to_save = {
         'SESSDATA': sessdata,
