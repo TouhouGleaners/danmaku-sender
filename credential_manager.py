@@ -99,7 +99,6 @@ def save_credentials(data: dict):
         json_bytes = json.dumps(credentials_to_save, ensure_ascii=False).encode('utf-8')
         encrypted_bytes = f.encrypt(json_bytes)
         
-        credentials_file = get_credentials_filepath()
         credentials_file.write_bytes(encrypted_bytes)
         logger.info(f"凭证已安全保存到 {credentials_file}")
     except Exception as e:
