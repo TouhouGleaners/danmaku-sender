@@ -4,7 +4,9 @@ class AppInfo:
     NAME_EN = "BiliDanmakuSender"
     AUTHOR = "Miku_oso"
     VERSION = "1.1.0"
-
+    LOG_FILE_NAME = "latest.log"
+    LOG_DIR_NAME = "logs"
+    
 
 class UI:
     """存放所有UI相关的静态配置"""
