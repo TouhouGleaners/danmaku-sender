@@ -213,7 +213,9 @@ def format_ms_to_hhmmss(ms: int) -> str:
         return f"{hours:02d}:{minutes:02d}:{seconds:02d}"
     else:
         return f"{minutes:02d}:{seconds:02d}"
-    
+
+FORBIDDEN_SYMBOLS = "☢⚠☣☠⚡💣⚔🔥"
+
 def validate_danmaku_list(danmaku_list: list, video_duration_ms: int = -1) -> list:
     """
     校验弹幕列表，找出不符合B站发送规则的弹幕。
@@ -229,40 +231,35 @@ def validate_danmaku_list(danmaku_list: list, video_duration_ms: int = -1) -> li
         msg = dm.get('msg', '')
         progress = dm.get('progress', 0)
         
-        # 默认所有弹幕都是有效的
-        dm['is_valid'] = True
-        is_problematic = False
+        reasons = []
+
         # 换行符检查
         if '\\n' in msg or '/n' in msg:
-            problems.append({
-                'original_index': i,
-                'danmaku': dm,
-                'reason': '内容包含换行符'
-            })
-            is_problematic = True
+            reasons.append('内容包含换行符')
 
         # 长度检查
         if len(msg) > 100:
-            if not is_problematic:
-                problems.append({
-                    'original_index': i,
-                    'danmaku': dm,
-                    'reason': '内容超过100个字符'
-                })
-            is_problematic = True
+            reasons.append('内容超过100个字符')
 
         # 时间戳检查
         if video_duration_ms > 0 and progress > video_duration_ms:
-            if not is_problematic:
-                problems.append({
-                    'original_index': i,
-                    'danmaku': dm,
-                    'reason': '时间戳超出视频总时长'
-                })
-            is_problematic = True
+            reasons.append('时间戳超出视频总时长')
 
-        # 如果发现任何问题，更新 'is_valid' 标记
-        if is_problematic:
+        # 特殊符号检查
+        found_forbidden = [char for char in FORBIDDEN_SYMBOLS if char in msg]
+        if found_forbidden:
+            # 只报告第一个禁用符号，避免信息过长
+            reasons.append(f"包含禁用符号'{found_forbidden[0]}'")
+        
+        # 问题汇总
+        if reasons:
             dm['is_valid'] = False
+            problems.append({
+                'original_index': i,
+                'danmaku': dm,
+                'reason': ", ".join(reasons)
+            })
+        else:
+            dm['is_valid'] = True
     
     return problems
