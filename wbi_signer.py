@@ -2,8 +2,10 @@ from functools import reduce
 from hashlib import md5
 import urllib.parse
 import time
+import logging
 import requests
-from typing import Optional, Tuple
+
+logger = logging.getLogger("WbiSigner")
 
 
 class WbiSigner:
@@ -16,7 +18,7 @@ class WbiSigner:
     ]
 
     # 类变量，用于在单次运行程序时缓存密钥
-    _cached_keys: Optional[Tuple[str, str]] = None
+    _cached_keys: tuple[str, str] | None = None
     _cached_time: float = 0
     CACHE_DURATION = 24 * 60 * 60  # 缓存时长为24小时(实际情况下单次运行程序不会超过这个时间)
 
@@ -77,7 +79,8 @@ class WbiSigner:
             cls._cached_keys = (img_key, sub_key)
             cls._cached_time = current_time
             
+            logger.debug("WBI 密钥获取成功并已缓存。")
             return cls._cached_keys
         except (requests.RequestException, ValueError) as e:
-            print(f"FATAL: Failed to get WBI keys: {e}")
+            logger.critical(f"获取B站签名密钥失败，请检查网络连接或稍后再试。错误: {e}")
             raise RuntimeError(f"获取B站签名密钥失败，请检查网络连接或稍后再试。错误: {e}") from e

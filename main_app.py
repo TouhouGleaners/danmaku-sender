@@ -1,7 +1,9 @@
 import logging
+import webbrowser
 import ttkbootstrap as ttk
 from ttkbootstrap.constants import *
-import webbrowser
+from pathlib import Path
+from platformdirs import user_data_dir
 
 from credential_manager import load_credentials, save_credentials
 from shared_data import SharedDataModel
@@ -10,7 +12,7 @@ from monitor_tab import MonitorTab
 from validator_tab import ValidatorTab
 from app_config import AppInfo, UI, Links
 from app_content import HelpText, AboutText
-from log_utils import GuiLoggingHandler
+from log_utils import GuiLoggingHandler, DailyLogFileHandler
 
 
 class Application(ttk.Window):
@@ -60,9 +62,10 @@ class Application(ttk.Window):
         """
         配置一个健壮的日志系统，能将不同模块的日志路由到对应的GUI界面。
         """
-        self.gui_handler = GuiLoggingHandler()
         formatter = logging.Formatter('%(asctime)s [%(name)s] %(levelname)s - %(message)s', datefmt='%H:%M:%S')
+        self.gui_handler = GuiLoggingHandler()
         self.gui_handler.setFormatter(formatter)
+        self.gui_handler.setLevel(logging.INFO)
 
         # 注册GUI输出目标
         if hasattr(self.sender_tab_frame, 'log_text'):
@@ -70,20 +73,39 @@ class Application(ttk.Window):
         if hasattr(self.monitor_tab_frame, 'log_text'):
             self.gui_handler.output_targets["monitor_tab"] = self.log_to_gui_widget(self.monitor_tab_frame.log_text)
 
-        loggers_to_configure = ["SenderTab", "MonitorTab", "ValidatorTab", "DanmakuSender", "DanmakuParser", "BiliUtils"]
-        for name in loggers_to_configure:
-            logger = logging.getLogger(name)
-            logger.setLevel(logging.INFO)
-            logger.propagate = False  # 阻止日志向上传播到根logger，避免重复处理
-            logger.addHandler(self.gui_handler)
+        log_dir = Path(user_data_dir(AppInfo.NAME_EN, AppInfo.AUTHOR)) / AppInfo.LOG_DIR_NAME
+        log_dir.mkdir(parents=True, exist_ok=True)
+        file_handler = DailyLogFileHandler(
+            filename=log_dir / AppInfo.LOG_FILE_NAME,
+            when='midnight',
+            interval=1,
+            backupCount=7,
+            encoding='utf-8'
+        )
+        file_handler.setFormatter(formatter)
+        file_handler.setLevel(logging.DEBUG)
 
-        # 配置根Logger，用于捕获所有其他未被专门处理的日志 (例如第三方库)
+        # 配置根Logger，作为所有未明确配置的模块的兜底
         root_logger = logging.getLogger()
-        root_logger.setLevel(logging.INFO)
+        root_logger.setLevel(logging.DEBUG)
 
         for handler in root_logger.handlers[:]:
             root_logger.removeHandler(handler)
+
         root_logger.addHandler(self.gui_handler)
+        root_logger.addHandler(file_handler)
+
+        loggers_to_configure = [
+            "SenderTab", "MonitorTab", "ValidatorTab", "DanmakuSender", "DanmakuMonitor",
+            "DanmakuParser", "BiliUtils", "BiliApiClient", "CredentialManager",
+            "NotificationUtils", "WbiSigner",
+        ]
+        for name in loggers_to_configure:
+            logger = logging.getLogger(name)
+            logger.setLevel(logging.DEBUG)
+            logger.propagate = False  # 阻止日志向上传播到根logger，避免重复处理
+            logger.addHandler(self.gui_handler)
+            logger.addHandler(file_handler)
 
     def log_to_gui_widget(self, text_widget):
         """返回一个用于更新特定ScrolledText控件的闭包函数"""
