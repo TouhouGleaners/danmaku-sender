@@ -14,6 +14,7 @@ class BiliDanmakuSender:
         self.logger = logging.getLogger("DanmakuSender")
         self.api_client = api_client
         self.danmaku_parser = DanmakuParser()
+        self.unsent_danmakus = []
 
     def get_video_info(self, bvid: str) -> dict:
         """根据BVID获取视频详细信息"""
@@ -87,6 +88,7 @@ class BiliDanmakuSender:
     def send_danmaku_from_list(self, bvid: str, cid: int, danmakus: list, min_delay: float, max_delay: float, stop_event: Event, progress_callback=None):
         """从一个弹幕字典列表发送弹幕，并响应停止事件"""
         self.logger.info(f"开始从内存列表发送弹幕到 CID: {cid}")
+        self.unsent_danmakus = []  # 开始新任务时清空列表
         if not danmakus:
             self._log_send_summary(0, 0, 0, stop_event, False)
             if progress_callback:
@@ -97,11 +99,14 @@ class BiliDanmakuSender:
         success_count = 0
         attempted_count = 0
         fatal_error_occurred = False
+
         if progress_callback:
             progress_callback(0, total)
+
         for i, dm in enumerate(danmakus):
             if stop_event.is_set():
                 self.logger.info("任务被用户手动停止。")
+                self.unsent_danmakus.extend(danmakus[i:])  # 记录剩余未发送的弹幕
                 break
             attempted_count += 1
 
@@ -115,18 +120,23 @@ class BiliDanmakuSender:
             sent_successfully, is_fatal = self._process_send_result(result)
             if is_fatal:
                 fatal_error_occurred = True
+                self.unsent_danmakus.append(dm)
+                self.unsent_danmakus.extend(danmakus[i+1:])
                 break
 
-            if sent_successfully:
+            if not sent_successfully:
+                self.unsent_danmakus.append(dm)
+            else:
                 success_count += 1
             
             if stop_event.is_set():
                 self.logger.info("任务被用户手动停止。")
+                self.unsent_danmakus.extend(danmakus[i+1:])
                 break
 
-            if i < total - 1:
-                if self._handle_delay_and_stop(min_delay, max_delay, stop_event):
-                    break
+            if i < total - 1 and self._handle_delay_and_stop(min_delay, max_delay, stop_event):
+                self.unsent_danmakus.extend(danmakus[i+1:])
+                break
         self._log_send_summary(total, attempted_count, success_count, stop_event, fatal_error_occurred)
 
     def _handle_delay_and_stop(self, min_delay: float, max_delay: float, stop_event: Event) -> bool:
