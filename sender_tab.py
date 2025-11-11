@@ -1,14 +1,14 @@
 import re
 import logging
 import threading
-from tkinter import filedialog, scrolledtext
+from tkinter import filedialog, scrolledtext, messagebox
 from pathlib import Path
 import ttkbootstrap as ttk
 from ttkbootstrap.tooltip import ToolTip
 
 from bili_api_client import BiliApiClient, BiliApiException
 from bili_sender import BiliDanmakuSender
-from bili_danmaku_utils import DanmakuParser
+from bili_danmaku_utils import DanmakuParser, create_xml_from_danmakus
 
 
 class SenderTab(ttk.Frame):
@@ -310,8 +310,49 @@ class SenderTab(ttk.Frame):
         except Exception as e:
             self.logger.error(f"【程序崩溃】发生未捕获的严重错误: {e}")
         finally:
-            self.app.after(0, self._restore_ui_after_task)
-            
+            self.app.after(0, lambda: self._finalize_sending_task(sender))
+
+    def _finalize_sending_task(self, sender: BiliDanmakuSender):
+        """
+        在弹幕发送任务完成后，于主线程中执行最终处理。
+        此方法负责：
+        1. 恢复用户界面到初始状态。
+        2. 检查 `sender` 实例中是否有未成功发送的弹幕。
+        3. 如果存在未发送弹幕，弹窗询问用户是否将其保存为新的XML文件。
+        Args:
+            sender (BiliDanmakuSender): 执行发送任务的 BiliDanmakuSender 实例。
+        """
+        self._restore_ui_after_task()
+
+        if sender.unsent_danmakus:
+            self.logger.info(f"检测到 {len(sender.unsent_danmakus)} 条弹幕未发送成功。")
+
+            should_save = messagebox.askyesno(
+                title="保存未发送弹幕",
+                message=f"有 {len(sender.unsent_danmakus)} 条弹幕未能发送成功。\n"
+                        "是否将它们保存为新的XML文件，以便后续重新发送？",
+                parent=self.app
+            )
+
+            if should_save is True:
+                file_path_str = filedialog.asksaveasfilename(
+                    title="保存未发送弹幕为XML文件",
+                    defaultextension=".xml",
+                    filetypes=(("XML files", "*.xml"), ("All files", "*.*")),
+                    initialfile="unsent_danmakus.xml"
+                )
+                if file_path_str:
+                    create_xml_from_danmakus(sender.unsent_danmakus, file_path_str)
+                    self.logger.info(f"已将未发送弹幕保存到 '{file_path_str}'。")
+                else:
+                    self.logger.info("用户取消了文件路径选择。")
+            elif should_save is False:
+                self.logger.info("用户选择不保存未发送弹幕。")
+            else:
+                self.logger.info("用户关闭了弹窗，未选择保存或不保存未发送弹幕。")
+        else:
+            self.logger.info("所有弹幕均已成功发送，或无未发送弹幕。")
+
     def stop_task(self):
         """停止发送弹幕任务的逻辑"""
         self.logger.info("ℹ️ 用户请求停止任务，将在当前弹幕发送完毕后终止...")
