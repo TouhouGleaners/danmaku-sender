@@ -169,6 +169,7 @@ class SenderTab(ttk.Frame):
         self.get_parts_button.config(state='disabled')
         self.model.part_var.set('正在获取中...')
         self.part_combobox.config(state="disabled")
+        self.model.video_title.set("（正在获取视频标题...）")
 
         threading.Thread(target=self._fetch_parts_worker, args=(bvid, sessdata, bili_jct), daemon=True).start()
 
@@ -178,6 +179,7 @@ class SenderTab(ttk.Frame):
             with BiliApiClient(sessdata, bili_jct) as api_client:
                 sender = BiliDanmakuSender(api_client)
                 video_info = sender.get_video_info(bvid)
+            self.model.video_title.set(video_info.get('title', '未知标题'))
             pages = video_info.get('pages', [])
 
             # 清空旧数据
@@ -229,6 +231,7 @@ class SenderTab(ttk.Frame):
                 self.model.cid_parts_map = {}
                 self.model.ordered_cids = []
                 self.model.ordered_durations = []
+                self.model.video_title.set("（未获取到视频标题）")
 
             self.after(0, _update_ui_fail)
             
@@ -276,6 +279,21 @@ class SenderTab(ttk.Frame):
                 return
         else:
             self.logger.error("❌【操作错误】请在下拉框中选择一个分P！")
+            return
+        
+        # --- 弹窗确认信息 ---
+        video_title = self.model.video_title.get()
+        part_name = self.model.part_var.get()
+        danmaku_count = len(self.model.loaded_danmakus)
+
+        confirmation_message = (
+            f"即将为视频：\n"
+            f"《{video_title}》| {part_name}\n"
+            f"发送 {danmaku_count} 条弹幕，是否继续？"
+        )
+        
+        if not messagebox.askyesno("确认发送", confirmation_message, parent=self.app):
+            self.logger.info("用户取消了弹幕发送任务。")
             return
             
         # --- 更新UI并启动后台任务 ---

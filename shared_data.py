@@ -16,7 +16,7 @@ class SharedDataModel:
         self.bvid = ttk.StringVar()
         self.part_var = ttk.StringVar()
         self.source_danmaku_filepath = ttk.StringVar()
-
+        self.video_title = ttk.StringVar(value="（未获取到视频标题）")
         self.cid_parts_map = {}  # 存储 {cid: 'title'} 的映射关系
         self.ordered_cids = []  # 存储一个与下拉框显示顺序完全对应的CID列表
         self.selected_cid = None
