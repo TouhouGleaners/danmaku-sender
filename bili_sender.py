@@ -134,10 +134,9 @@ class BiliDanmakuSender:
                 self.unsent_danmakus.extend(danmakus[i+1:])
                 break
 
-            if i < total - 1:
-                if self._handle_delay_and_stop(min_delay, max_delay, stop_event):
-                    self.unsent_danmakus.extend(danmakus[i+1:])
-                    break
+            if i < total - 1 and self._handle_delay_and_stop(min_delay, max_delay, stop_event):
+                self.unsent_danmakus.extend(danmakus[i+1:])
+                break
         self._log_send_summary(total, attempted_count, success_count, stop_event, fatal_error_occurred)
 
     def _handle_delay_and_stop(self, min_delay: float, max_delay: float, stop_event: Event) -> bool:
