@@ -1,21 +1,14 @@
-name: Build Application EXE and Portable Folder
+name: Build Application EXE
 
 on:
   release:
     types: [created]
-  workflow_dispatch:
-    inputs:
-      version_tag:
-        description: 'Specify the version tag (e.g., v0.0.0) for manual build. Will be used if not a release build.'
-        required: false
-        default: 'dev'
 
 jobs:
   build:
     runs-on: windows-latest
     permissions:
       contents: write
-
     steps:
     - name: Check out repository code
       uses: actions/checkout@v4
@@ -31,95 +24,61 @@ jobs:
         pip install -r requirements.txt
         pip install pyinstaller
 
-    # --- 统一版本标签逻辑 ---
-    - name: Set Version Tag
-      id: set_version_tag
+    - name: Build onefile EXE with Pyinstaller
       run: |
-        $VERSION = ""
-        if ("${{ github.event_name }}" -eq "release") {
-          $VERSION = "${{ github.ref_name }}"
-        } elseif ("${{ github.event_name }}" -eq "workflow_dispatch") {
-          $VERSION = "${{ github.event.inputs.version_tag }}"
-        } else {
-          $VERSION = "dev"
-        }
-        echo "Calculated Version Tag: $VERSION"
-        echo "version=$VERSION" >> $GITHUB_OUTPUT
-
-    - name: Get ttkbootstrap path
-      id: get_ttkbootstrap_path
-      run: |
-        $ttkbootstrap_path = python -c "import ttkbootstrap; import os; print(os.path.dirname(ttkbootstrap.__file__))"
-        echo "ttkbootstrap_path=$ttkbootstrap_path" >> $GITHUB_OUTPUT
-
-    # --- 构建 Onefile (单个 EXE) 版本 ---
-    - name: Build Onefile EXE with Pyinstaller
-      run: |
-        $app_base_name_onefile = "BiliDanmakuSender"
-
-        pyinstaller --noconfirm --onefile --windowed `
-          --name "$app_base_name_onefile" `
+        $ttkbootstrap_path = (Get-Command pip).Path | Split-Path | Join-Path -ChildPath "..\Lib\site-packages\ttkbootstrap"
+        pyinstaller --noconfirm --onefile --windowed --name "BiliDanmakuSender" `
           --icon="assets/icon.ico" `
-          --add-data "$((steps.get_ttkbootstrap_path.outputs.ttkbootstrap_path));ttkbootstrap" `
+          --add-data "$ttkbootstrap_path;ttkbootstrap" `
           --add-data "assets;assets" `
           main_app.py
 
-    - name: Debug - List contents of dist directory (Onefile)
-      run: Get-ChildItem -Path ./dist
+    - name: Build onedir with Pyinstaller
+      run: |
+        $ttkbootstrap_path = (Get-Command pip).Path | Split-Path | Join-Path -ChildPath "..\Lib\site-packages\ttkbootstrap"
+        pyinstaller --noconfirm --onedir --windowed --name "BiliDanmakuSender_onedir" `
+          --icon="assets/icon.ico" `
+          --add-data "$ttkbootstrap_path;ttkbootstrap" `
+          --add-data "assets;assets" `
+          main_app.py
 
-    - name: Upload Onefile EXE artifact
+    - name: Prepare Artifact Names
+      id: set_names
+      run: |
+        $version = "${{ github.ref_name }}"
+        $onefile_name = "BiliDanmakuSender-${version}-windows-x64-onefile.exe"
+        $onedir_zip_name = "BiliDanmakuSender-${version}-windows-x64-onedir.zip"
+        
+        echo "onefile_name=$onefile_name" >> $env:GITHUB_OUTPUT
+        echo "onedir_zip_name=$onedir_zip_name" >> $env:GITHUB_OUTPUT
+
+    - name: Rename and Package Artifacts
+      run: |
+        $onefile_name = "${{ steps.set_names.outputs.onefile_name }}"
+        $onedir_zip_name = "${{ steps.set_names.outputs.onedir_zip_name }}"
+        
+        Move-Item -Path "./dist/BiliDanmakuSender.exe" -Destination "./dist/$onefile_name"
+        Compress-Archive -Path "./dist/BiliDanmakuSender_onedir/*" -DestinationPath "./dist/$onedir_zip_name" -Force
+
+    - name: Debug - List contents of dist directory
+      run: Get-ChildItem -Path ./dist -Recurse
+
+    - name: Upload onefile EXE to Release
       uses: actions/upload-release-asset@v1
       env:
         GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
       with:
-        upload_url: ${{ github.event.release.upload_url }}
-        asset_name: BiliDanmakuSender-${{ steps.set_version_tag.outputs.version }}.exe
-        asset_path: ./dist/BiliDanmakuSender.exe
+        upload_url: ${{ github.event.release.upload_url }} 
+        asset_name: ${{ steps.set_names.outputs.onefile_name }}
+        asset_path: ./dist/${{ steps.set_names.outputs.onefile_name }}
         asset_content_type: application/vnd.microsoft.portable-executable
-      if: github.event_name == 'release'
 
-    # --- 构建 Onedir (便携式文件夹) 版本 ---
-    - name: Build Onedir Portable Folder with Pyinstaller
-      run: |
-        Remove-Item -Path "./dist/*" -Recurse -Force -ErrorAction SilentlyContinue
-        
-        $app_base_name_onedir = "BiliDanmakuSender-Portable"
-
-        pyinstaller --noconfirm --windowed `
-          --name "$app_base_name_onedir" `
-          --icon="assets/icon.ico" `
-          --add-data "$((steps.get_ttkbootstrap_path.outputs.ttkbootstrap_path));ttkbootstrap" `
-          --add-data "assets;assets" `
-          main_app.py
-
-    - name: Debug - List contents of dist directory (Onedir)
-      run: Get-ChildItem -Path ./dist
-
-    - name: Archive Onedir Portable Folder
-      run: |
-        $app_folder_name_in_dist = "BiliDanmakuSender-Portable"
-        $zip_file_name = "BiliDanmakuSender-Portable-${{ steps.set_version_tag.outputs.version }}.zip"
-        
-        Compress-Archive -Path "./dist/$app_folder_name_in_dist/*" -DestinationPath "./dist/$zip_file_name"
-        
-        echo "::set-output name=zip_path::./dist/$zip_file_name"
-      id: archive_onedir_portable
-
-    - name: Upload Onedir Portable ZIP artifact
+    - name: Upload onedir ZIP to Release
       uses: actions/upload-release-asset@v1
       env:
         GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
       with:
-        upload_url: ${{ github.event.release.upload_url }}
-        asset_name: BiliDanmakuSender-Portable-${{ steps.set_version_tag.outputs.version }}.zip
-        asset_path: ${{ steps.archive_onedir_portable.outputs.zip_path }}
+        upload_url: ${{ github.event.release.upload_url }} 
+        asset_name: ${{ steps.set_names.outputs.onedir_zip_name }}
+        asset_path: ./dist/${{ steps.set_names.outputs.onedir_zip_name }}
         asset_content_type: application/zip
-      if: github.event_name == 'release'
-
-    # --- 额外的测试文件上传 (非 release 事件时) ---
-    - name: Upload artifacts for non-release testing
-      uses: actions/upload-artifact@v4
-      with:
-        name: BiliDanmakuSender-Test-Artifacts-${{ steps.set_version_tag.outputs.version }}
-        path: dist/
-      if: github.event_name != 'release'
