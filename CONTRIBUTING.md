@@ -64,12 +64,12 @@
 
 ## 代码风格指南
 
-我们遵循 [PEP 8](https://www.python.org/dev/peps/pep-0008/) 代码风格。在提交代码前，请使用 `black` 或 `flake8` 等工具进行检查和格式化。
-就目前来讲，代码风格的检查是*不必要的*。
+我们遵循 [PEP 8](https://www.python.org/dev/peps/pep-0008/) 代码风格。在提交代码前，请使用 `black` 或 `flake8` 等工具进行检查和格式化。  
+(但就目前来讲，代码风格的检查是*不必要的*。)
 
 ### Commit 消息规范
 
-我们遵循 [Conventional Commits](https://www.conventionalcommits.org/) 规范。这能让我们的提交历史更加清晰，并有助于自动化生成版本日志。
+我们遵循 [Conventional Commits](https://www.conventionalcommits.org/) 规范。这能让我们的提交历史更加清晰，并有助于自动化生成版本日志。  
 提交语言可根据个人习惯选择。
 
 Commit 消息格式为：`<type>: <description>`
@@ -83,9 +83,9 @@ Commit 消息格式为：`<type>: <description>`
 -   **chore**: 构建流程、辅助工具的变动
 
 **示例:**
-`feat: Add user authentication feature`
-`fix: Correct a typo in the documentation`
-`fix: 修正文档中的拼写错误`
+* `feat: Add user authentication feature`
+* `fix: Correct a typo in the documentation`
+* `fix: 修正文档中的拼写错误`
 
 ---
 
