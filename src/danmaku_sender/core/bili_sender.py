@@ -3,9 +3,9 @@ import random
 import logging
 from threading import Event
 
-from bili_api_client import BiliApiClient, BiliApiException
-from bili_danmaku_utils import BiliDmErrorCode, DanmakuSendResult, DanmakuParser
-from notification_utils import send_windows_notification
+from ..api.bili_api_client import BiliApiClient, BiliApiException
+from ..core.bili_danmaku_utils import BiliDmErrorCode, DanmakuSendResult, DanmakuParser
+from ..utils.notification_utils import send_windows_notification
 
 
 class BiliDanmakuSender:

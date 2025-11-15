@@ -3,8 +3,8 @@ import copy
 from tkinter import ttk, messagebox
 from ttkbootstrap.dialogs import Messagebox
 
-from bili_danmaku_utils import validate_danmaku_list, format_ms_to_hhmmss
-from shared_data import SharedDataModel
+from ..core.bili_danmaku_utils import validate_danmaku_list, format_ms_to_hhmmss
+from ..config.shared_data import SharedDataModel
 
 
 class ValidatorTab(ttk.Frame):
