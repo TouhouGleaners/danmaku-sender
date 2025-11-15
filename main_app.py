@@ -73,8 +73,7 @@ class Application(ttk.Window):
         if hasattr(self.monitor_tab_frame, 'log_text'):
             self.gui_handler.output_targets["monitor_tab"] = self.log_to_gui_widget(self.monitor_tab_frame.log_text)
 
-        log_dir = Path(user_data_dir(AppInfo.NAME_EN, AppInfo.AUTHOR)) / AppInfo.LOG_DIR_NAME
-        log_dir.mkdir(parents=True, exist_ok=True)
+        log_dir = self.get_log_directory()
         file_handler = DailyLogFileHandler(
             filename=log_dir / AppInfo.LOG_FILE_NAME,
             when='midnight',
@@ -126,6 +125,8 @@ class Application(ttk.Window):
         # --- 文件菜单 ---
         file_menu = ttk.Menu(menu_bar, tearoff=0)
         menu_bar.add_cascade(label="文件", menu=file_menu)
+        file_menu.add_command(label="打开日志文件夹", command=self.open_log_folder)
+        file_menu.add_separator()
         file_menu.add_command(label="退出", command=self.on_closing)
 
         # --- 帮助菜单 ---
@@ -134,6 +135,17 @@ class Application(ttk.Window):
         help_menu.add_command(label=UI.HELP_WINDOW_TITLE, command=self.show_help_window)
         help_menu.add_separator()
         help_menu.add_command(label=UI.ABOUT_WINDOW_SHORT_TITLE, command=self.show_about_window)
+
+    def get_log_directory(self) -> Path:
+        """获取日志文件存储目录"""
+        log_dir = Path(user_data_dir(AppInfo.NAME_EN, AppInfo.AUTHOR)) / AppInfo.LOG_DIR_NAME
+        log_dir.mkdir(parents=True, exist_ok=True)
+        return log_dir
+    
+    def open_log_folder(self):
+        """在文件浏览器中打开日志文件夹"""
+        log_path = self.get_log_directory()
+        webbrowser.open(log_path.as_uri())
 
     def show_help_window(self):
         """显示使用说明窗口"""
