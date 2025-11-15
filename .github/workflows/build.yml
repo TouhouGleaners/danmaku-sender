@@ -31,7 +31,7 @@ jobs:
           --icon="assets/icon.ico" `
           --add-data "$ttkbootstrap_path;ttkbootstrap" `
           --add-data "assets;assets" `
-          main_app.py
+          src/danmaku_sender/ui/main_app.py
 
     - name: Build onedir with Pyinstaller
       run: |
@@ -40,7 +40,7 @@ jobs:
           --icon="assets/icon.ico" `
           --add-data "$ttkbootstrap_path;ttkbootstrap" `
           --add-data "assets;assets" `
-          main_app.py
+          src/danmaku_sender/ui/main_app.py
 
     - name: Prepare Artifact Names
       id: set_names
