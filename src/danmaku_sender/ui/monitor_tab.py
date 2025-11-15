@@ -5,8 +5,8 @@ import ttkbootstrap as ttk
 from ttkbootstrap.tooltip import ToolTip 
 from ttkbootstrap.dialogs import Messagebox
 
-from bili_api_client import BiliApiClient, BiliApiException
-from bili_monitor import BiliDanmakuMonitor
+from ..api.bili_api_client import BiliApiClient, BiliApiException
+from ..core.bili_monitor import BiliDanmakuMonitor
 
 
 class MonitorTab(ttk.Frame):

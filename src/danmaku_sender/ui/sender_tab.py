@@ -6,9 +6,9 @@ from pathlib import Path
 import ttkbootstrap as ttk
 from ttkbootstrap.tooltip import ToolTip
 
-from bili_api_client import BiliApiClient, BiliApiException
-from bili_sender import BiliDanmakuSender
-from bili_danmaku_utils import DanmakuParser, create_xml_from_danmakus
+from ..api.bili_api_client import BiliApiClient, BiliApiException
+from ..core.bili_sender import BiliDanmakuSender
+from ..core.bili_danmaku_utils import DanmakuParser, create_xml_from_danmakus
 
 
 class SenderTab(ttk.Frame):

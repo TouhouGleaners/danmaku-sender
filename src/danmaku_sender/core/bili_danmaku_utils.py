@@ -4,7 +4,7 @@ import xml.etree.ElementTree as ET
 from enum import Enum
 from xml.dom import minidom
 
-from bili_api_client import BiliApiException
+from ..api.bili_api_client import BiliApiException
 
 
 logger = logging.getLogger("BiliUtils")

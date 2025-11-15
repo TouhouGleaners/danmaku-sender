@@ -6,7 +6,7 @@ from pathlib import Path
 from cryptography.fernet import Fernet, InvalidToken
 from platformdirs import user_data_dir
 
-from app_config import AppInfo
+from ..config.app_config import AppInfo
 
 
 KEYRING_SERVICE_NAME = f"{AppInfo.NAME_EN}-CredentialsKey"

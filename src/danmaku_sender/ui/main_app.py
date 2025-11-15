@@ -5,14 +5,14 @@ from ttkbootstrap.constants import *
 from pathlib import Path
 from platformdirs import user_data_dir
 
-from credential_manager import load_credentials, save_credentials
-from shared_data import SharedDataModel
-from sender_tab import SenderTab
-from monitor_tab import MonitorTab
-from validator_tab import ValidatorTab
-from app_config import AppInfo, UI, Links
-from app_content import HelpText, AboutText
-from log_utils import GuiLoggingHandler, DailyLogFileHandler
+from ..utils.credential_manager import load_credentials, save_credentials
+from ..config.shared_data import SharedDataModel
+from ..ui.sender_tab import SenderTab
+from ..ui.monitor_tab import MonitorTab
+from ..ui.validator_tab import ValidatorTab
+from ..config.app_config import AppInfo, UI, Links
+from ..config.app_content import HelpText, AboutText
+from ..utils.log_utils import GuiLoggingHandler, DailyLogFileHandler
 
 
 class Application(ttk.Window):
@@ -231,7 +231,9 @@ class Application(ttk.Window):
         about_win.focus_force()
         about_win.wait_window()
 
-
-if __name__ == "__main__":
+def main():
     app = Application()
     app.mainloop()
+
+if __name__ == "__main__":
+    main()

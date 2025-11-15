@@ -3,7 +3,7 @@ import logging
 import requests
 from requests.exceptions import Timeout, ConnectionError, RequestException
 
-from wbi_signer import WbiSigner
+from ..api.wbi_signer import WbiSigner
 
 
 class BiliApiException(Exception):

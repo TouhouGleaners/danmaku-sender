@@ -4,17 +4,24 @@ import platform
 import threading
 from pathlib import Path
 
-from app_config import AppInfo
+from ..config.app_config import AppInfo
 
 
 logger = logging.getLogger("NotificationUtils")
 
-try:
-    base_path = Path(sys._MEIPASS)
-except AttributeError:
-    base_path = Path(__file__).resolve().parent
+def get_app_root_path() -> Path:
+    """
+    获取应用程序的根目录。
+    在开发环境中，这是项目根目录。
+    在 PyInstaller 打包后的环境中，这是临时解压目录 (sys._MEIPASS)。
+    """
+    if getattr(sys, 'frozen', False) and hasattr(sys, '_MEIPASS'):
+        return Path(sys._MEIPASS)
+    else:
+        return Path(__file__).resolve().parent.parent.parent.parent
 
-ICON_PATH = base_path / 'assets' / 'icon.ico'
+APP_ROOT_PATH = get_app_root_path()
+ICON_PATH = APP_ROOT_PATH / 'assets' / 'icon.ico'
 
 if not ICON_PATH.is_file():
     logger.warning(f"图标文件未找到: {ICON_PATH}。通知将可能没有图标。")
