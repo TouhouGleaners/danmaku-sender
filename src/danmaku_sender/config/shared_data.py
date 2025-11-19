@@ -10,20 +10,36 @@ class SenderConfig:
     min_delay: float = 20.0
     max_delay: float = 25.0
 
-    def is_valid(self):
+    def is_valid(self) -> bool:
         """自身的数据校验逻辑"""
         return (self.min_delay > 0 and 
                 self.max_delay > 0 and 
                 self.min_delay <= self.max_delay and
                 bool(self.sessdata) and 
                 bool(self.bili_jct))
+
+
+@dataclass
+class MonitorConfig:
+    """监视器的配置数据"""
+    sessdata: str = ""
+    bili_jct: str = ""
+    interval: int = 60
+    tolerance: int = 500
+
+    def is_valid(self) -> bool:
+        return (self.interval > 0 and 
+                self.tolerance >= 0 and 
+                bool(self.sessdata) and 
+                bool(self.bili_jct))
+
     
 @dataclass
 class VideoState:
     """视频相关的运行时状态"""
     bvid: str = ""
     video_title: str = "（未获取到视频标题）"
-    selected_cid: int = None
+    selected_cid: int | None = None
     selected_part_name: str = ""
     selected_part_duration_ms: int = 0
     loaded_danmakus: list[dict] = field(default_factory=list)
@@ -122,6 +138,21 @@ class SharedDataModel:
                 bili_jct=self.bili_jct.get().strip(),
                 min_delay=float(self.min_delay.get()),
                 max_delay=float(self.max_delay.get())
+            )
+            return config
+        except ValueError:
+            return None
+        
+    def get_monitor_config(self) -> MonitorConfig | None:
+        """
+        从 UI 变量提取并构建 MonitorConfig 对象。
+        """
+        try:
+            config = MonitorConfig(
+                sessdata=self.sessdata.get().strip(),
+                bili_jct=self.bili_jct.get().strip(),
+                interval=int(self.monitor_interval.get()),
+                tolerance=int(self.time_tolerance.get())
             )
             return config
         except ValueError:
