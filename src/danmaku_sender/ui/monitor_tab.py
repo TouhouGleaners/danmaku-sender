@@ -7,6 +7,7 @@ from ttkbootstrap.dialogs import Messagebox
 
 from ..api.bili_api_client import BiliApiClient, BiliApiException
 from ..core.bili_monitor import BiliDanmakuMonitor
+from ..config.shared_data import VideoState
 
 
 class MonitorTab(ttk.Frame):
@@ -138,20 +139,13 @@ class MonitorTab(ttk.Frame):
 
     def start_monitoring(self):
         """启动监视任务"""
+        video_state = self.model.get_video_state()
         # 参数校验
-        self.logger.debug(f"MonitorTab.start_monitoring: self.model.selected_cid={self.model.selected_cid}, type={type(self.model.selected_cid)}")
-        cid = self.model.selected_cid
-        source_filepath = self.model.source_danmaku_filepath.get()
-        loaded_danmakus = self.model.loaded_danmakus  # 获取预先解析好的本地弹幕列表，如果存在的话
-        
-        # 统一检查是否有CID，以及是否有本地弹幕来源（要么有source_filepath，要么有loaded_danmakus）
-        if not cid:
-            Messagebox.show_warning("请先在“弹幕发射器”标签页加载视频。", title="CID缺失", parent=self.app)
-            self.logger.warning("CID缺失，无法开始监控。") 
-            return
-        if not source_filepath and not loaded_danmakus:
-            Messagebox.show_warning("请先在“弹幕发射器”标签页选择弹幕文件或确认已解析本地弹幕。", title="弹幕数据缺失", parent=self.app)
-            self.logger.warning("弹幕数据缺失，无法开始监控。")
+        if not video_state.is_ready_to_send:
+            if not video_state.selected_cid:
+                Messagebox.show_warning("请先在“弹幕发射器”标签页加载视频。", title="CID缺失", parent=self.app)
+            else:
+                Messagebox.show_warning("请先加载弹幕文件。", title="数据缺失", parent=self.app)
             return
         
         try:
@@ -169,7 +163,7 @@ class MonitorTab(ttk.Frame):
         self.stop_monitor_event.clear()
         self.monitor_thread = threading.Thread(
             target=self._monitor_task,
-            args=(cid, source_filepath, loaded_danmakus, interval, tolerance),
+            args=(video_state, interval, tolerance),
             daemon=True
         )
         self.monitor_thread.start()
@@ -181,14 +175,21 @@ class MonitorTab(ttk.Frame):
             self.stop_monitor_event.set()
             self.model.monitor_status_text.set("监视器：正在停止...")
 
-    def _monitor_task(self, cid: int, source_filepath: str, loaded_danmakus: list, interval: int, tolerance: int):
+    def _monitor_task(self, video_state: VideoState, interval: int, tolerance: int):
         """在后台线程中运行的监视核心逻辑"""
         try:
             sessdata = self.model.sessdata.get()
             bili_jct = self.model.bili_jct.get()
             with BiliApiClient(sessdata, bili_jct) as api_client:
-                monitor = BiliDanmakuMonitor(api_client, cid, source_filepath, loaded_danmakus, interval, tolerance)
-        
+                monitor = BiliDanmakuMonitor(
+                    api_client=api_client, 
+                    cid=video_state.selected_cid, 
+                    source_danmaku_filepath=None,
+                    loaded_danmakus=video_state.loaded_danmakus, 
+                    interval=interval, 
+                    time_tolerance=tolerance
+                )
+                
                 def progress_updater(matched_count, total_count):
                     if total_count > 0:
                         progress = (matched_count / total_count) * 100

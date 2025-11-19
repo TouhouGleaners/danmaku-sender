@@ -1,40 +1,134 @@
 import ttkbootstrap as ttk
+from dataclasses import dataclass, field
+
+
+@dataclass
+class SenderConfig:
+    """发送器的配置数据"""
+    sessdata: str = ""
+    bili_jct: str = ""
+    min_delay: float = 20.0
+    max_delay: float = 25.0
+
+    def is_valid(self):
+        """自身的数据校验逻辑"""
+        return (self.min_delay > 0 and 
+                self.max_delay > 0 and 
+                self.min_delay <= self.max_delay and
+                bool(self.sessdata) and 
+                bool(self.bili_jct))
+    
+@dataclass
+class VideoState:
+    """视频相关的运行时状态"""
+    bvid: str = ""
+    video_title: str = "（未获取到视频标题）"
+    selected_cid: int = None
+    selected_part_name: str = ""
+    selected_part_duration_ms: int = 0
+    loaded_danmakus: list[dict] = field(default_factory=list)
+
+    @property
+    def danmaku_count(self) -> int:
+        return len(self.loaded_danmakus)
+    
+    @property
+    def is_ready_to_send(self) -> bool:
+        """是否具备发送/监视的基本条件"""
+        return bool(self.bvid and self.selected_cid and self.loaded_danmakus)
 
 
 class SharedDataModel:
-    """
-    一个集中的数据模型，用于在GUI的不同组件之间共享状态。
-    使用Tkinter的变量类型 (StringVar, BooleanVar等) 可以让UI组件自动响应数据变化。
-    """
+    """ViewModel: 负责连接 UI (StringVar) 和 纯数据 (Dataclass)"""
     def __init__(self):
-        # --- 身份凭证 ---
-        # 这些变量将直接绑定到凭证输入框
+        # --- 核心数据实体 ---
+        self._video_state = VideoState()
+
+        # --- UI 绑定变量 ---
+        # 身份凭证
         self.sessdata = ttk.StringVar()
         self.bili_jct = ttk.StringVar()
 
-        # --- 核心参数 ---
+        # 核心参数 UI
         self.bvid = ttk.StringVar()
         self.part_var = ttk.StringVar()
         self.source_danmaku_filepath = ttk.StringVar()
         self.video_title = ttk.StringVar(value="（未获取到视频标题）")
-        self.cid_parts_map = {}  # 存储 {cid: 'title'} 的映射关系
-        self.ordered_cids = []  # 存储一个与下拉框显示顺序完全对应的CID列表
-        self.selected_cid = None
-        self.ordered_durations = []         # 按顺序存储所有分P的时长（秒）
-        self.selected_part_duration_ms = 0
 
-        # --- 高级设置 (仅SenderTab使用) ---
+        # 辅助数据 (仅用于 UI 下拉框逻辑)
+        self.cid_parts_map = {} 
+        self.ordered_cids = []  
+        self.ordered_durations = [] 
+
+        # 高级设置 (UI)
         self.min_delay = ttk.StringVar(value="20.0")
         self.max_delay = ttk.StringVar(value="25.0")
+        self.monitor_interval = ttk.StringVar(value="60")
+        self.time_tolerance = ttk.StringVar(value="500")
 
-        # --- 高级设置 (仅MonitorTab使用) ---
-        self.monitor_interval = ttk.StringVar(value="60")  # 刷新间隔，默认60秒
-        self.time_tolerance = ttk.StringVar(value="500")  # 时间容差，默认500毫秒
-        self.loaded_danmakus = []  # 解析后的本地弹幕列表
-
-        # --- 状态信息 (用于状态栏显示) ---
-        # 这些变量将由后台任务更新，并由状态栏显示
+        # 状态栏信息
         self.sender_status_text = ttk.StringVar(value="发送器：待命")
         self.sender_progress_var = ttk.DoubleVar(value=0.0)
         self.monitor_status_text = ttk.StringVar(value="监视器：待命")
         self.monitor_progress_var = ttk.DoubleVar(value=0.0)
+
+        # --- 绑定 UI 变化到数据实体 ---
+        self.bvid.trace_add("write", self._sync_bvid)
+        self.part_var.trace_add("write", self._sync_part_name)
+        self.video_title.trace_add("write", self._sync_video_title)
+    
+    def _sync_bvid(self, *args):
+        self._video_state.bvid = self.bvid.get()
+
+    def _sync_part_name(self, *args):
+        self._video_state.selected_part_name = self.part_var.get()
+
+    def _sync_video_title(self, *args):
+        self._video_state.video_title = self.video_title.get()
+
+    @property
+    def loaded_danmakus(self) -> list[dict]:
+        return self._video_state.loaded_danmakus
+    
+    @loaded_danmakus.setter
+    def loaded_danmakus(self, value: list[dict]):
+        self._video_state.loaded_danmakus = value
+
+    @property
+    def selected_cid(self) -> int | None:
+        return self._video_state.selected_cid
+    
+    @selected_cid.setter
+    def selected_cid(self, value: int | None):
+        self._video_state.selected_cid = value
+        
+    @property
+    def selected_part_duration_ms(self) -> int:
+        return self._video_state.selected_part_duration_ms
+    
+    @selected_part_duration_ms.setter
+    def selected_part_duration_ms(self, value: int):
+        self._video_state.selected_part_duration_ms = value
+
+
+    def get_sender_config(self) -> SenderConfig | None:
+        """
+        从 UI 变量中提取并构建 SenderConfig 对象。
+        如果转换失败（如延迟不是数字），返回 None。
+        """
+        try:
+            config = SenderConfig(
+                sessdata=self.sessdata.get().strip(),
+                bili_jct=self.bili_jct.get().strip(),
+                min_delay=float(self.min_delay.get()),
+                max_delay=float(self.max_delay.get())
+            )
+            return config
+        except ValueError:
+            return None
+
+    def get_video_state(self) -> VideoState:
+        """获取当前的视频状态对象 (用于 MonitorTab 读取)"""
+        self._video_state.bvid = self.bvid.get()
+        self._video_state.video_title = self.video_title.get()
+        return self._video_state
