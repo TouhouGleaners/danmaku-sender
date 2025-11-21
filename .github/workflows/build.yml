@@ -24,25 +24,25 @@ jobs:
         pip install -r requirements.txt
         pip install pyinstaller
 
-    - name: Build onefile EXE with Pyinstaller
+    - name: Build EXE (Onefile & Onedir)
       run: |
         $ttkbootstrap_path = (Get-Command pip).Path | Split-Path | Join-Path -ChildPath "..\Lib\site-packages\ttkbootstrap"
-        pyinstaller --noconfirm --onefile --windowed --name "BiliDanmakuSender" `
-          --paths "src" `
-          --icon="assets/icon.ico" `
-          --add-data "$ttkbootstrap_path;ttkbootstrap" `
-          --add-data "assets;assets" `
-          run.py
+        
+        $common_args = @(
+            "--noconfirm",
+            "--windowed",
+            "--paths", "./src",
+            "--icon=assets/icon.ico",
+            "--add-data", "$ttkbootstrap_path;ttkbootstrap",
+            "--add-data", "assets;assets",
+            "run.py"
+        )
 
-    - name: Build onedir with Pyinstaller
-      run: |
-        $ttkbootstrap_path = (Get-Command pip).Path | Split-Path | Join-Path -ChildPath "..\Lib\site-packages\ttkbootstrap"
-        pyinstaller --noconfirm --onedir --windowed --name "BiliDanmakuSender_onedir" `
-          --paths "src" `
-          --icon="assets/icon.ico" `
-          --add-data "$ttkbootstrap_path;ttkbootstrap" `
-          --add-data "assets;assets" `
-          run.py
+        Write-Host "Building Onefile version..."
+        pyinstaller --onefile --name "BiliDanmakuSender" @common_args
+
+        Write-Host "Building Onedir version..."
+        pyinstaller --onedir --name "BiliDanmakuSender_onedir" @common_args
 
     - name: Prepare Artifact Names
       id: set_names
