@@ -28,6 +28,7 @@ jobs:
       run: |
         $ttkbootstrap_path = (Get-Command pip).Path | Split-Path | Join-Path -ChildPath "..\Lib\site-packages\ttkbootstrap"
         pyinstaller --noconfirm --onefile --windowed --name "BiliDanmakuSender" `
+          --paths "src" `
           --icon="assets/icon.ico" `
           --add-data "$ttkbootstrap_path;ttkbootstrap" `
           --add-data "assets;assets" `
@@ -37,6 +38,7 @@ jobs:
       run: |
         $ttkbootstrap_path = (Get-Command pip).Path | Split-Path | Join-Path -ChildPath "..\Lib\site-packages\ttkbootstrap"
         pyinstaller --noconfirm --onedir --windowed --name "BiliDanmakuSender_onedir" `
+          --paths "src" `
           --icon="assets/icon.ico" `
           --add-data "$ttkbootstrap_path;ttkbootstrap" `
           --add-data "assets;assets" `
