@@ -1,7 +1,7 @@
 # B站弹幕发射器 (BiliDanmakuSender)
 
 <p align="center">
-  <img src="https://img.shields.io/github/v/tag/TouhouGleaners/danmaku-sender?label=Pre-Release&color=orange"alt="Pre-release">
+  <img src="https://img.shields.io/github/v/tag/TouhouGleaners/danmaku-sender?label=Pre-Release&color=orange" alt="Pre-release">
   <img src="https://img.shields.io/github/v/release/TouhouGleaners/danmaku-sender?label=Release&color=bright-green" alt="Release">
   <img src="https://img.shields.io/github/downloads/TouhouGleaners/danmaku-sender/total" alt="Total Downloads">
   <img src="https://img.shields.io/badge/Python-3.12+-blue.svg" alt="Python 3.12+">
@@ -59,13 +59,13 @@ B站弹幕发射工具，基于**Python 3.12**。
     pip install -r requirements.txt
     ```
 *   **运行:**
-  ```bash
-  # 从仓库根目录运行（推荐）
-  python run.py
+    ```bash
+    # 从仓库根目录运行（推荐）
+    python run.py
 
-  # 或者以模块方式运行（在某些环境下可用）
-  python -m src.danmaku_sender
-  ```
+    # 或者以模块方式运行（在某些环境下可用）
+    python -m src.danmaku_sender
+    ```
 
 ## 📖 使用指南
 ### 🔑 1. 准备工作：获取 Cookie
