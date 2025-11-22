@@ -9,6 +9,7 @@ from ttkbootstrap.tooltip import ToolTip
 from ..api.bili_api_client import BiliApiClient, BiliApiException
 from ..core.bili_sender import BiliDanmakuSender
 from ..core.bili_danmaku_utils import DanmakuParser, create_xml_from_danmakus
+from ..config.shared_data import SenderConfig, VideoState
 
 
 class SenderTab(ttk.Frame):
@@ -239,57 +240,37 @@ class SenderTab(ttk.Frame):
         """开始发送弹幕任务的逻辑"""
         self.app.focus()  # 移除按钮焦点
 
-        # --- 数据预处理和校验 ---
-        bvid = self.model.bvid.get().strip()
-        sessdata = self.model.sessdata.get().strip()
-        bili_jct = self.model.bili_jct.get().strip()
-        xml_path = self.model.source_danmaku_filepath.get()
-        
-        try:
-            min_delay = float(self.model.min_delay.get())
-            max_delay = float(self.model.max_delay.get())
-            if min_delay < 0 or max_delay < 0 or min_delay > max_delay:
-                raise ValueError("延迟时间必须为正数，且最小延迟不大于最大延迟")
-        except (ValueError, TypeError):
-            self.logger.error("❌【输入错误】延迟时间设置不合法！")
+        # 获取并校验配置
+        config = self.model.get_sender_config()
+        if config is None:
+            self.logger.error("❌【输入错误】延迟时间设置不合法！请输入有效的数字。")
+            return
+
+        if not config.is_valid():
+            self.logger.error("❌【配置错误】请确保 SESSDATA/BILI_JCT 已填写，且延迟时间为正数！")
             return
         
-        if not self.model.source_danmaku_filepath.get():
-            self.logger.error("❌【输入错误】请先选择一个弹幕文件！")
-            return
-        
-        if not all([bvid, xml_path, sessdata, bili_jct]):
-            self.logger.error("❌【输入错误】请确保 BV号、弹幕文件、SESSDATA 和 BILI_JCT 均已填写！")
-            return
-        
-        # 直接检查模型中是否有解析好的弹幕
-        if not self.model.loaded_danmakus:
-            self.logger.error("❌【文件错误】未加载或解析到有效弹幕，请选择一个有效的弹幕文件！")
+        # 获取视频状态
+        video_state = self.model.get_video_state()
+
+        # 校验业务逻辑
+        if not video_state.bvid:
+            self.logger.error("❌【输入错误】BV号不能为空！")
             return
             
-        # --- 使用索引安全地获取 CID ---
-        selected_cid = None
-        selected_index = self.part_combobox.current()
-        if selected_index != -1:
-            try:
-                selected_cid = self.model.ordered_cids[selected_index]
-                self.logger.info(f"已选择目标分P: {self.model.part_var.get()}, CID: {selected_cid}")
-            except IndexError:
-                self.logger.error("❌【程序错误】选择的索引超出了CID列表范围，请重新获取分P。")
-                return
-        else:
-            self.logger.error("❌【操作错误】请在下拉框中选择一个分P！")
+        if not video_state.loaded_danmakus:
+            self.logger.error("❌【文件错误】未加载或解析到有效弹幕，请选择一个有效的弹幕文件！")
+            return
+
+        if not video_state.selected_cid:
+            self.logger.error("❌【操作错误】请先获取并选择一个分P！")
             return
         
         # --- 弹窗确认信息 ---
-        video_title = self.model.video_title.get()
-        part_name = self.model.part_var.get()
-        danmaku_count = len(self.model.loaded_danmakus)
-
         confirmation_message = (
             f"即将为视频：\n"
-            f"《{video_title}》| {part_name}\n"
-            f"发送 {danmaku_count} 条弹幕，是否继续？"
+            f"《{video_state.video_title}》| {video_state.selected_part_name}\n"
+            f"发送 {video_state.danmaku_count} 条弹幕，是否继续？"
         )
         
         if not messagebox.askyesno("确认发送", confirmation_message, parent=self.app):
@@ -301,10 +282,9 @@ class SenderTab(ttk.Frame):
         self.stop_event.clear()
 
         try:
-            danmakus_to_send = self.model.loaded_danmakus.copy()
             thread = threading.Thread(
                 target=self._task_worker, 
-                args=(bvid, danmakus_to_send, sessdata, bili_jct, min_delay, max_delay, selected_cid),
+                args=(config, video_state), 
                 daemon=True
             )
             thread.start()
@@ -312,23 +292,39 @@ class SenderTab(ttk.Frame):
             self.logger.error(f"【程序崩溃】无法启动后台任务线程: {e}")
             self._restore_ui_after_task()
 
-    def _task_worker(self, bvid, danmaku_list, sessdata, bili_jct, min_delay, max_delay, cid):
+    def _task_worker(self, config: SenderConfig, video_state: VideoState):
         """在工作线程中执行弹幕发送任务"""
+        danmakus_to_send = video_state.loaded_danmakus.copy()
+        sender = None
+
         try:
-            with BiliApiClient(sessdata, bili_jct) as api_client:
+            with BiliApiClient(config.sessdata, config.bili_jct) as api_client:
                 sender = BiliDanmakuSender(api_client)
+
                 def _progress_updater(attempted, total):
                     """一个在后台线程被调用的函数，用于向主线程发送UI更新请求"""
                     if total > 0:
                         progress_percent = (attempted / total) * 100
                         self.app.after(0, self.model.sender_progress_var.set, progress_percent)
-                sender.send_danmaku_from_list(bvid, cid, danmaku_list, min_delay, max_delay, self.stop_event, _progress_updater)
+
+                sender.send_danmaku_from_list(
+                    bvid=video_state.bvid, 
+                    cid=video_state.selected_cid, 
+                    danmakus=danmakus_to_send, 
+                    min_delay=config.min_delay, 
+                    max_delay=config.max_delay, 
+                    stop_event=self.stop_event, 
+                    progress_callback=_progress_updater
+                )
         except (BiliApiException, ValueError) as e:
             self.logger.error(f"【任务启动失败】无法初始化API客户端: {e}")
         except Exception as e:
             self.logger.error(f"【程序崩溃】发生未捕获的严重错误: {e}")
         finally:
-            self.app.after(0, lambda: self._finalize_sending_task(sender))
+            if sender:
+                self.app.after(0, lambda: self._finalize_sending_task(sender))
+            else:
+                self.app.after(0, self._restore_ui_after_task)
 
     def _finalize_sending_task(self, sender: BiliDanmakuSender):
         """
