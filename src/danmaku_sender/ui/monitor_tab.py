@@ -7,6 +7,7 @@ from ttkbootstrap.dialogs import Messagebox
 
 from ..api.bili_api_client import BiliApiClient, BiliApiException
 from ..core.bili_monitor import BiliDanmakuMonitor
+from ..config.shared_data import MonitorConfig, VideoState
 
 
 class MonitorTab(ttk.Frame):
@@ -138,29 +139,23 @@ class MonitorTab(ttk.Frame):
 
     def start_monitoring(self):
         """启动监视任务"""
+        video_state = self.model.get_video_state()
         # 参数校验
-        self.logger.debug(f"MonitorTab.start_monitoring: self.model.selected_cid={self.model.selected_cid}, type={type(self.model.selected_cid)}")
-        cid = self.model.selected_cid
-        source_filepath = self.model.source_danmaku_filepath.get()
-        loaded_danmakus = self.model.loaded_danmakus  # 获取预先解析好的本地弹幕列表，如果存在的话
-        
-        # 统一检查是否有CID，以及是否有本地弹幕来源（要么有source_filepath，要么有loaded_danmakus）
-        if not cid:
-            Messagebox.show_warning("请先在“弹幕发射器”标签页加载视频。", title="CID缺失", parent=self.app)
-            self.logger.warning("CID缺失，无法开始监控。") 
-            return
-        if not source_filepath and not loaded_danmakus:
-            Messagebox.show_warning("请先在“弹幕发射器”标签页选择弹幕文件或确认已解析本地弹幕。", title="弹幕数据缺失", parent=self.app)
-            self.logger.warning("弹幕数据缺失，无法开始监控。")
+        if not video_state.is_ready_to_send:
+            if not video_state.selected_cid:
+                Messagebox.show_warning("请先在“弹幕发射器”标签页加载视频。", title="CID缺失", parent=self.app)
+            else:
+                Messagebox.show_warning("请先加载弹幕文件。", title="数据缺失", parent=self.app)
             return
         
-        try:
-            interval = int(self.model.monitor_interval.get())
-            tolerance = int(self.model.time_tolerance.get())
-            if interval <= 0 or tolerance < 0: raise ValueError
-        except ValueError:
+        config = self.model.get_monitor_config()
+        if config is None:
             Messagebox.show_error("检查间隔必须为正整数，时间容差必须为非负整数。", title="设置无效", parent=self.app)
-            self.logger.error("监控设置参数无效。")
+            self.logger.error("监控设置参数格式错误。")
+            return
+            
+        if not config.is_valid():
+            Messagebox.show_error("请确保 SESSDATA/BILI_JCT 已填写，且参数合法。", title="配置错误", parent=self.app)
             return
 
         self._set_ui_for_task_start()  # 更新UI状态
@@ -169,7 +164,7 @@ class MonitorTab(ttk.Frame):
         self.stop_monitor_event.clear()
         self.monitor_thread = threading.Thread(
             target=self._monitor_task,
-            args=(cid, source_filepath, loaded_danmakus, interval, tolerance),
+            args=(video_state, config),
             daemon=True
         )
         self.monitor_thread.start()
@@ -181,20 +176,25 @@ class MonitorTab(ttk.Frame):
             self.stop_monitor_event.set()
             self.model.monitor_status_text.set("监视器：正在停止...")
 
-    def _monitor_task(self, cid: int, source_filepath: str, loaded_danmakus: list, interval: int, tolerance: int):
+    def _monitor_task(self, video_state: VideoState, config: MonitorConfig):
         """在后台线程中运行的监视核心逻辑"""
         try:
-            sessdata = self.model.sessdata.get()
-            bili_jct = self.model.bili_jct.get()
-            with BiliApiClient(sessdata, bili_jct) as api_client:
-                monitor = BiliDanmakuMonitor(api_client, cid, source_filepath, loaded_danmakus, interval, tolerance)
-        
+            with BiliApiClient(config.sessdata, config.bili_jct) as api_client:
+                monitor = BiliDanmakuMonitor(
+                    api_client=api_client, 
+                    cid=video_state.selected_cid, 
+                    source_danmaku_filepath=None,
+                    loaded_danmakus=video_state.loaded_danmakus, 
+                    interval=config.interval,
+                    time_tolerance=config.tolerance
+                )
+
                 def progress_updater(matched_count, total_count):
                     if total_count > 0:
                         progress = (matched_count / total_count) * 100
                         status = f"监视器: 运行中... ({matched_count}/{total_count})"
                         self.app.after(0, lambda: (self.model.monitor_progress_var.set(progress), self.model.monitor_status_text.set(status)))
-                    else: # 如果总数为0，进度条也应该为0并显示对应的状态
+                    else: 
                         self.app.after(0, lambda: (self.model.monitor_progress_var.set(0), self.model.monitor_status_text.set("监视器：无弹幕可匹配")))
 
                 monitor.run(self.stop_monitor_event, progress_updater)
