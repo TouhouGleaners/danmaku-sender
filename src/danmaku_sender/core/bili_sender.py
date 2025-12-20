@@ -1,11 +1,16 @@
 import time
-import random
 import logging
 from threading import Event
 
+from typing import TYPE_CHECKING
+
 from ..api.bili_api_client import BiliApiClient, BiliApiException
 from ..core.bili_danmaku_utils import BiliDmErrorCode, DanmakuSendResult, DanmakuParser
+from ..core.delay_manager import DelayManager
 from ..utils.notification_utils import send_windows_notification
+
+if TYPE_CHECKING:
+    from ..config.shared_data import SenderConfig
 
 
 class BiliDanmakuSender:
@@ -85,15 +90,27 @@ class BiliDanmakuSender:
             return False, False  # 失败，但不是致命错误
         return True, False  # 成功发送
     
-    def send_danmaku_from_list(self, bvid: str, cid: int, danmakus: list, min_delay: float, max_delay: float, stop_event: Event, progress_callback=None):
+    def send_danmaku_from_list(self, bvid: str, cid: int, danmakus: list, config: 'SenderConfig', stop_event: Event, progress_callback=None):
         """从一个弹幕字典列表发送弹幕，并响应停止事件"""
-        self.logger.info(f"开始从内存列表发送弹幕到 CID: {cid}")
+        self.logger.info(f"开始发送... CID: {cid}")
         self.unsent_danmakus = []  # 开始新任务时清空列表
+
+        if config.burst_size > 1:
+            self.logger.info(f"🚀 爆发模式已启用: 每 {config.burst_size} 条休息 {config.rest_min}-{config.rest_max} 秒")
+
         if not danmakus:
             self._log_send_summary(0, 0, 0, stop_event, False)
             if progress_callback:
                 progress_callback(0, 0)
             return
+        
+        delay_manager = DelayManager(
+            normal_min=config.min_delay,
+            normal_max=config.max_delay,
+            burst_size=config.burst_size,
+            rest_min=config.rest_min,
+            rest_max=config.rest_max
+        )
         
         total = len(danmakus)
         success_count = 0
@@ -134,26 +151,13 @@ class BiliDanmakuSender:
                 self.unsent_danmakus.extend(danmakus[i+1:])
                 break
 
-            if i < total - 1 and self._handle_delay_and_stop(min_delay, max_delay, stop_event):
-                self.unsent_danmakus.extend(danmakus[i+1:])
-                break
+            if i < total - 1:
+                should_stop = delay_manager.wait_and_check_stop(stop_event)
+                if should_stop:
+                    self.logger.info("任务被用户手动停止。")
+                    self.unsent_danmakus.extend(danmakus[i+1:])
+                    break
         self._log_send_summary(total, attempted_count, success_count, stop_event, fatal_error_occurred)
-
-    def _handle_delay_and_stop(self, min_delay: float, max_delay: float, stop_event: Event) -> bool:
-        """
-        处理发送间隔等待和停止事件。
-        返回是否需要中断任务（True表示需要中断，False表示继续）。
-        """
-        if stop_event.is_set():
-            self.logger.info("任务被用户手动停止。")
-            return True  # 需要中断任务
-
-        delay = random.uniform(min_delay, max_delay)
-        self.logger.info(f"等待 {delay:.2f} 秒...")
-        if stop_event.wait(timeout=delay):
-            self.logger.info("在等待期间接收到停止信号，立即终止。")
-            return True  # 需要中断任务
-        return False  # 不需要中断，继续任务
 
     def _log_send_summary(self, total: int, attempted_count: int, success_count: int, stop_event: Event, fatal_error_occurred: bool):
         """记录弹幕发送任务的总结信息。"""

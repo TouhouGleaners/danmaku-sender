@@ -76,8 +76,9 @@ class SenderTab(ttk.Frame):
         # --- 高级设置 (延迟) ---
         advanced_frame = ttk.Labelframe(self, text="高级设置", padding=15)
         advanced_frame.grid(row=2, column=0, padx=10, pady=5, sticky="ew")
-        advanced_frame.columnconfigure(1, weight=1); advanced_frame.columnconfigure(3, weight=1)
+        for i in range(4): advanced_frame.columnconfigure(i, weight=1)
 
+        # 第一行：普通延迟
         ttk.Label(advanced_frame, text="最小延迟(秒):").grid(row=0, column=0, sticky="w", padx=5, pady=5)
         self.min_delay_entry = ttk.Entry(advanced_frame, width=10, textvariable=self.model.min_delay, takefocus=0)
         self.min_delay_entry.grid(row=0, column=1)
@@ -85,6 +86,19 @@ class SenderTab(ttk.Frame):
         ttk.Label(advanced_frame, text="最大延迟(秒):").grid(row=0, column=2, sticky="w", padx=(20, 5), pady=5)
         self.max_delay_entry = ttk.Entry(advanced_frame, width=10, textvariable=self.model.max_delay, takefocus=0)
         self.max_delay_entry.grid(row=0, column=3)
+
+        # 第二行：爆发模式
+        ttk.Label(advanced_frame, text="每发送(条):").grid(row=1, column=0, sticky="e", padx=5, pady=5)
+        burst_entry = ttk.Entry(advanced_frame, width=5, textvariable=self.model.burst_size, takefocus=0)
+        burst_entry.grid(row=1, column=1, sticky="w", pady=5)
+        ToolTip(burst_entry, "爆发阈值：每发送这么多条后，进行一次长休息。\n设为 0 或 1 表示不开启。")
+        ttk.Label(advanced_frame, text="休息(秒):").grid(row=1, column=2, sticky="e", padx=5, pady=5)
+
+        rest_frame = ttk.Frame(advanced_frame)
+        rest_frame.grid(row=1, column=3, sticky="w", pady=5)
+        ttk.Entry(rest_frame, width=5, textvariable=self.model.rest_min, takefocus=0).pack(side="left")
+        ttk.Label(rest_frame, text="-").pack(side="left", padx=2)
+        ttk.Entry(rest_frame, width=5, textvariable=self.model.rest_max, takefocus=0).pack(side="left")
         
         # --- 日志输出区 ---
         log_frame = ttk.Labelframe(self, text="运行日志", padding=10)
@@ -267,6 +281,10 @@ class SenderTab(ttk.Frame):
             return
         
         # --- 弹窗确认信息 ---
+        burst_info = ""
+        if config.burst_size > 1:
+            burst_info = f"\n(已开启爆发模式: 每 {config.burst_size} 条休息 {config.rest_min}-{config.rest_max} 秒)"
+
         confirmation_message = (
             f"即将为视频：\n"
             f"《{video_state.video_title}》| {video_state.selected_part_name}\n"
@@ -311,8 +329,7 @@ class SenderTab(ttk.Frame):
                     bvid=video_state.bvid, 
                     cid=video_state.selected_cid, 
                     danmakus=danmakus_to_send, 
-                    min_delay=config.min_delay, 
-                    max_delay=config.max_delay, 
+                    config=config, 
                     stop_event=self.stop_event, 
                     progress_callback=_progress_updater
                 )
