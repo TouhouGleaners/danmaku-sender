@@ -117,7 +117,7 @@ class ValidatorTab(ttk.Frame):
         """删除在Treeview中选中的条目"""
         selected_items = self.tree.selection()
         if not selected_items:
-            Messagebox.show_warning("未选择", "请先选择要删除的弹幕条目。", parent=self.app)
+            Messagebox.show_warning("请先选择要删除的弹幕条目。", "未选择", parent=self.app)
             return
         
         if messagebox.askyesno("确认删除", f"确定要从问题列表中移除这 {len(selected_items)} 条弹幕吗？\n（应用修改后将从发送队列中删除）", parent=self.app):
@@ -127,7 +127,7 @@ class ValidatorTab(ttk.Frame):
     def apply_changes(self):
         """应用更改，重建并更新共享模型中的弹幕列表"""
         if not self.original_danmakus_snapshot:
-            Messagebox.show_warning("未进行验证", "请先运行一次验证，再应用修改。", parent=self.app)
+            Messagebox.show_warning("请先运行一次验证，再应用修改。", "未进行验证", parent=self.app)
             return
         
         modified_issues = {
