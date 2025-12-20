@@ -2,15 +2,11 @@ import time
 import logging
 from threading import Event
 
-from typing import TYPE_CHECKING
-
 from ..api.bili_api_client import BiliApiClient, BiliApiException
+from ..config.shared_data import SenderConfig
 from ..core.bili_danmaku_utils import BiliDmErrorCode, DanmakuSendResult, DanmakuParser
 from ..core.delay_manager import DelayManager
 from ..utils.notification_utils import send_windows_notification
-
-if TYPE_CHECKING:
-    from ..config.shared_data import SenderConfig
 
 
 class BiliDanmakuSender:
