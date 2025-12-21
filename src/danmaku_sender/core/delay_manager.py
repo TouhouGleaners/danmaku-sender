@@ -17,7 +17,6 @@ class DelayManager:
                  rest_min: float = 0,
                  rest_max: float = 0):
         """
-
         Args:
             normal_min (float): 普通最小间隔时间（秒）
             normal_max (float): 普通最大间隔时间（秒）
@@ -26,6 +25,15 @@ class DelayManager:
             rest_max (float, optional): 长休息最大时间. Defaults to 0.
         """
         self.logger = logging.getLogger("DelayManager")
+
+        # --- 内部参数校验 (Defensive Programming) ---
+        if normal_min > normal_max:
+            raise ValueError(f"普通延迟参数错误: min({normal_min}) > max({normal_max})")
+        
+        if burst_size > 1:
+            if rest_min > rest_max:
+                raise ValueError(f"爆发休息参数错误: min({rest_min}) > max({rest_max})")
+
         self.normal_min = normal_min
         self.normal_max = normal_max
 
@@ -36,6 +44,12 @@ class DelayManager:
 
         # 内部计数器
         self._current_count = 0
+
+        # 日志逻辑内聚
+        if self.burst_size > 1:
+            self.logger.info(f"🚀 爆发模式已启用: 每 {self.burst_size} 条休息 {self.rest_min}-{self.rest_max} 秒")
+        else:
+            self.logger.debug(f"爆发模式未启用 (阈值: {self.burst_size})")
 
     def wait_and_check_stop(self, stop_event: Event) -> bool:
         """

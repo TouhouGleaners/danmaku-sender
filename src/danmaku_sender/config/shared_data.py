@@ -30,6 +30,9 @@ class SenderConfig:
         if not basic_valid:
             return False
         
+        if self.burst_size < 0:
+            return False
+        
         if self.burst_size > 1:
             if self.rest_min < 0 or self.rest_max < 0 or self.rest_min >= self.rest_max:
                 return False

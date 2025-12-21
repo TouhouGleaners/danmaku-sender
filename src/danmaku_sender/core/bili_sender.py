@@ -91,9 +91,6 @@ class BiliDanmakuSender:
         self.logger.info(f"开始发送... CID: {cid}")
         self.unsent_danmakus = []  # 开始新任务时清空列表
 
-        if config.burst_size > 1:
-            self.logger.info(f"🚀 爆发模式已启用: 每 {config.burst_size} 条休息 {config.rest_min}-{config.rest_max} 秒")
-
         if not danmakus:
             self._log_send_summary(0, 0, 0, stop_event, False)
             if progress_callback:
