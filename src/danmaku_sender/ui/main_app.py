@@ -38,7 +38,7 @@ class Application(ttk.Window):
         notebook.grid(row=0, column=0, padx=10, pady=5, sticky="nsew")
 
         # --- 创建并添加标签页 ---
-        self.settings_tab_frame = SettingsTab(notebook, self.shared_data, self)
+        self.settings_tab_frame = SettingsTab(notebook, self.shared_data)
         self.sender_tab_frame = SenderTab(notebook, self.shared_data, self)
         self.validator_tab_frame = ValidatorTab(notebook, self.shared_data, self)
         self.monitor_tab_frame = MonitorTab(notebook, self.shared_data, self)

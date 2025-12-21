@@ -1,5 +1,3 @@
-import logging
-
 import ttkbootstrap as ttk
 from ttkbootstrap.tooltip import ToolTip
 
@@ -7,11 +5,9 @@ from ..config.shared_data import SharedDataModel
 
 
 class SettingsTab(ttk.Frame):
-    def __init__(self, parent, model: SharedDataModel, app):
+    def __init__(self, parent, model: SharedDataModel):
         super().__init__(parent, padding=15)
         self.model = model
-        self.app = app
-        self.logger = logging.getLogger("SettingsTab")
         self.columnconfigure(0, weight=1)
         self._create_widgets()
 
