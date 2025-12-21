@@ -1,15 +1,17 @@
 import logging
+from pathlib import Path
+from platformdirs import user_data_dir
+
 import webbrowser
 import ttkbootstrap as ttk
 from ttkbootstrap.constants import *
-from pathlib import Path
-from platformdirs import user_data_dir
 
 from ..utils.credential_manager import load_credentials, save_credentials
 from ..config.shared_data import SharedDataModel
 from ..ui.sender_tab import SenderTab
 from ..ui.monitor_tab import MonitorTab
 from ..ui.validator_tab import ValidatorTab
+from ..ui.settings_tab import SettingsTab
 from ..config.app_config import AppInfo, UI, Links
 from ..config.app_content import HelpText, AboutText
 from ..utils.log_utils import GuiLoggingHandler, DailyLogFileHandler
@@ -36,12 +38,15 @@ class Application(ttk.Window):
         notebook.grid(row=0, column=0, padx=10, pady=5, sticky="nsew")
 
         # --- 创建并添加标签页 ---
+        self.settings_tab_frame = SettingsTab(notebook, self.shared_data, self)
         self.sender_tab_frame = SenderTab(notebook, self.shared_data, self)
         self.validator_tab_frame = ValidatorTab(notebook, self.shared_data, self)
         self.monitor_tab_frame = MonitorTab(notebook, self.shared_data, self)
+        notebook.add(self.settings_tab_frame, text="全局设置")
         notebook.add(self.sender_tab_frame, text="弹幕发射器")
         notebook.add(self.validator_tab_frame, text="弹幕校验器")
         notebook.add(self.monitor_tab_frame, text="弹幕监视器")
+        notebook.select(1)
 
     def load_and_populate_credentials(self):
         """加载凭证并填充到UI控件中。"""
