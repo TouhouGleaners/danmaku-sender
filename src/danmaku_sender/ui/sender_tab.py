@@ -76,29 +76,41 @@ class SenderTab(ttk.Frame):
         # --- 高级设置 (延迟) ---
         advanced_frame = ttk.Labelframe(self, text="高级设置", padding=15)
         advanced_frame.grid(row=2, column=0, padx=10, pady=5, sticky="ew")
-        for i in range(4): advanced_frame.columnconfigure(i, weight=1)
 
-        # 第一行：普通延迟
-        ttk.Label(advanced_frame, text="最小延迟(秒):").grid(row=0, column=0, sticky="w", padx=5, pady=5)
-        self.min_delay_entry = ttk.Entry(advanced_frame, width=10, textvariable=self.model.min_delay, takefocus=0)
-        self.min_delay_entry.grid(row=0, column=1)
+        # Grid 布局：左侧区域(0)，分割线(1)，右侧区域(2)
+        # 左右权重设置为1以平分空间
+        advanced_frame.columnconfigure(0, weight=1)
+        advanced_frame.columnconfigure(1, weight=0)
+        advanced_frame.columnconfigure(2, weight=1)
 
-        ttk.Label(advanced_frame, text="最大延迟(秒):").grid(row=0, column=2, sticky="w", padx=(20, 5), pady=5)
-        self.max_delay_entry = ttk.Entry(advanced_frame, width=10, textvariable=self.model.max_delay, takefocus=0)
-        self.max_delay_entry.grid(row=0, column=3)
+        # ====== 左半区：基础间隔 ======
+        left_frame = ttk.Frame(advanced_frame)
+        left_frame.grid(row=0, column=0, sticky="w")
+        
+        ttk.Label(left_frame, text="随机间隔(秒):").pack(side="left")
+        ttk.Entry(left_frame, textvariable=self.model.min_delay, width=6, takefocus=0).pack(side="left", padx=5)
+        ttk.Label(left_frame, text="-").pack(side="left")
+        ttk.Entry(left_frame, textvariable=self.model.max_delay, width=6, takefocus=0).pack(side="left", padx=5)
 
-        # 第二行：爆发模式
-        ttk.Label(advanced_frame, text="每发送(条):").grid(row=1, column=0, sticky="e", padx=5, pady=5)
-        burst_entry = ttk.Entry(advanced_frame, width=5, textvariable=self.model.burst_size, takefocus=0)
-        burst_entry.grid(row=1, column=1, sticky="w", pady=5)
-        ToolTip(burst_entry, "爆发阈值：每发送这么多条后，进行一次长休息。\n设为 0 或 1 表示不开启。")
-        ttk.Label(advanced_frame, text="休息(秒):").grid(row=1, column=2, sticky="e", padx=5, pady=5)
+        # ====== 中间：垂直分割线 ======
+        sep = ttk.Separator(advanced_frame, orient='vertical')
+        sep.grid(row=0, column=1, sticky="ns", padx=20)
 
-        rest_frame = ttk.Frame(advanced_frame)
-        rest_frame.grid(row=1, column=3, sticky="w", pady=5)
-        ttk.Entry(rest_frame, width=5, textvariable=self.model.rest_min, takefocus=0).pack(side="left")
-        ttk.Label(rest_frame, text="-").pack(side="left", padx=2)
-        ttk.Entry(rest_frame, width=5, textvariable=self.model.rest_max, takefocus=0).pack(side="left")
+        # ====== 右半区：爆发模式 ======
+        right_frame = ttk.Frame(advanced_frame)
+        right_frame.grid(row=0, column=2, sticky="w")
+        
+        # 爆发阈值
+        ttk.Label(right_frame, text="每(条):").pack(side="left")
+        burst_entry = ttk.Entry(right_frame, textvariable=self.model.burst_size, width=5, takefocus=0)
+        burst_entry.pack(side="left", padx=5)
+        ToolTip(burst_entry, "爆发阈值：每发送多少条弹幕后，进入一次长休息。\n0 或 1 表示关闭。")
+        
+        # 休息时间
+        ttk.Label(right_frame, text="休息(秒):").pack(side="left", padx=(10, 5))
+        ttk.Entry(right_frame, textvariable=self.model.rest_min, width=5, takefocus=0).pack(side="left")
+        ttk.Label(right_frame, text="-").pack(side="left", padx=2)
+        ttk.Entry(right_frame, textvariable=self.model.rest_max, width=5, takefocus=0).pack(side="left")
         
         # --- 日志输出区 ---
         log_frame = ttk.Labelframe(self, text="运行日志", padding=10)
