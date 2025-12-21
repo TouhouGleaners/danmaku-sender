@@ -59,7 +59,6 @@ class DelayManager:
             bool: 如果收到停止信号(需要中断任务)返回 True，否则返回 False
         """
         if stop_event.is_set():
-            self.logger.info("任务被用户手动停止。")
             return True
         
         self._current_count += 1
