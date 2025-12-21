@@ -9,11 +9,11 @@ class SenderConfig:
     bili_jct: str = ""
 
     # 普通延迟
-    min_delay: float = 20.0
-    max_delay: float = 25.0
+    min_delay: float = 8.0
+    max_delay: float = 8.5
 
     # 爆发延迟
-    burst_size: int = 0
+    burst_size: int = 3
     rest_min: float = 40.0
     rest_max: float = 45.0
 
@@ -93,16 +93,19 @@ class SharedDataModel:
         self.video_title = ttk.StringVar(value="（未获取到视频标题）")
 
         # 辅助数据 (仅用于 UI 下拉框逻辑)
-        self.cid_parts_map = {} 
-        self.ordered_cids = []  
-        self.ordered_durations = [] 
+        self.cid_parts_map = {}
+        self.ordered_cids = []
+        self.ordered_durations = []
 
         # 高级设置 (UI)
-        self.min_delay = ttk.StringVar(value="20.0")
-        self.max_delay = ttk.StringVar(value="25.0")
-        self.burst_size = ttk.StringVar(value="0")
-        self.rest_min = ttk.StringVar(value="40.0")
-        self.rest_max = ttk.StringVar(value="45.0")
+        # 实例化默认配置对象
+        _default_config = SenderConfig()
+
+        self.min_delay = ttk.StringVar(value=str(_default_config.min_delay))
+        self.max_delay = ttk.StringVar(value=str(_default_config.max_delay))
+        self.burst_size = ttk.StringVar(value=str(_default_config.burst_size))
+        self.rest_min = ttk.StringVar(value=str(_default_config.rest_min))
+        self.rest_max = ttk.StringVar(value=str(_default_config.rest_max))
 
         # 监视器设置 (UI)
         self.monitor_interval = ttk.StringVar(value="60")
