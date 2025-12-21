@@ -26,13 +26,14 @@ class DelayManager:
         """
         self.logger = logging.getLogger("DelayManager")
 
-        # 内部参数校验
+        # 内部参数校验，min > max，则自动交换。
         if normal_min > normal_max:
-            raise ValueError(f"普通延迟参数错误: min({normal_min}) > max({normal_max})")
+            self.logger.warning(f"检测到普通延迟参数 min({normal_min}) > max({normal_max})，已自动交换修正。")
+            normal_min, normal_max = normal_max, normal_min
         
-        if burst_size > 1:
-            if rest_min > rest_max:
-                raise ValueError(f"爆发休息参数错误: min({rest_min}) > max({rest_max})")
+        if burst_size > 1 and rest_min > rest_max:
+            self.logger.warning(f"检测到爆发休息参数 min({rest_min}) > max({rest_max})，已自动交换修正。")
+            rest_min, rest_max = rest_max, rest_min
 
         self.normal_min = normal_min
         self.normal_max = normal_max
