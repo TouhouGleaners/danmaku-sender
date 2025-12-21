@@ -24,15 +24,15 @@ class SettingsTab(ttk.Frame):
 
         # SESSDATA
         ttk.Label(auth_frame, text="SESSDATA:").grid(row=0, column=0, sticky="w", padx=5, pady=8)
-        sessdata_entry = ttk.Entry(auth_frame, show="*", textvariable=self.model.sessdata, takefocus=0)
-        sessdata_entry.grid(row=0, column=1, sticky="ew", padx=5)
-        ToolTip(sessdata_entry, "SESSDATA | 请勿泄露")
+        self.sessdata_entry = ttk.Entry(auth_frame, show="*", textvariable=self.model.sessdata, takefocus=0)
+        self.sessdata_entry.grid(row=0, column=1, sticky="ew", padx=5)
+        ToolTip(self.sessdata_entry, "SESSDATA | 请勿泄露")
 
         # BILI_JCT
         ttk.Label(auth_frame, text="BILI_JCT:").grid(row=1, column=0, sticky="w", padx=5, pady=8)
-        bili_jct_entry = ttk.Entry(auth_frame, show="*", textvariable=self.model.bili_jct, takefocus=0)
-        bili_jct_entry.grid(row=1, column=1, sticky="ew", padx=5)
-        ToolTip(bili_jct_entry, "BILI_JCT | 请勿泄露")
+        self.bili_jct_entry = ttk.Entry(auth_frame, show="*", textvariable=self.model.bili_jct, takefocus=0)
+        self.bili_jct_entry.grid(row=1, column=1, sticky="ew", padx=5)
+        ToolTip(self.bili_jct_entry, "BILI_JCT | 请勿泄露")
 
         # 提示信息
         info_label = ttk.Label(

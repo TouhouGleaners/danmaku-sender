@@ -46,7 +46,7 @@ class Application(ttk.Window):
         notebook.add(self.sender_tab_frame, text="弹幕发射器")
         notebook.add(self.validator_tab_frame, text="弹幕校验器")
         notebook.add(self.monitor_tab_frame, text="弹幕监视器")
-        notebook.select(1)
+        notebook.select(self.sender_tab_frame)
 
     def load_and_populate_credentials(self):
         """加载凭证并填充到UI控件中。"""
