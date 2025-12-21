@@ -288,7 +288,7 @@ class SenderTab(ttk.Frame):
         confirmation_message = (
             f"即将为视频：\n"
             f"《{video_state.video_title}》| {video_state.selected_part_name}\n"
-            f"发送 {video_state.danmaku_count} 条弹幕，是否继续？"
+            f"发送 {video_state.danmaku_count} 条弹幕{burst_info}，是否继续？"
         )
         
         if not messagebox.askyesno("确认发送", confirmation_message, parent=self.app):

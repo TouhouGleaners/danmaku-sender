@@ -26,7 +26,7 @@ class DelayManager:
         """
         self.logger = logging.getLogger("DelayManager")
 
-        # --- 内部参数校验 (Defensive Programming) ---
+        # 内部参数校验
         if normal_min > normal_max:
             raise ValueError(f"普通延迟参数错误: min({normal_min}) > max({normal_max})")
         
