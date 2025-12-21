@@ -15,7 +15,7 @@ class SettingsTab(ttk.Frame):
         """创建并布局标签页中的所有UI控件"""
         # --- 身份凭证输入区 ---
         auth_frame = ttk.Labelframe(self, text="身份凭证 (Cookie)", padding=15)
-        auth_frame.grid(row=0, column=0, sticky="ew", pady=(0, 15))
+        auth_frame.grid(row=0, column=0, sticky="ew", padx=10, pady=5)
         auth_frame.columnconfigure(1, weight=1)
 
         # SESSDATA
@@ -36,4 +36,4 @@ class SettingsTab(ttk.Frame):
             text="ℹ️ 提示：凭证修改后会自动保存，重启软件后依然有效。",
             bootstyle="secondary"
         )
-        info_label.grid(row=1, column=0, sticky="w", padx=5)
+        info_label.grid(row=1, column=0, sticky="w", padx=15, pady=(10, 5))
