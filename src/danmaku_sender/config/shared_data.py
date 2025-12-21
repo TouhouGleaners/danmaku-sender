@@ -7,16 +7,37 @@ class SenderConfig:
     """发送器的配置数据"""
     sessdata: str = ""
     bili_jct: str = ""
-    min_delay: float = 20.0
-    max_delay: float = 25.0
+
+    # 普通延迟
+    min_delay: float = 8.0
+    max_delay: float = 8.5
+
+    # 爆发延迟
+    burst_size: int = 3
+    rest_min: float = 40.0
+    rest_max: float = 45.0
 
     def is_valid(self) -> bool:
         """自身的数据校验逻辑"""
-        return (self.min_delay > 0 and 
-                self.max_delay > 0 and 
-                self.min_delay <= self.max_delay and
-                bool(self.sessdata) and 
-                bool(self.bili_jct))
+        basic_valid = (
+            self.min_delay > 0 and 
+            self.max_delay > 0 and 
+            self.min_delay <= self.max_delay and
+            bool(self.sessdata) and 
+            bool(self.bili_jct)
+        )
+
+        if not basic_valid:
+            return False
+        
+        if self.burst_size < 0:
+            return False
+        
+        if self.burst_size > 1:
+            if self.rest_min < 0 or self.rest_max < 0 or self.rest_min > self.rest_max:
+                return False
+        
+        return True
 
 
 @dataclass
@@ -72,13 +93,21 @@ class SharedDataModel:
         self.video_title = ttk.StringVar(value="（未获取到视频标题）")
 
         # 辅助数据 (仅用于 UI 下拉框逻辑)
-        self.cid_parts_map = {} 
-        self.ordered_cids = []  
-        self.ordered_durations = [] 
+        self.cid_parts_map = {}
+        self.ordered_cids = []
+        self.ordered_durations = []
 
         # 高级设置 (UI)
-        self.min_delay = ttk.StringVar(value="20.0")
-        self.max_delay = ttk.StringVar(value="25.0")
+        # 实例化默认配置对象
+        _default_config = SenderConfig()
+
+        self.min_delay = ttk.StringVar(value=str(_default_config.min_delay))
+        self.max_delay = ttk.StringVar(value=str(_default_config.max_delay))
+        self.burst_size = ttk.StringVar(value=str(_default_config.burst_size))
+        self.rest_min = ttk.StringVar(value=str(_default_config.rest_min))
+        self.rest_max = ttk.StringVar(value=str(_default_config.rest_max))
+
+        # 监视器设置 (UI)
         self.monitor_interval = ttk.StringVar(value="60")
         self.time_tolerance = ttk.StringVar(value="500")
 
@@ -137,7 +166,10 @@ class SharedDataModel:
                 sessdata=self.sessdata.get().strip(),
                 bili_jct=self.bili_jct.get().strip(),
                 min_delay=float(self.min_delay.get()),
-                max_delay=float(self.max_delay.get())
+                max_delay=float(self.max_delay.get()),
+                burst_size=int(self.burst_size.get()),
+                rest_min=float(self.rest_min.get()),
+                rest_max=float(self.rest_max.get())
             )
             return config
         except ValueError:

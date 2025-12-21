@@ -76,15 +76,41 @@ class SenderTab(ttk.Frame):
         # --- 高级设置 (延迟) ---
         advanced_frame = ttk.Labelframe(self, text="高级设置", padding=15)
         advanced_frame.grid(row=2, column=0, padx=10, pady=5, sticky="ew")
-        advanced_frame.columnconfigure(1, weight=1); advanced_frame.columnconfigure(3, weight=1)
 
-        ttk.Label(advanced_frame, text="最小延迟(秒):").grid(row=0, column=0, sticky="w", padx=5, pady=5)
-        self.min_delay_entry = ttk.Entry(advanced_frame, width=10, textvariable=self.model.min_delay, takefocus=0)
-        self.min_delay_entry.grid(row=0, column=1)
+        # Grid 布局：左侧区域(0)，分割线(1)，右侧区域(2)
+        # 左右权重设置为1以平分空间
+        advanced_frame.columnconfigure(0, weight=1)
+        advanced_frame.columnconfigure(1, weight=0)
+        advanced_frame.columnconfigure(2, weight=1)
 
-        ttk.Label(advanced_frame, text="最大延迟(秒):").grid(row=0, column=2, sticky="w", padx=(20, 5), pady=5)
-        self.max_delay_entry = ttk.Entry(advanced_frame, width=10, textvariable=self.model.max_delay, takefocus=0)
-        self.max_delay_entry.grid(row=0, column=3)
+        # ====== 左半区：基础间隔 ======
+        left_frame = ttk.Frame(advanced_frame)
+        left_frame.grid(row=0, column=0, sticky="w")
+        
+        ttk.Label(left_frame, text="随机间隔(秒):").pack(side="left")
+        ttk.Entry(left_frame, textvariable=self.model.min_delay, width=6, takefocus=0).pack(side="left", padx=5)
+        ttk.Label(left_frame, text="-").pack(side="left")
+        ttk.Entry(left_frame, textvariable=self.model.max_delay, width=6, takefocus=0).pack(side="left", padx=5)
+
+        # ====== 中间：垂直分割线 ======
+        sep = ttk.Separator(advanced_frame, orient='vertical')
+        sep.grid(row=0, column=1, sticky="ns", padx=20)
+
+        # ====== 右半区：爆发模式 ======
+        right_frame = ttk.Frame(advanced_frame)
+        right_frame.grid(row=0, column=2, sticky="w")
+        
+        # 爆发阈值
+        ttk.Label(right_frame, text="每(条):").pack(side="left")
+        burst_entry = ttk.Entry(right_frame, textvariable=self.model.burst_size, width=5, takefocus=0)
+        burst_entry.pack(side="left", padx=5)
+        ToolTip(burst_entry, "爆发阈值：每发送多少条弹幕后，进入一次长休息。\n0 或 1 表示关闭。")
+        
+        # 休息时间
+        ttk.Label(right_frame, text="休息(秒):").pack(side="left", padx=(10, 5))
+        ttk.Entry(right_frame, textvariable=self.model.rest_min, width=5, takefocus=0).pack(side="left")
+        ttk.Label(right_frame, text="-").pack(side="left", padx=2)
+        ttk.Entry(right_frame, textvariable=self.model.rest_max, width=5, takefocus=0).pack(side="left")
         
         # --- 日志输出区 ---
         log_frame = ttk.Labelframe(self, text="运行日志", padding=10)
@@ -267,10 +293,14 @@ class SenderTab(ttk.Frame):
             return
         
         # --- 弹窗确认信息 ---
+        burst_info = ""
+        if config.burst_size > 1:
+            burst_info = f"\n(已开启爆发模式: 每 {config.burst_size} 条休息 {config.rest_min}-{config.rest_max} 秒)"
+
         confirmation_message = (
             f"即将为视频：\n"
             f"《{video_state.video_title}》| {video_state.selected_part_name}\n"
-            f"发送 {video_state.danmaku_count} 条弹幕，是否继续？"
+            f"发送 {video_state.danmaku_count} 条弹幕{burst_info}，是否继续？"
         )
         
         if not messagebox.askyesno("确认发送", confirmation_message, parent=self.app):
@@ -311,8 +341,7 @@ class SenderTab(ttk.Frame):
                     bvid=video_state.bvid, 
                     cid=video_state.selected_cid, 
                     danmakus=danmakus_to_send, 
-                    min_delay=config.min_delay, 
-                    max_delay=config.max_delay, 
+                    config=config, 
                     stop_event=self.stop_event, 
                     progress_callback=_progress_updater
                 )
