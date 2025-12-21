@@ -26,7 +26,7 @@ class SenderTab(ttk.Frame):
         self.app = app  # 主应用实例，用于after调用
         self.logger = logging.getLogger("SenderTab")
         self.columnconfigure(0, weight=1)
-        self.rowconfigure(3, weight=1)
+        self.rowconfigure(2, weight=1)
         self.stop_event = threading.Event()
         self.danmaku_parser = DanmakuParser()
 
@@ -34,31 +34,19 @@ class SenderTab(ttk.Frame):
 
     def _create_widgets(self):
         """创建并布局此标签页中的所有UI控件"""
-
-        # --- 身份凭证输入区 ---
-        auth_frame = ttk.Labelframe(self, text="身份凭证 (Cookie)", padding=15)
-        auth_frame.grid(row=0, column=0, padx=10, pady=5, sticky="ew")
-        auth_frame.columnconfigure(1, weight=1)
-
-        ttk.Label(auth_frame, text="SESSDATA:").grid(row=0, column=0, sticky="w", padx=5, pady=8)
-        self.sessdata_entry = ttk.Entry(auth_frame, show="*", textvariable=self.model.sessdata, takefocus=0)
-        self.sessdata_entry.grid(row=0, column=1, sticky="ew")
-
-        ttk.Label(auth_frame, text="BILI_JCT:").grid(row=1, column=0, sticky="w",padx=5, pady=8)
-        self.bili_jct_entry = ttk.Entry(auth_frame, show="*", textvariable=self.model.bili_jct, takefocus=0)
-        self.bili_jct_entry.grid(row=1, column=1, sticky="ew")
-
         # --- 设置区 ---
         settings_frame = ttk.Labelframe(self, text="参数设置", padding=15)
-        settings_frame.grid(row=1, column=0, padx=10, pady=(10, 5), sticky="ew")
+        settings_frame.grid(row=0, column=0, padx=10, pady=5, sticky="ew")
         settings_frame.columnconfigure(1, weight=1)
 
+        # BV号
         ttk.Label(settings_frame, text="BV号:").grid(row=0, column=0, sticky="w", padx=5, pady=8)
         self.bvid_entry = ttk.Entry(settings_frame, textvariable=self.model.bvid, takefocus=0)
-        self.bvid_entry.grid(row=0, column=1, sticky="ew") 
+        self.bvid_entry.grid(row=0, column=1, sticky="ew")
         self.get_parts_button = ttk.Button(settings_frame, text="获取分P", command=self.fetch_video_parts, takefocus=0)
         self.get_parts_button.grid(row=0, column=2, padx=(5, 0))
 
+        # 分P选择
         ttk.Label(settings_frame, text="选择分P:").grid(row=1, column=0, sticky="w", padx=5, pady=8)
         self.part_combobox = ttk.Combobox(settings_frame, textvariable=self.model.part_var, state="readonly", bootstyle="secondary", takefocus=0)
         self.part_combobox.grid(row=1, column=1, columnspan=2, sticky="ew", padx=(0, 5))
@@ -75,7 +63,7 @@ class SenderTab(ttk.Frame):
         
         # --- 高级设置 (延迟) ---
         advanced_frame = ttk.Labelframe(self, text="高级设置", padding=15)
-        advanced_frame.grid(row=2, column=0, padx=10, pady=5, sticky="ew")
+        advanced_frame.grid(row=1, column=0, padx=10, pady=5, sticky="ew")
 
         # Grid 布局：左侧区域(0)，分割线(1)，右侧区域(2)
         # 左右权重设置为1以平分空间
@@ -104,7 +92,7 @@ class SenderTab(ttk.Frame):
         ttk.Label(right_frame, text="每(条):").pack(side="left")
         burst_entry = ttk.Entry(right_frame, textvariable=self.model.burst_size, width=5, takefocus=0)
         burst_entry.pack(side="left", padx=5)
-        ToolTip(burst_entry, "爆发阈值：每发送多少条弹幕后，进入一次长休息。\n0 或 1 表示关闭。")
+        ToolTip(burst_entry, "爆发阈值：\n每发送多少条弹幕后，进入一次长休息。\n0 或 1 表示关闭。")
         
         # 休息时间
         ttk.Label(right_frame, text="休息(秒):").pack(side="left", padx=(10, 5))
@@ -114,14 +102,14 @@ class SenderTab(ttk.Frame):
         
         # --- 日志输出区 ---
         log_frame = ttk.Labelframe(self, text="运行日志", padding=10)
-        log_frame.grid(row=3, column=0, padx=10, pady=5, sticky="nsew") 
+        log_frame.grid(row=2, column=0, padx=10, pady=5, sticky="nsew") 
         log_frame.columnconfigure(0, weight=1); log_frame.rowconfigure(0, weight=1)
         self.log_text = scrolledtext.ScrolledText(log_frame, wrap=ttk.WORD, state='disabled', font=("TkDefaultFont", 9))
         self.log_text.grid(row=0, column=0, sticky="nsew")
         
         # --- 操作区 ---
         action_frame = ttk.Frame(self, padding=(10, 10))
-        action_frame.grid(row=4, column=0, padx=10, pady=10, sticky="ew")
+        action_frame.grid(row=3, column=0, padx=10, pady=10, sticky="ew")
         action_frame.columnconfigure(0, weight=0)
         action_frame.columnconfigure(1, weight=1)
         action_frame.columnconfigure(2, weight=0)
