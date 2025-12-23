@@ -10,6 +10,7 @@ from ..api.bili_api_client import BiliApiClient, BiliApiException
 from ..core.bili_sender import BiliDanmakuSender
 from ..core.bili_danmaku_utils import DanmakuParser, create_xml_from_danmakus
 from ..config.shared_data import SenderConfig, VideoState
+from ..utils.system_utils import PowerManagement
 
 
 class SenderTab(ttk.Frame):
@@ -29,6 +30,7 @@ class SenderTab(ttk.Frame):
         self.rowconfigure(2, weight=1)
         self.stop_event = threading.Event()
         self.danmaku_parser = DanmakuParser()
+        self._running_task_prevented_sleep = False  # 记录当前运行的任务是否申请了阻止休眠
 
         self._create_widgets()
 
@@ -299,6 +301,10 @@ class SenderTab(ttk.Frame):
         self._set_ui_for_task_start()
         self.stop_event.clear()
 
+        self._running_task_prevented_sleep = config.prevent_sleep
+        if self._running_task_prevented_sleep:
+            PowerManagement.prevent_sleep()
+
         try:
             thread = threading.Thread(
                 target=self._task_worker, 
@@ -323,7 +329,7 @@ class SenderTab(ttk.Frame):
                     """一个在后台线程被调用的函数，用于向主线程发送UI更新请求"""
                     if total > 0:
                         progress_percent = (attempted / total) * 100
-                        self.app.after(0, self.model.sender_progress_var.set, progress_percent)
+                        self.app.after(0, lambda: self.model.sender_progress_var.set(progress_percent))
 
                 sender.send_danmaku_from_list(
                     bvid=video_state.bvid, 
@@ -403,6 +409,9 @@ class SenderTab(ttk.Frame):
 
     def _restore_ui_after_task(self):
         """任务结束后恢复UI状态"""
+        if self._running_task_prevented_sleep:
+            PowerManagement.allow_sleep()
+            self._running_task_prevented_sleep = False
         self.start_button.config(state='normal', text="开始任务", command=self.start_task, style="success.TButton")
         self.select_button.config(state='normal')
         self.get_parts_button.config(state='normal')

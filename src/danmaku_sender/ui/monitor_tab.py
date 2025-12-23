@@ -8,6 +8,7 @@ from ttkbootstrap.dialogs import Messagebox
 from ..api.bili_api_client import BiliApiClient, BiliApiException
 from ..core.bili_monitor import BiliDanmakuMonitor
 from ..config.shared_data import MonitorConfig, VideoState
+from ..utils.system_utils import PowerManagement
 
 
 class MonitorTab(ttk.Frame):
@@ -33,6 +34,7 @@ class MonitorTab(ttk.Frame):
         self.rowconfigure(2, weight=1)
         self.monitor_thread = None
         self.stop_monitor_event = threading.Event()
+        self._running_task_prevented_sleep = False
         
         # 绑定来自共享数据模型的变量
         self.current_bvid = self.model.bvid 
@@ -159,6 +161,10 @@ class MonitorTab(ttk.Frame):
             return
 
         self._set_ui_for_task_start()  # 更新UI状态
+
+        self._running_task_prevented_sleep = config.prevent_sleep
+        if self._running_task_prevented_sleep:
+            PowerManagement.prevent_sleep()
         
         # 启动后台线程
         self.stop_monitor_event.clear()
@@ -193,9 +199,15 @@ class MonitorTab(ttk.Frame):
                     if total_count > 0:
                         progress = (matched_count / total_count) * 100
                         status = f"监视器: 运行中... ({matched_count}/{total_count})"
-                        self.app.after(0, lambda: (self.model.monitor_progress_var.set(progress), self.model.monitor_status_text.set(status)))
+                        self.app.after(0, lambda: (
+                            self.model.monitor_progress_var.set(progress),
+                            self.model.monitor_status_text.set(status)
+                        ))
                     else: 
-                        self.app.after(0, lambda: (self.model.monitor_progress_var.set(0), self.model.monitor_status_text.set("监视器：无弹幕可匹配")))
+                        self.app.after(0, lambda: (
+                            self.model.monitor_progress_var.set(0),
+                            self.model.monitor_status_text.set("监视器：无弹幕可匹配")
+                        ))
 
                 monitor.run(self.stop_monitor_event, progress_updater)
         except (ValueError, BiliApiException) as e:
@@ -216,6 +228,9 @@ class MonitorTab(ttk.Frame):
 
     def _reset_ui_after_task(self):
         """任务结束后（正常完成或被停止），重置UI组件状态。"""
+        if self._running_task_prevented_sleep:
+            PowerManagement.allow_sleep()
+            self._running_task_prevented_sleep = False
         self.set_ui_state(True)
         self.start_button.config(text="开始监视", style="success.TButton")
         self.model.monitor_status_text.set("监视器：已停止")
