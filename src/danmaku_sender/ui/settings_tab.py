@@ -30,10 +30,20 @@ class SettingsTab(ttk.Frame):
         self.bili_jct_entry.grid(row=1, column=1, sticky="ew", padx=5)
         ToolTip(self.bili_jct_entry, "BILI_JCT | 请勿泄露")
 
+        # --- 系统设置区 ---
+        sys_frame = ttk.Labelframe(self, text="系统设置", padding=15)
+        sys_frame.grid(row=1, column=0, sticky="ew", padx=10, pady=5)
+        sys_frame.columnconfigure(0, weight=1)
+
+        # 阻止系统休眠
+        sleep_chk = ttk.Checkbutton(sys_frame, text="任务运行时阻止电脑休眠", variable=self.model.prevent_sleep, bootstyle="round-toggle")
+        sleep_chk.grid(row=0, column=0, sticky="w", padx=5)
+        ToolTip(sleep_chk, "勾选后，在发送或监视弹幕时，将禁止Windows进入睡眠状态。\n(保持网络和CPU运行，但允许屏幕关闭)")
+
         # 提示信息
         info_label = ttk.Label(
             self, 
             text="ℹ️ 提示：凭证修改后会自动保存，重启软件后依然有效。",
             bootstyle="secondary"
         )
-        info_label.grid(row=1, column=0, sticky="w", padx=15, pady=(10, 5))
+        info_label.grid(row=2, column=0, sticky="w", padx=15, pady=(10, 5))

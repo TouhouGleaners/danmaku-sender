@@ -8,6 +8,7 @@ from ttkbootstrap.dialogs import Messagebox
 from ..api.bili_api_client import BiliApiClient, BiliApiException
 from ..core.bili_monitor import BiliDanmakuMonitor
 from ..config.shared_data import MonitorConfig, VideoState
+from ..utils.system_utils import PowerManagement
 
 
 class MonitorTab(ttk.Frame):
@@ -159,6 +160,9 @@ class MonitorTab(ttk.Frame):
             return
 
         self._set_ui_for_task_start()  # 更新UI状态
+
+        if config.prevent_sleep:
+            PowerManagement.prevent_sleep()
         
         # 启动后台线程
         self.stop_monitor_event.clear()
@@ -201,7 +205,7 @@ class MonitorTab(ttk.Frame):
         except (ValueError, BiliApiException) as e:
             self.logger.error(f"无法启动监视任务，API客户端初始化失败: {e}")
         finally:
-            self.app.after(0, self._reset_ui_after_task)
+            self.app.after(0, self._reset_ui_after_task(config.prevent_sleep))
         
     def _set_ui_for_task_start(self):
         """任务开始时更新UI状态"""
@@ -214,8 +218,10 @@ class MonitorTab(ttk.Frame):
         self.log_text.delete('1.0', 'end')
         self.log_text.config(state='disabled')
 
-    def _reset_ui_after_task(self):
+    def _reset_ui_after_task(self, was_sleep_prevented: bool):
         """任务结束后（正常完成或被停止），重置UI组件状态。"""
+        if was_sleep_prevented:
+            PowerManagement.allow_sleep()
         self.set_ui_state(True)
         self.start_button.config(text="开始监视", style="success.TButton")
         self.model.monitor_status_text.set("监视器：已停止")

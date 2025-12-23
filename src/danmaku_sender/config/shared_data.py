@@ -17,6 +17,8 @@ class SenderConfig:
     rest_min: float = 40.0
     rest_max: float = 45.0
 
+    prevent_sleep: bool = True
+
     def is_valid(self) -> bool:
         """自身的数据校验逻辑"""
         basic_valid = (
@@ -47,6 +49,8 @@ class MonitorConfig:
     bili_jct: str = ""
     interval: int = 60
     tolerance: int = 500
+
+    prevent_sleep: bool = True
 
     def is_valid(self) -> bool:
         return (self.interval > 0 and 
@@ -106,6 +110,9 @@ class SharedDataModel:
         self.burst_size = ttk.StringVar(value=str(_default_config.burst_size))
         self.rest_min = ttk.StringVar(value=str(_default_config.rest_min))
         self.rest_max = ttk.StringVar(value=str(_default_config.rest_max))
+
+        # 系统设置 (UI)
+        self.prevent_sleep = ttk.BooleanVar(value=True)
 
         # 监视器设置 (UI)
         self.monitor_interval = ttk.StringVar(value="60")
@@ -169,7 +176,8 @@ class SharedDataModel:
                 max_delay=float(self.max_delay.get()),
                 burst_size=int(self.burst_size.get()),
                 rest_min=float(self.rest_min.get()),
-                rest_max=float(self.rest_max.get())
+                rest_max=float(self.rest_max.get()),
+                prevent_sleep=self.prevent_sleep.get()
             )
             return config
         except ValueError:
@@ -184,7 +192,8 @@ class SharedDataModel:
                 sessdata=self.sessdata.get().strip(),
                 bili_jct=self.bili_jct.get().strip(),
                 interval=int(self.monitor_interval.get()),
-                tolerance=int(self.time_tolerance.get())
+                tolerance=int(self.time_tolerance.get()),
+                prevent_sleep=self.prevent_sleep.get()
             )
             return config
         except ValueError:
