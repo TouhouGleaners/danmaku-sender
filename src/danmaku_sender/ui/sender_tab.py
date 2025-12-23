@@ -30,6 +30,7 @@ class SenderTab(ttk.Frame):
         self.rowconfigure(2, weight=1)
         self.stop_event = threading.Event()
         self.danmaku_parser = DanmakuParser()
+        self._running_task_prevented_sleep = False  # 记录当前运行的任务是否申请了阻止休眠
 
         self._create_widgets()
 
@@ -300,7 +301,8 @@ class SenderTab(ttk.Frame):
         self._set_ui_for_task_start()
         self.stop_event.clear()
 
-        if config.prevent_sleep:
+        self._running_task_prevented_sleep = config.prevent_sleep
+        if self._running_task_prevented_sleep:
             PowerManagement.prevent_sleep()
 
         try:
@@ -312,7 +314,7 @@ class SenderTab(ttk.Frame):
             thread.start()
         except Exception as e:
             self.logger.error(f"【程序崩溃】无法启动后台任务线程: {e}")
-            self._restore_ui_after_task(config.prevent_sleep)
+            self._restore_ui_after_task()
 
     def _task_worker(self, config: SenderConfig, video_state: VideoState):
         """在工作线程中执行弹幕发送任务"""
@@ -343,11 +345,11 @@ class SenderTab(ttk.Frame):
             self.logger.error(f"【程序崩溃】发生未捕获的严重错误: {e}")
         finally:
             if sender:
-                self.app.after(0, lambda: self._finalize_sending_task(sender, config.prevent_sleep))
+                self.app.after(0, lambda: self._finalize_sending_task(sender))
             else:
-                self.app.after(0, lambda: self._restore_ui_after_task(config.prevent_sleep))
+                self.app.after(0, self._restore_ui_after_task)
 
-    def _finalize_sending_task(self, sender: BiliDanmakuSender, was_sleep_prevented: bool):
+    def _finalize_sending_task(self, sender: BiliDanmakuSender):
         """
         在弹幕发送任务完成后，于主线程中执行最终处理。
         此方法负责：
@@ -357,7 +359,7 @@ class SenderTab(ttk.Frame):
         Args:
             sender (BiliDanmakuSender): 执行发送任务的 BiliDanmakuSender 实例。
         """
-        self._restore_ui_after_task(was_sleep_prevented)
+        self._restore_ui_after_task()
 
         if sender.unsent_danmakus:
             self.logger.info(f"检测到 {len(sender.unsent_danmakus)} 条弹幕未发送成功。")
@@ -405,10 +407,11 @@ class SenderTab(ttk.Frame):
         self.model.sender_progress_var.set(0)
         self.model.sender_status_text.set("发送器：运行中...")
 
-    def _restore_ui_after_task(self, was_sleep_prevented: bool):
+    def _restore_ui_after_task(self):
         """任务结束后恢复UI状态"""
-        if was_sleep_prevented:
+        if self._running_task_prevented_sleep:
             PowerManagement.allow_sleep()
+            self._running_task_prevented_sleep = False
         self.start_button.config(state='normal', text="开始任务", command=self.start_task, style="success.TButton")
         self.select_button.config(state='normal')
         self.get_parts_button.config(state='normal')
