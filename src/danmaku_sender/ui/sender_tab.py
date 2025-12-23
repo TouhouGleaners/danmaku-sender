@@ -327,7 +327,7 @@ class SenderTab(ttk.Frame):
                     """一个在后台线程被调用的函数，用于向主线程发送UI更新请求"""
                     if total > 0:
                         progress_percent = (attempted / total) * 100
-                        self.app.after(0, self.model.sender_progress_var.set, progress_percent)
+                        self.app.after(0, lambda: self.model.sender_progress_var.set(progress_percent))
 
                 sender.send_danmaku_from_list(
                     bvid=video_state.bvid, 
@@ -345,7 +345,7 @@ class SenderTab(ttk.Frame):
             if sender:
                 self.app.after(0, lambda: self._finalize_sending_task(sender, config.prevent_sleep))
             else:
-                self.app.after(0, self._restore_ui_after_task(config.prevent_sleep))
+                self.app.after(0, lambda: self._restore_ui_after_task(config.prevent_sleep))
 
     def _finalize_sending_task(self, sender: BiliDanmakuSender, was_sleep_prevented: bool):
         """

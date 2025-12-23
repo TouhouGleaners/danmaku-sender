@@ -197,15 +197,21 @@ class MonitorTab(ttk.Frame):
                     if total_count > 0:
                         progress = (matched_count / total_count) * 100
                         status = f"监视器: 运行中... ({matched_count}/{total_count})"
-                        self.app.after(0, lambda: (self.model.monitor_progress_var.set(progress), self.model.monitor_status_text.set(status)))
+                        self.app.after(0, lambda: (
+                            self.model.monitor_progress_var.set(progress),
+                            self.model.monitor_status_text.set(status)
+                        ))
                     else: 
-                        self.app.after(0, lambda: (self.model.monitor_progress_var.set(0), self.model.monitor_status_text.set("监视器：无弹幕可匹配")))
+                        self.app.after(0, lambda: (
+                            self.model.monitor_progress_var.set(0),
+                            self.model.monitor_status_text.set("监视器：无弹幕可匹配")
+                        ))
 
                 monitor.run(self.stop_monitor_event, progress_updater)
         except (ValueError, BiliApiException) as e:
             self.logger.error(f"无法启动监视任务，API客户端初始化失败: {e}")
         finally:
-            self.app.after(0, self._reset_ui_after_task(config.prevent_sleep))
+            self.app.after(0, lambda: self._reset_ui_after_task(config.prevent_sleep))
         
     def _set_ui_for_task_start(self):
         """任务开始时更新UI状态"""
