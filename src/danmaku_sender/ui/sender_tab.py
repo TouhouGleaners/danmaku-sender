@@ -322,7 +322,7 @@ class SenderTab(ttk.Frame):
         sender = None
 
         try:
-            with BiliApiClient(config.sessdata, config.bili_jct) as api_client:
+            with BiliApiClient(config.sessdata, config.bili_jct, use_system_proxy=config.use_system_proxy) as api_client:
                 sender = BiliDanmakuSender(api_client)
 
                 def _progress_updater(attempted, total):

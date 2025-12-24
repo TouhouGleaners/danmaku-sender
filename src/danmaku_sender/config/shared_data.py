@@ -17,7 +17,11 @@ class SenderConfig:
     rest_min: float = 40.0
     rest_max: float = 45.0
 
+    # 系统设置
     prevent_sleep: bool = True
+
+    # 网络设置
+    use_system_proxy: bool = True
 
     def is_valid(self) -> bool:
         """自身的数据校验逻辑"""
@@ -51,6 +55,7 @@ class MonitorConfig:
     tolerance: int = 500
 
     prevent_sleep: bool = True
+    use_system_proxy: bool = True
 
     def is_valid(self) -> bool:
         return (self.interval > 0 and 
@@ -113,6 +118,7 @@ class SharedDataModel:
 
         # 系统设置 (UI)
         self.prevent_sleep = ttk.BooleanVar(value=True)
+        self.use_system_proxy = ttk.BooleanVar(value=True)
 
         # 监视器设置 (UI)
         self.monitor_interval = ttk.StringVar(value="60")
@@ -177,7 +183,8 @@ class SharedDataModel:
                 burst_size=int(self.burst_size.get()),
                 rest_min=float(self.rest_min.get()),
                 rest_max=float(self.rest_max.get()),
-                prevent_sleep=self.prevent_sleep.get()
+                prevent_sleep=self.prevent_sleep.get(),
+                use_system_proxy=self.use_system_proxy.get()
             )
             return config
         except ValueError:
@@ -193,7 +200,8 @@ class SharedDataModel:
                 bili_jct=self.bili_jct.get().strip(),
                 interval=int(self.monitor_interval.get()),
                 tolerance=int(self.time_tolerance.get()),
-                prevent_sleep=self.prevent_sleep.get()
+                prevent_sleep=self.prevent_sleep.get(),
+                use_system_proxy=self.use_system_proxy.get()
             )
             return config
         except ValueError:
