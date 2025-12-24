@@ -20,4 +20,4 @@ class Links:
     """存放所有外部URL"""
     GITHUB_REPO = "https://github.com/TouhouGleaners/danmaku-sender"
     GITHUB_ISSUES = f"{GITHUB_REPO}/issues"
-    GITHUB_API_LATEST = "https://api.github.com/repos/TouhouGleaners/danmaku-sender/releases/latest"
+    GITHUB_API_LATEST = "https://api.github.com/repos/TouhouGleaners/danmaku-sender/releases"

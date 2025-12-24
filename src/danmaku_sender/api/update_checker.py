@@ -34,7 +34,8 @@ class UpdateChecker:
                 session.trust_env = False
                 session.proxies = {"http": None, "https": None}
 
-            response = session.get(Links.GITHUB_API_LATEST, timeout=10)
+            api_url = Links.GITHUB_API_LATEST
+            response = session.get(f"{api_url}?per_page=1", timeout=10)
 
             if response.status_code != 200:
                 logger.warning(f"检查更新失败: HTTP {response.status_code}")
@@ -45,25 +46,24 @@ class UpdateChecker:
                         parent=app_window
                     ))
                 return
-            data = response.json()
+            data_list = response.json()
+            if not data_list:
+                logger.info("未找到任何发布版本信息。")
+                return
 
-            remote_tag = data.get("tag_name", "")
+            data = data_list[0]
+
+            remote_tag = data.get("tag_name", "").lstrip("v")
             release_notes = data.get("body", "暂无更新日志")
-            html_url = data.get("html_url", Links.GITHUB_REPO)
-
-            download_url = html_url
-            for asset in data.get("assets", []):
-                if asset.get("name", "").lower().endswith(".exe"):
-                    download_url = asset.get("browser_download_url")
-                    break
+            release_url = data.get("html_url", Links.GITHUB_REPO)
 
             local_ver = version.parse(AppInfo.VERSION)
-            remote_ver = version.parse(remote_tag.lstrip("v"))
+            remote_ver = version.parse(remote_tag)
 
             if remote_ver > local_ver:
                 logger.info(f"发现新版本: {remote_tag}")
                 app_window.after(0, lambda: UpdateChecker._show_update_dialog(
-                    app_window, remote_tag, release_notes, download_url
+                    app_window, remote_tag, release_notes, release_url
                 ))
             else:
                 logger.info(f"当前已是最新版本 ({local_ver})")
@@ -101,7 +101,7 @@ class UpdateChecker:
             title="发现新版本",
             message=f"发现新版本: v{ver}\n\n"
                     f"--- 更新内容 ---\n{notes}\n\n"
-                    "是否立即下载？",
+                    "是否前往 GitHub 发布页面下载？",
             parent=parent
         )
         if ask:
