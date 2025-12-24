@@ -151,7 +151,7 @@ class Application(ttk.Window):
         menu_bar.add_cascade(label="帮助", menu=help_menu)
         help_menu.add_command(label=UI.HELP_WINDOW_TITLE, command=self.show_help_window)
         help_menu.add_separator()
-        help_menu.add_command(label="检查新版本", command=self.manual_update_check)
+        help_menu.add_command(label=UI.CHECK_UPDATE_MENU_LABEL, command=self.manual_update_check)
         help_menu.add_separator()
         help_menu.add_command(label=UI.ABOUT_WINDOW_SHORT_TITLE, command=self.show_about_window)
 

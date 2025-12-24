@@ -34,8 +34,8 @@ class UpdateChecker:
                 session.trust_env = False
                 session.proxies = {"http": None, "https": None}
 
-            api_url = Links.GITHUB_API_LATEST
-            response = session.get(f"{api_url}?per_page=1", timeout=10)
+            api_url = f"{Links.GITHUB_API_RELEASES}?per_page=1"
+            response = session.get(api_url, timeout=10)
 
             if response.status_code != 200:
                 logger.warning(f"检查更新失败: HTTP {response.status_code}")
@@ -47,18 +47,22 @@ class UpdateChecker:
                     ))
                 return
             data_list = response.json()
-            if not data_list:
-                logger.info("未找到任何发布版本信息。")
+            if not data_list or not isinstance(data_list, list):
+                logger.warning("未找到任何发布信息")
                 return
 
             data = data_list[0]
 
             remote_tag = data.get("tag_name", "").lstrip("v")
-            release_notes = data.get("body", "暂无更新日志")
+            release_notes = data.get("body") or "暂无更新日志"
             release_url = data.get("html_url", Links.GITHUB_REPO)
 
-            local_ver = version.parse(AppInfo.VERSION)
-            remote_ver = version.parse(remote_tag)
+            try:
+                local_ver = version.parse(AppInfo.VERSION)
+                remote_ver = version.parse(remote_tag)
+            except Exception as e:
+                logger.warning(f"版本号解析失败: {e}")
+                return
 
             if remote_ver > local_ver:
                 logger.info(f"发现新版本: {remote_tag}")
@@ -75,7 +79,6 @@ class UpdateChecker:
         except requests.RequestException as e:
             logger.warning(f"检查更新网络错误: {e}")
             if not quiet:
-                # 只有手动检查时，才给用户详细的“教育性”提示
                 app_window.after(0, lambda: messagebox.showerror(
                     "网络连接失败", 
                     "无法连接到 GitHub 服务器。\n\n"
