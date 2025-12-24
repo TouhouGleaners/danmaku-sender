@@ -15,6 +15,7 @@ from ..ui.settings_tab import SettingsTab
 from ..config.app_config import AppInfo, UI, Links
 from ..config.app_content import HelpText, AboutText
 from ..utils.log_utils import GuiLoggingHandler, DailyLogFileHandler
+from ..api.update_checker import UpdateChecker
 
 
 class Application(ttk.Window):
@@ -31,6 +32,7 @@ class Application(ttk.Window):
         self.create_menu()
         self.setup_logging()
         self.load_and_populate_credentials()
+        self.after(3000, self.run_auto_update_check)
         self.protocol("WM_DELETE_WINDOW", self.on_closing)
 
     def create_widgets(self):
@@ -122,6 +124,16 @@ class Application(ttk.Window):
             self.after(0, _task)
         return _update_log
     
+    def run_auto_update_check(self):
+        """启动时的自动检查 (静默)"""
+        use_proxy = self.shared_data.use_system_proxy.get()
+        UpdateChecker.check_for_updates(self, use_system_proxy=use_proxy, quiet=True)
+
+    def manual_update_check(self):
+        """菜单栏手动检查 (有反馈)"""
+        use_proxy = self.shared_data.use_system_proxy.get()
+        UpdateChecker.check_for_updates(self, use_system_proxy=use_proxy, quiet=False)
+    
     def create_menu(self):
         """创建顶部菜单栏"""
         menu_bar = ttk.Menu(self)
@@ -138,6 +150,8 @@ class Application(ttk.Window):
         help_menu = ttk.Menu(menu_bar, tearoff=0)
         menu_bar.add_cascade(label="帮助", menu=help_menu)
         help_menu.add_command(label=UI.HELP_WINDOW_TITLE, command=self.show_help_window)
+        help_menu.add_separator()
+        help_menu.add_command(label=UI.CHECK_UPDATE_MENU_LABEL, command=self.manual_update_check)
         help_menu.add_separator()
         help_menu.add_command(label=UI.ABOUT_WINDOW_SHORT_TITLE, command=self.show_about_window)
 
