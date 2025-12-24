@@ -65,7 +65,7 @@ class UpdateChecker:
                 return
 
             if remote_ver > local_ver:
-                logger.info(f"发现新版本: {remote_tag}")
+                logger.info(f"发现新版本: v{remote_tag}")
                 app_window.after(0, lambda: UpdateChecker._show_update_dialog(
                     app_window, remote_tag, release_notes, release_url
                 ))
