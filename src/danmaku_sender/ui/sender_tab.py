@@ -10,7 +10,7 @@ from ..api.bili_api_client import BiliApiClient, BiliApiException
 from ..core.bili_sender import BiliDanmakuSender
 from ..core.bili_danmaku_utils import DanmakuParser, create_xml_from_danmakus
 from ..config.shared_data import SenderConfig, VideoState
-from ..utils.system_utils import PowerManagement
+from ..utils.system_utils import KeepSystemAwake
 
 
 class SenderTab(ttk.Frame):
@@ -30,7 +30,6 @@ class SenderTab(ttk.Frame):
         self.rowconfigure(2, weight=1)
         self.stop_event = threading.Event()
         self.danmaku_parser = DanmakuParser()
-        self._running_task_prevented_sleep = False  # 记录当前运行的任务是否申请了阻止休眠
 
         self._create_widgets()
 
@@ -173,6 +172,7 @@ class SenderTab(ttk.Frame):
         bvid = self.model.bvid.get().strip()
         sessdata = self.model.sessdata.get().strip()
         bili_jct = self.model.bili_jct.get().strip()
+        use_system_proxy = self.model.use_system_proxy.get()
 
         if not re.match(r'^BV[0-9A-Za-z]{10}$', bvid):
             self.logger.error("❌【输入错误】BV号格式不正确！应为BV开头的12位字符。")
@@ -188,12 +188,16 @@ class SenderTab(ttk.Frame):
         self.part_combobox.config(state="disabled")
         self.model.video_title.set("（正在获取视频标题...）")
 
-        threading.Thread(target=self._fetch_parts_worker, args=(bvid, sessdata, bili_jct), daemon=True).start()
+        threading.Thread(
+            target=self._fetch_parts_worker,
+            args=(bvid, sessdata, bili_jct, use_system_proxy),
+            daemon=True
+        ).start()
 
-    def _fetch_parts_worker(self, bvid, sessdata, bili_jct):
+    def _fetch_parts_worker(self, bvid, sessdata, bili_jct, use_system_proxy):
         """在工作线程中执行获取分P的API调用"""
         try:
-            with BiliApiClient(sessdata, bili_jct) as api_client:
+            with BiliApiClient(sessdata, bili_jct, use_system_proxy) as api_client:
                 sender = BiliDanmakuSender(api_client)
                 video_info = sender.get_video_info(bvid)
             self.model.video_title.set(video_info.get('title', '未知标题'))
@@ -301,10 +305,6 @@ class SenderTab(ttk.Frame):
         self._set_ui_for_task_start()
         self.stop_event.clear()
 
-        self._running_task_prevented_sleep = config.prevent_sleep
-        if self._running_task_prevented_sleep:
-            PowerManagement.prevent_sleep()
-
         try:
             thread = threading.Thread(
                 target=self._task_worker, 
@@ -322,23 +322,24 @@ class SenderTab(ttk.Frame):
         sender = None
 
         try:
-            with BiliApiClient(config.sessdata, config.bili_jct, use_system_proxy=config.use_system_proxy) as api_client:
-                sender = BiliDanmakuSender(api_client)
+            with KeepSystemAwake(config.prevent_sleep):
+                with BiliApiClient.from_config(config) as api_client:
+                    sender = BiliDanmakuSender(api_client)
 
-                def _progress_updater(attempted, total):
-                    """一个在后台线程被调用的函数，用于向主线程发送UI更新请求"""
-                    if total > 0:
-                        progress_percent = (attempted / total) * 100
-                        self.app.after(0, lambda: self.model.sender_progress_var.set(progress_percent))
+                    def _progress_updater(attempted, total):
+                        """一个在后台线程被调用的函数，用于向主线程发送UI更新请求"""
+                        if total > 0:
+                            progress_percent = (attempted / total) * 100
+                            self.app.after(0, lambda: self.model.sender_progress_var.set(progress_percent))
 
-                sender.send_danmaku_from_list(
-                    bvid=video_state.bvid, 
-                    cid=video_state.selected_cid, 
-                    danmakus=danmakus_to_send, 
-                    config=config, 
-                    stop_event=self.stop_event, 
-                    progress_callback=_progress_updater
-                )
+                    sender.send_danmaku_from_list(
+                        bvid=video_state.bvid, 
+                        cid=video_state.selected_cid, 
+                        danmakus=danmakus_to_send, 
+                        config=config, 
+                        stop_event=self.stop_event, 
+                        progress_callback=_progress_updater
+                    )
         except (BiliApiException, ValueError) as e:
             self.logger.error(f"【任务启动失败】无法初始化API客户端: {e}")
         except Exception as e:
@@ -409,9 +410,6 @@ class SenderTab(ttk.Frame):
 
     def _restore_ui_after_task(self):
         """任务结束后恢复UI状态"""
-        if self._running_task_prevented_sleep:
-            PowerManagement.allow_sleep()
-            self._running_task_prevented_sleep = False
         self.start_button.config(state='normal', text="开始任务", command=self.start_task, style="success.TButton")
         self.select_button.config(state='normal')
         self.get_parts_button.config(state='normal')

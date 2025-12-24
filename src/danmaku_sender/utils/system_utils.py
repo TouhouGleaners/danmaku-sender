@@ -78,3 +78,21 @@ class PowerManagement:
                 logger.info("引用计数归零，已恢复系统正常休眠策略。")
             except Exception as e:
                 logger.error(f"无法恢复休眠策略: {e}")
+
+
+class KeepSystemAwake:
+    """
+    上下文管理器：
+    在代码块执行期间阻止系统休眠 (仅限 Windows)
+    """
+    def __init__(self, enabled: bool = True):
+        self.enabled = enabled
+
+    def __enter__(self):
+        if self.enabled:
+            PowerManagement.prevent_sleep()
+        return self
+    
+    def __exit__(self, exc_type, exc_value, traceback):
+        if self.enabled:
+            PowerManagement.allow_sleep()
