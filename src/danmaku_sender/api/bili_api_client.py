@@ -40,7 +40,19 @@ class BiliApiClient:
         except RuntimeError as e:
             self.logger.critical(f"WBI密钥获取失败: {e}")
             raise BiliApiException(code=-1, message=f"获取WBI签名密钥失败: {e}") from e
-        
+
+    @classmethod
+    def from_config(cls, config):
+        """
+        工厂方法：直接从配置对象创建实例。
+        鸭子类型：只要 config 对象里有 sessdata, bili_jct, use_system_proxy 属性即可。
+        """
+        return cls(
+            sessdata=config.sessdata,
+            bili_jct=config.bili_jct,
+            use_system_proxy=config.use_system_proxy
+        )
+
     def _create_session(self) -> requests.Session:
         """创建一个配置好 Headers 和 Cookies 的 requests.Session 对象"""
         session = requests.Session()
