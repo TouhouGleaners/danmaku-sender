@@ -185,7 +185,7 @@ class MonitorTab(ttk.Frame):
     def _monitor_task(self, video_state: VideoState, config: MonitorConfig):
         """在后台线程中运行的监视核心逻辑"""
         try:
-            with BiliApiClient(config.sessdata, config.bili_jct) as api_client:
+            with BiliApiClient(config.sessdata, config.bili_jct, use_system_proxy=config.use_system_proxy) as api_client:
                 monitor = BiliDanmakuMonitor(
                     api_client=api_client, 
                     cid=video_state.selected_cid, 

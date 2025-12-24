@@ -1,5 +1,6 @@
 import time
 import logging
+
 import requests
 from requests.exceptions import Timeout, ConnectionError, RequestException
 
@@ -24,14 +25,15 @@ class BiliApiClient:
         'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
         'Referer': 'https://www.bilibili.com/'
     }
-    def __init__(self, sessdata: str, bili_jct: str):
+    def __init__(self, sessdata: str, bili_jct: str, use_system_proxy: bool = True):
         if not all([sessdata, bili_jct]):
             raise ValueError("SESSDATA 和 BILI_JCT 不能为空")
         
         self.sessdata = sessdata
         self.bili_jct = bili_jct
-        self.session = self._create_session()
+        self.use_system_proxy = use_system_proxy
         self.logger = logging.getLogger("BiliApiClient")
+        self.session = self._create_session()
 
         try:
             self.wbi_keys = WbiSigner.get_wbi_keys()
@@ -47,6 +49,11 @@ class BiliApiClient:
             'SESSDATA': self.sessdata,
             'bili_jct': self.bili_jct
         })
+
+        if not self.use_system_proxy:
+            self.logger.info("用户已关闭系统代理选项，将强制直连。")
+            session.trust_env = False
+            session.proxies = {"http": None, "https": None}
         return session
     
     def close(self):

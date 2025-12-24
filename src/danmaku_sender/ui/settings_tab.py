@@ -36,9 +36,28 @@ class SettingsTab(ttk.Frame):
         sys_frame.columnconfigure(0, weight=1)
 
         # 阻止系统休眠
-        sleep_chk = ttk.Checkbutton(sys_frame, text="任务运行时阻止电脑休眠", variable=self.model.prevent_sleep, bootstyle="round-toggle")
+        sleep_chk = ttk.Checkbutton(
+            sys_frame,
+            text="任务运行时阻止电脑休眠",
+            variable=self.model.prevent_sleep,
+            bootstyle="round-toggle"
+        )
         sleep_chk.grid(row=0, column=0, sticky="w", padx=5)
         ToolTip(sleep_chk, "勾选后，在发送或监视弹幕时，将禁止Windows进入睡眠状态。\n(保持网络和CPU运行，但允许屏幕关闭)")
+
+        # --- 网络设置区 ---
+        net_frame = ttk.Labelframe(self, text="网络设置", padding=15)
+        net_frame.grid(row=2, column=0, sticky="ew", padx=10, pady=5)
+        net_frame.columnconfigure(0, weight=1)
+
+        proxy_chk = ttk.Checkbutton(
+            net_frame, 
+            text="使用系统代理 (兼容VPN/加速器)", 
+            variable=self.model.use_system_proxy, 
+            bootstyle="round-toggle"
+        )
+        proxy_chk.grid(row=0, column=0, sticky="w", padx=5)
+        ToolTip(proxy_chk, "默认开启。\n如果你开启了VPN/加速器但无法发送弹幕，尝试【取消勾选】此项以强制直连。")
 
         # 提示信息
         info_label = ttk.Label(
@@ -46,4 +65,4 @@ class SettingsTab(ttk.Frame):
             text="ℹ️ 提示：凭证修改后会自动保存，重启软件后依然有效。",
             bootstyle="secondary"
         )
-        info_label.grid(row=2, column=0, sticky="w", padx=15, pady=(10, 5))
+        info_label.grid(row=3, column=0, sticky="w", padx=15, pady=(10, 5))
