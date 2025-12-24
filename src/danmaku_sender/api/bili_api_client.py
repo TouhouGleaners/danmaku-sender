@@ -25,7 +25,7 @@ class BiliApiClient:
         'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
         'Referer': 'https://www.bilibili.com/'
     }
-    def __init__(self, sessdata: str, bili_jct: str, use_system_proxy: bool = True):
+    def __init__(self, sessdata: str, bili_jct: str, use_system_proxy: bool):
         if not all([sessdata, bili_jct]):
             raise ValueError("SESSDATA 和 BILI_JCT 不能为空")
         
