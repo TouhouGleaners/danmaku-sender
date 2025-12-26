@@ -369,6 +369,13 @@ class SenderTab(ttk.Frame):
 
     def _ask_save_unsent_danmakus(self, sender: BiliDanmakuSender):
         """独立的逻辑处理函数，仅负责弹窗和保存"""
+        if not self.winfo_exists():
+            return
+
+        if not sender.unsent_danmakus:
+            self.logger.info("所有弹幕均已成功发送，或无未发送弹幕。")
+            return
+        
         self.logger.info(f"检测到 {len(sender.unsent_danmakus)} 条弹幕未发送成功。")
 
         should_save = messagebox.askyesno(
@@ -378,7 +385,7 @@ class SenderTab(ttk.Frame):
             parent=self.app
         )
 
-        if should_save is True:
+        if should_save:
             file_path_str = filedialog.asksaveasfilename(
                 title="保存未发送弹幕为XML文件",
                 defaultextension=".xml",
@@ -390,10 +397,8 @@ class SenderTab(ttk.Frame):
                 self.logger.info(f"已将未发送弹幕保存到 '{file_path_str}'。")
             else:
                 self.logger.info("用户取消了文件路径选择。")
-        elif should_save is False:
-            self.logger.info("用户选择不保存未发送弹幕。")
         else:
-            self.logger.info("用户关闭了弹窗，未选择保存或不保存未发送弹幕。")
+            self.logger.info("用户选择不保存未发送弹幕。")
 
     def stop_task(self):
         """停止发送弹幕任务的逻辑"""
