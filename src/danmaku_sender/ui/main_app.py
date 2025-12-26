@@ -1,3 +1,4 @@
+import os
 import logging
 from pathlib import Path
 from platformdirs import user_data_dir
@@ -164,7 +165,13 @@ class Application(ttk.Window):
     def open_log_folder(self):
         """在文件浏览器中打开日志文件夹"""
         log_path = self.get_log_directory()
-        webbrowser.open(log_path.as_uri())
+        try:
+            if log_path.exists():
+                os.startfile(log_path)
+            else:
+                self.logger.error(f"日志文件夹不存在: {log_path}")
+        except Exception as e:
+            self.logger.error(f"无法打开日志文件夹: {e}")
 
     def show_help_window(self):
         """显示使用说明窗口"""
