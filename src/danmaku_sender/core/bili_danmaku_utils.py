@@ -289,7 +289,8 @@ def create_xml_from_danmakus(danmakus: list[UnsentDanmakusRecord], filepath: str
 
     # 写入 XML
     for reason, dms in grouped_data.items():
-        root.append(ET.Comment(f' === 失败原因: {reason} (共 {len(dms)} 条) === '))
+        safe_reason = reason.replace('--', ' - ').strip('-')
+        root.append(ET.Comment(f' === 失败原因: {safe_reason} (共 {len(dms)} 条) === '))
         
         # 组内按视频时间排序，方便用户后续查看/修改
         dms.sort(key=lambda x: x.get('progress', 0))

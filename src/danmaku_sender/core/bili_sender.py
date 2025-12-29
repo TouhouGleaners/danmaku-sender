@@ -178,8 +178,10 @@ class BiliDanmakuSender:
             for item in self.unsent_danmakus:
                 r = item['reason']
                 reason_counts[r] = reason_counts.get(r, 0) + 1
+
+            sorted_reasons = sorted(reason_counts.items(), key=lambda x: x[1], reverse=True)
             
-            for reason, count in reason_counts.items():
+            for reason, count in sorted_reasons():
                 self.logger.warning(f"  > {reason}: {count} 条")
             self.logger.info("--------------------")
 
