@@ -15,7 +15,7 @@ class BiliDanmakuSender:
         self.logger = logging.getLogger("DanmakuSender")
         self.api_client = api_client
         self.danmaku_parser = DanmakuParser()
-        self.unsent_danmakus = []
+        self.unsent_danmakus: list[dict[str, dict | str]] = []
 
     def get_video_info(self, bvid: str) -> dict:
         """根据BVID获取视频详细信息"""
@@ -86,6 +86,14 @@ class BiliDanmakuSender:
             return False, False  # 失败，但不是致命错误
         return True, False  # 成功发送
     
+    def _record_unsent_danmakus(self, danmakus: dict | list[dict], reason: str) -> None:
+        """记录未发送成功的弹幕及其原因"""
+        if isinstance(danmakus, dict):
+            self.unsent_danmakus.append({'dm': danmakus, 'reason': reason})
+        else:
+            for dm in danmakus:
+                self.unsent_danmakus.append({'dm': dm, 'reason': reason})
+    
     def send_danmaku_from_list(self, bvid: str, cid: int, danmakus: list, config: 'SenderConfig', stop_event: Event, progress_callback=None):
         """从一个弹幕字典列表发送弹幕，并响应停止事件"""
         self.logger.info(f"开始发送... CID: {cid}")
@@ -115,7 +123,7 @@ class BiliDanmakuSender:
 
         for i, dm in enumerate(danmakus):
             if stop_event.is_set():
-                self.unsent_danmakus.extend([{'dm': d, 'reason': '任务手动停止'} for d in danmakus[i:]])
+                self._record_unsent_danmakus(danmakus[i:], "任务手动停止")
                 break
             attempted_count += 1
 
@@ -128,11 +136,9 @@ class BiliDanmakuSender:
 
             sent_successfully, is_fatal = self._process_send_result(result)
             if is_fatal:
-                fatal_error_occurred = True
-                f_reason = f"致命错误: {result.display_message}"
-                self.unsent_danmakus.append({'dm': dm, 'reason': f_reason})
-                # 将后续所有未尝试的弹幕也打上标签
-                self.unsent_danmakus.extend([{'dm': d, 'reason': '由于前序致命错误停止任务'} for d in danmakus[i+1:]])
+                fatal_err = f"致命错误: {result.display_message}"
+                self._record_unsent_danmakus(dm, fatal_err)
+                self._record_unsent_danmakus(danmakus[i+1:], "由于前序致命错误停止任务")
                 break
 
             if not sent_successfully:
@@ -142,7 +148,7 @@ class BiliDanmakuSender:
             
             if i < total - 1 and delay_manager.wait_and_check_stop(stop_event):
                 # 如果在休息时被停止，记录后续弹幕
-                self.unsent_danmakus.extend([{'dm': d, 'reason': '任务手动停止'} for d in danmakus[i+1:]])
+                self._record_unsent_danmakus(danmakus[i+1:], "任务手动停止")
                 break
 
         self._log_send_summary(total, attempted_count, success_count, stop_event, fatal_error_occurred)
@@ -165,12 +171,12 @@ class BiliDanmakuSender:
 
         if self.unsent_danmakus:
             self.logger.info("--- 失败原因汇总 ---")
-            counts = {}
+            reason_counts: dict[str, int] = {}
             for item in self.unsent_danmakus:
-                r = item['reason']
-                counts[r] = counts.get(r, 0) + 1
+                r = str(item['reason'])
+                reason_counts[r] = reason_counts.get(r, 0) + 1
             
-            for reason, count in counts.items():
+            for reason, count in reason_counts.items():
                 self.logger.warning(f"  > {reason}: {count} 条")
             self.logger.info("--------------------")
 
