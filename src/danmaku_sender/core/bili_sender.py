@@ -2,9 +2,11 @@ import time
 import logging
 from threading import Event
 
+from typing import TypedDict
+
 from ..api.bili_api_client import BiliApiClient, BiliApiException
 from ..config.shared_data import SenderConfig
-from ..core.bili_danmaku_utils import BiliDmErrorCode, DanmakuSendResult, DanmakuParser
+from ..core.bili_danmaku_utils import BiliDmErrorCode, DanmakuSendResult, DanmakuParser, UnsentDanmakusRecord
 from ..core.delay_manager import DelayManager
 from ..utils.notification_utils import send_windows_notification
 
@@ -15,7 +17,7 @@ class BiliDanmakuSender:
         self.logger = logging.getLogger("DanmakuSender")
         self.api_client = api_client
         self.danmaku_parser = DanmakuParser()
-        self.unsent_danmakus = []
+        self.unsent_danmakus: list[UnsentDanmakusRecord] = []
 
     def get_video_info(self, bvid: str) -> dict:
         """根据BVID获取视频详细信息"""
@@ -86,6 +88,14 @@ class BiliDanmakuSender:
             return False, False  # 失败，但不是致命错误
         return True, False  # 成功发送
     
+    def _record_unsent_danmakus(self, danmakus: dict | list[dict], reason: str) -> None:
+        """记录未发送成功的弹幕及其原因"""
+        if isinstance(danmakus, dict):
+            self.unsent_danmakus.append({'dm': danmakus, 'reason': reason})
+        else:
+            for dm in danmakus:
+                self.unsent_danmakus.append({'dm': dm, 'reason': reason})
+    
     def send_danmaku_from_list(self, bvid: str, cid: int, danmakus: list, config: 'SenderConfig', stop_event: Event, progress_callback=None):
         """从一个弹幕字典列表发送弹幕，并响应停止事件"""
         self.logger.info(f"开始发送... CID: {cid}")
@@ -115,8 +125,7 @@ class BiliDanmakuSender:
 
         for i, dm in enumerate(danmakus):
             if stop_event.is_set():
-                self.logger.info("任务被用户手动停止。")
-                self.unsent_danmakus.extend(danmakus[i:])  # 记录剩余未发送的弹幕
+                self._record_unsent_danmakus(danmakus[i:], "任务手动停止")
                 break
             attempted_count += 1
 
@@ -129,27 +138,22 @@ class BiliDanmakuSender:
 
             sent_successfully, is_fatal = self._process_send_result(result)
             if is_fatal:
-                fatal_error_occurred = True
-                self.unsent_danmakus.append(dm)
-                self.unsent_danmakus.extend(danmakus[i+1:])
+                fatal_error_occurred = True 
+                fatal_err = f"致命错误: {result.display_message}"
+                self._record_unsent_danmakus(dm, fatal_err)
+                self._record_unsent_danmakus(danmakus[i+1:], "由于前序致命错误停止任务")
                 break
 
             if not sent_successfully:
-                self.unsent_danmakus.append(dm)
+                self._record_unsent_danmakus(dm, result.display_message)
             else:
                 success_count += 1
             
-            if stop_event.is_set():
-                self.logger.info("任务被用户手动停止。")
-                self.unsent_danmakus.extend(danmakus[i+1:])
+            if i < total - 1 and delay_manager.wait_and_check_stop(stop_event):
+                # 如果在休息时被停止，记录后续弹幕
+                self._record_unsent_danmakus(danmakus[i+1:], "任务手动停止")
                 break
 
-            if i < total - 1:
-                should_stop = delay_manager.wait_and_check_stop(stop_event)
-                if should_stop:
-                    self.logger.info("任务被用户手动停止。")
-                    self.unsent_danmakus.extend(danmakus[i+1:])
-                    break
         self._log_send_summary(total, attempted_count, success_count, stop_event, fatal_error_occurred)
 
     def _log_send_summary(self, total: int, attempted_count: int, success_count: int, stop_event: Event, fatal_error_occurred: bool):
@@ -168,6 +172,20 @@ class BiliDanmakuSender:
         self.logger.info(f"发送成功: {success_count} 条")
         self.logger.info(f"发送失败: {attempted_count - success_count} 条")
 
+        if self.unsent_danmakus:
+            self.logger.info("--- 失败原因汇总 ---")
+            reason_counts: dict[str, int] = {}
+            for item in self.unsent_danmakus:
+                r = item['reason']
+                reason_counts[r] = reason_counts.get(r, 0) + 1
+            
+            sorted_reasons = sorted(reason_counts.items(), key=lambda x: x[1], reverse=True)
+            
+            for reason, count in sorted_reasons:
+                self.logger.warning(f"  > {reason}: {count} 条")
+            self.logger.info("--------------------")
+
+        # 发送Windows通知
         notification_title = "弹幕发送任务已结束"
         summary_message = (f"成功: {success_count} / 尝试: {attempted_count} / 总计: {total}")
 
