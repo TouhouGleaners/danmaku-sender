@@ -52,7 +52,7 @@ class ValidatorTab(ttk.Frame):
         tree_frame.pack(expand=True, fill=BOTH, padx=5, pady=10)
         
         columns = ("row_idx", "time", "issue", "content")
-        self.tree = ttk.Treeview(tree_frame, columns=columns, show="headings", bootstyle=SECONDARY)
+        self.tree = ttk.Treeview(tree_frame, columns=columns, show="headings", bootstyle=PRIMARY)
         
         self.tree.heading("row_idx", text="行号")
         self.tree.heading("time", text="时间")
@@ -128,8 +128,8 @@ class ValidatorTab(ttk.Frame):
             values = self.tree.item(item_id, "values")
             content = values[3]
 
-            if '\\n' in content or '/n' in content:
-                new_content = content.replace('\\n', ' ').replace('/n', ' ')
+            if '\n' in content or '\\n' in content or '/n' in content:
+                new_content = content.replace('\n', '').replace('\\n', '').replace('/n', '')
                 self.tree.set(item_id, column="content", value=new_content)
                 if not new_content.strip():
                     # 如果处理后只剩空白，直接从列表中删除
@@ -185,7 +185,7 @@ class ValidatorTab(ttk.Frame):
             prompt="请输入修改后的弹幕内容：", 
             title="编辑弹幕", 
             initialvalue=current_text,
-            parent=self.run_validation_button # 让弹窗显示在主窗口附近
+            parent=self.app
         )
         
         if new_text is not None:
