@@ -23,7 +23,7 @@ class GuiLoggingHandler(logging.Handler):
 
         target_func = None
 
-        if record.name in ("SenderTab", "ValidatorTab", "DanmakuSender", "DanmakuParser", "BiliUtils"):
+        if record.name in ("SenderTab", "DanmakuSender", "DanmakuParser", "BiliUtils"):
             target_func = self.output_targets.get("sender_tab")
         elif record.name == "MonitorTab":
             target_func = self.output_targets.get("monitor_tab")
