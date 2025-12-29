@@ -2,9 +2,11 @@ import time
 import logging
 from threading import Event
 
+from typing import TypedDict
+
 from ..api.bili_api_client import BiliApiClient, BiliApiException
 from ..config.shared_data import SenderConfig
-from ..core.bili_danmaku_utils import BiliDmErrorCode, DanmakuSendResult, DanmakuParser
+from ..core.bili_danmaku_utils import BiliDmErrorCode, DanmakuSendResult, DanmakuParser, UnsentDanmakusRecord
 from ..core.delay_manager import DelayManager
 from ..utils.notification_utils import send_windows_notification
 
@@ -15,7 +17,7 @@ class BiliDanmakuSender:
         self.logger = logging.getLogger("DanmakuSender")
         self.api_client = api_client
         self.danmaku_parser = DanmakuParser()
-        self.unsent_danmakus: list[dict[str, dict | str]] = []
+        self.unsent_danmakus: list[UnsentDanmakusRecord] = []
 
     def get_video_info(self, bvid: str) -> dict:
         """根据BVID获取视频详细信息"""
@@ -136,13 +138,14 @@ class BiliDanmakuSender:
 
             sent_successfully, is_fatal = self._process_send_result(result)
             if is_fatal:
+                fatal_error_occurred = True 
                 fatal_err = f"致命错误: {result.display_message}"
                 self._record_unsent_danmakus(dm, fatal_err)
                 self._record_unsent_danmakus(danmakus[i+1:], "由于前序致命错误停止任务")
                 break
 
             if not sent_successfully:
-                self.unsent_danmakus.append({'dm': dm, 'reason': result.display_message})
+                self._record_unsent_danmakus(dm, result.display_message)
             else:
                 success_count += 1
             
@@ -173,7 +176,7 @@ class BiliDanmakuSender:
             self.logger.info("--- 失败原因汇总 ---")
             reason_counts: dict[str, int] = {}
             for item in self.unsent_danmakus:
-                r = str(item['reason'])
+                r = item['reason']
                 reason_counts[r] = reason_counts.get(r, 0) + 1
             
             for reason, count in reason_counts.items():

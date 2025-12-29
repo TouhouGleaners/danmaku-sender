@@ -4,10 +4,17 @@ import xml.etree.ElementTree as ET
 from enum import Enum
 from xml.dom import minidom
 
+from typing import TypedDict
+
 from ..api.bili_api_client import BiliApiException
 
 
 logger = logging.getLogger("BiliUtils")
+
+class UnsentDanmakusRecord(TypedDict):
+    dm: dict
+    reason: str
+
 
 class BiliDmErrorCode(Enum):
     """
@@ -265,7 +272,7 @@ def validate_danmaku_list(danmaku_list: list, video_duration_ms: int = -1) -> li
     
     return problems
 
-def create_xml_from_danmakus(danmakus: list[dict], filepath: str) -> None:
+def create_xml_from_danmakus(danmakus: list[UnsentDanmakusRecord], filepath: str) -> None:
     """
     将弹幕字典列表转换为B站XML格式并保存到文件。
     期望输入: [{'dm': dict, 'reason': str}, ...]
