@@ -154,6 +154,7 @@ class ValidatorSession:
             # 弹幕原本有问题的，检查 changes_map
             if i in changes_map:
                 issue_record = changes_map[i]
+
                 if issue_record['is_deleted']:
                     deleted_count += 1
                 else:
@@ -165,8 +166,11 @@ class ValidatorSession:
             else:
                 # 理论不可达
                 # 弹幕原本有问题，但 changes_map 里找不到它
-                self.logger.warning(f"数据不一致警告: 索引 {i} 的弹幕被标记为无效，但在修改记录中未找到。已强制保留原样。")
-                new_list.append(dm)
+                self.logger.error(
+                    f"严重错误: 索引 {i} 的弹幕被标记为无效(is_valid=False)，"
+                    f"但在修改记录中丢失。已自动移除该条目以阻断风险。"
+                )
+                deleted_count += 1
 
         self.logger.info(
             f"应用修改结果汇总: 原总数={len(self.original_snapshot)} | "
