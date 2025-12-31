@@ -1,23 +1,24 @@
 import logging
-import copy
+from tkinter import Menu
+
 import ttkbootstrap as ttk
 from ttkbootstrap.constants import *
 from ttkbootstrap.dialogs import Messagebox, Querybox
-from tkinter import Menu
 
-from ..core.bili_danmaku_utils import validate_danmaku_list, format_ms_to_hhmmss
+from ..core.bili_danmaku_utils import format_ms_to_hhmmss
 from ..config.shared_data import SharedDataModel
+from ..core.validator_session import ValidatorSession
 
 
 class ValidatorTab(ttk.Frame):
-    """用于验证和修改弹幕的UI标签页"""
+    """用于验证和修改弹幕的UI标签页 (View层)"""
     def __init__(self, parent, model: SharedDataModel, app):
         super().__init__(parent, padding=15)
         self.model = model
         self.app = app
         self.logger = logging.getLogger("ValidatorTab")
-        self.original_danmakus_snapshot = []
-        self.has_unsaved_changes = False
+        
+        self.session = ValidatorSession(model)
 
         self.columnconfigure(0, weight=1)
         self.rowconfigure(1, weight=1)
@@ -86,123 +87,88 @@ class ValidatorTab(ttk.Frame):
         self.apply_button.pack(side=RIGHT)
 
     def run_validation(self):
-        """运行弹幕验证并显示结果"""
+        """运行弹幕验证"""
         if not self.model.loaded_danmakus:
             Messagebox.show_warning("请先在 “发射器” 页面加载弹幕文件。", "无法验证", parent=self.app)
             self.status_label.config(text="验证失败: 未加载文件", bootstyle=DANGER)
             return
         
         if self.model.selected_cid is None:
-            Messagebox.show_warning("请先在 “发射器” 页面选择一个分P。\n（需要分P时长来检查时间戳）", "无法验证", parent=self.app)
+            Messagebox.show_warning("请先在 “发射器” 页面选择一个分P。", "无法验证", parent=self.app)
             self.status_label.config(text="验证失败: 未选择分P", bootstyle=DANGER)
             return
         
-        if self.has_unsaved_changes:
-            do_continue = Messagebox.okcancel(
-                message="⚠️ 警告：当前有未应用的修改，\n\n继续验证将丢弃这些修改。是否继续？", 
-                title="确认继续", 
-                parent=self.app
-            )
-            if not do_continue:
+        if self.session.is_dirty:
+            if not Messagebox.okcancel("⚠️ 警告：当前有未应用的修改，继续验证将丢弃这些修改。是否继续？", "确认继续", parent=self.app):
                 return
             
-        # 重置状态
-        self.has_unsaved_changes = False
         self.status_label.config(text="正在验证...", bootstyle=SECONDARY)
-        self.tree.delete(*self.tree.get_children())
+        has_issues = self.session.load_and_validate(self.model.selected_part_duration_ms)
+        self._refresh_tree_view()
         
-        # 创建快照，防止直接修改 SharedModel
-        self.original_danmakus_snapshot = copy.deepcopy(self.model.loaded_danmakus)
-        duration_ms = self.model.selected_part_duration_ms
-
-        self.logger.info(f"开始验证弹幕，共 {len(self.model.loaded_danmakus)} 条，分P时长 {duration_ms / 1000} 秒。")
-        
-        issues = validate_danmaku_list(self.original_danmakus_snapshot, duration_ms)
-        if not issues:
+        if not has_issues:
             self.status_label.config(text="✅ 验证通过: 所有弹幕均符合规范！", bootstyle=SUCCESS)
             Messagebox.show_info("验证通过", "所有弹幕均符合规范！", parent=self.app)
-            self._set_action_buttons_state(False) # 禁用操作按钮
+            self._set_action_buttons_state(False)
         else:
-            self.status_label.config(text=f"❌ 发现 {len(issues)} 条问题弹幕，请处理。", bootstyle=DANGER)
+            self.status_label.config(text=f"❌ 发现问题弹幕，请处理。", bootstyle=DANGER)
+            self._set_action_buttons_state(True)
 
-            for issue in issues:
-                self.tree.insert("", "end", iid=str(issue['original_index']), values=(
-                    issue['original_index'] + 1,
-                    format_ms_to_hhmmss(issue['danmaku'].get('progress', 0)),
-                    issue['reason'],
-                    issue['danmaku']['msg']
-                ))
+    def _refresh_tree_view(self):
+        """刷新Treeview中的数据"""
+        self.tree.delete(*self.tree.get_children())
+        
+        items = self.session.get_display_items()
 
-            self._set_action_buttons_state(True) # 启用操作按钮
-
-    def _mark_as_dirty(self):
-        """标记当前有未保存的修改"""
-        self.has_unsaved_changes = True
-        self.status_label.config(text="⚠️ 有未应用的修改，请点击“应用所有修改”按钮。", bootstyle=WARNING)
+        for item in items:
+            self.tree.insert("", END, iid=str(item['original_index']), values=(
+                item['original_index'] + 1,
+                format_ms_to_hhmmss(item['time_ms']),
+                item['reason'],
+                item['current_content']
+            ))
+        
+        if self.session.is_dirty:
+            self.status_label.config(text="⚠️ 有未应用的修改！请点击“应用所有修改”按钮。", bootstyle=WARNING)
 
     def batch_remove_newlines(self):
         """批量去除所有问题弹幕中的换行符"""
-        modified_count = 0
-        deleted_count = 0
+        modified_count, deleted_count = self.session.batch_remove_newlines()
 
-        for item_id in self.tree.get_children():
-            values = self.tree.item(item_id, "values")
-            content = values[3]
-
-            if '\n' in content or '\\n' in content or '/n' in content:
-                new_content = content.replace('\n', '').replace('\\n', '').replace('/n', '')
-                if not new_content.strip():
-                    # 如果处理后只剩空白，直接从列表中删除
-                    self.tree.delete(item_id)
-                    deleted_count += 1
-                else:
-                    # 如果不为空，更新内容
-                    self.tree.set(item_id, column="content", value=new_content)
-                    modified_count += 1
-        
         if modified_count > 0 or deleted_count > 0:
-            self._mark_as_dirty()
-            msg = f"批量处理完成！\n\n- 内容修复: {modified_count} 条\n- 变成空白已删除: {deleted_count} 条"
-            Messagebox.show_info(msg, "处理结果", parent=self.app)
+            self._refresh_tree_view()
+            Messagebox.show_info(
+                message=f"批量处理完成！\n修复: {modified_count} 条 | 删除: {deleted_count} 条",
+                title="处理结果",
+                parent=self.app
+            )
         else:
             Messagebox.show_info("未发现包含换行符的弹幕。", "无变化", parent=self.app)
 
     def batch_truncate_length(self):
         """批量截断所有过长弹幕 (>100字)"""
-        count = 0
-        for item_id in self.tree.get_children():
-            values = self.tree.item(item_id, "values")
-            content = values[3]
+        count = self.session.batch_truncate_length()
 
-            if len(content) > 100:
-                new_content = content[:100]
-                self.tree.set(item_id, column="content", value=new_content)
-                count += 1
-        
-        self._show_batch_result(count, "过长内容")
-
-    def _show_batch_result(self, count: int, action_name: str):
         if count > 0:
-            self._mark_as_dirty()
-            Messagebox.show_info(f"已批量处理 {count} 条弹幕 ({action_name})。", "处理完成", parent=self.app)
+            self._refresh_tree_view()
+            Messagebox.show_info(f"已批量截断 {count} 条过长弹幕 (内容)。", "处理完成", parent=self.app)
         else:
-            Messagebox.show_info(f"未发现需要进行 ({action_name}) 处理的弹幕。", "无变化", parent=self.app)
+            Messagebox.show_info("未发现过长弹幕。", "无变化", parent=self.app)
 
     def on_tree_double_click(self, event):
         """双击单元格进行编辑"""
         region = self.tree.identify_region(event.x, event.y)
-        if region != "cell": return
-        
-        column = self.tree.identify_column(event.x)
-        if column != "#4": return # 只允许编辑内容列
-        
-        selected_iid = self.tree.focus()
-        if not selected_iid: return
-        
-        # 获取当前值
-        current_text = self.tree.item(selected_iid, "values")[3]
+        if region != "cell":
+            return
 
-        # 弹出输入框让用户编辑
+        if self.tree.identify_column(event.x) != "#4":
+            return
+
+        selected_iid = self.tree.focus()
+        if not selected_iid:
+            return
+
+        current_text = self.tree.item(selected_iid, "values")[3]  # 获取当前值
         new_text = Querybox.get_string(
             prompt="请输入修改后的弹幕内容：", 
             title="编辑弹幕", 
@@ -211,17 +177,17 @@ class ValidatorTab(ttk.Frame):
         )
         
         if new_text is not None:
-            # 去除首尾空格，防止误操作
             clean_text = new_text.strip()
+            idx = int(selected_iid)
+
             if clean_text:
                 if clean_text != current_text:
-                    self.tree.set(selected_iid, column="content", value=clean_text)
-                    self._mark_as_dirty()
+                    self.session.update_item_content(idx, clean_text)
+                    self._refresh_tree_view()
             else:
-                # 如果用户把内容删光了点确定，询问是否要删除这条
                 if Messagebox.okcancel("内容为空，是否删除该条弹幕？", "确认删除", parent=self.app):
-                    self.tree.delete(selected_iid)
-                    self._mark_as_dirty()
+                    self.session.delete_item(idx)
+                    self._refresh_tree_view()
 
     def delete_selected_item(self):
         """删除在Treeview中选中的条目"""
@@ -230,61 +196,27 @@ class ValidatorTab(ttk.Frame):
             Messagebox.show_warning("请先选择要删除的弹幕条目。", "未选择", parent=self.app)
             return
         
-        for item in selected_items:
-            self.tree.delete(item)
-
-        if selected_items:
-            self._mark_as_dirty()
+        for iid in selected_items:
+            self.session.delete_item(int(iid))
+            
+        self._refresh_tree_view()
 
     def apply_changes(self):
-        """应用更改，重建并更新共享模型中的弹幕列表"""
-        if not self.original_danmakus_snapshot:
+        """应用更改"""
+        if not self.session.original_snapshot:
             Messagebox.show_warning("请先运行一次验证，再应用修改。", "未进行验证", parent=self.app)
             return
         
-        # 获取所有还在列表里的问题弹幕 (ID -> 最新内容)
-        remaining_issues_map = {}
-        for item_id in self.tree.get_children():
-            values = self.tree.item(item_id, "values")
-            new_msg = values[3]
-            remaining_issues_map[int(item_id)] = new_msg
-
-        # 重建列表
-        new_danmaku_list = []
-        deleted_count = 0
-        fixed_count = 0
-
-        for i, dm_snapshot in enumerate(self.original_danmakus_snapshot):
-            # 如果它原本就是合法的，直接保留
-            if dm_snapshot.get('is_valid', False):
-                new_danmaku_list.append(dm_snapshot)
-                continue
-            
-            # 如果它是不合法的
-            if i in remaining_issues_map:
-                # 还在列表里 -> 说明用户修改了它 (或者没修直接点应用，也算保留)
-                # 使用修改后的内容
-                dm_snapshot['msg'] = remaining_issues_map[i]
-                # 假设只要还在列表里，用户就认可了它的内容，我们标记为有效
-                dm_snapshot['is_valid'] = True 
-                new_danmaku_list.append(dm_snapshot)
-                fixed_count += 1
-            else:
-                # 不在列表里 -> 说明用户把它删了
-                deleted_count += 1
+        total, fixed, deleted = self.session.apply_changes()
         
-        self.model.loaded_danmakus = new_danmaku_list
-        
-        self.logger.info(f"修改已应用: 修复 {fixed_count} 条, 删除 {deleted_count} 条。")
+        self.logger.info(f"修改已应用: 修复 {fixed}, 删除 {deleted}")
         Messagebox.show_info( 
-            f"已更新发送队列！\n\n保留(修复): {fixed_count} 条\n移除(删除): {deleted_count} 条\n\n现在的弹幕总数: {len(new_danmaku_list)}", 
+            f"已更新发送队列！\n\n保留(修复): {fixed} 条 | 移除(删除): {deleted} 条\n\n现在的弹幕总数: {total}", 
             "应用成功",
             parent=self.app
         )
-        
-        self.has_unsaved_changes = False
-        self.tree.delete(*self.tree.get_children())
-        self.original_danmakus_snapshot = []
+
+        self._refresh_tree_view()
         self.status_label.config(text="修改已应用。", bootstyle=SECONDARY)
         self._set_action_buttons_state(False)
 
