@@ -87,6 +87,16 @@ class ValidatorTab(ttk.Frame):
 
     def run_validation(self):
         """运行弹幕验证并显示结果"""
+        if not self.model.loaded_danmakus:
+            Messagebox.show_warning("请先在 “发射器” 页面加载弹幕文件。", "无法验证", parent=self.app)
+            self.status_label.config(text="验证失败: 未加载文件", bootstyle=DANGER)
+            return
+        
+        if self.model.selected_cid is None:
+            Messagebox.show_warning("请先在 “发射器” 页面选择一个分P。\n（需要分P时长来检查时间戳）", "无法验证", parent=self.app)
+            self.status_label.config(text="验证失败: 未选择分P", bootstyle=DANGER)
+            return
+        
         if self.has_unsaved_changes:
             do_continue = Messagebox.okcancel(
                 message="⚠️ 警告：当前有未应用的修改，\n\n继续验证将丢弃这些修改。是否继续？", 
@@ -100,16 +110,6 @@ class ValidatorTab(ttk.Frame):
         self.has_unsaved_changes = False
         self.status_label.config(text="正在验证...", bootstyle=SECONDARY)
         self.tree.delete(*self.tree.get_children())
-
-        if not self.model.loaded_danmakus:
-            Messagebox.show_warning("请先在 “发射器” 页面加载弹幕文件。", "无法验证", parent=self.app)
-            self.status_label.config(text="验证失败: 未加载文件", bootstyle=DANGER)
-            return
-        
-        if self.model.selected_cid is None:
-            Messagebox.show_warning("请先在 “发射器” 页面选择一个分P。\n（需要分P时长来检查时间戳）", "无法验证", parent=self.app)
-            self.status_label.config(text="验证失败: 未选择分P", bootstyle=DANGER)
-            return
         
         # 创建快照，防止直接修改 SharedModel
         self.original_danmakus_snapshot = copy.deepcopy(self.model.loaded_danmakus)
