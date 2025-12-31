@@ -174,10 +174,11 @@ class ValidatorSession:
                 # 理论不可达
                 # 弹幕原本有问题，但 changes_map 里找不到它
                 self.logger.error(
-                    f"严重错误: 索引 {i} 的弹幕被标记为无效(is_valid=False)，"
-                    f"但在修改记录中丢失。已自动移除该条目以阻断风险。"
+                    f"数据一致性严重错误: 索引 {i} 的弹幕被标记为无效(is_valid=False)，"
+                    f"但在修改记录中丢失。已强制保留原条目以避免数据丢失。"
                 )
-                deleted_count += 1
+                new_list.append(dm)
+                kept_count += 1  # 算作保留
 
         self.logger.info(
             f"应用修改结果汇总: 原总数={len(self.original_snapshot)} | "
