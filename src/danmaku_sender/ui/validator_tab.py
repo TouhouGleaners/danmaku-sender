@@ -98,14 +98,17 @@ class ValidatorTab(ttk.Frame):
             
         # 重置状态
         self.has_unsaved_changes = False
+        self.status_label.config(text="正在验证...", bootstyle=SECONDARY)
         self.tree.delete(*self.tree.get_children())
 
         if not self.model.loaded_danmakus:
             Messagebox.show_warning("请先在 “发射器” 页面加载弹幕文件。", "无法验证", parent=self.app)
+            self.status_label.config(text="验证失败: 未加载文件", bootstyle=DANGER)
             return
         
         if self.model.selected_cid is None:
             Messagebox.show_warning("请先在 “发射器” 页面选择一个分P。\n（需要分P时长来检查时间戳）", "无法验证", parent=self.app)
+            self.status_label.config(text="验证失败: 未选择分P", bootstyle=DANGER)
             return
         
         # 创建快照，防止直接修改 SharedModel
