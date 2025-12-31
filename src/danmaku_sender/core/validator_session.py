@@ -131,27 +131,27 @@ class ValidatorSession:
         """应用修改回 SharedDataModel。
 
         Returns:
-            tuple[int, int, int]: 保留数, 修复数, 删除数
+            tuple[int, int, int]: 最终剩余总数, 修复数量, 删除数量
         """
         if not self.original_snapshot:
             return 0, 0, 0
 
-        # 构建查找表：original_index -> (content, is_deleted)
+        # 构建查找表：Key: original_index, Value: issue_record
         changes_map = {item['original_index']: item for item in self.current_issues}
         
-        new_list = []
-        fixed_count = 0
-        deleted_count = 0
-        kept_count = 0 # 原本就是好的
+        new_list = []       # 最终名单
+        fixed_count = 0     # 统计：修好了多少个
+        deleted_count = 0   # 统计：删掉了多少个
+        kept_count = 0      # 统计：原本就是好的，直接保留的
 
         for i, dm in enumerate(self.original_snapshot):
-            # 1. 这种弹幕原本就是好的
+            # 弹幕原本就是好的
             if dm.get('is_valid', False):
                 new_list.append(dm)
                 kept_count += 1
                 continue
             
-            # 2. 这种是原本有问题的，检查 changes_map
+            # 弹幕原本有问题的，检查 changes_map
             if i in changes_map:
                 issue_record = changes_map[i]
                 if issue_record['is_deleted']:
@@ -163,14 +163,13 @@ class ValidatorSession:
                     new_list.append(dm)
                     fixed_count += 1
             else:
-                # 理论上不应该走到这，除非 issue 列表跟 snapshot 不对等
-                # 默认策略：保留原样（或者删除，看具体需求，这里保留比较安全）
+                # 理论不可达
+                # 弹幕原本有问题，但 changes_map 里找不到它
                 new_list.append(dm)
 
         self.model.loaded_danmakus = new_list
         self.set_dirty(False)
         
-        # 清理 Session
         self.original_snapshot = []
         self.current_issues = []
         
