@@ -124,6 +124,9 @@ class SharedDataModel:
         self.monitor_interval = ttk.StringVar(value="60")
         self.time_tolerance = ttk.StringVar(value="500")
 
+        # 全局校验器脏状态
+        self.validator_is_dirty = False  # True 表示校验器有未应用的修改，SenderTab 应该拦截发送
+
         # 状态栏信息
         self.sender_status_text = ttk.StringVar(value="发送器：待命")
         self.sender_progress_var = ttk.DoubleVar(value=0.0)
