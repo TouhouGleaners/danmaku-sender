@@ -17,6 +17,8 @@ class ValidatorTab(ttk.Frame):
         self.app = app
         self.logger = logging.getLogger("ValidatorTab")
         self.original_danmakus_snapshot = []
+        self.has_unsaved_changes = False
+
         self.columnconfigure(0, weight=1)
         self.rowconfigure(1, weight=1)
 
@@ -85,15 +87,29 @@ class ValidatorTab(ttk.Frame):
 
     def run_validation(self):
         """运行弹幕验证并显示结果"""
-        self.tree.delete(*self.tree.get_children())
-
         if not self.model.loaded_danmakus:
             Messagebox.show_warning("请先在 “发射器” 页面加载弹幕文件。", "无法验证", parent=self.app)
+            self.status_label.config(text="验证失败: 未加载文件", bootstyle=DANGER)
             return
         
         if self.model.selected_cid is None:
             Messagebox.show_warning("请先在 “发射器” 页面选择一个分P。\n（需要分P时长来检查时间戳）", "无法验证", parent=self.app)
+            self.status_label.config(text="验证失败: 未选择分P", bootstyle=DANGER)
             return
+        
+        if self.has_unsaved_changes:
+            do_continue = Messagebox.okcancel(
+                message="⚠️ 警告：当前有未应用的修改，\n\n继续验证将丢弃这些修改。是否继续？", 
+                title="确认继续", 
+                parent=self.app
+            )
+            if not do_continue:
+                return
+            
+        # 重置状态
+        self.has_unsaved_changes = False
+        self.status_label.config(text="正在验证...", bootstyle=SECONDARY)
+        self.tree.delete(*self.tree.get_children())
         
         # 创建快照，防止直接修改 SharedModel
         self.original_danmakus_snapshot = copy.deepcopy(self.model.loaded_danmakus)
@@ -119,6 +135,11 @@ class ValidatorTab(ttk.Frame):
 
             self._set_action_buttons_state(True) # 启用操作按钮
 
+    def _mark_as_dirty(self):
+        """标记当前有未保存的修改"""
+        self.has_unsaved_changes = True
+        self.status_label.config(text="⚠️ 有未应用的修改，请点击“应用所有修改”按钮。", bootstyle=WARNING)
+
     def batch_remove_newlines(self):
         """批量去除所有问题弹幕中的换行符"""
         modified_count = 0
@@ -130,7 +151,6 @@ class ValidatorTab(ttk.Frame):
 
             if '\n' in content or '\\n' in content or '/n' in content:
                 new_content = content.replace('\n', '').replace('\\n', '').replace('/n', '')
-                self.tree.set(item_id, column="content", value=new_content)
                 if not new_content.strip():
                     # 如果处理后只剩空白，直接从列表中删除
                     self.tree.delete(item_id)
@@ -141,6 +161,7 @@ class ValidatorTab(ttk.Frame):
                     modified_count += 1
         
         if modified_count > 0 or deleted_count > 0:
+            self._mark_as_dirty()
             msg = f"批量处理完成！\n\n- 内容修复: {modified_count} 条\n- 变成空白已删除: {deleted_count} 条"
             Messagebox.show_info(msg, "处理结果", parent=self.app)
         else:
@@ -162,6 +183,7 @@ class ValidatorTab(ttk.Frame):
 
     def _show_batch_result(self, count: int, action_name: str):
         if count > 0:
+            self._mark_as_dirty()
             Messagebox.show_info(f"已批量处理 {count} 条弹幕 ({action_name})。", "处理完成", parent=self.app)
         else:
             Messagebox.show_info(f"未发现需要进行 ({action_name}) 处理的弹幕。", "无变化", parent=self.app)
@@ -192,11 +214,14 @@ class ValidatorTab(ttk.Frame):
             # 去除首尾空格，防止误操作
             clean_text = new_text.strip()
             if clean_text:
-                self.tree.set(selected_iid, column="content", value=clean_text)
+                if clean_text != current_text:
+                    self.tree.set(selected_iid, column="content", value=clean_text)
+                    self._mark_as_dirty()
             else:
                 # 如果用户把内容删光了点确定，询问是否要删除这条
                 if Messagebox.okcancel("内容为空，是否删除该条弹幕？", "确认删除", parent=self.app):
                     self.tree.delete(selected_iid)
+                    self._mark_as_dirty()
 
     def delete_selected_item(self):
         """删除在Treeview中选中的条目"""
@@ -207,6 +232,9 @@ class ValidatorTab(ttk.Frame):
         
         for item in selected_items:
             self.tree.delete(item)
+
+        if selected_items:
+            self._mark_as_dirty()
 
     def apply_changes(self):
         """应用更改，重建并更新共享模型中的弹幕列表"""
@@ -254,7 +282,7 @@ class ValidatorTab(ttk.Frame):
             parent=self.app
         )
         
-        # 清理现场
+        self.has_unsaved_changes = False
         self.tree.delete(*self.tree.get_children())
         self.original_danmakus_snapshot = []
         self.status_label.config(text="修改已应用。", bootstyle=SECONDARY)
