@@ -111,7 +111,8 @@ class ValidatorTab(ttk.Frame):
             Messagebox.show_info("验证通过", "所有弹幕均符合规范！", parent=self.app)
             self._set_action_buttons_state(False)
         else:
-            self.status_label.config(text=f"❌ 发现问题弹幕，请处理。", bootstyle=DANGER)
+            issue_count = len(self.session.current_issues)
+            self.status_label.config(text=f"❌ 发现 {issue_count} 条问题弹幕，请处理。", bootstyle=DANGER)
             self._set_action_buttons_state(True)
 
     def _refresh_tree_view(self):
@@ -147,7 +148,7 @@ class ValidatorTab(ttk.Frame):
 
     def batch_truncate_length(self):
         """批量截断所有过长弹幕 (>100字)"""
-        count = self.session.batch_truncate_length()
+        count = self.session.batch_truncate_length(limit=100)
 
         if count > 0:
             self._refresh_tree_view()
@@ -203,7 +204,7 @@ class ValidatorTab(ttk.Frame):
 
     def apply_changes(self):
         """应用更改"""
-        if not self.session.original_snapshot:
+        if not self.session.has_active_session:
             Messagebox.show_warning("请先运行一次验证，再应用修改。", "未进行验证", parent=self.app)
             return
         

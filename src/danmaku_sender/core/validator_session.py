@@ -21,6 +21,10 @@ class ValidatorSession:
     @property
     def is_dirty(self) -> bool:
         return self.model.validator_is_dirty
+    
+    @property
+    def has_active_session(self) -> bool:
+        return bool(self.original_snapshot)
 
     def set_dirty(self, dirty: bool):
         self.model.validator_is_dirty = dirty
@@ -39,6 +43,7 @@ class ValidatorSession:
 
         # 创建快照
         self.original_snapshot = copy.deepcopy(self.model.loaded_danmakus)
+        self.logger.info(f"启动校验会话... 原始弹幕总数: {len(self.original_snapshot)}")
         
         # 执行校验
         raw_issues = validate_danmaku_list(self.original_snapshot, duration_ms)
@@ -53,6 +58,8 @@ class ValidatorSession:
                 'current_content': issue['danmaku']['msg'],
                 'is_deleted': False
             })
+
+        self.logger.info(f"校验完成: 发现 {len(self.current_issues)} 个问题。")
             
         self.set_dirty(False)
         return len(self.current_issues) > 0
