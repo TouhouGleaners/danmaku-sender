@@ -165,7 +165,14 @@ class ValidatorSession:
             else:
                 # 理论不可达
                 # 弹幕原本有问题，但 changes_map 里找不到它
+                self.logger.warning(f"数据不一致警告: 索引 {i} 的弹幕被标记为无效，但在修改记录中未找到。已强制保留原样。")
                 new_list.append(dm)
+
+        self.logger.info(
+            f"应用修改结果汇总: 原总数={len(self.original_snapshot)} | "
+            f"保留(Kept)={kept_count}, 修复(Fixed)={fixed_count}, 删除(Deleted)={deleted_count} | "
+            f"现总数={len(new_list)}"
+        )
 
         self.model.loaded_danmakus = new_list
         self.set_dirty(False)
