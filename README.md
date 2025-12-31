@@ -3,25 +3,23 @@
 <p align="center">
   <img src="https://img.shields.io/github/v/tag/TouhouGleaners/danmaku-sender?label=Pre-Release&color=orange" alt="Pre-release">
   <img src="https://img.shields.io/github/v/release/TouhouGleaners/danmaku-sender?label=Release&color=bright-green" alt="Release">
-  <img src="https://img.shields.io/github/downloads/TouhouGleaners/danmaku-sender/total" alt="Total Downloads">
+  <img src="https://img.shields.io/github/downloads/TouhouGleaners/danmaku-sender/total?label=Downloads" alt="Total Downloads">
   <img src="https://img.shields.io/badge/Python-3.12+-blue.svg" alt="Python 3.12+">
-  <img src="https://img.shields.io/github/license/TouhouGleaners/danmaku-sender" alt="License">
+  <img src="https://img.shields.io/github/license/TouhouGleaners/danmaku-sender?label=License" alt="License">
 </p>
 
-B站弹幕发射工具，基于**Python 3.12**。  
-使用 Python 和 `ttkbootstrap` 构建。它能帮助您将本地的B站XML弹幕文件重新发送到指定的视频分P中，实现弹幕的备份、迁移和恢复。
+B站弹幕发射工具，基于 **Python 3.12** 与 `ttkbootstrap` 构建。  
+它能帮助您将本地的 B 站 XML 弹幕文件重新发送到指定的视频分 P 中，实现弹幕的**备份、迁移和恢复**。针对大规模补档场景，提供了稳健的挂机支持与风控规避机制。
 
 ## 目录
 
 - [✨ 主要特性](#-主要特性)
 - [🚀 安装与运行](#-安装与运行)
-  - [📦 打包版 (Windows 用户推荐)](#-打包版-windows-用户推荐)
-  - [🐍 源码版 (开发者)](#-源码版-开发者)
 - [📖 使用指南](#-使用指南)
-  - [🔑 1. 准备工作：获取 Cookie](#-1-准备工作获取-cookie)
-  - [🚀 2. 发送弹幕 (核心流程)](#-2-发送弹幕-核心流程)
-  - [🔧 3. (可选) 校验和修改弹幕](#-3-可选-校验和修改弹幕)
-  - [🔭 4. (可选) 监视匹配进度](#-4-可选-监视匹配进度)
+  - [🔑 1. 获取 Cookie](#-1-获取-cookie)
+  - [⚙️ 2. 全局配置 (重要)](#-2-全局配置-重要)
+  - [🚀 3. 发送弹幕](#-3-发送弹幕)
+  - [🔧 4. 校验与监视](#-4-校验与监视)
 - [🤝 贡献](#-贡献)
 - [📄 许可证](#-许可证)
 
@@ -29,19 +27,20 @@ B站弹幕发射工具，基于**Python 3.12**。
 
 ## ✨ 主要特性
 
-*   **Cookie 登录**: 安全、便捷地使用您的B站账户。
-*   **精准分P**: 自动获取视频所有分P，确保弹幕发送到正确位置。
-*   **延时发送**: 自定义弹幕发送延迟，模拟真实用户行为，提高成功率。
-*   **弹幕校验**: 在发送前检查弹幕格式，并提供实时编辑和删除功能。
-*   **弹幕监视**: 实时比对线上弹幕与本地文件，跟踪弹幕匹配进度。
-*   **开箱即用**: 提供 Windows 打包版，无需安装 Python 环境。
+*   **🛡️ 任务防中断**：新增**阻止系统休眠**逻辑。任务运行期间自动保持系统唤醒，防止因电脑睡眠导致的长任务中断。
+*   **🚀 智能控频**：支持**随机延迟**与**爆发模式**（每发送 N 条休息 M 秒），有效模拟人工行为，降低风控风险。
+*   **🌐 网络适配器**：支持**系统代理开关**。允许手动禁用代理强制直连 B 站，解决 VPN 或加速器导致的连接超时。
+*   **🔍 弹幕校验**：内置校验器，支持在发送前识别并选择编辑或删除过长、含换行符或特殊符号的非法弹幕。
+*   **🔭 进度监视**：实时比对线上弹幕与本地文件，直观掌握弹幕补全进度。
+*   **🔔 自动检测更新**：启动时自动检查 GitHub 最新版本，确保及时获取功能改进与 Bug 修复。
+*   **📦 开箱即用**：提供 Windows 绿色打包版，无需安装 Python 环境。
 
 
 ## 🚀 安装与运行
 
-### 📦 打包版 (Windows 用户推荐)
+### 📦 打包版 (推荐)
 
-无需安装任何环境依赖，下载后直接运行。
+下载解压后直接运行 `BiliDanmakuSender.exe`。
 
 <p align="center">
   <a href="https://github.com/TouhouGleaners/danmaku-sender/releases/latest">
@@ -51,61 +50,42 @@ B站弹幕发射工具，基于**Python 3.12**。
 
 ### 🐍 源码版 (开发者)
 
-*   **Python 版本:** Python 3.12 或更高版本
-*   **安装依赖:**
-    ```bash
-    git clone https://github.com/TouhouGleaners/danmaku-sender.git
-    cd danmaku-sender
-    pip install -r requirements.txt
-    ```
-*   **运行:**
-    ```bash
-    # 从仓库根目录运行（推荐）
-    python run.py
-
-    # 或者以模块方式运行（在某些环境下可用）
-    python -m src.danmaku_sender
-    ```
+```bash
+git clone https://github.com/TouhouGleaners/danmaku-sender.git
+cd danmaku-sender
+pip install -r requirements.txt
+python run.py
+```
 
 ## 📖 使用指南
-### 🔑 1. 准备工作：获取 Cookie
 
-1.  在浏览器（推荐Chrome/Edge）中登录Bilibili。
-2.  按 `F12` 打开“开发者工具”。
-3.  切换到 **"应用" (Application)** 标签页。
-4.  在左侧菜单，找到 **"存储" (Storage) -> "Cookie" -> `https://www.bilibili.com`**。
-5.  在右侧列表中找到 `SESSDATA` 和 `bili_jct`，复制它们的 **值 (Value)**。
+### 🔑 1. 获取 Cookie
+1.  在浏览器（Chrome/Edge）中登录 Bilibili。
+2.  按 `F12` -> **"应用" (Application)** -> **"Cookie"**。
+3.  复制 `SESSDATA` 和 `bili_jct` 的值。
 
-### 🚀 2. 发送弹幕 (核心流程)
+### ⚙️ 2. 全局配置 (重要)
+在正式发送前，请先前往 **“全局设置”** 标签页：
+*   **身份凭证**：填写上一步获取的 `SESSDATA` 和 `bili_jct`（自动加密保存）。
+*   **系统设置**：建议勾选 **“阻止电脑休眠”** 以确保挂机任务稳定。
+*   **网络设置**：若开启 VPN 后无法连接，请尝试取消勾选 **“使用系统代理”**。
 
-1.  **填写凭证**: 在 "弹幕发射器" 标签页，将上一步获取的 `SESSDATA` 和 `bili_jct` 粘贴到对应输入框。
-2.  **获取分P**: 输入目标视频的 **BV号**，点击 **“获取分P”** 按钮。
-3.  **选择分P**: 在下拉框中选择你要发送弹幕的目标分P。
-4.  **选择文件**: 点击 **“选择文件”**，加载你本地的弹幕XML文件。
-5.  **设置延迟**: 根据需要调整最小和最大延迟（建议20-25秒）。
-6.  **开始任务**: 点击 **“开始任务”** 按钮。任务进行中可以点击 **“紧急停止”** 来终止。
+### 🚀 3. 发送弹幕
+1.  在 **“弹幕发射器”** 标签页输入 **BV 号** 并点击 **“获取分 P”**。
+2.  选择目标分 P 并加载本地 **XML 弹幕文件**。
+3.  **高级设置**：根据视频热度调整延迟。推荐使用爆发模式（如：每 3 条休息 40 秒）以规避高频风控。
+4.  点击 **“开始任务”**。
 
-### 🔧 3. (可选) 校验和修改弹幕
-
-1.  切换到 "弹幕校验器" 标签页。
-2.  确保已在 "发射器" 页面加载了视频分P和弹幕文件。
-3.  点击 **“开始验证”**，所有不合规的弹幕都会被列出。
-4.  双击弹幕内容可直接 **编辑**，或选中后点击 **删除**。
-5.  操作完成后，点击 **“应用所有修改”**。
-
-### 🔭 4. (可选) 监视匹配进度
-
-1.  切换到 "弹幕监视器" 标签页。
-2.  点击 **“开始监视”**，程序将定期拉取线上弹幕并与你的本地文件进行比对。
+### 🔧 4. 校验与监视
+*   **校验器**：发送前可切换至“弹幕校验器”找出并修改有问题的弹幕，应用修改后会同步至发送队列。
+*   **监视器**：任务开始后，可开启监视器定期比对线上已存在的弹幕，防止重复发送。
 
 ## 🤝 贡献
 
-我们非常欢迎任何形式的贡献！无论是提交 Bug 反馈、功能建议还是代码贡献。
+我们欢迎任何形式的贡献！请参考 [**贡献指南**](CONTRIBUTING.md)。
 
-请参考我们的 [**贡献指南 (CONTRIBUTING.md)**](CONTRIBUTING.md) 来了解详细流程。
-
-*   [**提交 PR**](https://github.com/TouhouGleaners/danmaku-sender/pulls)
 *   [**报告 Issue**](https://github.com/TouhouGleaners/danmaku-sender/issues)
+*   [**提交 PR**](https://github.com/TouhouGleaners/danmaku-sender/pulls)
 
 ## 📄 许可证
 
