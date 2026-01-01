@@ -1,22 +1,30 @@
 import copy
 import logging
-from typing import Any
+from typing import Any, TypedDict
 
 from ..config.shared_data import SharedDataModel
 from ..core.bili_danmaku_utils import validate_danmaku_list
 
 
+class ChangedRecord(TypedDict):
+    original_index: int
+    field: str
+    old_value: Any
+
+
 class ValidatorSession:
     """
     校验器逻辑会话层。
-    负责管理数据快照、执行修改逻辑、维护脏状态。
+    负责管理数据快照、执行修改逻辑、维护脏状态及撤销栈。
     """
     def __init__(self, model: SharedDataModel):
         self.model = model
         self.logger = logging.getLogger("ValidatorSession")
         
-        self.original_snapshot: list[dict] = []         # 原始数据的深拷贝
-        self.current_issues: list[dict[str, Any]] = []  # 当前的问题列表
+        self.original_snapshot: list[dict] = []          # 原始数据的深拷贝
+        self.current_issues: list[dict[str, Any]] = []   # 当前的问题列表
+
+        self.undo_stack: list[list[ChangedRecord]] = []  # 撤销栈: 一次操作产生的一组变更记录
 
     @property
     def is_dirty(self) -> bool:
@@ -25,6 +33,10 @@ class ValidatorSession:
     @property
     def has_active_session(self) -> bool:
         return bool(self.original_snapshot)
+    
+    @property
+    def can_undo(self) -> bool:
+        return bool(self.undo_stack)
 
     def set_dirty(self, dirty: bool):
         self.model.validator_is_dirty = dirty
@@ -60,30 +72,78 @@ class ValidatorSession:
             })
 
         self.logger.info(f"校验完成: 发现 {len(self.current_issues)} 个问题。")
-            
+
+        self.undo_stack.clear()    
         self.set_dirty(False)
         return len(self.current_issues) > 0
 
     def get_display_items(self):
         """获取用于 UI 显示的列表 (排除已标记删除的项)"""
         return [item for item in self.current_issues if not item['is_deleted']]
+    
+    def _find_issue_by_index(self, original_index: int) -> dict[str, Any] | None:
+        """根据原始索引查找问题记录"""
+        for item in self.current_issues:
+            if item['original_index'] == original_index:
+                return item
+        return None
+    
+    def _push_undo_record(self, changes: list[ChangedRecord]):
+        """将一组变更记录推入撤销栈"""
+        if changes:
+            self.undo_stack.append(changes)
+            self.set_dirty(True)
+
+    def undo(self) -> bool:
+        """撤销上一次修改。
+
+        Returns:
+            bool: 是否成功撤销
+        """
+        if not self.undo_stack:
+            return False
+        
+        last_changes = self.undo_stack.pop()
+
+        issue_map = {item['original_index']: item for item in self.current_issues}
+        
+        for change in last_changes:
+            target_idx = change['original_index']
+            
+            if target_item := issue_map.get(target_idx):
+                target_item[change['field']] = change['old_value']
+
+        # 如果撤销栈已空，则已回至初始状态
+        if not self.undo_stack:
+            self.set_dirty(False)
+        else:
+            self.set_dirty(True)
+
+        return True
 
     def update_item_content(self, original_index: int, new_content: str):
         """更新单条内容"""
-        for item in self.current_issues:
-            if item['original_index'] == original_index:
-                if item['current_content'] != new_content:
-                    item['current_content'] = new_content
-                    self.set_dirty(True)
-                break
+        item = self._find_issue_by_index(original_index)
+        if item and item['current_content'] != new_content:
+            self._push_undo_record([{
+                'original_index': original_index,
+                'field': 'current_content',
+                'old_value': item['current_content']
+            }])
+
+            item['current_content'] = new_content
 
     def delete_item(self, original_index: int):
         """标记删除单条"""
-        for item in self.current_issues:
-            if item['original_index'] == original_index:
-                item['is_deleted'] = True
-                self.set_dirty(True)
-                break
+        item = self._find_issue_by_index(original_index)
+        if item and not item['is_deleted']:
+            self._push_undo_record([{
+                'original_index': original_index,
+                'field': 'is_deleted',
+                'old_value': False
+            }])
+
+            item['is_deleted'] = True
 
     def batch_remove_newlines(self) -> tuple[int, int]:
         """批量去除换行符
@@ -93,23 +153,36 @@ class ValidatorSession:
         """
         modified_count = 0
         deleted_count = 0
+        current_changes: list[ChangedRecord] = []  # 本次批量操作的变更记录
         
         for item in self.current_issues:
-            if item['is_deleted']: continue
+            if item['is_deleted']:
+                continue
             
             content = item['current_content']
             if '\n' in content or '\\n' in content or '/n' in content:
                 new_content = content.replace('\n', '').replace('\\n', '').replace('/n', '')
+
+                current_changes.append({
+                    'original_index': item['original_index'],
+                    'field': 'current_content',
+                    'old_value': item['current_content']
+                })
                 
                 if not new_content.strip():
+                    current_changes.append({
+                        'original_index': item['original_index'],
+                        'field': 'is_deleted',
+                        'old_value': item['is_deleted']
+                    })
                     item['is_deleted'] = True
                     deleted_count += 1
                 else:
                     item['current_content'] = new_content
                     modified_count += 1
         
-        if modified_count > 0 or deleted_count > 0:
-            self.set_dirty(True)
+        if current_changes:
+            self._push_undo_record(current_changes)
             
         return modified_count, deleted_count
 
@@ -123,15 +196,25 @@ class ValidatorSession:
             int: 修改数
         """
         count = 0
+        current_changes: list[ChangedRecord] = []  # 本次批量操作的变更记录
+
         for item in self.current_issues:
-            if item['is_deleted']: continue
+            if item['is_deleted']:
+                continue
             
             if len(item['current_content']) > limit:
+                current_changes.append({
+                    'original_index': item['original_index'],
+                    'field': 'current_content',
+                    'old_value': item['current_content']
+                })
+
                 item['current_content'] = item['current_content'][:limit]
                 count += 1
                 
-        if count > 0:
-            self.set_dirty(True)
+        if current_changes:
+            self._push_undo_record(current_changes)
+
         return count
 
     def apply_changes(self) -> tuple[int, int, int]:
@@ -187,6 +270,7 @@ class ValidatorSession:
         )
 
         self.model.loaded_danmakus = new_list
+        self.undo_stack.clear()
         self.set_dirty(False)
         
         self.original_snapshot = []
