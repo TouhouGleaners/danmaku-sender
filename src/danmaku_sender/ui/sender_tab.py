@@ -260,6 +260,18 @@ class SenderTab(ttk.Frame):
         """开始发送弹幕任务的逻辑"""
         self.app.focus()  # 移除按钮焦点
 
+        # 检查 SharedDataModel 中的全局脏状态
+        if self.model.validator_is_dirty:
+            messagebox.showwarning(
+                title="存在未保存的修改",
+                message="检测到【弹幕校验器】中有未应用的修改！\n\n"
+                        "请先返回校验器点击“应用所有修改”，\n"
+                        "否则发送的将是旧的、未修复的弹幕。",
+                parent=self.app
+            )
+            # 拦截成功，直接返回，不执行后续发送逻辑
+            return
+
         # 获取并校验配置
         config = self.model.get_sender_config()
         if config is None:
