@@ -23,13 +23,30 @@ class GuiLoggingHandler(logging.Handler):
 
         target_func = None
 
-        if record.name in ("SenderTab", "DanmakuSender", "DanmakuParser", "BiliUtils"):
+        # Sender 相关日志
+        sender_whitelist = (
+            "SenderTab", 
+            "DanmakuSender", 
+            "DanmakuParser", 
+            "BiliUtils", 
+            "BiliApiClient", 
+            "WbiSigner",
+            "CredentialManager",
+            "NotificationUtils",
+            "UpdateChecker"
+        )
+
+        # Monitor 相关日志
+        monitor_whitelist = (
+            "MonitorTab",
+            "DanmakuMonitor"
+        )
+
+        if record.name in sender_whitelist:
             target_func = self.output_targets.get("sender_tab")
-        elif record.name == "MonitorTab":
+        elif record.name in monitor_whitelist:
             target_func = self.output_targets.get("monitor_tab")
 
-        if not target_func:
-            target_func = self.output_targets.get("sender_tab")
         if target_func:
             target_func(msg)
 

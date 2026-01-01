@@ -29,7 +29,7 @@ class BiliDanmakuMonitor:
         self.interval = interval
         self.time_tolerance = time_tolerance
         self.danmaku_parser = DanmakuParser()
-        self.logger = logging.getLogger("MonitorTab")
+        self.logger = logging.getLogger("DanmakuMonitor")
         self.source_danmaku_filepath = source_danmaku_filepath
         self.loaded_danmakus = loaded_danmakus if loaded_danmakus is not None else []  
         self.total_danmakus = len(self.loaded_danmakus)
