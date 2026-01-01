@@ -27,7 +27,7 @@ class SenderTab(ttk.Frame):
         self.app = app  # 主应用实例，用于after调用
         self.logger = logging.getLogger("SenderTab")
         self.columnconfigure(0, weight=1)
-        self.rowconfigure(2, weight=1)
+        self.rowconfigure(3, weight=1)
         self.stop_event = threading.Event()
         self.danmaku_parser = DanmakuParser()
 
@@ -100,17 +100,34 @@ class SenderTab(ttk.Frame):
         ttk.Entry(right_frame, textvariable=self.model.rest_min, width=5, takefocus=0).pack(side="left")
         ttk.Label(right_frame, text="-").pack(side="left", padx=2)
         ttk.Entry(right_frame, textvariable=self.model.rest_max, width=5, takefocus=0).pack(side="left")
+
+        # --- 自动停止设置 ---
+        stop_frame = ttk.Labelframe(self, text="自动停止设置", padding=10)
+        stop_frame.grid(row=2, column=0, padx=10, pady=5, sticky="ew")
+
+        stop_frame.columnconfigure(1, weight=1)
+        stop_frame.columnconfigure(3, weight=1)
+
+        # 按数量停止
+        ttk.Label(stop_frame, text="发送满").grid(row=0, column=0, sticky="w")
+        ttk.Entry(stop_frame, textvariable=self.model.stop_after_count, width=10, takefocus=0).grid(row=0, column=1, sticky="w", padx=5)
+        ttk.Label(stop_frame, text="条后停止发送").grid(row=0, column=2, sticky="w", padx=(0, 20))
+
+        # 按时间停止
+        ttk.Label(stop_frame, text="发送满").grid(row=0, column=3, sticky="w")
+        ttk.Entry(stop_frame, textvariable=self.model.stop_after_time, width=10, takefocus=0).grid(row=0, column=4, sticky="w", padx=5)
+        ttk.Label(stop_frame, text="分钟后停止发送").grid(row=0, column=5, sticky="w")
         
         # --- 日志输出区 ---
         log_frame = ttk.Labelframe(self, text="运行日志", padding=10)
-        log_frame.grid(row=2, column=0, padx=10, pady=5, sticky="nsew") 
+        log_frame.grid(row=3, column=0, padx=10, pady=5, sticky="nsew") 
         log_frame.columnconfigure(0, weight=1); log_frame.rowconfigure(0, weight=1)
         self.log_text = scrolledtext.ScrolledText(log_frame, wrap=ttk.WORD, state='disabled', font=("TkDefaultFont", 9))
         self.log_text.grid(row=0, column=0, sticky="nsew")
         
         # --- 操作区 ---
         action_frame = ttk.Frame(self, padding=(10, 10))
-        action_frame.grid(row=3, column=0, padx=10, pady=10, sticky="ew")
+        action_frame.grid(row=4, column=0, padx=10, pady=10, sticky="ew")
         action_frame.columnconfigure(0, weight=0)
         action_frame.columnconfigure(1, weight=1)
         action_frame.columnconfigure(2, weight=0)

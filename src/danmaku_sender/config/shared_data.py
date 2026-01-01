@@ -17,6 +17,10 @@ class SenderConfig:
     rest_min: float = 40.0
     rest_max: float = 45.0
 
+    # 自动停止
+    stop_after_count: int = 0  # 发满多少条停止 (0=不限)
+    stop_after_time: int = 0   # 发满多少分钟停止 (0=不限)
+
     # 系统设置
     prevent_sleep: bool = True
 
@@ -42,6 +46,9 @@ class SenderConfig:
         if self.burst_size > 1:
             if self.rest_min < 0 or self.rest_max < 0 or self.rest_min > self.rest_max:
                 return False
+            
+        if self.stop_after_count < 0 or self.stop_after_time < 0:
+            return False
         
         return True
 
@@ -116,6 +123,10 @@ class SharedDataModel:
         self.rest_min = ttk.StringVar(value=str(_default_config.rest_min))
         self.rest_max = ttk.StringVar(value=str(_default_config.rest_max))
 
+        # 自动停止 (UI)
+        self.stop_after_count = ttk.StringVar(value=str(_default_config.stop_after_count))
+        self.stop_after_time = ttk.StringVar(value=str(_default_config.stop_after_time))
+
         # 系统设置 (UI)
         self.prevent_sleep = ttk.BooleanVar(value=True)
         self.use_system_proxy = ttk.BooleanVar(value=True)
@@ -186,6 +197,8 @@ class SharedDataModel:
                 burst_size=int(self.burst_size.get()),
                 rest_min=float(self.rest_min.get()),
                 rest_max=float(self.rest_max.get()),
+                stop_after_count=int(self.stop_after_count.get()),
+                stop_after_time=int(self.stop_after_time.get()),
                 prevent_sleep=self.prevent_sleep.get(),
                 use_system_proxy=self.use_system_proxy.get()
             )
