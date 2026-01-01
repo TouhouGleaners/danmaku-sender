@@ -5,6 +5,7 @@ from typing import Any, TypedDict
 from ..config.shared_data import SharedDataModel
 from ..core.bili_danmaku_utils import validate_danmaku_list
 
+
 class ChangedRecord(TypedDict):
     original_index: int
     field: str
@@ -80,6 +81,13 @@ class ValidatorSession:
         """获取用于 UI 显示的列表 (排除已标记删除的项)"""
         return [item for item in self.current_issues if not item['is_deleted']]
     
+    def _find_issue_by_index(self, original_index: int) -> dict[str, Any] | None:
+        """根据原始索引查找问题记录"""
+        for item in self.current_issues:
+            if item['original_index'] == original_index:
+                return item
+        return None
+    
     def _push_undo_record(self, changes: list[ChangedRecord]):
         """将一组变更记录推入撤销栈"""
         if changes:
@@ -96,16 +104,14 @@ class ValidatorSession:
             return False
         
         last_changes = self.undo_stack.pop()
+
+        issue_map = {item['original_index']: item for item in self.current_issues}
         
         for change in last_changes:
             target_idx = change['original_index']
-            target_field = change['field']
-            old_val = change['old_value']
-
-            for item in self.current_issues:
-                if item['original_index'] == target_idx:
-                    item[target_field] = old_val
-                    break
+            
+            if target_item := issue_map.get(target_idx):
+                target_item[change['field']] = change['old_value']
 
         # 如果撤销栈已空，则已回至初始状态
         if not self.undo_stack:
@@ -117,33 +123,29 @@ class ValidatorSession:
 
     def update_item_content(self, original_index: int, new_content: str):
         """更新单条内容"""
-        for item in self.current_issues:
-            if item['original_index'] == original_index:
-                if item['current_content'] != new_content:
-                    change: ChangedRecord = {
-                        'original_index': original_index,
-                        'field': 'current_content',
-                        'old_value': item['current_content']
-                    }
-                    self._push_undo_record([change])
+        item = self._find_issue_by_index(original_index)
+        if item and item['current_content'] != new_content:
+            self._push_undo_record([{
+                'original_index': original_index,
+                'field': 'current_content',
+                'old_value': item['current_content']
+            }])
 
-                    item['current_content'] = new_content
-                break
+            item['current_content'] = new_content
+            self.set_dirty(True)
 
     def delete_item(self, original_index: int):
         """标记删除单条"""
-        for item in self.current_issues:
-            if item['original_index'] == original_index:
-                if not item['is_deleted']:
-                    change: ChangedRecord = {
-                        'original_index': original_index,
-                        'field': 'is_deleted',
-                        'old_value': item['is_deleted']
-                    }
-                    self._push_undo_record([change])
+        item = self._find_issue_by_index(original_index)
+        if item and not item['is_deleted']:
+            self._push_undo_record([{
+                'original_index': original_index,
+                'field': 'is_deleted',
+                'old_value': False
+            }])
 
-                    item['is_deleted'] = True
-                break
+            item['is_deleted'] = True
+            self.set_dirty(True)
 
     def batch_remove_newlines(self) -> tuple[int, int]:
         """批量去除换行符
