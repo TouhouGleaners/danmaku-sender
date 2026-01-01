@@ -46,6 +46,10 @@ class ValidatorTab(ttk.Frame):
         self.batch_menu.add_command(label="一键截断过长弹幕(>100字)", command=self.batch_truncate_length)
         self.batch_mb['menu'] = self.batch_menu
 
+        # 撤销按钮
+        self.undo_button = ttk.Button(top_frame, text="撤销上次修改", command=self.undo, bootstyle=OUTLINE + WARNING, takefocus=False)
+        self.undo_button.pack(side=LEFT, padx=(0, 10))
+
         # 状态提示文字
         self.status_label = ttk.Label(top_frame, text="提示: 请先在“发射器”页面加载文件并选择分P。", bootstyle=SECONDARY)
         self.status_label.pack(side=LEFT, fill=X, expand=True)
@@ -85,6 +89,14 @@ class ValidatorTab(ttk.Frame):
         
         self.apply_button = ttk.Button(bottom_frame, text="应用所有修改", command=self.apply_changes, bootstyle=SUCCESS, state=DISABLED, takefocus=False)
         self.apply_button.pack(side=RIGHT)
+
+    def undo(self):
+        """撤销上一次修改"""
+        if self.session.undo():
+            self._refresh_tree_view()
+            self.status_label.config(text="撤销成功。", bootstyle=INFO)
+        else:
+            self.logger.info("无可撤销的操作。")
 
     def run_validation(self):
         """运行弹幕验证"""
@@ -128,9 +140,16 @@ class ValidatorTab(ttk.Frame):
                 item['reason'],
                 item['current_content']
             ))
+
+        if self.session.can_undo:
+            self.undo_button.config(state=NORMAL)
+        else:
+            self.undo_button.config(state=DISABLED)
         
         if self.session.is_dirty:
             self.status_label.config(text="⚠️ 有未应用的修改！请点击“应用所有修改”按钮。", bootstyle=WARNING)
+        elif self.session.has_active_session:
+            self.status_label.config(text="当前无未保存修改。", bootstyle=SECONDARY)
 
     def batch_remove_newlines(self):
         """批量去除所有问题弹幕中的换行符"""
@@ -227,3 +246,5 @@ class ValidatorTab(ttk.Frame):
         self.batch_mb.config(state=state)
         self.delete_button.config(state=state)
         self.apply_button.config(state=state)
+        if not enabled:
+            self.undo_button.config(state=DISABLED)
