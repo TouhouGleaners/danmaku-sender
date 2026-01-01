@@ -269,8 +269,7 @@ class SenderTab(ttk.Frame):
                         "否则发送的将是旧的、未修复的弹幕。",
                 parent=self.app
             )
-            # 拦截成功，直接返回，不执行后续发送逻辑
-            return
+            return # 不执行后续发送逻辑
 
         # 获取并校验配置
         config = self.model.get_sender_config()
