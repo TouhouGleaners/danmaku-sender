@@ -4,6 +4,26 @@ from pathlib import Path
 from datetime import datetime, timezone
 
 
+# Sender 相关日志源
+SENDER_LOG_WHITELIST = (
+    "SenderTab", 
+    "DanmakuSender", 
+    "DanmakuParser", 
+    "BiliUtils", 
+    "BiliApiClient", 
+    "WbiSigner",
+    "CredentialManager",
+    "NotificationUtils",
+    "UpdateChecker"
+)
+
+# Monitor 相关日志源
+MONITOR_LOG_WHITELIST = (
+    "MonitorTab",
+    "DanmakuMonitor"
+)
+
+
 class GuiLoggingHandler(logging.Handler):
     """
     一个自定义的日志处理程序，将日志消息根据其来源路由到不同的GUI文本框。
@@ -20,16 +40,18 @@ class GuiLoggingHandler(logging.Handler):
     def emit(self, record):
         """根据 record.name 将日志消息发送到正确的GUI组件。"""
         msg = self.format(record)
-
         target_func = None
 
-        if record.name in ("SenderTab", "DanmakuSender", "DanmakuParser", "BiliUtils"):
+        if record.name in SENDER_LOG_WHITELIST:
             target_func = self.output_targets.get("sender_tab")
-        elif record.name == "MonitorTab":
+        elif record.name in MONITOR_LOG_WHITELIST:
             target_func = self.output_targets.get("monitor_tab")
 
-        if not target_func:
-            target_func = self.output_targets.get("sender_tab")
+        # 请注意：
+        # 如果 record.name 不在上述任何白名单中（例如 ValidatorTab），
+        # target_func 将保持为 None。这意味着该日志会被静默丢弃（不显示在 GUI），
+        # 但依然会被 FileHandler 写入日志文件。这是有意为之的设计。
+
         if target_func:
             target_func(msg)
 
