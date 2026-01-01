@@ -132,7 +132,6 @@ class ValidatorSession:
             }])
 
             item['current_content'] = new_content
-            self.set_dirty(True)
 
     def delete_item(self, original_index: int):
         """标记删除单条"""
@@ -145,7 +144,6 @@ class ValidatorSession:
             }])
 
             item['is_deleted'] = True
-            self.set_dirty(True)
 
     def batch_remove_newlines(self) -> tuple[int, int]:
         """批量去除换行符
