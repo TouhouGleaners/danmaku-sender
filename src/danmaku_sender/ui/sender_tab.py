@@ -4,6 +4,7 @@ import threading
 from tkinter import filedialog, scrolledtext, messagebox
 from pathlib import Path
 import ttkbootstrap as ttk
+from ttkbootstrap.constants import *
 from ttkbootstrap.tooltip import ToolTip
 
 from ..api.bili_api_client import BiliApiClient, BiliApiException
@@ -27,7 +28,7 @@ class SenderTab(ttk.Frame):
         self.app = app  # 主应用实例，用于after调用
         self.logger = logging.getLogger("SenderTab")
         self.columnconfigure(0, weight=1)
-        self.rowconfigure(2, weight=1)
+        self.rowconfigure(3, weight=1)
         self.stop_event = threading.Event()
         self.danmaku_parser = DanmakuParser()
 
@@ -37,89 +38,96 @@ class SenderTab(ttk.Frame):
         """创建并布局此标签页中的所有UI控件"""
         # --- 设置区 ---
         settings_frame = ttk.Labelframe(self, text="参数设置", padding=15)
-        settings_frame.grid(row=0, column=0, padx=10, pady=5, sticky="ew")
+        settings_frame.grid(row=0, column=0, padx=5, pady=5, sticky=EW)
         settings_frame.columnconfigure(1, weight=1)
 
         # BV号
-        ttk.Label(settings_frame, text="BV号:").grid(row=0, column=0, sticky="w", padx=5, pady=8)
+        ttk.Label(settings_frame, text="BV号:").grid(row=0, column=0, sticky=W, padx=5, pady=8)
         self.bvid_entry = ttk.Entry(settings_frame, textvariable=self.model.bvid, takefocus=0)
-        self.bvid_entry.grid(row=0, column=1, sticky="ew")
+        self.bvid_entry.grid(row=0, column=1, sticky=EW)
         self.get_parts_button = ttk.Button(settings_frame, text="获取分P", command=self.fetch_video_parts, takefocus=0)
         self.get_parts_button.grid(row=0, column=2, padx=(5, 0))
 
         # 分P选择
-        ttk.Label(settings_frame, text="选择分P:").grid(row=1, column=0, sticky="w", padx=5, pady=8)
-        self.part_combobox = ttk.Combobox(settings_frame, textvariable=self.model.part_var, state="readonly", bootstyle="secondary", takefocus=0)
-        self.part_combobox.grid(row=1, column=1, columnspan=2, sticky="ew", padx=(0, 5))
+        ttk.Label(settings_frame, text="选择分P:").grid(row=1, column=0, sticky=W, padx=5, pady=8)
+        self.part_combobox = ttk.Combobox(settings_frame, textvariable=self.model.part_var, state=READONLY, bootstyle=SECONDARY, takefocus=0)
+        self.part_combobox.grid(row=1, column=1, columnspan=2, sticky=EW, padx=(0, 5))
         self.part_combobox.bind("<<ComboboxSelected>>", lambda _: (self.focus(), self.part_combobox.selection_clear(), self._on_part_selected()))
         self.part_combobox.set("请先获取分P")
-        self.part_combobox.config(state="disabled")
+        self.part_combobox.config(state=DISABLED)
 
-        ttk.Label(settings_frame, text="弹幕文件:").grid(row=2, column=0, sticky="w", padx=5, pady=8)
+        ttk.Label(settings_frame, text="弹幕文件:").grid(row=2, column=0, sticky=W, padx=5, pady=8)
         self.file_path_label = ttk.Label(settings_frame, text="请选择弹幕XML文件...", style="secondary.TLabel")
-        self.file_path_label.grid(row=2, column=1, sticky="ew", padx=(0, 5))
+        self.file_path_label.grid(row=2, column=1, sticky=EW, padx=(0, 5))
         self.select_button = ttk.Button(settings_frame, text="选择文件", command=self.select_file, style="info.TButton", takefocus=0)
-        self.select_button.grid(row=2, column=2, sticky="e")
+        self.select_button.grid(row=2, column=2, sticky=E)
         self.file_path_tooltip = ToolTip(self.file_path_label, text="") 
         
-        # --- 高级设置 (延迟) ---
-        advanced_frame = ttk.Labelframe(self, text="高级设置", padding=15)
-        advanced_frame.grid(row=1, column=0, padx=10, pady=5, sticky="ew")
-
-        # Grid 布局：左侧区域(0)，分割线(1)，右侧区域(2)
-        # 左右权重设置为1以平分空间
-        advanced_frame.columnconfigure(0, weight=1)
-        advanced_frame.columnconfigure(1, weight=0)
-        advanced_frame.columnconfigure(2, weight=1)
-
-        # ====== 左半区：基础间隔 ======
-        left_frame = ttk.Frame(advanced_frame)
-        left_frame.grid(row=0, column=0, sticky="w")
+        strategy_notebook = ttk.Notebook(self, bootstyle=LIGHT)
+        strategy_notebook.grid(row=1, column=0, padx=5, pady=5, sticky=EW)
         
-        ttk.Label(left_frame, text="随机间隔(秒):").pack(side="left")
-        ttk.Entry(left_frame, textvariable=self.model.min_delay, width=6, takefocus=0).pack(side="left", padx=5)
-        ttk.Label(left_frame, text="-").pack(side="left")
-        ttk.Entry(left_frame, textvariable=self.model.max_delay, width=6, takefocus=0).pack(side="left", padx=5)
-
-        # ====== 中间：垂直分割线 ======
-        sep = ttk.Separator(advanced_frame, orient='vertical')
-        sep.grid(row=0, column=1, sticky="ns", padx=20)
-
-        # ====== 右半区：爆发模式 ======
-        right_frame = ttk.Frame(advanced_frame)
-        right_frame.grid(row=0, column=2, sticky="w")
+        # --- Tab 1: 延迟设置 ---
+        delay_tab = ttk.Frame(strategy_notebook, padding=15)
+        strategy_notebook.add(delay_tab, text="发送延迟")
         
-        # 爆发阈值
-        ttk.Label(right_frame, text="每(条):").pack(side="left")
-        burst_entry = ttk.Entry(right_frame, textvariable=self.model.burst_size, width=5, takefocus=0)
-        burst_entry.pack(side="left", padx=5)
-        ToolTip(burst_entry, "爆发阈值：\n每发送多少条弹幕后，进入一次长休息。\n0 或 1 表示关闭。")
+        # 延迟内容布局
+        ttk.Label(delay_tab, text="随机间隔(秒):").pack(side=LEFT)
+        ttk.Entry(delay_tab, textvariable=self.model.min_delay, width=5, takefocus=0).pack(side=LEFT, padx=5)
+        ttk.Label(delay_tab, text="-").pack(side=LEFT)
+        ttk.Entry(delay_tab, textvariable=self.model.max_delay, width=5, takefocus=0).pack(side=LEFT, padx=5)
+
+        ttk.Separator(delay_tab, orient=VERTICAL).pack(side=LEFT, fill=Y, padx=15)
+
+        ttk.Label(delay_tab, text="爆发模式:").pack(side=LEFT)
+        ttk.Label(delay_tab, text="每").pack(side=LEFT, padx=(5,0))
+        burst_entry = ttk.Entry(delay_tab, textvariable=self.model.burst_size, width=4, takefocus=0)
+        burst_entry.pack(side=LEFT, padx=2)
+        ttk.Label(delay_tab, text="条，休息").pack(side=LEFT)
+        ttk.Entry(delay_tab, textvariable=self.model.rest_min, width=4, takefocus=0).pack(side=LEFT, padx=2)
+        ttk.Label(delay_tab, text="-").pack(side=LEFT)
+        ttk.Entry(delay_tab, textvariable=self.model.rest_max, width=4, takefocus=0).pack(side=LEFT, padx=2)
+        ttk.Label(delay_tab, text="秒").pack(side=LEFT)
+        ToolTip(burst_entry, "爆发阈值：0 或 1 表示关闭爆发模式")
+
+        # --- Tab 2: 自动停止 ---
+        stop_tab = ttk.Frame(strategy_notebook, padding=15)
+        strategy_notebook.add(stop_tab, text="自动停止")
         
-        # 休息时间
-        ttk.Label(right_frame, text="休息(秒):").pack(side="left", padx=(10, 5))
-        ttk.Entry(right_frame, textvariable=self.model.rest_min, width=5, takefocus=0).pack(side="left")
-        ttk.Label(right_frame, text="-").pack(side="left", padx=2)
-        ttk.Entry(right_frame, textvariable=self.model.rest_max, width=5, takefocus=0).pack(side="left")
+        # 数量限制
+        ttk.Label(stop_tab, text="已发送 >=").pack(side=LEFT)
+        ttk.Entry(stop_tab, textvariable=self.model.stop_after_count, width=8, takefocus=0).pack(side=LEFT, padx=5)
+        ttk.Label(stop_tab, text="条").pack(side=LEFT)
+
+        # 间隔线
+        ttk.Separator(stop_tab, orient=VERTICAL).pack(side=LEFT, fill=Y, padx=15)
+
+        # 时间限制
+        ttk.Label(stop_tab, text="已用时 >=").pack(side=LEFT)
+        ttk.Entry(stop_tab, textvariable=self.model.stop_after_time, width=8, takefocus=0).pack(side=LEFT, padx=5)
+        ttk.Label(stop_tab, text="分钟").pack(side=LEFT)
+        
+        # 提示文字
+        ttk.Label(stop_tab, text="(0表示不限制)", bootstyle=SECONDARY, font=("TkDefaultFont", 8)).pack(side=LEFT, padx=(15, 0))
         
         # --- 日志输出区 ---
         log_frame = ttk.Labelframe(self, text="运行日志", padding=10)
-        log_frame.grid(row=2, column=0, padx=10, pady=5, sticky="nsew") 
+        log_frame.grid(row=3, column=0, padx=5, pady=5, sticky=NSEW) 
         log_frame.columnconfigure(0, weight=1); log_frame.rowconfigure(0, weight=1)
-        self.log_text = scrolledtext.ScrolledText(log_frame, wrap=ttk.WORD, state='disabled', font=("TkDefaultFont", 9))
-        self.log_text.grid(row=0, column=0, sticky="nsew")
+        self.log_text = scrolledtext.ScrolledText(log_frame, wrap=ttk.WORD, state=DISABLED, font=("TkDefaultFont", 9))
+        self.log_text.grid(row=0, column=0, sticky=NSEW)
         
         # --- 操作区 ---
         action_frame = ttk.Frame(self, padding=(10, 10))
-        action_frame.grid(row=3, column=0, padx=10, pady=10, sticky="ew")
+        action_frame.grid(row=4, column=0, padx=5, pady=10, sticky=EW)
         action_frame.columnconfigure(0, weight=0)
         action_frame.columnconfigure(1, weight=1)
         action_frame.columnconfigure(2, weight=0)
         self.status_label = ttk.Label(action_frame, textvariable=self.model.sender_status_text, style="secondary.TLabel")
-        self.status_label.grid(row=0, column=0, sticky="w")
-        self.progress_bar = ttk.Progressbar(action_frame, mode='determinate', variable=self.model.sender_progress_var, style='success.Striped.TProgressbar')
-        self.progress_bar.grid(row=0, column=1, sticky="ew", padx=(10, 10))
+        self.status_label.grid(row=0, column=0, sticky=W)
+        self.progress_bar = ttk.Progressbar(action_frame, mode=DETERMINATE, variable=self.model.sender_progress_var, style='success.Striped.TProgressbar')
+        self.progress_bar.grid(row=0, column=1, sticky=EW, padx=(10, 10))
         self.start_button = ttk.Button(action_frame, text="开始任务", command=self.start_task, style="success.TButton", width=12, takefocus=0)
-        self.start_button.grid(row=0, column=2, sticky="e")
+        self.start_button.grid(row=0, column=2, sticky=E)
 
     def select_file(self):
         """打开文件选择对话框，让用户选择弹幕XML文件。"""
@@ -183,9 +191,9 @@ class SenderTab(ttk.Frame):
             return
         
         self.logger.info(f"正在获取 {bvid} 的分P列表...")
-        self.get_parts_button.config(state='disabled')
+        self.get_parts_button.config(state=DISABLED)
         self.model.part_var.set('正在获取中...')
-        self.part_combobox.config(state="disabled")
+        self.part_combobox.config(state=DISABLED)
         self.model.video_title.set("（正在获取视频标题...）")
 
         threading.Thread(
@@ -223,7 +231,7 @@ class SenderTab(ttk.Frame):
                 """在主线程中更新UI的回调函数"""
                 if display_parts:
                     self.part_combobox['values'] = display_parts
-                    self.part_combobox.config(state="readonly")
+                    self.part_combobox.config(state=READONLY)
 
                     if len(display_parts) == 1:
                         self.logger.info(f"✅ 成功获取到 1 个分P，已为您自动选中。")
@@ -246,7 +254,7 @@ class SenderTab(ttk.Frame):
                 self.get_parts_button.config(state="normal")
                 self.model.part_var.set("获取失败, 请检查BV号")
                 self.part_combobox['values'] = []
-                self.part_combobox.config(state="disabled")
+                self.part_combobox.config(state=DISABLED)
 
                 # 失败时清空模型
                 self.model.cid_parts_map = {}
@@ -415,16 +423,16 @@ class SenderTab(ttk.Frame):
         """停止发送弹幕任务的逻辑"""
         self.logger.info("ℹ️ 用户请求停止任务，将在当前弹幕发送完毕后终止...")
         self.stop_event.set()
-        self.start_button.config(state='disabled', text="正在停止")
+        self.start_button.config(state=DISABLED, text="正在停止")
 
     def _set_ui_for_task_start(self):
         """将UI设置为“任务进行中”的状态"""
         self.start_button.config(text="紧急停止", command=self.stop_task, style="danger.TButton")
-        self.select_button.config(state='disabled')
-        self.get_parts_button.config(state='disabled')
+        self.select_button.config(state=DISABLED)
+        self.get_parts_button.config(state=DISABLED)
         self.log_text.config(state='normal')
         self.log_text.delete('1.0', 'end')
-        self.log_text.config(state='disabled')
+        self.log_text.config(state=DISABLED)
         self.model.sender_progress_var.set(0)
         self.model.sender_status_text.set("发送器：运行中...")
 

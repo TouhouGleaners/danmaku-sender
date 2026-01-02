@@ -2,8 +2,6 @@ import time
 import logging
 from threading import Event
 
-from typing import TypedDict
-
 from ..api.bili_api_client import BiliApiClient, BiliApiException
 from ..config.shared_data import SenderConfig
 from ..core.bili_danmaku_utils import BiliDmErrorCode, DanmakuSendResult, DanmakuParser, UnsentDanmakusRecord
@@ -101,6 +99,9 @@ class BiliDanmakuSender:
         self.logger.info(f"开始发送... CID: {cid}")
         self.unsent_danmakus = []  # 开始新任务时清空列表
 
+        auto_stop_reason = ""
+        start_time = time.time()
+
         if not danmakus:
             self._log_send_summary(0, 0, 0, stop_event, False)
             if progress_callback:
@@ -127,6 +128,7 @@ class BiliDanmakuSender:
             if stop_event.is_set():
                 self._record_unsent_danmakus(danmakus[i:], "任务手动停止")
                 break
+
             attempted_count += 1
 
             self.logger.info(f"[{i+1}/{total}] 准备发送: {dm.get('msg', 'N/A')}")
@@ -148,18 +150,38 @@ class BiliDanmakuSender:
                 self._record_unsent_danmakus(dm, result.display_message)
             else:
                 success_count += 1
+
+            if config.stop_after_count > 0 and success_count >= config.stop_after_count:
+                auto_stop_reason = f"达到数量限制 ({config.stop_after_count}条)"
+                self.logger.info(f"🛑 {auto_stop_reason}，自动停止任务。")
+                # 记录剩余未发送的 (从下一条开始)
+                if i + 1 < total:
+                    self._record_unsent_danmakus(danmakus[i+1:], "达到自动停止条件")
+                stop_event.set()
+                break
+
+            elapsed_minutes = (time.time() - start_time) / 60
+            if config.stop_after_time > 0 and elapsed_minutes >= config.stop_after_time:
+                auto_stop_reason = f"达到时间限制 ({config.stop_after_time}分钟)"
+                self.logger.info(f"🛑 {auto_stop_reason}，自动停止任务。")
+                if i + 1 < total:
+                    self._record_unsent_danmakus(danmakus[i+1:], "达到自动停止条件")
+                stop_event.set()
+                break
             
             if i < total - 1 and delay_manager.wait_and_check_stop(stop_event):
                 # 如果在休息时被停止，记录后续弹幕
                 self._record_unsent_danmakus(danmakus[i+1:], "任务手动停止")
                 break
 
-        self._log_send_summary(total, attempted_count, success_count, stop_event, fatal_error_occurred)
+        self._log_send_summary(total, attempted_count, success_count, stop_event, fatal_error_occurred, auto_stop_reason)
 
-    def _log_send_summary(self, total: int, attempted_count: int, success_count: int, stop_event: Event, fatal_error_occurred: bool):
+    def _log_send_summary(self, total: int, attempted_count: int, success_count: int, stop_event: Event, fatal_error_occurred: bool, auto_stop_reason: str = ""):
         """记录弹幕发送任务的总结信息。"""
         self.logger.info("--- 发送任务结束 ---")
-        if stop_event.is_set():
+        if auto_stop_reason:
+            self.logger.info(f"原因：{auto_stop_reason}")
+        elif stop_event.is_set():
             self.logger.info("原因：任务被用户手动停止。")
         elif fatal_error_occurred:
             self.logger.critical("原因：任务因致命错误中断。请检查配置或网络！")
@@ -189,7 +211,9 @@ class BiliDanmakuSender:
         notification_title = "弹幕发送任务已结束"
         summary_message = (f"成功: {success_count} / 尝试: {attempted_count} / 总计: {total}")
 
-        if stop_event.is_set():
+        if auto_stop_reason:
+            notification_message = f"任务自动停止：{auto_stop_reason}\n{summary_message}"
+        elif stop_event.is_set():
             notification_message = f"任务已被手动停止。\n{summary_message}"
         elif fatal_error_occurred:
             notification_message = f"任务因致命错误而中断！\n{summary_message}"
