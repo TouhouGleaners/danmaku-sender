@@ -2,8 +2,6 @@ import time
 import logging
 from threading import Event
 
-from typing import TypedDict
-
 from ..api.bili_api_client import BiliApiClient, BiliApiException
 from ..config.shared_data import SenderConfig
 from ..core.bili_danmaku_utils import BiliDmErrorCode, DanmakuSendResult, DanmakuParser, UnsentDanmakusRecord
@@ -131,21 +129,6 @@ class BiliDanmakuSender:
                 self._record_unsent_danmakus(danmakus[i:], "任务手动停止")
                 break
 
-            if config.stop_after_count > 0 and success_count >= config.stop_after_count:
-                auto_stop_reason = f"达到数量限制 ({config.stop_after_count}条)"
-                self.logger.info(f"🛑 {auto_stop_reason}，自动停止任务。")
-                self._record_unsent_danmakus(danmakus[i:], "达到自动停止条件")
-                stop_event.set()
-                break
-
-            elapsed_minutes = (time.time() - start_time) / 60
-            if config.stop_after_time > 0 and elapsed_minutes >= config.stop_after_time:
-                auto_stop_reason = f"达到时间限制 ({config.stop_after_time}分钟)"
-                self.logger.info(f"🛑 {auto_stop_reason}，自动停止任务。")
-                self._record_unsent_danmakus(danmakus[i:], "达到自动停止条件")
-                stop_event.set()
-                break
-
             attempted_count += 1
 
             self.logger.info(f"[{i+1}/{total}] 准备发送: {dm.get('msg', 'N/A')}")
@@ -167,6 +150,24 @@ class BiliDanmakuSender:
                 self._record_unsent_danmakus(dm, result.display_message)
             else:
                 success_count += 1
+
+            if config.stop_after_count > 0 and success_count >= config.stop_after_count:
+                auto_stop_reason = f"达到数量限制 ({config.stop_after_count}条)"
+                self.logger.info(f"🛑 {auto_stop_reason}，自动停止任务。")
+                # 记录剩余未发送的 (从下一条开始)
+                if i + 1 < total:
+                    self._record_unsent_danmakus(danmakus[i+1:], "达到自动停止条件")
+                stop_event.set()
+                break
+
+            elapsed_minutes = (time.time() - start_time) / 60
+            if config.stop_after_time > 0 and elapsed_minutes >= config.stop_after_time:
+                auto_stop_reason = f"达到时间限制 ({config.stop_after_time}分钟)"
+                self.logger.info(f"🛑 {auto_stop_reason}，自动停止任务。")
+                if i + 1 < total:
+                    self._record_unsent_danmakus(danmakus[i+1:], "达到自动停止条件")
+                stop_event.set()
+                break
             
             if i < total - 1 and delay_manager.wait_and_check_stop(stop_event):
                 # 如果在休息时被停止，记录后续弹幕
