@@ -62,9 +62,8 @@ class SettingsTab(QWidget):
         network_group.setLayout(network_layout)
         main_layout.addWidget(network_group)
 
-        # --- 底部弹簧 ---
-        vertical_spacer = QSpacerItem(20, 40, QSizePolicy.Minimum, QSizePolicy.Expanding)
-        main_layout.addItem(vertical_spacer)
+        # 添加伸缩项以推送内容到顶部
+        main_layout.addStretch()
 
         # 底部提示
         info_label = QLabel("ℹ️ 提示：凭证将在关闭时保存以供下次使用。")
