@@ -3,6 +3,7 @@ from PySide6.QtCore import Qt
 
 from .sender_tab import SenderTab
 from .settings_tab import SettingsTab
+from .monitor_tab import MonitorTab
 from .validator_tab import ValidatorTab
 
 
@@ -17,15 +18,14 @@ class MainWindow(QMainWindow):
         self.tabs = QTabWidget()
         self.setCentralWidget(self.tabs)
 
-        # 初始化各页面（占位
+        # 初始化各页面
         self.init_tabs()
 
     def init_tabs(self):
-        # 这里的 QWidget 以后会被替换成真正的 SenderTab, ValidatorTab 类
         self.tab_settings = SettingsTab()
         self.tab_sender = SenderTab()
         self.tab_validator = ValidatorTab()
-        self.tab_monitor = QWidget()
+        self.tab_monitor = MonitorTab()
 
         # 添加至选项卡
         self.tabs.addTab(self.tab_settings, "全局设置")
@@ -35,14 +35,3 @@ class MainWindow(QMainWindow):
 
         # 默认选中发射器
         self.tabs.setCurrentWidget(self.tab_sender)
-
-        # 占位内容
-        self._add_placeholder_text(self.tab_sender, "发射器施工中...")
-
-    def _add_placeholder_text(self, widget, text):
-        """临时辅助函数：给空白页加个标签"""
-        layout = QVBoxLayout()
-        label = QLabel(text)
-        label.setAlignment(Qt.AlignCenter) # 居中
-        layout.addWidget(label)
-        widget.setLayout(layout)
