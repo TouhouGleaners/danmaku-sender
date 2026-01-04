@@ -1,14 +1,26 @@
 import sys
-from pathlib import Path
+import logging
+
+from PySide6.QtWidgets import QApplication
+
+from src.danmaku_sender.ui.main_window import MainWindow
 
 
-root_dir = Path(__file__).resolve().parent
-src_dir = root_dir / 'src'
-sys.path.insert(0, str(src_dir))
+logging.basicConfig(
+    level=logging.INFO,
+    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
+)
+
+def main():
+    app = QApplication(sys.argv)
+    
+    app.setStyle("Fusion")
+
+    window = MainWindow()
+    window.show()
+
+    sys.exit(app.exec())
 
 
-from danmaku_sender.ui.main_app import main
-
-
-if __name__ == '__main__':
+if __name__ == "__main__":
     main()
