@@ -1,6 +1,8 @@
 from PySide6.QtWidgets import QMainWindow, QTabWidget, QWidget, QVBoxLayout, QLabel
 from PySide6.QtCore import Qt
 
+from .settings_tab import SettingsTab
+
 
 class MainWindow(QMainWindow):
     def __init__(self):
@@ -18,7 +20,7 @@ class MainWindow(QMainWindow):
 
     def init_tabs(self):
         # 这里的 QWidget 以后会被替换成真正的 SenderTab, ValidatorTab 类
-        self.tab_settings = QWidget()
+        self.tab_settings = SettingsTab()
         self.tab_sender = QWidget()
         self.tab_validator = QWidget()
         self.tab_monitor = QWidget()
