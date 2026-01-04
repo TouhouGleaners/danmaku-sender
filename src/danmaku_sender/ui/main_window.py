@@ -3,6 +3,7 @@ from PySide6.QtCore import Qt
 
 from .sender_tab import SenderTab
 from .settings_tab import SettingsTab
+from .validator_tab import ValidatorTab
 
 
 class MainWindow(QMainWindow):
@@ -23,7 +24,7 @@ class MainWindow(QMainWindow):
         # 这里的 QWidget 以后会被替换成真正的 SenderTab, ValidatorTab 类
         self.tab_settings = SettingsTab()
         self.tab_sender = SenderTab()
-        self.tab_validator = QWidget()
+        self.tab_validator = ValidatorTab()
         self.tab_monitor = QWidget()
 
         # 添加至选项卡
