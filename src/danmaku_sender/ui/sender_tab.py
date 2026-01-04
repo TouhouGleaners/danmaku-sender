@@ -164,7 +164,18 @@ class SenderTab(QWidget):
         self.progress_bar = QProgressBar()
         self.progress_bar.setValue(0)
         self.start_btn = QPushButton("开始发送")
-        self.start_btn.setStyleSheet("background-color: #2ecc71; color: white; font-weight: bold;")
+        self.start_btn.setStyleSheet("""
+            QPushButton {
+                background-color: #2ecc71; 
+                color: white; 
+                font-weight: bold; 
+                padding: 6px 20px;
+                border-radius: 4px;
+            }
+            QPushButton:disabled {
+                background-color: #bdc3c7;
+            }
+        """)
 
         action_layout.addWidget(self.status_label)
         action_layout.addWidget(self.progress_bar, stretch=1)

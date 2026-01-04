@@ -4,11 +4,14 @@ from PySide6.QtWidgets import (
 )
 from PySide6.QtCore import Qt
 
+from ..core.state import AppState
+
 
 class SettingsTab(QWidget):
     def __init__(self):
         super().__init__()
 
+        self._state: AppState | None = None
         self._create_ui()
 
     def _create_ui(self):
@@ -71,3 +74,39 @@ class SettingsTab(QWidget):
         main_layout.addWidget(info_label)
 
         self.setLayout(main_layout)
+
+    def bind_state(self, state: AppState):
+        """将 UI 控件绑定到 AppState"""
+        self._state = state
+
+        # 初始化UI值
+        self.sessdata_input.setText(state.sessdata)
+        self.bili_jct_input.setText(state.bili_jct)
+        self.prevent_sleep_checkbox.setChecked(state.sender_config.prevent_sleep)
+        self.proxy_checkbox.setChecked(state.sender_config.use_system_proxy)
+
+        # 连接信号槽以实现双向绑定
+        self.sessdata_input.textChanged.connect(self._on_credentials_changed)
+        self.bili_jct_input.textChanged.connect(self._on_credentials_changed)
+        self.prevent_sleep_checkbox.stateChanged.connect(self._on_prevent_sleep_changed)
+        self.proxy_checkbox.stateChanged.connect(self._on_proxy_changed)
+
+    def _on_credentials_changed(self):
+        if self._state:
+            self._state.update_credentials(
+                self.sessdata_input.text().strip(),
+                self.bili_jct_input.text().strip()
+            )
+
+    def _on_prevent_sleep_changed(self, state_value):
+        if self._state:
+            # Qt.CheckState: 0=Unchecked, 2=Checked
+            is_checked = (state_value == Qt.Checked.value)
+            self._state.sender_config.prevent_sleep = is_checked
+            self._state.monitor_config.prevent_sleep = is_checked
+
+    def _on_proxy_changed(self, state_value):
+        if self._state:
+            is_checked = (state_value == Qt.Checked.value)
+            self._state.sender_config.use_system_proxy = is_checked
+            self._state.monitor_config.use_system_proxy = is_checked
