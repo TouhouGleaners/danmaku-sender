@@ -10,7 +10,6 @@ class MonitorTab(QWidget):
     def __init__(self):
         super().__init__()
         self._state = None
-        self._is_bound = False
 
         self._create_ui()
 
@@ -78,7 +77,6 @@ class MonitorTab(QWidget):
         settings_group.setLayout(settings_layout)
         main_layout.addWidget(settings_group)
 
-        
         # --- 运行日志区 ---
         log_group = QGroupBox("监视运行日志")
         log_layout = QVBoxLayout()
@@ -108,7 +106,6 @@ class MonitorTab(QWidget):
         self.start_btn = QPushButton("开始监视")
         self.start_btn.setFixedWidth(120)
         self.start_btn.setCursor(Qt.PointingHandCursor)
-        # 统一使用绿色的成功样式
         self.start_btn.setStyleSheet("""
             QPushButton {
                 background-color: #2ecc71; 
@@ -131,8 +128,11 @@ class MonitorTab(QWidget):
         self.setLayout(main_layout)
 
     def bind_state(self, state):
-        if self._is_bound:
+        if self._state is state:
             return
+            
+        if self._state is not None:
+            self._disconnect_signals()
         
         self._state = state
         config = state.monitor_config
@@ -144,7 +144,13 @@ class MonitorTab(QWidget):
         self.interval_spin.valueChanged.connect(lambda v: setattr(config, 'refresh_interval', v))
         self.tolerance_spin.valueChanged.connect(lambda v: setattr(config, 'tolerance', v))
 
-        self._is_bound = True
+    def _disconnect_signals(self):
+        """断开信号连接"""
+        try:
+            self.interval_spin.valueChanged.disconnect()
+            self.tolerance_spin.valueChanged.disconnect()
+        except (RuntimeError, TypeError):
+            pass
 
     def append_log(self, message: str):
         self.log_output.append(message)

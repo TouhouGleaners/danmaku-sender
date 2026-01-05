@@ -10,7 +10,6 @@ class SenderTab(QWidget):
     def __init__(self):
         super().__init__()
         self._state = None
-        self._is_bound = False
 
         self._create_ui()
 
@@ -189,8 +188,11 @@ class SenderTab(QWidget):
 
     def bind_state(self, state):
         """将 UI 控件绑定到 AppState"""
-        if self._is_bound:
+        if self._state == state:
             return
+            
+        if self._state is not None:
+            self._disconnect_signals()
         
         self._state = state
         config = state.sender_config
@@ -225,12 +227,21 @@ class SenderTab(QWidget):
         self.stop_time.valueChanged.connect(lambda v: setattr(config, 'stop_after_time', v))
 
         # BV号同步
-        self.bv_input.textChanged.connect(self._on_bvid_changed)
+        self.bv_input.textChanged.connect(lambda t: setattr(video_state, 'bvid', t.strip()))
 
-        self._is_bound = True
-
-    def _on_bvid_changed(self, text):
-        self._state.video_state.bvid = text.strip()
+    def _disconnect_signals(self):
+        """安全断开所有信号连接"""
+        try:
+            self.min_delay.valueChanged.disconnect()
+            self.max_delay.valueChanged.disconnect()
+            self.burst_size.valueChanged.disconnect()
+            self.burst_rest_min.valueChanged.disconnect()
+            self.burst_rest_max.valueChanged.disconnect()
+            self.stop_count.valueChanged.disconnect()
+            self.stop_time.valueChanged.disconnect()
+            self.bv_input.textChanged.disconnect()
+        except (RuntimeError, TypeError):
+            pass
 
     def append_log(self, message: str):
         """外部调用的日志接口"""
