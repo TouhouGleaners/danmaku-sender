@@ -80,12 +80,15 @@ class MainWindow(QMainWindow):
 
     def _setup_log_routing(self):
         """将 GuiLoggingHandler 的回调挂载到信号发射方法上"""
-        root_logger = logging.getLogger()
-        for handler in root_logger.handlers:
-            if isinstance(handler, GuiLoggingHandler):
-                handler.sender_callback = self.state.sender_log_received.emit
-                handler.monitor_callback = self.state.monitor_log_received.emit
-                break
+        # 筛选出所有 GUI 处理器并注入回调
+        gui_handlers = [h for h in logging.getLogger().handlers if isinstance(h, GuiLoggingHandler)]
+        
+        for h in gui_handlers:
+            h.sender_callback = self.state.sender_log_received.emit
+            h.monitor_callback = self.state.monitor_log_received.emit
+            
+        if not gui_handlers:
+            self.logger.warning("日志路由失败：未找到 GuiLoggingHandler。")
 
     def closeEvent(self, event: QCloseEvent):
         """
