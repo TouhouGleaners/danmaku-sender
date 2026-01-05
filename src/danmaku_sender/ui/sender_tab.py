@@ -189,7 +189,7 @@ class SenderTab(QWidget):
 
     def bind_state(self, state):
         """将 UI 控件绑定到 AppState"""
-        if self._state == state:
+        if self._state is state:
             return
             
         if self._state is not None:
