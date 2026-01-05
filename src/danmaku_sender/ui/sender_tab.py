@@ -3,12 +3,14 @@ from PySide6.QtWidgets import (
     QPushButton, QComboBox, QLabel, QGroupBox, QTextEdit,
     QProgressBar, QTabWidget, QSpinBox, QDoubleSpinBox, QFrame
 )
+from PySide6.QtGui import QTextCursor
 from PySide6.QtCore import Qt
 
 
 class SenderTab(QWidget):
     def __init__(self):
         super().__init__()
+        self._state = None
 
         self._create_ui()
 
@@ -184,3 +186,69 @@ class SenderTab(QWidget):
         main_layout.addLayout(action_layout)
 
         self.setLayout(main_layout)
+
+    def bind_state(self, state):
+        """将 UI 控件绑定到 AppState"""
+        if self._state is state:
+            return
+            
+        if self._state is not None:
+            self._disconnect_signals()
+        
+        self._state = state
+        config = state.sender_config
+        video_state = state.video_state
+
+        # --- 初始化 UI 内容 ---
+        self.min_delay.setValue(config.min_delay)
+        self.max_delay.setValue(config.max_delay)
+        self.burst_size.setValue(config.burst_size)
+        self.burst_rest_min.setValue(config.rest_min)
+        self.burst_rest_max.setValue(config.rest_max)
+        self.stop_count.setValue(config.stop_after_count)
+        self.stop_time.setValue(config.stop_after_time)
+
+        # 视频状态初始化
+        self.bv_input.setText(video_state.bvid)
+        if video_state.selected_part_name:
+            self.part_combo.setPlaceholderText(video_state.selected_part_name)
+
+        # --- 绑定信号槽 (UI -> State) ---
+        # 延迟设置
+        self.min_delay.valueChanged.connect(lambda v: setattr(config, "min_delay", v))
+        self.max_delay.valueChanged.connect(lambda v: setattr(config, 'max_delay', v))
+
+        # 爆发模式
+        self.burst_size.valueChanged.connect(lambda v: setattr(config, 'burst_size', v))
+        self.burst_rest_min.valueChanged.connect(lambda v: setattr(config, 'rest_min', v))
+        self.burst_rest_max.valueChanged.connect(lambda v: setattr(config, 'rest_max', v))
+        
+        # 自动停止
+        self.stop_count.valueChanged.connect(lambda v: setattr(config, 'stop_after_count', v))
+        self.stop_time.valueChanged.connect(lambda v: setattr(config, 'stop_after_time', v))
+
+        # BV号同步
+        self.bv_input.textChanged.connect(lambda t: setattr(video_state, 'bvid', t.strip()))
+
+    def _disconnect_signals(self):
+        """安全断开所有信号连接"""
+        signals = [
+            self.min_delay.valueChanged,
+            self.max_delay.valueChanged,
+            self.burst_size.valueChanged,
+            self.burst_rest_min.valueChanged,
+            self.burst_rest_max.valueChanged,
+            self.stop_count.valueChanged,
+            self.stop_time.valueChanged,
+            self.bv_input.textChanged
+        ]
+        for sig in signals:
+            try:
+                sig.disconnect()
+            except (RuntimeError, TypeError):
+                pass
+
+    def append_log(self, message: str):
+        """外部调用的日志接口"""
+        self.log_output.append(message) 
+        self.log_output.moveCursor(QTextCursor.End)
