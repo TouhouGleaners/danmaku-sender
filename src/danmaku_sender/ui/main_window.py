@@ -10,6 +10,7 @@ from .monitor_tab import MonitorTab
 from .validator_tab import ValidatorTab
 
 from ..core.state import AppState
+from ..utils.log_utils import GuiLoggingHandler
 from ..utils.credential_manager import load_credentials, save_credentials
 
 
@@ -63,11 +64,37 @@ class MainWindow(QMainWindow):
             self.logger.warning(f"加载凭证失败: {e}")
 
     def bind_state_to_tabs(self):
-        """将 AppState 绑定到各个 Tab 页面。"""
+        """绑定全局状态并配置日志路由"""
+        # 页面数据绑定
         self.tab_settings.bind_state(self.state)
-        # self.tab_sender.bind_state(self.state)
+        self.tab_sender.bind_state(self.state)
         # self.tab_validator.bind_state(self.state)
-        # self.tab_monitor.bind_state(self.state)
+        self.tab_monitor.bind_state(self.state)
+
+        # 日志分流：信号 -> Tab 接口
+        try:
+            self.state.sender_log_received.disconnect(self.tab_sender.append_log)
+            self.state.monitor_log_received.disconnect(self.tab_monitor.append_log)
+        except (RuntimeError, TypeError):
+            pass
+
+        self.state.sender_log_received.connect(self.tab_sender.append_log)
+        self.state.monitor_log_received.connect(self.tab_monitor.append_log)
+
+        # 信号接入：底层 Handler -> 信号发射
+        self._setup_log_routing()
+
+    def _setup_log_routing(self):
+        """将 GuiLoggingHandler 的回调挂载到信号发射方法上"""
+        # 筛选出所有 GUI 处理器并注入回调
+        gui_handlers = [h for h in logging.getLogger().handlers if isinstance(h, GuiLoggingHandler)]
+        
+        for h in gui_handlers:
+            h.sender_callback = self.state.sender_log_received.emit
+            h.monitor_callback = self.state.monitor_log_received.emit
+            
+        if not gui_handlers:
+            self.logger.warning("日志路由失败：未找到 GuiLoggingHandler。")
 
     def closeEvent(self, event: QCloseEvent):
         """

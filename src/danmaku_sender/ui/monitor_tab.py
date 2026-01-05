@@ -3,12 +3,14 @@ from PySide6.QtWidgets import (
     QLabel, QGroupBox, QTextEdit, QProgressBar, 
     QPushButton, QSpinBox, QFrame
 )
+from PySide6.QtGui import QTextCursor
 from PySide6.QtCore import Qt
 
 
 class MonitorTab(QWidget):
     def __init__(self):
         super().__init__()
+        self._state = None
 
         self._create_ui()
 
@@ -76,7 +78,6 @@ class MonitorTab(QWidget):
         settings_group.setLayout(settings_layout)
         main_layout.addWidget(settings_group)
 
-        
         # --- 运行日志区 ---
         log_group = QGroupBox("监视运行日志")
         log_layout = QVBoxLayout()
@@ -106,7 +107,6 @@ class MonitorTab(QWidget):
         self.start_btn = QPushButton("开始监视")
         self.start_btn.setFixedWidth(120)
         self.start_btn.setCursor(Qt.PointingHandCursor)
-        # 统一使用绿色的成功样式
         self.start_btn.setStyleSheet("""
             QPushButton {
                 background-color: #2ecc71; 
@@ -127,3 +127,32 @@ class MonitorTab(QWidget):
         main_layout.addLayout(action_layout)
 
         self.setLayout(main_layout)
+
+    def bind_state(self, state):
+        if self._state is state:
+            return
+            
+        if self._state is not None:
+            self._disconnect_signals()
+        
+        self._state = state
+        config = state.monitor_config
+
+        # 初始化与绑定
+        self.interval_spin.setValue(config.refresh_interval)
+        self.tolerance_spin.setValue(config.tolerance)
+
+        self.interval_spin.valueChanged.connect(lambda v: setattr(config, 'refresh_interval', v))
+        self.tolerance_spin.valueChanged.connect(lambda v: setattr(config, 'tolerance', v))
+
+    def _disconnect_signals(self):
+        """断开信号连接"""
+        try:
+            self.interval_spin.valueChanged.disconnect()
+            self.tolerance_spin.valueChanged.disconnect()
+        except (RuntimeError, TypeError):
+            pass
+
+    def append_log(self, message: str):
+        self.log_output.append(message)
+        self.log_output.moveCursor(QTextCursor.End)

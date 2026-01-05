@@ -31,29 +31,21 @@ class GuiLoggingHandler(logging.Handler):
     """
     def __init__(self):
         super().__init__()
-        # 存储不同日志目标的更新函数
-        self.output_targets = {
-            "sender_tab": None,
-            "monitor_tab": None,
-        }
+        # 存储不同日志目标的回调函数
+        self.sender_callback = None
+        self.monitor_callback = None
 
     def emit(self, record):
-        """根据 record.name 将日志消息发送到正确的GUI组件。"""
+        """根据白名单分发日志到对应的回调"""
         msg = self.format(record)
-        target_func = None
 
-        if record.name in SENDER_LOG_WHITELIST:
-            target_func = self.output_targets.get("sender_tab")
-        elif record.name in MONITOR_LOG_WHITELIST:
-            target_func = self.output_targets.get("monitor_tab")
+        if record.name in SENDER_LOG_WHITELIST and self.sender_callback:
+            self.sender_callback(msg)
+        elif record.name in MONITOR_LOG_WHITELIST and self.monitor_callback:
+            self.monitor_callback(msg)
 
-        # 请注意：
-        # 如果 record.name 不在上述任何白名单中（例如 ValidatorTab），
-        # target_func 将保持为 None。这意味着该日志会被静默丢弃（不显示在 GUI），
-        # 但依然会被 FileHandler 写入日志文件。这是有意为之的设计。
-
-        if target_func:
-            target_func(msg)
+        # 备注：不在任何白名单中的日志（如 ValidatorTab）在此处会被忽略，
+        # 不会显示在任何 GUI 窗口中，但会被其他 Handler（如 DailyLogFileHandler）写入文件。
 
 
 class DailyLogFileHandler(logging.handlers.TimedRotatingFileHandler):

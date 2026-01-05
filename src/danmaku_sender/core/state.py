@@ -71,7 +71,8 @@ class AppState(QObject):
     继承自 QObject 以支持信号槽机制，实现 UI 与 逻辑 的解耦。
     """
     credentials_changed = Signal(str, str)
-    log_message = Signal(str)
+    sender_log_received = Signal(str)
+    monitor_log_received = Signal(str)
 
     def __init__(self):
         super().__init__()
@@ -93,6 +94,8 @@ class AppState(QObject):
         self.bili_jct = bili_jct
         self.credentials_changed.emit(sessdata, bili_jct)
 
-    def log(self, message: str):
-        """发送日志信号，供 UI 消费"""
-        self.log_message.emit(message)
+    def log_sender(self, message: str):
+        self.sender_log_received.emit(message)
+
+    def log_monitor(self, message: str):
+        self.monitor_log_received.emit(message)
