@@ -127,3 +127,18 @@ class MonitorTab(QWidget):
         main_layout.addLayout(action_layout)
 
         self.setLayout(main_layout)
+
+    def bind_state(self, state):
+        self._state = state
+        config = state.monitor_config
+
+        # 初始化与绑定
+        self.interval_spin.setValue(config.refresh_interval)
+        self.tolerance_spin.setValue(config.tolerance)
+
+        self.interval_spin.valueChanged.connect(lambda v: setattr(config, 'refresh_interval', v))
+        self.tolerance_spin.valueChanged.connect(lambda v: setattr(config, 'tolerance', v))
+
+    def append_log(self, message: str):
+        self.log_output.append(message)
+        self.log_output.moveCursor(self.log_output.textCursor().End)

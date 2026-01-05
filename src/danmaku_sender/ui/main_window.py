@@ -65,9 +65,16 @@ class MainWindow(QMainWindow):
     def bind_state_to_tabs(self):
         """将 AppState 绑定到各个 Tab 页面。"""
         self.tab_settings.bind_state(self.state)
-        # self.tab_sender.bind_state(self.state)
+        self.tab_sender.bind_state(self.state)
         # self.tab_validator.bind_state(self.state)
-        # self.tab_monitor.bind_state(self.state)
+        self.tab_monitor.bind_state(self.state)
+
+        self.state.log_message.connect(self._on_log_recevied)
+
+    def _on_log_recevied(self, message: str):
+        """将日志输出到当前活动的或相关的日志框"""
+        self.tab_sender.append_log(message)
+        self.tab_monitor.append_log(message)
 
     def closeEvent(self, event: QCloseEvent):
         """
