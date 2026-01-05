@@ -118,13 +118,13 @@ class SettingsTab(QWidget):
                 self.bili_jct_input.text().strip()
             )
 
-    def _on_prevent_sleep_changed(self):
+    def _on_prevent_sleep_changed(self, state_value):
         if self._state:
             is_checked = self.prevent_sleep_checkbox.isChecked()
             self._state.sender_config.prevent_sleep = is_checked
             self._state.monitor_config.prevent_sleep = is_checked
 
-    def _on_proxy_changed(self):
+    def _on_proxy_changed(self, state_value):
         if self._state:
             is_checked = self.proxy_checkbox.isChecked()
             self._state.sender_config.use_system_proxy = is_checked
