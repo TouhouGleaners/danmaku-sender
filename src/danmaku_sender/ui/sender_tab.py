@@ -231,17 +231,21 @@ class SenderTab(QWidget):
 
     def _disconnect_signals(self):
         """安全断开所有信号连接"""
-        try:
-            self.min_delay.valueChanged.disconnect()
-            self.max_delay.valueChanged.disconnect()
-            self.burst_size.valueChanged.disconnect()
-            self.burst_rest_min.valueChanged.disconnect()
-            self.burst_rest_max.valueChanged.disconnect()
-            self.stop_count.valueChanged.disconnect()
-            self.stop_time.valueChanged.disconnect()
-            self.bv_input.textChanged.disconnect()
-        except (RuntimeError, TypeError):
-            pass
+        signals = [
+            self.min_delay.valueChanged,
+            self.max_delay.valueChanged,
+            self.burst_size.valueChanged,
+            self.burst_rest_min.valueChanged,
+            self.burst_rest_max.valueChanged,
+            self.stop_count.valueChanged,
+            self.stop_time.valueChanged,
+            self.bv_input.textChanged
+        ]
+        for sig in signals:
+            try:
+                sig.disconnect()
+            except (RuntimeError, TypeError):
+                pass
 
     def append_log(self, message: str):
         """外部调用的日志接口"""

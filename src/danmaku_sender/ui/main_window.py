@@ -72,6 +72,12 @@ class MainWindow(QMainWindow):
         self.tab_monitor.bind_state(self.state)
 
         # 日志分流：信号 -> Tab 接口
+        try:
+            self.state.sender_log_received.disconnect(self.tab_sender.append_log)
+            self.state.monitor_log_received.disconnect(self.tab_monitor.append_log)
+        except (RuntimeError, TypeError):
+            pass
+
         self.state.sender_log_received.connect(self.tab_sender.append_log)
         self.state.monitor_log_received.connect(self.tab_monitor.append_log)
 
