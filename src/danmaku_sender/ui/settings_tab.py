@@ -1,6 +1,6 @@
 from PySide6.QtWidgets import (
     QWidget, QVBoxLayout, QFormLayout, QLabel, QLineEdit,
-    QCheckBox, QGroupBox, QSpacerItem, QSizePolicy
+    QCheckBox, QGroupBox
 )
 from PySide6.QtCore import Qt
 
@@ -77,6 +77,9 @@ class SettingsTab(QWidget):
 
     def bind_state(self, state: AppState):
         """将 UI 控件绑定到 AppState"""
+        if self._state is not None:
+            self._disconnect_signals()
+        
         self._state = state
 
         # 初始化UI值
@@ -91,6 +94,24 @@ class SettingsTab(QWidget):
         self.prevent_sleep_checkbox.stateChanged.connect(self._on_prevent_sleep_changed)
         self.proxy_checkbox.stateChanged.connect(self._on_proxy_changed)
 
+    def _disconnect_signals(self):
+        """安全断开所有信号连接，忽略未连接的异常"""
+        try:
+            self.sessdata_input.textChanged.disconnect(self._on_credentials_changed)
+        except RuntimeError: pass
+        
+        try:
+            self.bili_jct_input.textChanged.disconnect(self._on_credentials_changed)
+        except RuntimeError: pass
+
+        try:
+            self.prevent_sleep_checkbox.stateChanged.disconnect(self._on_prevent_sleep_changed)
+        except RuntimeError: pass
+
+        try:
+            self.proxy_checkbox.stateChanged.disconnect(self._on_proxy_changed)
+        except RuntimeError: pass
+
     def _on_credentials_changed(self):
         if self._state:
             self._state.update_credentials(
@@ -98,15 +119,14 @@ class SettingsTab(QWidget):
                 self.bili_jct_input.text().strip()
             )
 
-    def _on_prevent_sleep_changed(self, state_value):
+    def _on_prevent_sleep_changed(self):
         if self._state:
-            # Qt.CheckState: 0=Unchecked, 2=Checked
-            is_checked = (state_value == Qt.Checked.value)
+            is_checked = self.prevent_sleep_checkbox.isChecked()
             self._state.sender_config.prevent_sleep = is_checked
             self._state.monitor_config.prevent_sleep = is_checked
 
-    def _on_proxy_changed(self, state_value):
+    def _on_proxy_changed(self):
         if self._state:
-            is_checked = (state_value == Qt.Checked.value)
+            is_checked = self.proxy_checkbox.isChecked()
             self._state.sender_config.use_system_proxy = is_checked
             self._state.monitor_config.use_system_proxy = is_checked
