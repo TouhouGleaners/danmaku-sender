@@ -58,7 +58,7 @@ class VideoState:
 
     @property
     def is_ready_to_send(self) -> bool:
-        return bool(self.bvid and self.selected_cid and self.loaded_danmakus)
+        return bool(self.bvid) and (self.selected_cid is not None) and bool(self.loaded_danmakus)
     
     @property
     def danmaku_count(self) -> int:

@@ -94,23 +94,22 @@ class SettingsTab(QWidget):
         self.prevent_sleep_checkbox.stateChanged.connect(self._on_prevent_sleep_changed)
         self.proxy_checkbox.stateChanged.connect(self._on_proxy_changed)
 
+    def _safe_disconnect(self, signal, slot):
+        """
+        辅助函数：安全断开信号连接。
+        如果信号没有连接该槽，会抛出 RuntimeError 或 TypeError，将其捕获并忽略。
+        """
+        try:
+            signal.disconnect(slot)
+        except (RuntimeError, TypeError):
+            pass
+
     def _disconnect_signals(self):
-        """安全断开所有信号连接，忽略未连接的异常"""
-        try:
-            self.sessdata_input.textChanged.disconnect(self._on_credentials_changed)
-        except RuntimeError: pass
-        
-        try:
-            self.bili_jct_input.textChanged.disconnect(self._on_credentials_changed)
-        except RuntimeError: pass
-
-        try:
-            self.prevent_sleep_checkbox.stateChanged.disconnect(self._on_prevent_sleep_changed)
-        except RuntimeError: pass
-
-        try:
-            self.proxy_checkbox.stateChanged.disconnect(self._on_proxy_changed)
-        except RuntimeError: pass
+        """断开所有已绑定的信号"""
+        self._safe_disconnect(self.sessdata_input.textChanged, self._on_credentials_changed)
+        self._safe_disconnect(self.bili_jct_input.textChanged, self._on_credentials_changed)
+        self._safe_disconnect(self.prevent_sleep_checkbox.stateChanged, self._on_prevent_sleep_changed)
+        self._safe_disconnect(self.proxy_checkbox.stateChanged, self._on_proxy_changed)
 
     def _on_credentials_changed(self):
         if self._state:

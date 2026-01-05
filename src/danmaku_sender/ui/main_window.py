@@ -86,4 +86,4 @@ class MainWindow(QMainWindow):
             QMessageBox.warning(self, "保存失败", f"无法保存凭证：\n{e}")
 
         # 接受关闭事件，允许窗口关闭
-        event.accept()
+        super().closeEvent(event)
