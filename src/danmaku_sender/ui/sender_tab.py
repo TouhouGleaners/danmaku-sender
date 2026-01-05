@@ -3,6 +3,7 @@ from PySide6.QtWidgets import (
     QPushButton, QComboBox, QLabel, QGroupBox, QTextEdit,
     QProgressBar, QTabWidget, QSpinBox, QDoubleSpinBox, QFrame
 )
+from PySide6.QtGui import QTextCursor
 from PySide6.QtCore import Qt
 
 
@@ -250,6 +251,4 @@ class SenderTab(QWidget):
     def append_log(self, message: str):
         """外部调用的日志接口"""
         self.log_output.append(message) 
-        # 自动滚动到底部
-        scrollbar = self.log_output.verticalScrollBar()
-        scrollbar.setValue(scrollbar.maximum())
+        self.log_output.moveCursor(QTextCursor.End)

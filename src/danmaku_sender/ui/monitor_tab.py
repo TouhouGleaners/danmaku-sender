@@ -3,6 +3,7 @@ from PySide6.QtWidgets import (
     QLabel, QGroupBox, QTextEdit, QProgressBar, 
     QPushButton, QSpinBox, QFrame
 )
+from PySide6.QtGui import QTextCursor
 from PySide6.QtCore import Qt
 
 
@@ -154,5 +155,4 @@ class MonitorTab(QWidget):
 
     def append_log(self, message: str):
         self.log_output.append(message)
-        scrollbar = self.log_output.verticalScrollBar()
-        scrollbar.setValue(scrollbar.maximum())
+        self.log_output.moveCursor(QTextCursor.End)
