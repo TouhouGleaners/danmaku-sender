@@ -9,6 +9,8 @@ from PySide6.QtCore import Qt
 class MonitorTab(QWidget):
     def __init__(self):
         super().__init__()
+        self._state = None
+        self._is_bound = False
 
         self._create_ui()
 
@@ -129,6 +131,9 @@ class MonitorTab(QWidget):
         self.setLayout(main_layout)
 
     def bind_state(self, state):
+        if self._is_bound:
+            return
+        
         self._state = state
         config = state.monitor_config
 
@@ -139,6 +144,9 @@ class MonitorTab(QWidget):
         self.interval_spin.valueChanged.connect(lambda v: setattr(config, 'refresh_interval', v))
         self.tolerance_spin.valueChanged.connect(lambda v: setattr(config, 'tolerance', v))
 
+        self._is_bound = True
+
     def append_log(self, message: str):
         self.log_output.append(message)
-        self.log_output.moveCursor(self.log_output.textCursor().End)
+        scrollbar = self.log_output.verticalScrollBar()
+        scrollbar.setValue(scrollbar.maximum())

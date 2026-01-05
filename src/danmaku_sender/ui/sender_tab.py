@@ -9,6 +9,8 @@ from PySide6.QtCore import Qt
 class SenderTab(QWidget):
     def __init__(self):
         super().__init__()
+        self._state = None
+        self._is_bound = False
 
         self._create_ui()
 
@@ -187,6 +189,9 @@ class SenderTab(QWidget):
 
     def bind_state(self, state):
         """将 UI 控件绑定到 AppState"""
+        if self._is_bound:
+            return
+        
         self._state = state
         config = state.sender_config
         video_state = state.video_state
@@ -222,6 +227,8 @@ class SenderTab(QWidget):
         # BV号同步
         self.bv_input.textChanged.connect(self._on_bvid_changed)
 
+        self._is_bound = True
+
     def _on_bvid_changed(self, text):
         self._state.video_state.bvid = text.strip()
 
@@ -229,4 +236,5 @@ class SenderTab(QWidget):
         """外部调用的日志接口"""
         self.log_output.append(message) 
         # 自动滚动到底部
-        self.log_output.moveCursor(self.log_output.textCursor().End)
+        scrollbar = self.log_output.verticalScrollBar()
+        scrollbar.setValue(scrollbar.maximum())
