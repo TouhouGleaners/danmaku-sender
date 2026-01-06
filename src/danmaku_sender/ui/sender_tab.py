@@ -88,6 +88,8 @@ class SenderTab(QWidget):
         self.stop_event = threading.Event()
         self.danmaku_parser = DanmakuParser()
 
+        self._is_task_running = False
+
         self._fetch_worker = None
         self._send_worker = None
 
@@ -341,6 +343,9 @@ class SenderTab(QWidget):
 
     def select_file(self):
         """文件选择逻辑"""
+        if not self._state:
+            return
+
         file_path, _ = QFileDialog.getOpenFileName(self, "选择弹幕XML文件", "", "XML Files (*.xml);;All Files (*.*)")
         if file_path:
             self.file_input.setText(Path(file_path).name)
@@ -359,6 +364,9 @@ class SenderTab(QWidget):
 
     def fetch_video_info(self):
         """获取视频信息"""
+        if not self._state:
+            return
+
         bvid = self.bv_input.text().strip()
         if not bvid:
             QMessageBox.warning(self, "输入错误", "请输入BV号")
@@ -403,6 +411,11 @@ class SenderTab(QWidget):
     def _on_fetch_error(self, err_msg: str):
         self.fetch_btn.setEnabled(True)
         self.fetch_btn.setText("获取分P")
+
+        self.part_combo.clear()
+        self.part_combo.setEnabled(False) 
+        self.part_combo.setPlaceholderText("获取失败，请重试")
+
         self.logger.error(f"获取视频信息失败: {err_msg}")
         QMessageBox.warning(self, "获取失败", f"无法获取视频信息:\n{err_msg}")
 
@@ -421,8 +434,11 @@ class SenderTab(QWidget):
 
     def toggle_task(self):
         """开始/停止 任务"""
+        if not self._state:
+            return
+        
         # 如果正在运行 -> 停止
-        if self.start_btn.text() == "紧急停止":
+        if self._is_task_running:
             self.stop_event.set()
             self.start_btn.setEnabled(False)
             self.start_btn.setText("正在停止...")
@@ -441,6 +457,7 @@ class SenderTab(QWidget):
              return
 
         # UI 锁定
+        self._is_task_running = True
         self.stop_event.clear()
         self.start_btn.setText("紧急停止")
         self.start_btn.setStyleSheet("background-color: #e74c3c; color: white; font-weight: bold; padding: 6px 20px; border-radius: 4px;")
@@ -449,6 +466,7 @@ class SenderTab(QWidget):
         self.log_output.clear()
         self.progress_bar.setValue(0)
 
+        # 构造配置
         auth_config = state.get_api_auth()
         strategy_config = state.sender_config
         
@@ -474,6 +492,7 @@ class SenderTab(QWidget):
     def _on_send_finished(self, sender_instance):
         """任务结束后的清理与保存逻辑"""
         # 恢复 UI
+        self._is_task_running = False
         self.start_btn.setText("开始发送")
         self.start_btn.setEnabled(True)
         self.start_btn.setStyleSheet("QPushButton { background-color: #2ecc71; color: white; font-weight: bold; padding: 6px 20px; border-radius: 4px; }")
