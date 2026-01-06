@@ -9,7 +9,7 @@ from PySide6.QtWidgets import (
     QFileDialog, QMessageBox
 )
 from PySide6.QtGui import QTextCursor
-from PySide6.QtCore import Qt, QThread, Signal, QObject
+from PySide6.QtCore import QThread, Signal
 
 from ..api.bili_api_client import BiliApiClient
 from ..core.bili_sender import BiliDanmakuSender
@@ -77,7 +77,8 @@ class SendTaskWorker(QThread):
         except Exception as e:
             self.log_message.emit(f"任务发生严重错误: {e}")
         finally:
-            self.task_finished.emit(self.sender_instance) 
+            logging.getLogger("SendTaskWorker").error("任务发生严重错误", exc_info=True)
+            self.log_message.emit(f"任务发生严重错误: {e}")
 
 
 class SenderTab(QWidget):
@@ -350,6 +351,7 @@ class SenderTab(QWidget):
         if file_path:
             self.file_input.setText(Path(file_path).name)
             self.logger.info(f"已选择文件：{file_path}")
+            self._state.video_state.loaded_danmakus = []
 
             try:
                 parsed = self.danmaku_parser.parse_xml_file(file_path)
@@ -444,6 +446,10 @@ class SenderTab(QWidget):
             self.start_btn.setText("正在停止...")
             self.logger.info("正在请求停止任务...")
             return
+        
+        if self._send_worker is not None and self._send_worker.isRunning():
+            self.logger.warning("上一轮任务尚未彻底结束，请稍候...")
+            return
 
         # 如果未运行 -> 开始
         # 校验
@@ -481,6 +487,7 @@ class SenderTab(QWidget):
         )
         self._send_worker.progress_updated.connect(self._on_send_progress)
         self._send_worker.task_finished.connect(self._on_send_finished)
+        self._send_worker.finished.connect(self._send_worker.deleteLater)
         self._send_worker.start()
 
     def _on_send_progress(self, attempted, total):
@@ -518,3 +525,5 @@ class SenderTab(QWidget):
                     except Exception as e:
                         self.logger.error(f"保存XML文件失败: {e}")
                         QMessageBox.critical(self, "保存失败", f"无法写入文件，请检查权限或路径。\n错误信息: {e}")
+
+        self._send_worker = None
