@@ -511,5 +511,10 @@ class SenderTab(QWidget):
             if reply == QMessageBox.Yes:
                 file_path, _ = QFileDialog.getSaveFileName(self, "保存XML", "unsent.xml", "XML Files (*.xml)")
                 if file_path:
-                    create_xml_from_danmakus(sender_instance.unsent_danmakus, file_path)
-                    self.logger.info(f"未发送弹幕已保存至: {file_path}")
+                    try:
+                        create_xml_from_danmakus(sender_instance.unsent_danmakus, file_path)
+                        self.logger.info(f"未发送弹幕已保存至: {file_path}")
+                        QMessageBox.information(self, "保存成功", f"文件已保存至：\n{file_path}")
+                    except Exception as e:
+                        self.logger.error(f"保存XML文件失败: {e}")
+                        QMessageBox.critical(self, "保存失败", f"无法写入文件，请检查权限或路径。\n错误信息: {e}")
