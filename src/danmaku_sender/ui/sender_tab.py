@@ -465,7 +465,8 @@ class SenderTab(QWidget):
             self.start_btn.setText("正在停止...")
             self.logger.info("正在请求停止任务...")
             return
-        
+
+        # 防并发
         if self._send_worker is not None and self._send_worker.isRunning():
             self.logger.warning("上一轮任务尚未彻底结束，请稍候...")
             return
@@ -482,16 +483,7 @@ class SenderTab(QWidget):
              return
 
         # UI 锁定
-        self._is_task_running = True
-        self.stop_event.clear()
-        self.start_btn.setText("紧急停止")
-        self.start_btn.setStyleSheet("background-color: #e74c3c; color: white; font-weight: bold; padding: 6px 20px; border-radius: 4px;")
-        self.fetch_btn.setEnabled(False)
-        self.file_btn.setEnabled(False)
-        self.part_combo.setEnabled(False)
-        self.bv_input.setReadOnly(True)
-        self.log_output.clear()
-        self.progress_bar.setValue(0)
+        self._set_ui_for_task_start()
 
         # 构造配置
         auth_config = state.get_api_auth()
@@ -522,15 +514,7 @@ class SenderTab(QWidget):
     def _on_send_finished(self, sender_instance):
         """任务结束后的清理与保存逻辑"""
         # 恢复 UI
-        self._is_task_running = False
-        self.start_btn.setText("开始发送")
-        self.start_btn.setEnabled(True)
-        self.start_btn.setStyleSheet("QPushButton { background-color: #2ecc71; color: white; font-weight: bold; padding: 6px 20px; border-radius: 4px; }")
-        self.fetch_btn.setEnabled(True)
-        self.file_btn.setEnabled(True)
-        self.part_combo.setEnabled(True)
-        self.bv_input.setReadOnly(False)
-        
+        self._reset_ui_after_task()
         self.status_label.setText("发送器：任务结束")
         
         # 检查是否有失败弹幕
@@ -553,3 +537,37 @@ class SenderTab(QWidget):
                         QMessageBox.critical(self, "保存失败", f"无法写入文件，请检查权限或路径。\n错误信息: {e}")
 
         self._send_worker = None
+
+    def _set_ui_for_task_start(self):
+        """任务开始时的 UI 状态设置"""
+        self._is_task_running = True
+        self.stop_event.clear()
+        
+        # 按钮变红
+        self.start_btn.setText("紧急停止")
+        self.start_btn.setStyleSheet("background-color: #e74c3c; color: white; font-weight: bold; padding: 6px 20px; border-radius: 4px;")
+        
+        # 锁定输入
+        self.fetch_btn.setEnabled(False)
+        self.file_btn.setEnabled(False)
+        self.part_combo.setEnabled(False)
+        self.bv_input.setReadOnly(True)
+        
+        # 重置进度
+        self.log_output.clear()
+        self.progress_bar.setValue(0)
+
+    def _reset_ui_after_task(self):
+        """任务结束后的 UI 状态复位"""
+        self._is_task_running = False
+
+        # 按钮变绿
+        self.start_btn.setText("开始发送")
+        self.start_btn.setEnabled(True)
+        self.start_btn.setStyleSheet("QPushButton { background-color: #2ecc71; color: white; font-weight: bold; padding: 6px 20px; border-radius: 4px; }")
+        
+        # 解锁输入
+        self.fetch_btn.setEnabled(True)
+        self.file_btn.setEnabled(True)
+        self.part_combo.setEnabled(True)
+        self.bv_input.setReadOnly(False)
