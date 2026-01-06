@@ -1,31 +1,11 @@
 import sys
-import logging
-
-from PySide6.QtWidgets import QApplication
-
-from src.danmaku_sender.ui.main_window import MainWindow
-from src.danmaku_sender.utils.log_utils import GuiLoggingHandler
+from pathlib import Path
 
 
-def setup_logging():
-    gui_handler = GuiLoggingHandler()
-    gui_handler.setFormatter(logging.Formatter('%(asctime)s [%(name)s] %(levelname)s - %(message)s'))
-    
-    root_logger = logging.getLogger()
-    root_logger.setLevel(logging.INFO)
-    root_logger.addHandler(gui_handler)
+current_dir = Path(__file__).resolve().parent
+sys.path.insert(0, str(current_dir))
 
-def main():
-    setup_logging()
-
-    app = QApplication(sys.argv)
-    
-    app.setStyle("Fusion")
-
-    window = MainWindow()
-    window.show()
-
-    sys.exit(app.exec())
+from src.danmaku_sender.main import main
 
 
 if __name__ == "__main__":
