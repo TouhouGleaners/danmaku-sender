@@ -70,6 +70,10 @@ class ValidatorTab(QWidget):
         self.table.setAlternatingRowColors(True)
         self.table.itemDoubleClicked.connect(self.on_table_double_click)
 
+        # 右键菜单
+        self.table.setContextMenuPolicy(Qt.CustomContextMenu)
+        self.table.customContextMenuRequested.connect(self.open_context_menu)
+
         # 设置列宽调整模式
         header = self.table.horizontalHeader()
         header.setSectionResizeMode(0, QHeaderView.ResizeToContents)
@@ -180,14 +184,38 @@ class ValidatorTab(QWidget):
             self.status_label.setText("所有问题已处理，请点击应用。")
             self.apply_btn.setEnabled(True)
 
-    def on_table_double_click(self, item):
-        """双击编辑内容"""
-        if item.column() != 3:
+    def open_context_menu(self, pos):
+        item = self.table.itemAt(pos)
+        if not item:
             return
         
-        row = item.row()
-        original_index = self.table.item(row, 0).data(Qt.UserRole)
-        current_text = item.text()
+        menu = QMenu(self)
+        edit_action = menu.addAction("✏️ 编辑内容")
+        delete_action = menu.addAction("🗑️ 删除此条")
+
+        # 在鼠标位置弹出
+        action = menu.exec(self.table.mapToGlobal(pos))
+
+        if action == edit_action:
+            self._edit_row(item.row())
+        elif action == delete_action:
+            # 获取原始索引并删除
+            original_index = self.table.item(item.row(), 0).data(Qt.UserRole)
+            self.session.delete_item(original_index)
+            self._refresh_table()
+
+    def on_table_double_click(self, item):
+        """双击编辑内容"""
+        if item.column() == 3:
+            self._edit_row(item.row())
+
+    def _edit_row(self, row):
+        idx_item = self.table.item(row, 0)
+        if not idx_item:
+            return
+        
+        original_index = idx_item.data(Qt.UserRole)
+        current_text = self.table.item(row, 3).text()
 
         new_text, ok = QInputDialog.getText(self, "编辑弹幕", "请输入修改后的内容：", text=current_text)
 
