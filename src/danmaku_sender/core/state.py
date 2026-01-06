@@ -4,6 +4,13 @@ from PySide6.QtCore import QObject, Signal
 
 
 @dataclass
+class ApiAuthConfig:
+    sessdata: str
+    bili_jct: str
+    use_system_proxy: bool
+
+
+@dataclass
 class SenderConfig:
     """发送器的配置数据"""
     # 延迟设置
@@ -93,6 +100,16 @@ class AppState(QObject):
         self.sessdata = sessdata
         self.bili_jct = bili_jct
         self.credentials_changed.emit(sessdata, bili_jct)
+
+    def get_api_auth(self) -> ApiAuthConfig:
+        """
+        工厂方法：从当前状态生成一个用于初始化的 API 凭证对象。
+        """
+        return ApiAuthConfig(
+            sessdata=self.sessdata,
+            bili_jct=self.bili_jct,
+            use_system_proxy=self.sender_config.use_system_proxy
+        )
 
     def log_sender(self, message: str):
         self.sender_log_received.emit(message)
