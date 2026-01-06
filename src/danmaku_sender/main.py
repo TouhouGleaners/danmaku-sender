@@ -24,6 +24,7 @@ def setup_logging():
     # 获取根 Logger 并重置
     root_logger = logging.getLogger()
     root_logger.setLevel(logging.DEBUG)
+
     if root_logger.hasHandlers():
         root_logger.handlers.clear()
 
@@ -63,14 +64,22 @@ def setup_logging():
     logging.info(f"日志系统初始化完成。日志路径: {log_file_path}")
 
 
-def main():
-    """程序主入口"""
+def main(argv=None):
+    """
+    程序主入口
+
+    Args:
+        argv: 命令行参数列表，默认使用 sys.argv
+    """
+    if argv is None:
+        argv = sys.argv
+
+    setup_logging()
+
     app = QApplication(sys.argv)
     app.setStyle("Fusion")
     app.setApplicationName(AppInfo.NAME)
     app.setApplicationVersion(AppInfo.VERSION)
-
-    setup_logging()
 
     window = MainWindow()
     window.show()
