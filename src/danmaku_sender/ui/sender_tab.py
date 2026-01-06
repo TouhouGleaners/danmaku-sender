@@ -75,10 +75,10 @@ class SendTaskWorker(QThread):
                         progress_callback=_callback
                     )
         except Exception as e:
-            self.log_message.emit(f"任务发生严重错误: {e}")
-        finally:
             logging.getLogger("SendTaskWorker").error("任务发生严重错误", exc_info=True)
             self.log_message.emit(f"任务发生严重错误: {e}")
+        finally:
+            self.task_finished.emit(self.sender_instance)
 
 
 class SenderTab(QWidget):
@@ -415,8 +415,8 @@ class SenderTab(QWidget):
         self.fetch_btn.setText("获取分P")
 
         self.part_combo.clear()
+        self.part_combo.addItem(f"获取失败，请重试")
         self.part_combo.setEnabled(False) 
-        self.part_combo.setPlaceholderText("获取失败，请重试")
 
         self.logger.error(f"获取视频信息失败: {err_msg}")
         QMessageBox.warning(self, "获取失败", f"无法获取视频信息:\n{err_msg}")
