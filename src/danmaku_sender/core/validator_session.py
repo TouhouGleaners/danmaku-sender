@@ -2,7 +2,7 @@ import copy
 import logging
 from typing import Any, TypedDict
 
-from ..config.shared_data import SharedDataModel
+from ..core.state import AppState
 from ..core.bili_danmaku_utils import validate_danmaku_list
 
 
@@ -17,18 +17,17 @@ class ValidatorSession:
     校验器逻辑会话层。
     负责管理数据快照、执行修改逻辑、维护脏状态及撤销栈。
     """
-    def __init__(self, model: SharedDataModel):
-        self.model = model
+    def __init__(self, state: AppState):
+        self.state = state
         self.logger = logging.getLogger("ValidatorSession")
         
         self.original_snapshot: list[dict] = []          # 原始数据的深拷贝
         self.current_issues: list[dict[str, Any]] = []   # 当前的问题列表
-
         self.undo_stack: list[list[ChangedRecord]] = []  # 撤销栈: 一次操作产生的一组变更记录
 
     @property
     def is_dirty(self) -> bool:
-        return self.model.validator_is_dirty
+        return self.state.validator_is_dirty
     
     @property
     def has_active_session(self) -> bool:
@@ -39,22 +38,18 @@ class ValidatorSession:
         return bool(self.undo_stack)
 
     def set_dirty(self, dirty: bool):
-        self.model.validator_is_dirty = dirty
+        self.state.validator_is_dirty = dirty
 
-    def load_and_validate(self, duration_ms: int) -> bool:
-        """加载数据并执行校验。
+    def load_and_validate(self) -> bool:
+        """加载数据并执行校验"""
+        danmakus = self.state.video_state.loaded_danmakus
+        duration_ms = self.state.video_state.selected_part_duration_ms
 
-        Args:
-            duration_ms (int): 视频分P时长
-
-        Returns:
-            bool: 是否发现问题 (True/False)
-        """
-        if not self.model.loaded_danmakus:
+        if not danmakus:
             return False
 
         # 创建快照
-        self.original_snapshot = copy.deepcopy(self.model.loaded_danmakus)
+        self.original_snapshot = copy.deepcopy(danmakus)
         self.logger.info(f"启动校验会话... 原始弹幕总数: {len(self.original_snapshot)}")
         
         # 执行校验
@@ -113,12 +108,7 @@ class ValidatorSession:
             if target_item := issue_map.get(target_idx):
                 target_item[change['field']] = change['old_value']
 
-        # 如果撤销栈已空，则已回至初始状态
-        if not self.undo_stack:
-            self.set_dirty(False)
-        else:
-            self.set_dirty(True)
-
+        self.set_dirty(bool(self.undo_stack))
         return True
 
     def update_item_content(self, original_index: int, new_content: str):
@@ -218,7 +208,7 @@ class ValidatorSession:
         return count
 
     def apply_changes(self) -> tuple[int, int, int]:
-        """应用修改回 SharedDataModel。
+        """应用修改回 AppState。
 
         Returns:
             tuple[int, int, int]: 最终剩余总数, 修复数量, 删除数量
@@ -269,7 +259,7 @@ class ValidatorSession:
             f"现总数={len(new_list)}"
         )
 
-        self.model.loaded_danmakus = new_list
+        self.state.video_state.loaded_danmakus = new_list
         self.undo_stack.clear()
         self.set_dirty(False)
         
