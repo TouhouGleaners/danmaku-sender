@@ -76,7 +76,7 @@ def main(argv=None):
 
     setup_logging()
 
-    app = QApplication(sys.argv)
+    app = QApplication(argv)
     app.setStyle("Fusion")
     app.setApplicationName(AppInfo.NAME)
     app.setApplicationVersion(AppInfo.VERSION)
