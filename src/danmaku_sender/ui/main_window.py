@@ -23,6 +23,7 @@ class MainWindow(QMainWindow):
 
         # 核心状态
         self.state = AppState()
+        self._log_signals_connected = False
         self.logger = logging.getLogger("MainWindow")
 
         # 中央部件
@@ -72,14 +73,13 @@ class MainWindow(QMainWindow):
         self.tab_monitor.bind_state(self.state)
 
         # 日志分流：信号 -> Tab 接口
-        try:
+        if self._log_signals_connected:
             self.state.sender_log_received.disconnect(self.tab_sender.append_log)
             self.state.monitor_log_received.disconnect(self.tab_monitor.append_log)
-        except (RuntimeError, TypeError):
-            pass
 
         self.state.sender_log_received.connect(self.tab_sender.append_log)
         self.state.monitor_log_received.connect(self.tab_monitor.append_log)
+        self._log_signals_connected = True
 
         # 信号接入：底层 Handler -> 信号发射
         self._setup_log_routing()
