@@ -368,7 +368,8 @@ class SenderTab(QWidget):
 
     def fetch_video_info(self):
         """获取视频信息"""
-        if not self._state:
+        if self._fetch_worker is not None and self._fetch_worker.isRunning():
+            self.logger.warning("正在获取视频信息，请稍候...")
             return
 
         bvid = self.bv_input.text().strip()
@@ -386,6 +387,7 @@ class SenderTab(QWidget):
         self._fetch_worker = FetchInfoWorker(bvid, auth_config, parent=self)
         self._fetch_worker.finished_success.connect(self._on_fetch_success)
         self._fetch_worker.finished_error.connect(self._on_fetch_error)
+        self._fetch_worker.finished.connect(self._fetch_worker.deleteLater)
         self._fetch_worker.start()
 
     def _on_fetch_success(self, info: dict):
@@ -401,12 +403,17 @@ class SenderTab(QWidget):
         self.logger.info(f"获取成功: {info.get('title')}, 共 {len(pages)} 个分P")
 
         for p in pages:
-            cid = p['cid']
-            part_name = f"P{p['page']} - {p['part']}"
+            cid = p.get('cid')
+            page_num = p.get('page', '?')
+            part_title = p.get('part', '未知分P标题')
             duration = p.get('duration', 0)
 
-            self.part_combo.addItem(part_name, userData={'cid': cid, 'duration': duration})
+            if not cid:
+                continue
 
+            part_name = f"P{page_num} - {part_title}"
+
+            self.part_combo.addItem(part_name, userData={'cid': cid, 'duration': duration})
             self._state.video_state.cid_parts_map[cid] = part_name
 
         if pages:
