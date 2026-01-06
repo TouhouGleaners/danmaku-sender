@@ -381,7 +381,7 @@ class SenderTab(QWidget):
 
         auth_config = self._state.get_api_auth()
 
-        self._fetch_worker = FetchInfoWorker(bvid, auth_config)
+        self._fetch_worker = FetchInfoWorker(bvid, auth_config, parent=self)
         self._fetch_worker.finished_success.connect(self._on_fetch_success)
         self._fetch_worker.finished_error.connect(self._on_fetch_error)
         self._fetch_worker.start()
@@ -425,6 +425,11 @@ class SenderTab(QWidget):
         """处理分P选择变化"""
         if index < 0:
             return
+
+        data = self.part_combo.itemData(index)
+        if not data or not isinstance(data, dict):
+            return
+        
         cid = self.part_combo.itemData(index)['cid']
         duration = self.part_combo.itemData(index)['duration']
         part_name = self.part_combo.currentText()
@@ -483,7 +488,8 @@ class SenderTab(QWidget):
             danmakus=state.video_state.loaded_danmakus,
             auth_config=auth_config,
             strategy_config=strategy_config,
-            stop_event=self.stop_event
+            stop_event=self.stop_event,
+            parent=self
         )
         self._send_worker.progress_updated.connect(self._on_send_progress)
         self._send_worker.task_finished.connect(self._on_send_finished)
