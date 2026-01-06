@@ -35,6 +35,7 @@ class FetchInfoWorker(QThread):
                 info = sender.get_video_info(self.bvid)
                 self.finished_success.emit(info)
         except Exception as e:
+            logging.getLogger("FetchInfoWorker").error("获取视频信息失败", exc_info=True)
             self.finished_error.emit(str(e))
 
 
@@ -349,18 +350,19 @@ class SenderTab(QWidget):
 
         file_path, _ = QFileDialog.getOpenFileName(self, "选择弹幕XML文件", "", "XML Files (*.xml);;All Files (*.*)")
         if file_path:
-            self.file_input.setText(Path(file_path).name)
-            self.logger.info(f"已选择文件：{file_path}")
             self._state.video_state.loaded_danmakus = []
 
             try:
                 parsed = self.danmaku_parser.parse_xml_file(file_path)
                 if parsed:
+                    self.file_input.setText(Path(file_path).name)
                     self._state.video_state.loaded_danmakus = parsed
                     self.logger.info(f"✅ 文件解析成功，共 {len(parsed)} 条弹幕。")
                 else:
+                    self.file_input.clear()
                     self.logger.warning("⚠️ 文件解析完成但无有效弹幕。")
             except Exception as e:
+                self.file_input.clear()
                 self.logger.error(f"❌ 解析失败: {e}")
                 QMessageBox.critical(self, "解析失败", str(e))
 
@@ -493,6 +495,7 @@ class SenderTab(QWidget):
         )
         self._send_worker.progress_updated.connect(self._on_send_progress)
         self._send_worker.task_finished.connect(self._on_send_finished)
+        self._send_worker.log_message.connect(self.append_log)
         self._send_worker.finished.connect(self._send_worker.deleteLater)
         self._send_worker.start()
 
