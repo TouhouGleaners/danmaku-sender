@@ -368,6 +368,9 @@ class SenderTab(QWidget):
 
     def fetch_video_info(self):
         """获取视频信息"""
+        if not self._state:
+            return
+        
         if self._fetch_worker is not None and self._fetch_worker.isRunning():
             self.logger.warning("正在获取视频信息，请稍候...")
             return
@@ -395,6 +398,7 @@ class SenderTab(QWidget):
         self.fetch_btn.setEnabled(True)
         self.fetch_btn.setText("获取分P")
         self.part_combo.setEnabled(True)
+        self._fetch_worker = None
         
         self._state.video_state.video_title = info.get('title', '未知标题')
         self._state.video_state.cid_parts_map = {}
@@ -422,6 +426,7 @@ class SenderTab(QWidget):
     def _on_fetch_error(self, err_msg: str):
         self.fetch_btn.setEnabled(True)
         self.fetch_btn.setText("获取分P")
+        self._fetch_worker = None
 
         self.part_combo.clear()
         self.part_combo.addItem(f"获取失败，请重试")
@@ -483,6 +488,8 @@ class SenderTab(QWidget):
         self.start_btn.setStyleSheet("background-color: #e74c3c; color: white; font-weight: bold; padding: 6px 20px; border-radius: 4px;")
         self.fetch_btn.setEnabled(False)
         self.file_btn.setEnabled(False)
+        self.part_combo.setEnabled(False)
+        self.bv_input.setReadOnly(True)
         self.log_output.clear()
         self.progress_bar.setValue(0)
 
@@ -521,6 +528,9 @@ class SenderTab(QWidget):
         self.start_btn.setStyleSheet("QPushButton { background-color: #2ecc71; color: white; font-weight: bold; padding: 6px 20px; border-radius: 4px; }")
         self.fetch_btn.setEnabled(True)
         self.file_btn.setEnabled(True)
+        self.part_combo.setEnabled(True)
+        self.bv_input.setReadOnly(False)
+        
         self.status_label.setText("发送器：任务结束")
         
         # 检查是否有失败弹幕
