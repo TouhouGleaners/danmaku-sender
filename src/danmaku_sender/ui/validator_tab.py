@@ -70,6 +70,7 @@ class ValidatorTab(QWidget):
         self.table.setSelectionBehavior(QAbstractItemView.SelectRows)
         self.table.setEditTriggers(QAbstractItemView.NoEditTriggers)
         self.table.setAlternatingRowColors(True)
+        self.table.setSortingEnabled(False)
         self.table.itemDoubleClicked.connect(self.on_table_double_click)
 
         # 右键菜单
@@ -265,6 +266,9 @@ class ValidatorTab(QWidget):
 
     def delete_selected_items(self):
         """删除选中项"""
+        if not self.session:
+            return
+        
         rows = set()
         for item in self.table.selectedItems():
             rows.add(item.row())
@@ -284,10 +288,16 @@ class ValidatorTab(QWidget):
             self._refresh_table()
 
     def batch_remove_newlines(self):
+        if not self.session:
+            return
+        
         mod, dele = self.session.batch_remove_newlines()
         self._show_batch_result(mod, dele)
 
     def batch_truncate_length(self):
+        if not self.session:
+            return
+        
         count = self.session.batch_truncate_length()
         if count > 0:
             self._refresh_table()
@@ -304,6 +314,9 @@ class ValidatorTab(QWidget):
 
     def apply_changes(self):
         """应用修改"""
+        if not self.session:
+            return
+        
         total, fixed, deleted = self.session.apply_changes()
         
         self.logger.info(f"修改已应用: 修复 {fixed}, 删除 {deleted}")
