@@ -129,6 +129,38 @@ class ValidatorTab(QWidget):
         else:
             self.status_label.setText("提示: 请先在“发射器”页面加载文件并选择分P。")
 
+    def _update_ui_state(self):
+        """更新 UI 状态"""
+        if not self._state or not self.session:
+            self.run_btn.setEnabled(False)
+            self.batch_btn.setEnabled(False)
+            self.undo_btn.setEnabled(False)
+            self.delete_btn.setEnabled(False)
+            self.apply_btn.setEnabled(False)
+            return
+        
+        has_items = self.table.rowCount() > 0
+        self.run_btn.setEnabled(True)
+        self.batch_btn.setEnabled(has_items)
+        self.delete_btn.setEnabled(has_items)
+        self.undo_btn.setEnabled(self.session.can_undo)
+        self.apply_btn.setEnabled(self.session.is_dirty)
+
+        if self.session.is_dirty:
+            self.status_label.setText("⚠️ 有未应用的修改！请点击“应用所有修改”按钮。")
+            self.status_label.setStyleSheet("color: #d35400;")
+        elif self.session.has_active_session:
+            if has_items:
+                count = len(self.session.current_issues)
+                self.status_label.setText(f"❌ 发现 {count} 条问题弹幕，请处理。")
+                self.status_label.setStyleSheet("color: red;")
+            else:
+                self.status_label.setText("✅ 当前无问题弹幕。")
+                self.status_label.setStyleSheet("color: green;")
+        else:
+            self.status_label.setText("提示: 请先在“发射器”页面加载文件并选择分P。")
+            self.status_label.setStyleSheet("color: #7f8c8d;")
+
     def run_validation(self):
         """运行验证逻辑"""
         if not self._state or not self.session:
@@ -142,6 +174,11 @@ class ValidatorTab(QWidget):
         if not self._state.video_state.selected_cid:
             QMessageBox.warning(self, "无法验证", "请先在 “发射器” 页面选择一个分P（用于检查时间戳）。")
             return
+        
+        duration = self._state.video_state.selected_part_duration_ms
+        if duration <= 0:
+            QMessageBox.warning(self, "数据缺失", "当前分P时长无效，无法进行时间戳校验。\n请尝试重新获取分P信息。")
+            return
 
         # 检查未保存修改
         if self.session.is_dirty:
@@ -154,18 +191,11 @@ class ValidatorTab(QWidget):
         self.status_label.setStyleSheet("color: blue;")
         
         has_issues = self.session.load_and_validate()
-        self._refresh_table()
-        
+
         if not has_issues:
-            self.status_label.setText("✅ 验证通过: 所有弹幕均符合规范！")
-            self.status_label.setStyleSheet("color: green;")
             QMessageBox.information(self, "验证通过", "所有弹幕均符合规范！")
-            self._set_buttons_enabled(False)
-        else:
-            count = len(self.session.current_issues)
-            self.status_label.setText(f"❌ 发现 {count} 条问题弹幕，请处理。")
-            self.status_label.setStyleSheet("color: red;")
-            self._set_buttons_enabled(True)
+
+        self._refresh_table()
 
     def _refresh_table(self):
         """刷新表格"""
@@ -184,15 +214,7 @@ class ValidatorTab(QWidget):
             self.table.setItem(row, 2, QTableWidgetItem(item['reason']))
             self.table.setItem(row, 3, QTableWidgetItem(item['current_content']))
 
-        # 更新按钮状态
-        self.undo_btn.setEnabled(self.session.can_undo)
-        if self.session.is_dirty:
-            self.status_label.setText("⚠️ 有未应用的修改！请点击“应用所有修改”按钮。")
-            self.status_label.setStyleSheet("color: #d35400;") # 橙色
-            self.apply_btn.setEnabled(True)
-        elif self.session.has_active_session and self.table.rowCount() == 0:
-            self.status_label.setText("所有问题已处理，请点击应用。")
-            self.apply_btn.setEnabled(True)
+        self._update_ui_state()
 
     def open_context_menu(self, pos):
         item = self.table.itemAt(pos)
@@ -291,9 +313,4 @@ class ValidatorTab(QWidget):
         self._refresh_table()
         self.status_label.setText("修改已应用。")
         self.status_label.setStyleSheet("color: green;")
-        self._set_buttons_enabled(False)
-        self.apply_btn.setEnabled(False)
-
-    def _set_buttons_enabled(self, enabled):
-        self.batch_btn.setEnabled(enabled)
-        self.delete_btn.setEnabled(enabled)
+        self._update_ui_state()
