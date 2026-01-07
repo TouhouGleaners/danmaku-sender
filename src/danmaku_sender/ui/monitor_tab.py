@@ -189,15 +189,42 @@ class MonitorTab(QWidget):
         self.start_btn.clicked.connect(self.toggle_task)
 
     def bind_state(self, state):
+        if self._state is state:
+            return
+
+        if self._state is not None:
+            self._disconnect_signals()
+
         self._state = state
         config = state.monitor_config
 
         # 初始化与绑定
+        self.interval_spin.blockSignals(True)
+        self.tolerance_spin.blockSignals(True)
+
         self.interval_spin.setValue(config.refresh_interval)
         self.tolerance_spin.setValue(config.tolerance)
 
-        self.interval_spin.valueChanged.connect(lambda v: setattr(config, 'refresh_interval', v))
-        self.tolerance_spin.valueChanged.connect(lambda v: setattr(config, 'tolerance', v))
+        self.interval_spin.blockSignals(False)
+        self.tolerance_spin.blockSignals(False)
+
+        self.interval_spin.valueChanged.connect(self._on_interval_changed)
+        self.tolerance_spin.valueChanged.connect(self._on_tolerance_changed)
+
+    def _disconnect_signals(self):
+        try:
+            self.interval_spin.valueChanged.disconnect(self._on_interval_changed)
+            self.tolerance_spin.valueChanged.disconnect(self._on_tolerance_changed)
+        except (RuntimeError, TypeError):
+            pass
+
+    def _on_interval_changed(self, value):
+        if self._state:
+            self._state.monitor_config.refresh_interval = value
+
+    def _on_tolerance_changed(self, value):
+        if self._state:
+            self._state.monitor_config.tolerance = value
 
     def showEvent(self, event):
         super().showEvent(event)
