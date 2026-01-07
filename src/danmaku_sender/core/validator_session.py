@@ -48,6 +48,10 @@ class ValidatorSession:
         if not danmakus:
             return False
 
+        self.undo_stack.clear()
+        self.set_dirty(False)
+        self.current_issues = []
+
         # 创建快照
         self.original_snapshot = copy.deepcopy(danmakus)
         self.logger.info(f"启动校验会话... 原始弹幕总数: {len(self.original_snapshot)}")

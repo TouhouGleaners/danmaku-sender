@@ -16,9 +16,11 @@ class ValidatorTab(QWidget):
         super().__init__()
         self._state = None
         self.session = None
-        self.logger = None
+        self.logger = logging.getLogger("ValidatorTab")
 
         self._create_ui()
+
+        self._set_ui_ready(False)
 
     def _create_ui(self):
         # 主布局 - 垂直布局
@@ -117,11 +119,19 @@ class ValidatorTab(QWidget):
     def bind_state(self, state):
         self._state = state
         self.session = ValidatorSession(state)
-        self.logger = logging.getLogger("ValidatorTab")
+        self._set_ui_ready(True)
+
+    def _set_ui_ready(self, is_ready):
+        """控制核心按钮的可用性"""
+        self.run_btn.setEnabled(is_ready)
+        if not is_ready:
+            self.status_label.setText("正在初始化...")
+        else:
+            self.status_label.setText("提示: 请先在“发射器”页面加载文件并选择分P。")
 
     def run_validation(self):
         """运行验证逻辑"""
-        if not self._state:
+        if not self._state or not self.session:
             return
         
         # 校验前置条件
