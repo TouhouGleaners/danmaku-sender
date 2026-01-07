@@ -95,6 +95,9 @@ class AppState(QObject):
         # 运行时状态
         self.video_state = VideoState()
 
+        # True 表示校验器有未应用的修改，SenderTab 拦截发送
+        self.validator_is_dirty: bool = False
+
     def update_credentials(self, sessdata: str, bili_jct: str):
         """更新凭证并通知监听者"""
         self.sessdata = sessdata

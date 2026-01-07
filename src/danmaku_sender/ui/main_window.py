@@ -2,7 +2,6 @@ import logging
 
 from PySide6.QtWidgets import QMainWindow, QTabWidget, QMessageBox
 from PySide6.QtGui import QCloseEvent
-from PySide6.QtCore import Qt
 
 from .sender_tab import SenderTab
 from .settings_tab import SettingsTab
@@ -69,7 +68,7 @@ class MainWindow(QMainWindow):
         # 页面数据绑定
         self.tab_settings.bind_state(self.state)
         self.tab_sender.bind_state(self.state)
-        # self.tab_validator.bind_state(self.state)
+        self.tab_validator.bind_state(self.state)
         self.tab_monitor.bind_state(self.state)
 
         # 日志分流：信号 -> Tab 接口
