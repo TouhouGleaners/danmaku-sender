@@ -408,6 +408,7 @@ class SenderTab(QWidget):
         # 如果未运行 -> 开始
         # 校验
         state = self._state
+
         if self._state.validator_is_dirty:
             QMessageBox.warning(
                 self, 
@@ -415,13 +416,14 @@ class SenderTab(QWidget):
                 "检测到【弹幕校验器】中有未应用的修改！\n\n请先返回校验器点击“应用所有修改”，\n否则发送的将是旧的、未修复的弹幕。"
             )
             return
+
         if not state.video_state.is_ready_to_send:
             QMessageBox.warning(self, "条件不足", "请确保 BV号、分P、弹幕文件 均已就绪。")
             return
-        
+
         if not state.sessdata or not state.bili_jct:
-             QMessageBox.warning(self, "凭证缺失", "请先在【全局设置】页填入 SESSDATA 和 BILI_JCT。")
-             return
+            QMessageBox.warning(self, "凭证缺失", "请先在【全局设置】页填入 SESSDATA 和 BILI_JCT。")
+            return
 
         # UI 锁定
         self._set_ui_for_task_start()
