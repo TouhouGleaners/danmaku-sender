@@ -409,7 +409,7 @@ class SenderTab(QWidget):
         # 校验
         state = self._state
 
-        if self._state.validator_is_dirty:
+        if state.validator_is_dirty:
             QMessageBox.warning(
                 self, 
                 "存在未保存的修改", 
