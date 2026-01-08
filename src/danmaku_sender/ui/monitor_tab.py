@@ -7,56 +7,9 @@ from PySide6.QtWidgets import (
     QPushButton, QSpinBox, QFrame, QMessageBox
 )
 from PySide6.QtGui import QTextCursor
-from PySide6.QtCore import Qt, QThread, Signal
+from PySide6.QtCore import Qt
 
-from ..api.bili_api_client import BiliApiClient
-from ..core.bili_monitor import BiliDanmakuMonitor
-from ..core.state import ApiAuthConfig, MonitorConfig
-from ..utils.system_utils import KeepSystemAwake
-
-
-class MonitorTaskWorker(QThread):
-    """监视任务后台线程"""
-    progress_updated = Signal(int, int)  # 匹配，总数
-    status_updated = Signal(str)         # 状态更新
-    log_message = Signal(str)            # 日志
-    task_finished = Signal()
-
-    def __init__(self, cid, danmakus,
-                 auth_config: ApiAuthConfig,
-                 monitor_config: MonitorConfig,
-                 stop_event, parent=None):
-        super().__init__(parent)
-        self.cid = cid
-        self.danmakus = danmakus
-        self.auth_config = auth_config
-        self.monitor_config = monitor_config
-        self.stop_event = stop_event
-
-    def run(self):
-        try:
-            with KeepSystemAwake(self.monitor_config.prevent_sleep):
-                with BiliApiClient.from_config(self.auth_config) as client:
-                    monitor = BiliDanmakuMonitor(
-                        api_client=client,
-                        cid=self.cid,
-                        loaded_danmakus=self.danmakus,
-                        interval=self.monitor_config.refresh_interval,
-                        time_tolerance=self.monitor_config.tolerance
-                    )
-
-                    def _callback(matched, total):
-                        self.progress_updated.emit(matched, total)
-                        if total > 0:
-                            self.status_updated.emit(f"监视中... ({matched}/{total})")
-
-                    monitor.run(self.stop_event, _callback)
-        
-        except Exception as e:
-            logging.getLogger("MonitorTaskWorker").error("监视任务异常", exc_info=True)
-            self.log_message.emit(f"监视任务异常: {e}")
-        finally:
-            self.task_finished.emit()
+from ..core.workers import MonitorTaskWorker
 
 
 class MonitorTab(QWidget):

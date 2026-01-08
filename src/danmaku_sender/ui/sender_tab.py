@@ -9,77 +9,9 @@ from PySide6.QtWidgets import (
     QFileDialog, QMessageBox
 )
 from PySide6.QtGui import QTextCursor
-from PySide6.QtCore import QThread, Signal
 
-from ..api.bili_api_client import BiliApiClient
-from ..core.bili_sender import BiliDanmakuSender
 from ..core.bili_danmaku_utils import DanmakuParser, create_xml_from_danmakus
-from ..core.state import ApiAuthConfig, SenderConfig
-from ..utils.system_utils import KeepSystemAwake
-
-
-class FetchInfoWorker(QThread):
-    """用于后台获取视频信息的线程"""
-    finished_success = Signal(dict)  # 成功信号，携带视频信息字典
-    finished_error = Signal(str)     # 失败信号，携带错误信息
-
-    def __init__(self, bvid, auth_config: ApiAuthConfig, parent=None):
-        super().__init__(parent)
-        self.bvid = bvid
-        self.auth_config = auth_config
-
-    def run(self):
-        try:
-            with BiliApiClient.from_config(self.auth_config) as client:
-                sender = BiliDanmakuSender(client)
-                info = sender.get_video_info(self.bvid)
-                self.finished_success.emit(info)
-        except Exception as e:
-            logging.getLogger("FetchInfoWorker").error("获取视频信息失败", exc_info=True)
-            self.finished_error.emit(str(e))
-
-
-class SendTaskWorker(QThread):
-    """用于后台发送弹幕的线程"""
-    progress_updated = Signal(int, int)  # 已尝试, 总数
-    task_finished = Signal(object)       # 携带 sender 实例以便后续处理(如保存失败弹幕)
-    log_message = Signal(str)            # 转发日志到主界面（可选，如果不用 logging 路由）
-
-    def __init__(self, bvid, cid, danmakus,
-                 auth_config: ApiAuthConfig,
-                 strategy_config: SenderConfig,
-                 stop_event, parent=None):
-        super().__init__(parent)
-        self.bvid = bvid
-        self.cid = cid
-        self.danmakus = danmakus
-        self.auth_config = auth_config
-        self.strategy_config = strategy_config
-        self.stop_event = stop_event
-        self.sender_instance = None
-
-    def run(self):
-        try:
-            with KeepSystemAwake(self.strategy_config.prevent_sleep):
-                with BiliApiClient.from_config(self.auth_config) as client:
-                    self.sender_instance = BiliDanmakuSender(client)
-
-                    def _callback(attempted, total):
-                        self.progress_updated.emit(attempted, total)
-
-                    self.sender_instance.send_danmaku_from_list(
-                        bvid=self.bvid,
-                        cid=self.cid,
-                        danmakus=self.danmakus,
-                        config=self.strategy_config,
-                        stop_event=self.stop_event,
-                        progress_callback=_callback
-                    )
-        except Exception as e:
-            logging.getLogger("SendTaskWorker").error("任务发生严重错误", exc_info=True)
-            self.log_message.emit(f"任务发生严重错误: {e}")
-        finally:
-            self.task_finished.emit(self.sender_instance)
+from ..core.workers import FetchInfoWorker, SendTaskWorker
 
 
 class SenderTab(QWidget):
