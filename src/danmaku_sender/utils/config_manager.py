@@ -14,7 +14,7 @@ def get_config_path() -> Path:
     config_dir.mkdir(parents=True, exist_ok=True)
     return config_dir / "config.json"
 
-def save_app_config(state: AppState) -> Path:
+def save_app_config(state: AppState):
     """保存非敏感配置到 config.json"""
     config_data = {
         "sender": state.sender_config.to_dict(),
