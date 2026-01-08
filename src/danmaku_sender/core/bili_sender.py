@@ -3,7 +3,7 @@ import logging
 from threading import Event
 
 from ..api.bili_api_client import BiliApiClient, BiliApiException
-from ..config.shared_data import SenderConfig
+from ..core.state import SenderConfig
 from ..core.bili_danmaku_utils import BiliDmErrorCode, DanmakuSendResult, DanmakuParser, UnsentDanmakusRecord
 from ..core.delay_manager import DelayManager
 from ..utils.notification_utils import send_windows_notification
