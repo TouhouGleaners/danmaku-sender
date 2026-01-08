@@ -41,6 +41,7 @@ class FetchInfoWorker(BaseWorker):
                 info = sender.get_video_info(self.bvid)
                 self.finished_success.emit(info)
         except Exception as e:
+            self.report_error("获取视频信息失败", e)
             self.finished_error.emit(str(e))
 
 
@@ -80,7 +81,7 @@ class SendTaskWorker(BaseWorker):
                         progress_callback=_callback
                     )
         except Exception as e:
-            self.log_message.emit(f"任务发生严重错误: {e}")
+            self.report_error("任务发生严重错误", e)
         finally:
             self.task_finished.emit(self.sender_instance)
 
@@ -122,6 +123,6 @@ class MonitorTaskWorker(BaseWorker):
                     monitor.run(self.stop_event, _callback)
         
         except Exception as e:
-            self.log_message.emit(f"监视任务异常: {e}")
+            self.report_error("监视任务异常", e)
         finally:
             self.task_finished.emit()
