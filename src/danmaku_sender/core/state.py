@@ -1,4 +1,5 @@
-from dataclasses import dataclass, field
+import json
+from dataclasses import dataclass, field, asdict
 
 from PySide6.QtCore import QObject, Signal
 
@@ -37,6 +38,17 @@ class SenderConfig:
         if self.burst_size > 1 and self.rest_min > self.rest_max:
             return False
         return True
+
+    def to_dict(self):
+        return asdict(self)
+    
+    def from_dict(self, data: dict):
+        if not data:
+            return
+        for key, value in data.items():
+            if hasattr(self, key):
+                setattr(self, key, value)
+            
     
 
 @dataclass
@@ -48,6 +60,16 @@ class MonitorConfig:
     # 复用全局设置
     prevent_sleep: bool = True
     use_system_proxy: bool = True
+
+    def to_dict(self):
+        return asdict(self)
+    
+    def from_dict(self, data: dict):
+        if not data:
+            return
+        for key, value in data.items():
+            if hasattr(self, key):
+                setattr(self, key, value)
 
 
 @dataclass
