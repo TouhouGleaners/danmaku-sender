@@ -1,14 +1,19 @@
 import logging
+from pathlib import Path
+from platformdirs import user_data_dir
 
 from PySide6.QtWidgets import QMainWindow, QTabWidget, QMessageBox
-from PySide6.QtGui import QCloseEvent, QDesktopServices
+from PySide6.QtGui import QCloseEvent, QDesktopServices, QAction
 from PySide6.QtCore import QUrl, QTimer
 
 from .sender_tab import SenderTab
 from .settings_tab import SettingsTab
 from .monitor_tab import MonitorTab
 from .validator_tab import ValidatorTab
+from .about_dialog import AboutDialog
+from .help_dialog import HelpDialog
 
+from ..config.app_config import AppInfo, UI
 from ..core.state import AppState
 from ..core.workers import UpdateCheckWorker
 from ..utils.log_utils import GuiLoggingHandler
@@ -20,7 +25,7 @@ class MainWindow(QMainWindow):
     def __init__(self):
         super().__init__()
 
-        self.setWindowTitle("B站弹幕补档工具 v2.0-dev")
+        self.setWindowTitle(UI.MAIN_WINDOW_TITLE)
         self.resize(750, 650)
 
         # 核心状态
@@ -34,6 +39,7 @@ class MainWindow(QMainWindow):
 
         # 初始化各页面
         self.init_tabs()
+        self.create_menu_bar()
 
         # 从磁盘中加载凭证
         self._load_initial_credentials()
@@ -58,6 +64,58 @@ class MainWindow(QMainWindow):
 
         # 默认选中发射器
         self.tabs.setCurrentWidget(self.tab_sender)
+
+    def create_menu_bar(self):
+        menu_bar = self.menuBar()
+
+        # --- 文件菜单 ---
+        file_menu = menu_bar.addMenu(UI.MENU_FILE)
+        
+        open_log_action = QAction("打开日志文件夹", self)
+        open_log_action.triggered.connect(self.open_log_folder)
+        file_menu.addAction(open_log_action)
+        
+        file_menu.addSeparator()
+        
+        exit_action = QAction("退出", self)
+        exit_action.triggered.connect(self.close)
+        file_menu.addAction(exit_action)
+
+        # --- 帮助菜单 ---
+        help_menu = menu_bar.addMenu("帮助")
+        
+        usage_action = QAction("使用说明", self)
+        usage_action.triggered.connect(self.show_help)
+        help_menu.addAction(usage_action)
+        
+        help_menu.addSeparator()
+        
+        update_action = QAction("检查新版本", self)
+        update_action.triggered.connect(lambda: self.run_update_check(is_manual=True))
+        help_menu.addAction(update_action)
+        
+        help_menu.addSeparator()
+        
+        about_action = QAction("关于", self)
+        about_action.triggered.connect(self.show_about)
+        help_menu.addAction(about_action)
+
+    def show_help(self):
+        HelpDialog(self).exec()
+
+    def show_about(self):
+        AboutDialog(self).exec()
+
+    def open_log_folder(self):
+        log_dir = Path(user_data_dir(AppInfo.NAME_EN, AppInfo.AUTHOR)) / AppInfo.LOG_DIR_NAME
+        if not log_dir.exists():
+            try:
+                log_dir.mkdir(parents=True, exist_ok=True)
+            except Exception as e:
+                QMessageBox.warning(self, "错误", f"无法创建日志目录：\n{e}")
+                return
+
+        QDesktopServices.openUrl(QUrl.fromLocalFile(str(log_dir)))
 
     def _load_initial_credentials(self):
         """程序启动时，从 Keyring 读取加密的凭证并填充到设置页面。"""

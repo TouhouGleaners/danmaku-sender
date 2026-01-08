@@ -3,7 +3,7 @@ class AppInfo:
     NAME = "B站弹幕补档工具"
     NAME_EN = "BiliDanmakuSender"
     AUTHOR = "Miku_oso"
-    VERSION = "1.3.0"
+    VERSION = "2.0.0-beta.1"
     LOG_FILE_NAME = "latest.log"
     LOG_DIR_NAME = "logs"
     
