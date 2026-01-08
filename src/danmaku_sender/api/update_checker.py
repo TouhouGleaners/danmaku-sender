@@ -32,11 +32,16 @@ class UpdateChecker:
         response = session.get(api_url, timeout=10)
         response.raise_for_status()
 
-        data_list = response.json()
+        try:
+            data_list = response.json()
+        except ValueError:
+            logger.warning("GitHub API 返回了非 JSON 数据")
+            return UpdateInfo(False)
+
         if not data_list or not isinstance(data_list, list):
             logger.warning("未找到任何发布信息")
             return UpdateInfo(False)
-        
+
         data = data_list[0]
         remote_tag = data.get("tag_name", "").lstrip("v")
         release_notes = data.get("body") or "暂无更新日志"
