@@ -2,9 +2,9 @@ import logging
 from PySide6.QtCore import QThread, Signal
 
 from ..api.bili_api_client import BiliApiClient
-from ..core.bili_sender import BiliDanmakuSender
-from ..core.bili_monitor import BiliDanmakuMonitor
-from ..core.state import ApiAuthConfig, SenderConfig, MonitorConfig
+from .bili_sender import BiliDanmakuSender
+from .bili_monitor import BiliDanmakuMonitor
+from .state import ApiAuthConfig, SenderConfig, MonitorConfig
 from ..utils.system_utils import KeepSystemAwake
 
 
