@@ -69,7 +69,7 @@ class MainWindow(QMainWindow):
         menu_bar = self.menuBar()
 
         # --- 文件菜单 ---
-        file_menu = menu_bar.addMenu(UI.MENU_FILE)
+        file_menu = menu_bar.addMenu("文件")
         
         open_log_action = QAction("打开日志文件夹", self)
         open_log_action.triggered.connect(self.open_log_folder)
