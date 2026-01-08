@@ -69,7 +69,7 @@ class MainWindow(QMainWindow):
         menu_bar = self.menuBar()
 
         # --- 文件菜单 ---
-        file_menu = menu_bar.addMenu("文件")
+        file_menu = menu_bar.addMenu(UI.MENU_FILE)
         
         open_log_action = QAction("打开日志文件夹", self)
         open_log_action.triggered.connect(self.open_log_folder)
@@ -108,8 +108,14 @@ class MainWindow(QMainWindow):
 
     def open_log_folder(self):
         log_dir = Path(user_data_dir(AppInfo.NAME_EN, AppInfo.AUTHOR)) / AppInfo.LOG_DIR_NAME
-        if log_dir.exists():
-            QDesktopServices.openUrl(QUrl.fromLocalFile(str(log_dir)))
+        if not log_dir.exists():
+            try:
+                log_dir.mkdir(parents=True, exist_ok=True)
+            except Exception as e:
+                QMessageBox.warning(self, "错误", f"无法创建日志目录：\n{e}")
+                return
+
+        QDesktopServices.openUrl(QUrl.fromLocalFile(str(log_dir)))
 
     def _load_initial_credentials(self):
         """程序启动时，从 Keyring 读取加密的凭证并填充到设置页面。"""
