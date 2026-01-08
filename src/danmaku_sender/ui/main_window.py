@@ -1,7 +1,8 @@
 import logging
 
 from PySide6.QtWidgets import QMainWindow, QTabWidget, QMessageBox
-from PySide6.QtGui import QCloseEvent
+from PySide6.QtGui import QCloseEvent, QDesktopServices
+from PySide6.QtCore import QUrl, QTimer
 
 from .sender_tab import SenderTab
 from .settings_tab import SettingsTab
@@ -9,6 +10,7 @@ from .monitor_tab import MonitorTab
 from .validator_tab import ValidatorTab
 
 from ..core.state import AppState
+from ..core.workers import UpdateCheckWorker
 from ..utils.log_utils import GuiLoggingHandler
 from ..utils.credential_manager import load_credentials, save_credentials
 
@@ -37,6 +39,8 @@ class MainWindow(QMainWindow):
 
         # 绑定 State 到各个 Tab
         self.bind_state_to_tabs()
+
+        QTimer.singleShot(1000, lambda: self.run_update_check(is_manual=False))
 
     def init_tabs(self):
         self.tab_settings = SettingsTab()
@@ -113,3 +117,33 @@ class MainWindow(QMainWindow):
 
         # 接受关闭事件，允许窗口关闭
         super().closeEvent(event)
+
+    def run_update_check(self, is_manual: bool = False):
+        """启动更新检查"""
+        if hasattr(self, '_update_worker') and self._update_worker and self._update_worker.isRunning():
+            return
+        
+        use_proxy = self.state.sender_config.use_system_proxy
+        self._update_worker = UpdateCheckWorker(use_proxy, is_manual, parent=self)
+        self._update_worker.update_found.connect(self._on_update_found)
+
+        if is_manual:
+            self._update_worker.no_update.connect(lambda: QMessageBox.information(self, "检查更新", "当前已是最新版本。"))
+
+        self._update_worker.start()
+
+    def _on_update_found(self, ver, notes, url):
+        """发现新版本时的弹窗"""
+        # 简单的文本截断
+        if len(notes) > 500:
+            notes = notes[:500] + "\n... (更多内容请查看网页)"
+            
+        reply = QMessageBox.question(
+            self, 
+            f"发现新版本 v{ver}",
+            f"发现新版本: v{ver}\n\n--- 更新内容 ---\n{notes}\n\n是否前往下载？",
+            QMessageBox.Yes | QMessageBox.No
+        )
+        
+        if reply == QMessageBox.Yes:
+            QDesktopServices.openUrl(QUrl(url))

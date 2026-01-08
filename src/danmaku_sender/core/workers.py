@@ -1,10 +1,13 @@
 import logging
 from PySide6.QtCore import QThread, Signal
 
-from ..api.bili_api_client import BiliApiClient
 from .bili_sender import BiliDanmakuSender
 from .bili_monitor import BiliDanmakuMonitor
 from .state import ApiAuthConfig, SenderConfig, MonitorConfig
+
+from ..api.bili_api_client import BiliApiClient
+from ..api.update_checker import UpdateChecker, UpdateInfo
+from ..config.app_config import AppInfo
 from ..utils.system_utils import KeepSystemAwake
 
 
@@ -22,6 +25,30 @@ class BaseWorker(QThread):
     def report_error(self, title: str, exception: Exception):
         self.logger.error(title, exc_info=True)
         self.log_message.emit(f"{title}: {exception}")
+
+
+class UpdateCheckWorker(BaseWorker):
+    """用于后台检查更新的线程"""
+    update_found = Signal(str, str, str)  # 版本，信息，URL
+    no_update = Signal()                  # 无更新 (手动检查时反馈)
+
+    def __init__(self, use_proxy: bool, is_manual: bool = False, parent=None):
+        super().__init__(parent)
+        self.use_proxy = use_proxy
+        self.is_manual = is_manual
+
+    def run(self):
+        try:
+            info = UpdateChecker.check(AppInfo.VERSION, self.use_proxy)
+            if info.has_update:
+                self.update_found.emit(info.remote_version, info.release_notes, info.url)
+            elif self.is_manual:
+                self.no_update.emit()
+        except Exception as e:
+            if self.is_manual:
+                self.report_error("检查更新失败", e)
+            else:
+                self.logger.warning(f"自动更新检查失败: {e}")
 
 
 class FetchInfoWorker(BaseWorker):
