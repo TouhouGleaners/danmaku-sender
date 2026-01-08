@@ -9,6 +9,7 @@ from PySide6.QtWidgets import (
     QFileDialog, QMessageBox
 )
 from PySide6.QtGui import QTextCursor
+from PySide6.QtCore import Qt
 
 from ..core.bili_danmaku_utils import DanmakuParser, create_xml_from_danmakus
 from ..core.workers import FetchInfoWorker, SendTaskWorker
@@ -182,18 +183,10 @@ class SenderTab(QWidget):
         self.progress_bar = QProgressBar()
         self.progress_bar.setValue(0)
         self.start_btn = QPushButton("开始发送")
-        self.start_btn.setStyleSheet("""
-            QPushButton {
-                background-color: #2ecc71; 
-                color: white; 
-                font-weight: bold; 
-                padding: 6px 20px;
-                border-radius: 4px;
-            }
-            QPushButton:disabled {
-                background-color: #bdc3c7;
-            }
-        """)
+        self.start_btn.setFixedWidth(100)
+        self.start_btn.setCursor(Qt.PointingHandCursor)
+        self.start_btn.setProperty("action", "true")
+        self.start_btn.setProperty("state", "ready")
 
         action_layout.addWidget(self.status_label)
         action_layout.addWidget(self.progress_bar, stretch=1)
@@ -208,6 +201,13 @@ class SenderTab(QWidget):
         self.fetch_btn.clicked.connect(self.fetch_video_info)
         self.part_combo.currentIndexChanged.connect(self.on_part_selected)
         self.start_btn.clicked.connect(self.toggle_task)
+
+    def _update_btn_style(self, running: bool):
+        """统一刷新按钮样式的私有方法"""
+        state = "running" if running else "ready"
+        self.start_btn.setProperty("state", state)
+        self.start_btn.style().unpolish(self.start_btn)
+        self.start_btn.style().polish(self.start_btn)
 
     def bind_state(self, state):
         """将 UI 控件绑定到 AppState"""
@@ -402,8 +402,6 @@ class SenderTab(QWidget):
         if self._send_worker is not None and self._send_worker.isRunning():
             self.logger.warning("上一轮任务尚未彻底结束，请稍候...")
             return
-        
-
 
         # 如果未运行 -> 开始
         # 校验
@@ -488,14 +486,14 @@ class SenderTab(QWidget):
         
         # 按钮变红
         self.start_btn.setText("紧急停止")
-        self.start_btn.setStyleSheet("background-color: #e74c3c; color: white; font-weight: bold; padding: 6px 20px; border-radius: 4px;")
+        self._update_btn_style(True)
         
         # 锁定输入
         self.fetch_btn.setEnabled(False)
         self.file_btn.setEnabled(False)
         self.part_combo.setEnabled(False)
         self.bv_input.setReadOnly(True)
-        
+
         # 重置进度
         self.log_output.clear()
         self.progress_bar.setValue(0)
@@ -507,8 +505,8 @@ class SenderTab(QWidget):
         # 按钮变绿
         self.start_btn.setText("开始发送")
         self.start_btn.setEnabled(True)
-        self.start_btn.setStyleSheet("QPushButton { background-color: #2ecc71; color: white; font-weight: bold; padding: 6px 20px; border-radius: 4px; }")
-        
+        self._update_btn_style(False)
+
         # 解锁输入
         self.fetch_btn.setEnabled(True)
         self.file_btn.setEnabled(True)

@@ -19,6 +19,7 @@ from ..core.workers import UpdateCheckWorker
 from ..utils.log_utils import GuiLoggingHandler
 from ..utils.credential_manager import load_credentials, save_credentials
 from ..utils.config_manager import load_app_config, save_app_config
+from ..utils.resource_utils import load_stylesheet
 
 
 class MainWindow(QMainWindow):
@@ -26,7 +27,7 @@ class MainWindow(QMainWindow):
         super().__init__()
 
         self.setWindowTitle(UI.MAIN_WINDOW_TITLE)
-        self.resize(750, 650)
+        self.resize(710, 650)
 
         # 核心状态
         self.state = AppState()
@@ -47,6 +48,7 @@ class MainWindow(QMainWindow):
 
         # 绑定 State 到各个 Tab
         self.bind_state_to_tabs()
+        load_stylesheet()
 
         QTimer.singleShot(1000, lambda: self.run_update_check(is_manual=False))
 
