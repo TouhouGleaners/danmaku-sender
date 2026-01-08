@@ -1,6 +1,6 @@
 import logging
-from platformdirs import user_data_dir
 from pathlib import Path
+from platformdirs import user_data_dir
 
 from PySide6.QtWidgets import QMainWindow, QTabWidget, QMessageBox
 from PySide6.QtGui import QCloseEvent, QDesktopServices, QAction
@@ -13,7 +13,7 @@ from .validator_tab import ValidatorTab
 from .about_dialog import AboutDialog
 from .help_dialog import HelpDialog
 
-from ..config.app_config import AppInfo
+from ..config.app_config import AppInfo, UI
 from ..core.state import AppState
 from ..core.workers import UpdateCheckWorker
 from ..utils.log_utils import GuiLoggingHandler
@@ -25,7 +25,7 @@ class MainWindow(QMainWindow):
     def __init__(self):
         super().__init__()
 
-        self.setWindowTitle("B站弹幕补档工具 v2.0-dev")
+        self.setWindowTitle(UI.MAIN_WINDOW_TITLE)
         self.resize(750, 650)
 
         # 核心状态
