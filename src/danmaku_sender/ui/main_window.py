@@ -13,6 +13,7 @@ from ..core.state import AppState
 from ..core.workers import UpdateCheckWorker
 from ..utils.log_utils import GuiLoggingHandler
 from ..utils.credential_manager import load_credentials, save_credentials
+from ..utils.config_manager import load_app_config, save_app_config
 
 
 class MainWindow(QMainWindow):
@@ -36,6 +37,7 @@ class MainWindow(QMainWindow):
 
         # 从磁盘中加载凭证
         self._load_initial_credentials()
+        load_app_config(self.state)
 
         # 绑定 State 到各个 Tab
         self.bind_state_to_tabs()
@@ -114,6 +116,8 @@ class MainWindow(QMainWindow):
         except Exception as e:
             self.logger.error(f"保存凭证失败: {e}")
             QMessageBox.warning(self, "保存失败", f"无法保存凭证：\n{e}")
+
+        save_app_config(self.state)
 
         # 接受关闭事件，允许窗口关闭
         super().closeEvent(event)
