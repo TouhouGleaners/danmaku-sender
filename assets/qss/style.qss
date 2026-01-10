@@ -1,0 +1,27 @@
+/* --- 操作按钮基础样式 --- */
+QPushButton[action="true"] {
+    color: white;
+    font-weight: bold;
+    padding: 6px 15px;
+    border-radius: 4px;
+    border: none;
+}
+
+/* 状态：准备就绪 (ready) -> 绿色 */
+QPushButton[action="true"][state="ready"] {
+    background-color: #2ecc71;
+}
+QPushButton[action="true"][state="ready"]:hover {
+    background-color: #27ae60;
+}
+QPushButton[action="true"][state="ready"]:disabled {
+    background-color: #bdc3c7;
+}
+
+/* 状态：运行中 (running) -> 红色 */
+QPushButton[action="true"][state="running"] {
+    background-color: #e74c3c;
+}
+QPushButton[action="true"][state="running"]:hover {
+    background-color: #c0392b;
+}
