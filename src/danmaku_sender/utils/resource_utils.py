@@ -10,16 +10,16 @@ def get_assets_path() -> Path:
     if getattr(sys, 'frozen', False) and hasattr(sys, '_MEIPASS'):
         return Path(sys._MEIPASS) / 'assets'
     
-    current_file = Path(__file__).resolve()
-
-    try:
-        candidate = current_file.parents[3] / 'assets'
+    if getattr(sys, 'frozen', False):
+        return Path(sys.argv[0]).resolve().parent / 'assets'
+    
+    current_path = Path(__file__).resolve().parent
+    for parent in [current_path] + list(current_path.parents):
+        candidate = parent / 'assets'
         if candidate.exists() and candidate.is_dir():
             return candidate
-    except IndexError:
-        pass
     
-    return Path(sys.argv[0]).resolve().parent / 'assets'
+    return Path(__file__).resolve().parents[3] / 'assets'
 
 def get_app_icon() -> QIcon:
     """获取程序全局图标"""
