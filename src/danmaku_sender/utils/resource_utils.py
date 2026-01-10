@@ -7,17 +7,19 @@ from PySide6.QtWidgets import QApplication
 
 def get_assets_path() -> Path:
     """获取 assets 文件夹路径"""
-    if getattr(sys, 'frozen', False) and hasattr(sys, '_MEIPASS'):
-        return Path(sys._MEIPASS) / 'assets'
-    
     if getattr(sys, 'frozen', False):
-        return Path(sys.argv[0]).resolve().parent / 'assets'
+        base_path = Path(getattr(sys, '_MEIPASS', Path(sys.argv[0]).resolve().parent))
+        return base_path / 'assets'
     
     current_path = Path(__file__).resolve().parent
-    for parent in [current_path] + list(current_path.parents):
-        candidate = parent / 'assets'
+    for _ in range(5):
+        candidate = current_path / 'assets'
         if candidate.exists() and candidate.is_dir():
             return candidate
+        
+        if current_path.parent == current_path:
+            break
+        current_path = current_path.parent
     
     return Path(__file__).resolve().parents[3] / 'assets'
 
