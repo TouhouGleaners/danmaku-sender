@@ -115,20 +115,10 @@ class MonitorTab(QWidget):
         self.progress_bar.setTextVisible(True)
         
         self.start_btn = QPushButton("开始监视")
-        self.start_btn.setFixedWidth(120)
+        self.start_btn.setFixedWidth(100)
         self.start_btn.setCursor(Qt.PointingHandCursor)
-        self.start_btn.setStyleSheet("""
-            QPushButton {
-                background-color: #2ecc71; 
-                color: white; 
-                font-weight: bold; 
-                padding: 6px;
-                border-radius: 4px;
-            }
-            QPushButton:hover {
-                background-color: #27ae60;
-            }
-        """)
+        self.start_btn.setProperty("action", "true")
+        self.start_btn.setProperty("state", "ready")
         
         action_layout.addWidget(self.status_label)
         action_layout.addWidget(self.progress_bar, stretch=1)
@@ -137,6 +127,12 @@ class MonitorTab(QWidget):
         main_layout.addLayout(action_layout)
 
         self.setLayout(main_layout)
+
+    def _update_btn_style(self, running: bool):
+        state = "running" if running else "ready"
+        self.start_btn.setProperty("state", state)
+        self.start_btn.style().unpolish(self.start_btn)
+        self.start_btn.style().polish(self.start_btn)
 
     def _connect_signals(self):
         self.start_btn.clicked.connect(self.toggle_task)
@@ -246,35 +242,13 @@ class MonitorTab(QWidget):
         
         if running:
             self.start_btn.setText("停止监视")
-            self.start_btn.setStyleSheet("""
-                QPushButton {
-                    background-color: #e74c3c;
-                    color: white;
-                    font-weight: bold;
-                    padding: 6px;
-                    border-radius: 4px;
-                }
-                QPushButton:hover {
-                    background-color: #c0392b;
-                    }
-            """)
+            self._update_btn_style(True)
             self.log_output.clear()
             self.progress_bar.setValue(0)
             self.status_label.setText("监视器：启动中...")
         else:
             self.start_btn.setText("开始监视")
-            self.start_btn.setStyleSheet("""
-                QPushButton {
-                    background-color: #2ecc71; 
-                    color: white; 
-                    font-weight: bold; 
-                    padding: 6px;
-                    border-radius: 4px;
-                }
-                QPushButton:hover {
-                    background-color: #27ae60;
-                }
-            """)
+            self._update_btn_style(False)
             self.status_label.setText("监视器：已停止")
 
     def _on_progress(self, matched, total):

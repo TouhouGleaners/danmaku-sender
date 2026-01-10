@@ -1,4 +1,5 @@
 import sys
+import ctypes
 import logging
 from pathlib import Path
 from platformdirs import user_data_dir
@@ -7,6 +8,7 @@ from PySide6.QtWidgets import QApplication
 
 from .config.app_config import AppInfo
 from .utils.log_utils import GuiLoggingHandler, DailyLogFileHandler
+from .utils.resource_utils import get_app_icon
 from .ui.main_window import MainWindow
 
 
@@ -78,6 +80,7 @@ def main(argv=None):
 
     app = QApplication(argv)
     app.setStyle("Fusion")
+    app.setWindowIcon(get_app_icon())
     app.setApplicationName(AppInfo.NAME)
     app.setApplicationVersion(AppInfo.VERSION)
 
