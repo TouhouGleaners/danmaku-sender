@@ -28,7 +28,8 @@ jobs:
       run: |
         python -m nuitka --standalone --onefile `
                --enable-plugin=pyside6 `
-               --windows-disable-console `
+               --assume-yes-for-downloads `
+               --windows-console-mode=disable `
                --windows-icon-from-ico=assets/icon.ico `
                --include-data-dir=assets=assets `
                --output-dir=dist `
