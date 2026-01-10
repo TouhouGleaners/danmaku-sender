@@ -1,4 +1,4 @@
-name: Build Application EXE
+name: Build Application EXE (Nuitka)
 
 on:
   release:
@@ -22,65 +22,37 @@ jobs:
       run: |
         python -m pip install --upgrade pip
         pip install -r requirements.txt
-        pip install pyinstaller
+        pip install nuitka zstandard
 
-    - name: Build EXE (Onefile & Onedir)
+    - name: Build EXE with Nuitka
       run: |
-        $ttkbootstrap_path = (Get-Command pip).Path | Split-Path | Join-Path -ChildPath "..\Lib\site-packages\ttkbootstrap"
-        
-        $common_args = @(
-            "--noconfirm",
-            "--windowed",
-            "--paths", "./src",
-            "--icon=assets/icon.ico",
-            "--add-data", "$ttkbootstrap_path;ttkbootstrap",
-            "--add-data", "assets;assets",
-            "run.py"
-        )
-
-        Write-Host "Building Onefile version..."
-        pyinstaller --onefile --name "BiliDanmakuSender" @common_args
-
-        Write-Host "Building Onedir version..."
-        pyinstaller --onedir --name "BiliDanmakuSender_onedir" @common_args
+        python -m nuitka --standalone --onefile `
+               --enable-plugin=pyside6 `
+               --windows-disable-console `
+               --windows-icon-from-ico=assets/icon.ico `
+               --include-data-dir=assets=assets `
+               --output-dir=dist `
+               --output-filename=BiliDanmakuSender `
+               run.py
 
     - name: Prepare Artifact Names
       id: set_names
       run: |
         $version = "${{ github.ref_name }}"
-        $onefile_name = "BiliDanmakuSender-${version}-windows-x64-onefile.exe"
-        $onedir_zip_name = "BiliDanmakuSender-${version}-windows-x64-onedir.zip"
-        
-        echo "onefile_name=$onefile_name" >> $env:GITHUB_OUTPUT
-        echo "onedir_zip_name=$onedir_zip_name" >> $env:GITHUB_OUTPUT
+        $file_name = "BiliDanmakuSender-${version}-windows-x64.exe"
+        echo "file_name=$file_name" >> $env:GITHUB_OUTPUT
 
-    - name: Rename and Package Artifacts
+    - name: Rename Artifact
       run: |
-        $onefile_name = "${{ steps.set_names.outputs.onefile_name }}"
-        $onedir_zip_name = "${{ steps.set_names.outputs.onedir_zip_name }}"
-        
-        Move-Item -Path "./dist/BiliDanmakuSender.exe" -Destination "./dist/$onefile_name"
-        Compress-Archive -Path "./dist/BiliDanmakuSender_onedir/*" -DestinationPath "./dist/$onedir_zip_name" -Force
+        $file_name = "${{ steps.set_names.outputs.file_name }}"
+        Move-Item -Path "./dist/BiliDanmakuSender.exe" -Destination "./dist/$file_name"
 
-    - name: Debug - List contents of dist directory
-      run: Get-ChildItem -Path ./dist -Recurse
-
-    - name: Upload onefile EXE to Release
+    - name: Upload Release Asset
       uses: actions/upload-release-asset@v1
       env:
         GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
       with:
         upload_url: ${{ github.event.release.upload_url }} 
-        asset_name: ${{ steps.set_names.outputs.onefile_name }}
-        asset_path: ./dist/${{ steps.set_names.outputs.onefile_name }}
+        asset_name: ${{ steps.set_names.outputs.file_name }}
+        asset_path: ./dist/${{ steps.set_names.outputs.file_name }}
         asset_content_type: application/vnd.microsoft.portable-executable
-
-    - name: Upload onedir ZIP to Release
-      uses: actions/upload-release-asset@v1
-      env:
-        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-      with:
-        upload_url: ${{ github.event.release.upload_url }} 
-        asset_name: ${{ steps.set_names.outputs.onedir_zip_name }}
-        asset_path: ./dist/${{ steps.set_names.outputs.onedir_zip_name }}
-        asset_content_type: application/zip
