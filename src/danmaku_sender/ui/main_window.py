@@ -10,8 +10,7 @@ from .sender_tab import SenderTab
 from .settings_tab import SettingsTab
 from .monitor_tab import MonitorTab
 from .validator_tab import ValidatorTab
-from .about_dialog import AboutDialog
-from .help_dialog import HelpDialog
+from .dialogs import AboutDialog, HelpDialog 
 
 from ..config.app_config import AppInfo, UI
 from ..core.state import AppState
@@ -49,6 +48,9 @@ class MainWindow(QMainWindow):
         # 绑定 State 到各个 Tab
         self.bind_state_to_tabs()
         load_stylesheet()
+
+        # 存储帮助窗口的引用，防止被垃圾回收
+        self._help_dialog = None 
 
         QTimer.singleShot(1000, lambda: self.run_update_check(is_manual=False))
 
@@ -103,7 +105,14 @@ class MainWindow(QMainWindow):
         help_menu.addAction(about_action)
 
     def show_help(self):
-        HelpDialog(self).exec()
+        """显示非模态的帮助窗口"""
+        if not self._help_dialog:
+            self._help_dialog = HelpDialog()
+            self._help_dialog.finished.connect(lambda *args: setattr(self, '_help_dialog', None))
+
+        self._help_dialog.show()
+        self._help_dialog.raise_()
+        self._help_dialog.activateWindow()
 
     def show_about(self):
         AboutDialog(self).exec()
@@ -175,9 +184,11 @@ class MainWindow(QMainWindow):
             self.logger.info("凭证已加密保存。")
         except Exception as e:
             self.logger.error(f"保存凭证失败: {e}")
-            QMessageBox.warning(self, "保存失败", f"无法保存凭证：\n{e}")
 
         save_app_config(self.state)
+
+        if self._help_dialog:
+            self._help_dialog.close()
 
         # 接受关闭事件，允许窗口关闭
         super().closeEvent(event)
