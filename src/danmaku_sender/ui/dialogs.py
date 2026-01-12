@@ -1,3 +1,4 @@
+import logging
 from PySide6.QtWidgets import (
     QDialog, QVBoxLayout, QHBoxLayout, QTabWidget,
     QTextBrowser, QPushButton, QLabel
@@ -7,6 +8,9 @@ from PySide6.QtGui import QDesktopServices
 
 from ..config.app_config import AppInfo, Links
 from ..utils.resource_utils import get_assets_path
+
+
+logger = logging.getLogger("HelpDialog")
 
 
 class MarkdownBrowser(QTextBrowser):
@@ -23,9 +27,20 @@ class MarkdownBrowser(QTextBrowser):
                 with open(md_path, "r", encoding="utf-8") as f:
                     self.setMarkdown(f.read())
             except Exception as e:
-                self.setPlainText(f"文档加载失败: {e}")
+                logger.error(f"加载帮助文档失败 [{md_path}]: {e}", exc_info=True)
+                self._show_error_placeholder("无法加载文档内容，请检查日志。")
         else:
-            self.setPlainText(f"未找到帮助文档: {md_path}")
+            logger.warning(f"帮助文档缺失: {md_path}")
+            self._show_error_placeholder("该模块暂无帮助文档。")
+
+    def _show_error_placeholder(self, message: str):
+        """显示一个居中的灰色提示文字"""
+        self.setHtml(f"""
+            <div style='text-align: center; margin-top: 50px; color: #888888;'>
+                <h3>⚠️</h3>
+                <p>{message}</p>
+            </div>
+        """)
 
 
 class HelpDialog(QDialog):
