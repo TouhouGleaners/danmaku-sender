@@ -108,6 +108,7 @@ class MainWindow(QMainWindow):
         """显示非模态的帮助窗口"""
         if not self._help_dialog:
             self._help_dialog = HelpDialog()
+            self._help_dialog.finished.connect(lambda *args: setattr(self, '_help_dialog', None))
 
         self._help_dialog.show()
         self._help_dialog.raise_()
@@ -183,9 +184,11 @@ class MainWindow(QMainWindow):
             self.logger.info("凭证已加密保存。")
         except Exception as e:
             self.logger.error(f"保存凭证失败: {e}")
-            QMessageBox.warning(self, "保存失败", f"无法保存凭证：\n{e}")
 
         save_app_config(self.state)
+
+        if self._help_dialog:
+            self._help_dialog.close()
 
         # 接受关闭事件，允许窗口关闭
         super().closeEvent(event)
