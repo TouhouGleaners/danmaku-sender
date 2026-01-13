@@ -438,6 +438,7 @@ class SenderTab(QWidget):
             auth_config=auth_config,
             strategy_config=strategy_config,
             stop_event=self.stop_event,
+            video_title=state.video_state.video_title,
             parent=self
         )
         self._send_worker.progress_updated.connect(self._on_send_progress)
