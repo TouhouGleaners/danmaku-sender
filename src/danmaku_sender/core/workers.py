@@ -3,10 +3,10 @@ from PySide6.QtCore import QThread, Signal
 
 from .bili_sender import BiliDanmakuSender
 from .bili_monitor import BiliDanmakuMonitor
-from .state import ApiAuthConfig, SenderConfig, MonitorConfig
+from .state import ApiAuthConfig, SenderConfig, MonitorConfig, VideoTarget
 
 from ..api.bili_api_client import BiliApiClient
-from ..api.update_checker import UpdateChecker, UpdateInfo
+from ..api.update_checker import UpdateChecker
 from ..config.app_config import AppInfo
 from ..utils.system_utils import KeepSystemAwake
 
@@ -80,10 +80,10 @@ class SendTaskWorker(BaseWorker):
     def __init__(self, bvid, cid, danmakus,
                  auth_config: ApiAuthConfig,
                  strategy_config: SenderConfig,
-                 stop_event, parent=None):
+                 stop_event, video_title: str = "",
+                 parent=None):
         super().__init__(parent)
-        self.bvid = bvid
-        self.cid = cid
+        self.target = VideoTarget(bvid=bvid, cid=cid, title=video_title)
         self.danmakus = danmakus
         self.auth_config = auth_config
         self.strategy_config = strategy_config
@@ -100,8 +100,7 @@ class SendTaskWorker(BaseWorker):
                         self.progress_updated.emit(attempted, total)
 
                     self.sender_instance.send_danmaku_from_list(
-                        bvid=self.bvid,
-                        cid=self.cid,
+                        target=self.target,
                         danmakus=self.danmakus,
                         config=self.strategy_config,
                         stop_event=self.stop_event,
