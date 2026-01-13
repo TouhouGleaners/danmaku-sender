@@ -1,7 +1,13 @@
-import json
 from dataclasses import dataclass, field, asdict
 
 from PySide6.QtCore import QObject, Signal
+
+@dataclass
+class VideoTarget:
+    """封装发送目标BVID和CID的视频信息"""
+    bvid: str
+    cid: int
+    title: str
 
 
 @dataclass

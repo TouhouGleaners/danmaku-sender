@@ -2,10 +2,11 @@ import time
 import logging
 from threading import Event
 
+from .state import SenderConfig, VideoTarget
+from .bili_danmaku_utils import BiliDmErrorCode, DanmakuSendResult, DanmakuParser, UnsentDanmakusRecord
+from .delay_manager import DelayManager
+
 from ..api.bili_api_client import BiliApiClient, BiliApiException
-from ..core.state import SenderConfig
-from ..core.bili_danmaku_utils import BiliDmErrorCode, DanmakuSendResult, DanmakuParser, UnsentDanmakusRecord
-from ..core.delay_manager import DelayManager
 from ..utils.notification_utils import send_windows_notification
 
 
@@ -39,10 +40,10 @@ class BiliDanmakuSender:
             self.logger.error(log_msg)
             raise RuntimeError(log_msg) from e
 
-    def _send_single_danmaku(self, cid: int, bvid: str, danmaku: dict) -> DanmakuSendResult:
+    def _send_single_danmaku(self, target: VideoTarget, danmaku: dict) -> DanmakuSendResult:
         """发送单条弹幕"""
         try:
-            result_json = self.api_client.post_danmaku(cid, bvid, danmaku)
+            result_json = self.api_client.post_danmaku(target.cid, target.bvid, danmaku)
             
             code = result_json.get('code', BiliDmErrorCode.GENERIC_FAILURE.code)
             raw_message = result_json.get('message', '无B站原始消息')
@@ -94,9 +95,9 @@ class BiliDanmakuSender:
             for dm in danmakus:
                 self.unsent_danmakus.append({'dm': dm, 'reason': reason})
     
-    def send_danmaku_from_list(self, bvid: str, cid: int, danmakus: list, config: 'SenderConfig', stop_event: Event, progress_callback=None):
+    def send_danmaku_from_list(self, target: VideoTarget, danmakus: list, config: 'SenderConfig', stop_event: Event, progress_callback=None):
         """从一个弹幕字典列表发送弹幕，并响应停止事件"""
-        self.logger.info(f"开始发送... CID: {cid}")
+        self.logger.info(f"开始发送... 目标: {target.title} (CID: {target.cid})")
         self.unsent_danmakus = []  # 开始新任务时清空列表
 
         auto_stop_reason = ""
@@ -132,7 +133,7 @@ class BiliDanmakuSender:
             attempted_count += 1
 
             self.logger.info(f"[{i+1}/{total}] 准备发送: {dm.get('msg', 'N/A')}")
-            result = self._send_single_danmaku(cid, bvid, dm)
+            result = self._send_single_danmaku(target, dm)
             self.logger.info(str(result))
 
             if progress_callback:
