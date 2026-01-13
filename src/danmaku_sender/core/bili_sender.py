@@ -97,7 +97,7 @@ class BiliDanmakuSender:
     
     def send_danmaku_from_list(self, target: VideoTarget, danmakus: list, config: 'SenderConfig', stop_event: Event, progress_callback=None):
         """从一个弹幕字典列表发送弹幕，并响应停止事件"""
-        self.logger.info(f"开始发送... 目标: {target.title} (CID: {target.cid})")
+        self.logger.info(f"开始发送... 目标: {target.display_string} (CID: {target.cid})")
         self.unsent_danmakus = []  # 开始新任务时清空列表
 
         auto_stop_reason = ""
