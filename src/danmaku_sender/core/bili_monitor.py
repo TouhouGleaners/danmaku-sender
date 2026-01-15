@@ -2,7 +2,9 @@ import logging
 import threading
 from datetime import timedelta
 
-from ..api.bili_api_client import BiliApiClient, BiliApiException
+from .exceptions import BiliApiException
+
+from ..api.bili_api_client import BiliApiClient
 from ..core.bili_danmaku_utils import DanmakuParser
 
 
