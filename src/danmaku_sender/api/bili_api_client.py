@@ -111,7 +111,7 @@ class BiliApiClient:
                 message = data.get('message', '未知错误')
                 self.logger.warning(f"API请求失败: {url}, Code: {code}, Message: {message}")
                 raise BiliApiException(code=code, message=message)
-        
+
         except (Timeout, ConnectionError) as e:
             self.logger.error(f"连接失败: {url}, Error: {e}")
             raise BiliApiException(
@@ -121,7 +121,8 @@ class BiliApiClient:
             ) from e
         
         except HTTPError as e:
-            self.logger.error(f"HTTP错误: {url}, Status: {e.response.status_code}")
+            status_code = e.response.status_code if e.response is not None else "Unknown"
+            self.logger.error(f"HTTP错误: {url}, Status: {status_code}")
             raise BiliApiException(
                 code=BiliDmErrorCode.HTTP_ERROR.code,
                 message=f"HTTP协议错误: {e}",
@@ -139,7 +140,7 @@ class BiliApiClient:
         except ValueError as e:
             self.logger.error(f"JSON解码失败: {url}, Response: {response.text[:100]}")
             raise BiliApiException(
-                code=BiliDmErrorCode.GENERIC_FAILURE.code,
+                code=BiliDmErrorCode.PARSE_ERROR.code,
                 message=f"无法解析服务器响应: {e}",
                 is_network_error=False
             ) from e

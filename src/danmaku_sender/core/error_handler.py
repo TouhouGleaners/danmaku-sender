@@ -6,7 +6,10 @@ def resolve_bili_error(code: int, raw_message: str) -> tuple[int, str]:
     try:
         return code, BiliDmErrorCode(code).description_str
     except ValueError:
-        return code, raw_message or "未知错误"
+        if raw_message:
+            return code, raw_message
+        else:
+            return code, BiliDmErrorCode.GENERIC_FAILURE.description_str
 
 def normalize_exception(e: Exception) -> BiliDmErrorCode:
     """将任意异常转换为标准错误码"""
