@@ -112,14 +112,22 @@ class BiliApiClient:
                 self.logger.warning(f"API请求失败: {url}, Code: {code}, Message: {message}")
                 raise BiliApiException(code=code, message=message)
 
-        except (Timeout, ConnectionError) as e:
+        except Timeout as e:
+            self.logger.error(f"请求超时: {url}, Error: {e}")
+            raise BiliApiException(
+                code=BiliDmErrorCode.TIMEOUT_ERROR.code,
+                message=f"请求超时: {e}",
+                is_network_error=True
+            ) from e
+
+        except ConnectionError as e:
             self.logger.error(f"连接失败: {url}, Error: {e}")
             raise BiliApiException(
                 code=BiliDmErrorCode.CONNECTION_ERROR.code,
                 message=f"网络连接断开: {e}",
                 is_network_error=True
             ) from e
-        
+
         except HTTPError as e:
             status_code = e.response.status_code if e.response is not None else "Unknown"
             self.logger.error(f"HTTP错误: {url}, Status: {status_code}")
@@ -128,7 +136,7 @@ class BiliApiClient:
                 message=f"HTTP协议错误: {e}",
                 is_network_error=True
             ) from e
-        
+
         except RequestException as e:
             self.logger.error(f"请求异常: {url}, Error: {e}")
             raise BiliApiException(
@@ -136,7 +144,7 @@ class BiliApiClient:
                 message=f"请求发生异常: {e}",
                 is_network_error=True
             ) from e
-        
+
         except ValueError as e:
             self.logger.error(f"JSON解码失败: {url}, Response: {response.text[:100]}")
             raise BiliApiException(
@@ -144,14 +152,14 @@ class BiliApiClient:
                 message=f"无法解析服务器响应: {e}",
                 is_network_error=False
             ) from e
-        
+
     def get_video_info(self, bvid: str) -> dict:
         """根据BVID获取视频详细信息"""
         url = "https://api.bilibili.com/x/web-interface/view"
         params = {'bvid': bvid}
         self.logger.info(f"正在获取视频信息: {bvid}")
         return self._request('GET', url, params=params)
-    
+
     def get_danmaku_list_xml(self, cid: int) -> str:
         """获取指定CID的线上实时弹幕XML内容"""
         url = f"https://api.bilibili.com/x/v1/dm/list.so?oid={cid}"
@@ -166,7 +174,7 @@ class BiliApiClient:
                 message=f"网络连接错误: {e}",
                 is_network_error=True
             ) from e
-        
+
     def post_danmaku(self, cid: int, bvid: str, danmaku: dict) -> dict:
         """发送单条弹幕"""
         url = "https://api.bilibili.com/x/v2/dm/post"
@@ -177,9 +185,9 @@ class BiliApiClient:
             'fontsize': danmaku['fontsize'], 'color': danmaku['color'],
             'pool': '0', 'rnd': int(time.time()), 'csrf': self.bili_jct
         }
-        
+
         signed_params = WbiSigner.enc_wbi(params=base_params, img_key=img_key, sub_key=sub_key)
-        
+
         # 对于发送弹幕，我们直接使用 requests.post 而不是 _request
         # 因为它的成功/失败判断逻辑和通用API不同（code=0不代表一定成功，需要解析data内容）
         # 并且我们不希望它自动重试
