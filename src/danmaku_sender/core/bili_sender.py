@@ -5,10 +5,11 @@ from threading import Event
 from .state import SenderConfig, VideoTarget
 from .bili_danmaku_utils import DanmakuSendResult, DanmakuParser, UnsentDanmakusRecord
 from .delay_manager import DelayManager
-from .models.errors import BiliDmErrorCode
 from .error_handler import resolve_bili_error, normalize_exception
+from .exceptions import BiliApiException
+from .models.errors import BiliDmErrorCode
 
-from ..api.bili_api_client import BiliApiClient, BiliApiException
+from ..api.bili_api_client import BiliApiClient
 from ..utils.notification_utils import send_windows_notification
 
 

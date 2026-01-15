@@ -1,3 +1,4 @@
+from .exceptions import BiliApiException
 from .models.errors import BiliDmErrorCode
 
 
@@ -8,20 +9,19 @@ def resolve_bili_error(code: int, raw_message: str) -> tuple[int, str]:
     if enum_number:
         return code, enum_number.description_str
     
-    if raw_message:
-        return code, raw_message
-    else:
-        return code, BiliDmErrorCode.GENERIC_FAILURE.description_str
+    if raw_message and str(raw_message).strip():
+        return code, str(raw_message)
 
-def normalize_exception(e: Exception) -> BiliDmErrorCode:
+    return code, BiliDmErrorCode.GENERIC_FAILURE.description_str
+
+def normalize_exception(e: BiliApiException) -> BiliDmErrorCode:
     """将任意异常转换为标准错误码"""
-    code = getattr(e, "code", None)
-    if code is not None:
-        found = BiliDmErrorCode.from_code(code)
+    if isinstance(e, BiliApiException):
+        found = BiliDmErrorCode.from_code(e.code)
         if found:
             return found
 
-    if getattr(e, "is_network_error", False):
-        return BiliDmErrorCode.NETWORK_ERROR
+        if e.is_network_error:
+            return BiliDmErrorCode.NETWORK_ERROR
 
     return BiliDmErrorCode.UNKNOWN_ERROR
