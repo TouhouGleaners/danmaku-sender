@@ -117,6 +117,14 @@ class BiliApiClient:
                 is_network_error=True
             ) from e
 
+        except (ValueError, UnicodeDecodeError) as e:
+            self.logger.error(f"JSON解码失败: {url}")
+            raise BiliApiException(
+                code=BiliDmErrorCode.PARSE_ERROR.code,
+                message=f"响应数据格式错误: {e}",
+                is_network_error=False
+            ) from e
+
         except RequestException as e:
             self.logger.error(f"请求异常: {url}, Error: {e}")
             raise BiliApiException(
@@ -135,16 +143,7 @@ class BiliApiClient:
         with self._network_guards(url):
             response = self.session.request(method, url, **kwargs)
             response.raise_for_status()
-
-            try:
-                data = response.json()
-            except ValueError as e:
-                self.logger.error(f"JSON解码失败: {url}, Response: {response.text[:100]}")
-                raise BiliApiException(
-                    code=BiliDmErrorCode.PARSE_ERROR.code,
-                    message=f"无法解析服务器响应: {e}",
-                    is_network_error=False
-                ) from e
+            data = response.json()
 
             code = data.get('code', BiliDmErrorCode.GENERIC_FAILURE.code)
             if code == BiliDmErrorCode.SUCCESS.code:

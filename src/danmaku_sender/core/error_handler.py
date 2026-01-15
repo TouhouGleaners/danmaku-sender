@@ -2,7 +2,7 @@ from .exceptions import BiliApiException
 from .models.errors import BiliDmErrorCode
 
 
-def resolve_bili_error(code: int, raw_message: str) -> tuple[int, str]:
+def resolve_bili_error(code: int, raw_message: str | None) -> tuple[int, str]:
     """根据状态码获取描述"""
     enum_number = BiliDmErrorCode.from_code(code)
 
