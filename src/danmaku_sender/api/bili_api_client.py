@@ -118,7 +118,7 @@ class BiliApiClient:
             ) from e
 
         except (ValueError, UnicodeDecodeError) as e:
-            self.logger.error(f"JSON解码失败: {url}")
+            self.logger.error(f"响应解码失败: {url}")
             raise BiliApiException(
                 code=BiliDmErrorCode.PARSE_ERROR.code,
                 message=f"响应数据格式错误: {e}",
