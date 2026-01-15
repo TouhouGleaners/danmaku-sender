@@ -1,0 +1,22 @@
+from .models.errors import BiliDmErrorCode
+
+
+def resolve_bili_error(code: int, raw_message: str) -> tuple[bool, str]:
+    """根据状态码获取描述"""
+    try:
+        return code, BiliDmErrorCode(code).description_str
+    except ValueError:
+        return code, raw_message or "未知错误"
+
+def normalize_exception(e: Exception) -> BiliDmErrorCode:
+    """将任意异常转换为标准错误码"""
+    code = getattr(e, "code", None)
+    if code is not None:
+        found = BiliDmErrorCode.from_code(code)
+        if found:
+            return found
+
+    if getattr(e, "is_network_error", False):
+        return BiliDmErrorCode.NETWORK_ERROR
+
+    return BiliDmErrorCode.UNKNOWN_ERROR

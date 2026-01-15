@@ -5,7 +5,9 @@ from typing import Protocol
 import requests
 from requests.exceptions import Timeout, ConnectionError, RequestException
 
-from ..api.wbi_signer import WbiSigner
+from .wbi_signer import WbiSigner
+
+from ..core.models.errors import BiliDmErrorCode
 
 
 class BiliApiException(Exception):
@@ -112,15 +114,26 @@ class BiliApiClient:
         
         except (Timeout, ConnectionError) as e:
             self.logger.error(f"网络错误: {url}, Error: {e}")
-            raise BiliApiException(code=-999, message=f"网络连接错误: {e}", is_network_error=True) from e
+            raise BiliApiException(
+                code=BiliDmErrorCode.CONNECTION_ERROR.code,
+                message=f"网络连接错误: {e}",
+                is_network_error=True
+            ) from e
         
         except RequestException as e:
             self.logger.error(f"请求异常: {url}, Error: {e}")
-            raise BiliApiException(code=-998, message=f"请求发生异常: {e}", is_network_error=True) from e
+            raise BiliApiException(\
+                code=BiliDmErrorCode.REQUEST_ERROR.code,
+                message=f"请求发生异常: {e}",
+                is_network_error=True
+            ) from e
         
         except ValueError as e:
             self.logger.error(f"JSON解码失败: {url}, Response: {response.text[:100]}")
-            raise BiliApiException(code=-997, message=f"无法解析服务器响应: {e}") from e
+            raise BiliApiException(
+                code=BiliDmErrorCode.GENERIC_FAILURE.code,
+                message=f"无法解析服务器响应: {e}"
+            ) from e
         
     def get_video_info(self, bvid: str) -> dict:
         """根据BVID获取视频详细信息"""

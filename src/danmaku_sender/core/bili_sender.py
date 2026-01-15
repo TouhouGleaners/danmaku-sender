@@ -3,8 +3,10 @@ import logging
 from threading import Event
 
 from .state import SenderConfig, VideoTarget
-from .bili_danmaku_utils import BiliDmErrorCode, DanmakuSendResult, DanmakuParser, UnsentDanmakusRecord
+from .bili_danmaku_utils import DanmakuSendResult, DanmakuParser, UnsentDanmakusRecord
 from .delay_manager import DelayManager
+from .models.errors import BiliDmErrorCode
+from .error_handler import resolve_bili_error, normalize_exception
 
 from ..api.bili_api_client import BiliApiClient, BiliApiException
 from ..utils.notification_utils import send_windows_notification
@@ -47,7 +49,7 @@ class BiliDanmakuSender:
             
             code = result_json.get('code', BiliDmErrorCode.GENERIC_FAILURE.code)
             raw_message = result_json.get('message', '无B站原始消息')
-            _, display_msg = BiliDmErrorCode.resolve_bili_error(code, raw_message)
+            _, display_msg = resolve_bili_error(code, raw_message)
 
             if code == BiliDmErrorCode.SUCCESS.code:
                 self.logger.info(f"✅ 成功发送: '{danmaku['msg']}'")
@@ -59,7 +61,7 @@ class BiliDanmakuSender:
                 self.logger.warning(f"发送失败 (API响应)! 内容: '{danmaku['msg']}', Code: {code}, 消息: {display_msg} (原始: {raw_message})")
                 return DanmakuSendResult(code=code, success=False, message=raw_message, display_message=display_msg)
         except BiliApiException as e:
-            error_code_enum = BiliDmErrorCode.from_api_exception(e)
+            error_code_enum = normalize_exception(e)
             
             log_message = f"❌ 发送异常! 内容: '{danmaku.get('msg', 'N/A')}', 错误: {e.message}"
             self.logger.error(log_message)
