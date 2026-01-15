@@ -168,7 +168,7 @@ class BiliApiClient:
         with self._network_guards(url):
             response = self.session.get(url, timeout=10)
             response.raise_for_status()
-            return response.json()
+            return response.content.decode('utf-8')
 
     def post_danmaku(self, cid: int, bvid: str, danmaku: dict) -> dict:
         """发送单条弹幕"""
