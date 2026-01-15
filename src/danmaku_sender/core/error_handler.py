@@ -1,7 +1,7 @@
 from .models.errors import BiliDmErrorCode
 
 
-def resolve_bili_error(code: int, raw_message: str) -> tuple[bool, str]:
+def resolve_bili_error(code: int, raw_message: str) -> tuple[int, str]:
     """根据状态码获取描述"""
     try:
         return code, BiliDmErrorCode(code).description_str

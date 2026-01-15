@@ -44,11 +44,13 @@ class BiliDmErrorCode(Enum):
 
     # 自定义错误码
     # 网络/未知类
-    NETWORK_ERROR = (-9999, "发送弹幕时发生网络或请求异常。请检查您的网络连接。", True)
-    UNKNOWN_ERROR = (-9998, "发送弹幕时发生未知异常，请联系开发者或稍后再试。", True)
-    TIMEOUT_ERROR = (-9997, "发送弹幕请求超时，请检查网络或稍后再试。", True)
-    CONNECTION_ERROR = (-9996, "发送弹幕时网络连接异常，请检查网络或稍后再试。", True)
-    GENERIC_FAILURE = (-1, "操作失败，详见原始消息或尝试稍后再试。", False)  # 当B站返回code是-1或未识别的code时使用
+    NETWORK_ERROR = (-9999, "未知的网络请求异常。", True)
+    UNKNOWN_ERROR = (-9998, "发生未知程序异常。", True)
+    TIMEOUT_ERROR = (-9997, "请求超时，请检查网络。", True)
+    CONNECTION_ERROR = (-9996, "无法连接服务器(DNS/TCP异常)。", True)
+    HTTP_ERROR = (-9995, "服务器返回了非 200 状态码。", True)
+    PARSE_ERROR = (-9994, "服务器响应无法解析(JSON错误)。", True)
+    GENERIC_FAILURE = (-1, "操作失败，详见原始消息或尝试稍后再试。", False)
 
     def __new__(cls, code, description, is_fatal):
         obj = object.__new__(cls)

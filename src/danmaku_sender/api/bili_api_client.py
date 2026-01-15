@@ -3,7 +3,7 @@ import logging
 from typing import Protocol
 
 import requests
-from requests.exceptions import Timeout, ConnectionError, RequestException
+from requests.exceptions import ConnectionError, HTTPError, RequestException, Timeout
 
 from .wbi_signer import WbiSigner
 
@@ -100,12 +100,12 @@ class BiliApiClient:
 
         try:
             response = self.session.request(method, url, **kwargs)
-            response.raise_for_status()  # 对 4xx/5xx 状态码抛出异常
+            response.raise_for_status()
 
             data = response.json()
-            code = data.get('code', -1)
+            code = data.get('code', BiliDmErrorCode.GENERIC_FAILURE.code)
 
-            if code == 0:
+            if code == BiliDmErrorCode.SUCCESS.code:
                 return data.get('data', {})
             else:
                 message = data.get('message', '未知错误')
@@ -113,17 +113,25 @@ class BiliApiClient:
                 raise BiliApiException(code=code, message=message)
         
         except (Timeout, ConnectionError) as e:
-            self.logger.error(f"网络错误: {url}, Error: {e}")
+            self.logger.error(f"连接失败: {url}, Error: {e}")
             raise BiliApiException(
                 code=BiliDmErrorCode.CONNECTION_ERROR.code,
-                message=f"网络连接错误: {e}",
+                message=f"网络连接断开: {e}",
+                is_network_error=True
+            ) from e
+        
+        except HTTPError as e:
+            self.logger.error(f"HTTP错误: {url}, Status: {e.response.status_code}")
+            raise BiliApiException(
+                code=BiliDmErrorCode.HTTP_ERROR.code,
+                message=f"HTTP协议错误: {e}",
                 is_network_error=True
             ) from e
         
         except RequestException as e:
             self.logger.error(f"请求异常: {url}, Error: {e}")
-            raise BiliApiException(\
-                code=BiliDmErrorCode.REQUEST_ERROR.code,
+            raise BiliApiException(
+                code=BiliDmErrorCode.NETWORK_ERROR.code,
                 message=f"请求发生异常: {e}",
                 is_network_error=True
             ) from e
@@ -132,7 +140,8 @@ class BiliApiClient:
             self.logger.error(f"JSON解码失败: {url}, Response: {response.text[:100]}")
             raise BiliApiException(
                 code=BiliDmErrorCode.GENERIC_FAILURE.code,
-                message=f"无法解析服务器响应: {e}"
+                message=f"无法解析服务器响应: {e}",
+                is_network_error=False
             ) from e
         
     def get_video_info(self, bvid: str) -> dict:
@@ -151,7 +160,11 @@ class BiliApiClient:
             return response.content.decode('utf-8')
         except RequestException as e:
             self.logger.error(f"获取在线弹幕XML时发生网络错误 (CID: {cid}): {e}")
-            raise BiliApiException(code=-999, message=f"网络连接错误: {e}", is_network_error=True) from e
+            raise BiliApiException(
+                code=BiliDmErrorCode.CONNECTION_ERROR.code,
+                message=f"网络连接错误: {e}",
+                is_network_error=True
+            ) from e
         
     def post_danmaku(self, cid: int, bvid: str, danmaku: dict) -> dict:
         """发送单条弹幕"""
@@ -173,9 +186,19 @@ class BiliApiClient:
             response = self.session.post(url, data=signed_params, timeout=15)
             response.raise_for_status()
             return response.json()
+
         except (Timeout, ConnectionError) as e:
             self.logger.warning(f"发送弹幕网络异常: {e}")
-            raise BiliApiException(code=-999, message=f"发送弹幕时网络连接错误: {e}", is_network_error=True) from e
+            raise BiliApiException(
+                code=BiliDmErrorCode.CONNECTION_ERROR.code,
+                message=f"发送弹幕时网络连接错误: {e}",
+                is_network_error=True
+            ) from e
+
         except RequestException as e:
             self.logger.warning(f"发送弹幕请求异常: {e}")
-            raise BiliApiException(code=-998, message=f"发送弹幕时请求发生异常: {e}", is_network_error=True) from e
+            raise BiliApiException(
+                code=BiliDmErrorCode.NETWORK_ERROR.code,
+                message=f"发送弹幕时请求发生异常: {e}",
+                is_network_error=True
+            ) from e
