@@ -14,7 +14,7 @@ def resolve_bili_error(code: int, raw_message: str) -> tuple[int, str]:
 
     return code, BiliDmErrorCode.GENERIC_FAILURE.description_str
 
-def normalize_exception(e: BiliApiException) -> BiliDmErrorCode:
+def normalize_exception(e: Exception) -> BiliDmErrorCode:
     """将任意异常转换为标准错误码"""
     if isinstance(e, BiliApiException):
         found = BiliDmErrorCode.from_code(e.code)
@@ -23,5 +23,13 @@ def normalize_exception(e: BiliApiException) -> BiliDmErrorCode:
 
         if e.is_network_error:
             return BiliDmErrorCode.NETWORK_ERROR
+
+        return BiliDmErrorCode.GENERIC_FAILURE
+
+    code = getattr(e, "code", None)
+    if code is not None:
+        found = BiliDmErrorCode.from_code(code)
+        if found:
+            return found
 
     return BiliDmErrorCode.UNKNOWN_ERROR
