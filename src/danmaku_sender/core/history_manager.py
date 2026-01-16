@@ -133,7 +133,8 @@ class HistoryManager:
                     cursor = conn.execute(sql, params)
 
                 if cursor.rowcount > 0:
-                    logger.warning(f"标记了 {cursor.rowcount} 条弹幕为‘疑似丢失’。")
+                    logger.warning(f"标记了 {cursor.rowcount} 条弹幕为'疑似丢失'。")
+
         except Exception as e:
             logger.error(f"标记丢失状态失败: {e}", exc_info=True)
         finally:
@@ -143,7 +144,6 @@ class HistoryManager:
         """获取 Pending 弹幕"""
         conn = self._get_conn()
         try:
-            # 查询不需要 with conn (事务)，但需要 close
             cursor = conn.execute(
                 'SELECT dmid, content, progress, send_time FROM sent_danmaku WHERE cid = ? AND status = ?', 
                 (cid, DanmakuStatus.PENDING.value)
@@ -152,9 +152,11 @@ class HistoryManager:
                 {"dmid": row[0], "content": row[1], "progress": row[2], "send_time": row[3]}
                 for row in cursor.fetchall()
             ]
+
         except Exception as e:
             logger.error(f"查询 Pending 记录失败: {e}")
             return []
+
         finally:
             conn.close()
     
@@ -164,11 +166,11 @@ class HistoryManager:
         """
         try:
             with self._get_conn() as conn:
-                cursor = conn.execute('''
+                cursor = conn.execute(f'''
                     SELECT 
                         COUNT(*),
-                        SUM(CASE WHEN status = 1 THEN 1 ELSE 0 END),
-                        SUM(CASE WHEN status = 2 THEN 1 ELSE 0 END)
+                        SUM(CASE WHEN status = {DanmakuStatus.VERIFIED.value} THEN 1 ELSE 0 END),
+                        SUM(CASE WHEN status = {DanmakuStatus.LOST.value} THEN 1 ELSE 0 END)
                     FROM sent_danmaku 
                     WHERE cid = ?
                 ''', (cid,))
