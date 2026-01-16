@@ -9,7 +9,6 @@ from PySide6.QtWidgets import QApplication
 from .config.app_config import AppInfo
 from .utils.log_utils import GuiLoggingHandler, DailyLogFileHandler
 from .utils.resource_utils import get_app_icon
-from .ui.main_window import MainWindow
 
 
 def setup_logging():
@@ -77,6 +76,8 @@ def main(argv=None):
         argv = sys.argv
 
     setup_logging()
+
+    from .ui.main_window import MainWindow
 
     app = QApplication(argv)
     app.setStyle("Fusion")
