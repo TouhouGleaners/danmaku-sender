@@ -1,45 +1,33 @@
-import uuid
 import logging
 import xml.etree.ElementTree as ET
 from xml.dom import minidom
 from typing import TypedDict
 
-from .models.errors import BiliDmErrorCode
+from .models.danmaku import Danmaku
 
 
 logger = logging.getLogger("BiliUtils")
 
 class UnsentDanmakusRecord(TypedDict):
-    dm: dict
+    dm: Danmaku
     reason: str
-        
 
-class DanmakuSendResult:
-    """封装弹幕发送结果"""
-    def __init__(self, code: int, success: bool, message: str, display_message: str = ""):
-        self.code = code
-        self.success = success
-        self.raw_message = message if message else "无原始错误信息"  # B站返回的原始信息
-        self.display_message = display_message if display_message else self.raw_message  # 用于显示给用户的信息
 
-    def __str__(self):
-        status = "成功" if self.success else "失败"
-        if self.code == BiliDmErrorCode.SUCCESS.code:
-            return f"[发送结果: {status}] {self.display_message}"
-        else:
-            return f"[发送结果: {status}] Code: {self.code}, 消息: \"{self.display_message}\" (原始: \"{self.raw_message}\")"
+class ValidationIssue(TypedDict):
+    original_index: int
+    danmaku: Danmaku
+    reason: str
 
 
 class DanmakuParser:
     """
-    一个专门用于解析Bilibili弹幕XML内容，并返回标准化弹幕字典列表的类。
-    唯一的弹幕解析来源，确保解析逻辑的一致性。
+    解析Bilibili弹幕XML内容
+    返回标准化弹幕字典列表的类。
     """
     def __init__(self):
-        # 获取一个独立的logger实例，用于该解析器类的日志
         self.logger = logging.getLogger("DanmakuParser")
 
-    def parse_xml_content(self, xml_content: str, is_online_data: bool = False) -> list:
+    def parse_xml_content(self, xml_content: str, is_online_data: bool = False) -> list[Danmaku]:
         """
         解析Bilibili的XML弹幕内容字符串，返回一个标准化的弹幕字典列表。
         
@@ -69,29 +57,10 @@ class DanmakuParser:
                         self.logger.warning(f"⚠️ 警告: 弹幕属性'p'不完整，跳过此条. 内容: '{text}', 属性: '{p_attr_str}'")
                         continue
 
-                    progress = int(float(p_attr[0]) * 1000)  # 转为毫秒
                     msg = text.strip()
-                    danmaku = {
-                        'progress': progress,
-                        'msg': msg
-                    }
+                    dm = Danmaku.from_xml(p_attr, msg, is_online_data)
 
-                    if is_online_data:
-                        if len(p_attr) > 7:
-                            danmaku['id'] = p_attr[7]  # 在线弹幕的唯一ID
-                        else:
-                            danmaku['id'] = str(uuid.uuid4())  # 生成一个伪ID
-                    else:
-                        if len(p_attr) >= 4:
-                            danmaku['mode'] = int(p_attr[1])
-                            danmaku['fontsize'] = int(p_attr[2])
-                            danmaku['color'] = int(p_attr[3])
-                        else:
-                            danmaku['mode'] = 1             # 默认值
-                            danmaku['fontsize'] = 25        # 默认值
-                            danmaku['color'] = 16777215     # 默认白色(#FFFFFF)
-
-                    danmakus.append(danmaku)
+                    danmakus.append(dm)
                 except (ValueError, IndexError) as e:
                     self.logger.warning(f"⚠️ 警告: 解析单个弹幕失败, 跳过此条. 内容: '{d_tag.text}', 属性: '{p_attr_str}', 错误: {e}")
                 except Exception as e:
@@ -136,7 +105,7 @@ def format_ms_to_hhmmss(ms: int) -> str:
 
 FORBIDDEN_SYMBOLS = "☢⚠☣☠⚡💣⚔🔥"
 
-def validate_danmaku_list(danmaku_list: list, video_duration_ms: int = -1) -> list:
+def validate_danmaku_list(danmaku_list: list[Danmaku], video_duration_ms: int = -1) -> list[ValidationIssue]:
     """
     校验弹幕列表，找出不符合B站发送规则的弹幕。
     Args:
@@ -146,10 +115,10 @@ def validate_danmaku_list(danmaku_list: list, video_duration_ms: int = -1) -> li
         list: 一个包含问题弹幕信息的字典列表，每个字典包含：
               {'original_index': 原始索引, 'danmaku': 弹幕本身, 'reason': '问题描述'}
     """
-    problems = []
+    problems: list[ValidationIssue] = []
     for i, dm in enumerate(danmaku_list):
-        msg = dm.get('msg', '')
-        progress = dm.get('progress', 0)
+        msg = dm.msg
+        progress = dm.progress
         
         reasons = []
 
@@ -173,14 +142,14 @@ def validate_danmaku_list(danmaku_list: list, video_duration_ms: int = -1) -> li
         
         # 问题汇总
         if reasons:
-            dm['is_valid'] = False
+            dm.is_valid = False
             problems.append({
                 'original_index': i,
                 'danmaku': dm,
                 'reason': ", ".join(reasons)
             })
         else:
-            dm['is_valid'] = True
+            dm.is_valid = True
     
     return problems
 
@@ -192,7 +161,7 @@ def create_xml_from_danmakus(danmakus: list[UnsentDanmakusRecord], filepath: str
     root = ET.Element('i')
     root.append(ET.Comment(' Generated by BiliDanmakuSender '))
 
-    grouped_data: dict[str, list[dict]] = {}
+    grouped_data: dict[str, list[Danmaku]] = {}
     for item in danmakus:
         reason = str(item.get('reason', '未归类'))
         if reason not in grouped_data:
@@ -205,18 +174,12 @@ def create_xml_from_danmakus(danmakus: list[UnsentDanmakusRecord], filepath: str
         root.append(ET.Comment(f' === 失败原因: {safe_reason} (共 {len(dms)} 条) === '))
         
         # 组内按视频时间排序，方便用户后续查看/修改
-        dms.sort(key=lambda x: x.get('progress', 0))
+        dms.sort(key=lambda x: x.progress)
         
         for dm in dms:
-            progress = dm.get('progress', 0)
-            mode = dm.get('mode', 1)
-            fontsize = dm.get('fontsize', 25)
-            color = dm.get('color', 16777215)
-            msg = dm.get('msg', '')
-
-            p_attr = f"{progress/1000},{mode},{fontsize},{color},0,0,0,0,0"
+            p_attr = f"{dm.progress/1000},{dm.mode},{dm.fontsize},{dm.color},0,0,0,0,0"
             d_tag = ET.SubElement(root, 'd', {'p': p_attr})
-            d_tag.text = msg
+            d_tag.text = dm.msg
 
     # 格式化并保存
     rough_string = ET.tostring(root, 'utf-8')

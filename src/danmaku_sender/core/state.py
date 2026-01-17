@@ -2,17 +2,7 @@ from dataclasses import dataclass, field, asdict
 
 from PySide6.QtCore import QObject, Signal
 
-@dataclass
-class VideoTarget:
-    """封装发送目标BVID和CID的视频信息"""
-    bvid: str
-    cid: int
-    title: str = ""
-
-    @property
-    def display_string(self) -> str:
-        """日志显示：如果有标题显示标题，没标题显示 BVID。"""
-        return self.title if self.title else self.bvid
+from .models.danmaku import Danmaku
 
 
 @dataclass
@@ -91,19 +81,19 @@ class VideoState:
     selected_cid: int | None = None
     selected_part_name: str = ""
     selected_part_duration_ms: int = 0
-    loaded_danmakus: list[dict] = field(default_factory=list)
-    
+    loaded_danmakus: list[Danmaku] = field(default_factory=list)
+
     # CID 到 分P名 的映射
     cid_parts_map: dict = field(default_factory=dict)
 
     @property
     def is_ready_to_send(self) -> bool:
         return bool(self.bvid) and (self.selected_cid is not None) and bool(self.loaded_danmakus)
-    
+
     @property
     def danmaku_count(self) -> int:
         return len(self.loaded_danmakus)
-    
+
 
 class AppState(QObject):
     """

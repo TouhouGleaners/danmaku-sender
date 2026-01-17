@@ -2,8 +2,9 @@ import copy
 import logging
 from typing import Any, TypedDict
 
-from ..core.state import AppState
-from ..core.bili_danmaku_utils import validate_danmaku_list
+from .bili_danmaku_utils import validate_danmaku_list, ValidationIssue
+from .models.danmaku import Danmaku
+from .state import AppState
 
 
 class ChangedRecord(TypedDict):
@@ -21,7 +22,7 @@ class ValidatorSession:
         self.state = state
         self.logger = logging.getLogger("ValidatorSession")
         
-        self.original_snapshot: list[dict] = []          # 原始数据的深拷贝
+        self.original_snapshot: list[Danmaku] = []          # 原始数据的深拷贝
         self.current_issues: list[dict[str, Any]] = []   # 当前的问题列表
         self.undo_stack: list[list[ChangedRecord]] = []  # 撤销栈: 一次操作产生的一组变更记录
 
@@ -57,16 +58,16 @@ class ValidatorSession:
         self.logger.info(f"启动校验会话... 原始弹幕总数: {len(self.original_snapshot)}")
         
         # 执行校验
-        raw_issues = validate_danmaku_list(self.original_snapshot, duration_ms)
+        raw_issues: list[ValidationIssue] = validate_danmaku_list(self.original_snapshot, duration_ms)
         
         # 转换结构
         self.current_issues = []
         for issue in raw_issues:
             self.current_issues.append({
                 'original_index': issue['original_index'],
-                'time_ms': issue['danmaku'].get('progress', 0),
+                'time_ms': issue['danmaku'].progress,
                 'reason': issue['reason'],
-                'current_content': issue['danmaku']['msg'],
+                'current_content': issue['danmaku'].msg,
                 'is_deleted': False
             })
 
@@ -230,7 +231,7 @@ class ValidatorSession:
 
         for i, dm in enumerate(self.original_snapshot):
             # 弹幕原本就是好的
-            if dm.get('is_valid', False):
+            if dm.is_valid:
                 new_list.append(dm)
                 kept_count += 1
                 continue
@@ -243,8 +244,8 @@ class ValidatorSession:
                     deleted_count += 1
                 else:
                     # 应用修改
-                    dm['msg'] = issue_record['current_content']
-                    dm['is_valid'] = True # 视为已修复
+                    dm.msg = issue_record['current_content']
+                    dm.is_valid = True # 视为已修复
                     new_list.append(dm)
                     fixed_count += 1
             else:
