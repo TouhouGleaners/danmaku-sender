@@ -126,17 +126,20 @@ class SendTaskWorker(BaseWorker):
 
 class MonitorTaskWorker(BaseWorker):
     """监视任务后台线程"""
-    progress_updated = Signal(int, int)  # 匹配，总数
-    status_updated = Signal(str)         # 状态更新
+    stats_updated = Signal(dict)
+    status_updated = Signal(str)
     task_finished = Signal()
 
-    def __init__(self, cid, danmakus,
-                 auth_config: ApiAuthConfig,
-                 monitor_config: MonitorConfig,
-                 stop_event, parent=None):
+    def __init__(
+        self,
+        target: VideoTarget,
+        auth_config: ApiAuthConfig,
+        monitor_config: MonitorConfig,
+        stop_event,
+        parent=None
+    ):
         super().__init__(parent)
-        self.cid = cid
-        self.danmakus = danmakus
+        self.target = target
         self.auth_config = auth_config
         self.monitor_config = monitor_config
         self.stop_event = stop_event
@@ -147,16 +150,24 @@ class MonitorTaskWorker(BaseWorker):
                 with BiliApiClient.from_config(self.auth_config) as client:
                     monitor = BiliDanmakuMonitor(
                         api_client=client,
-                        cid=self.cid,
-                        loaded_danmakus=self.danmakus,
-                        interval=self.monitor_config.refresh_interval,
-                        time_tolerance=self.monitor_config.tolerance
+                        target=self.target,
+                        interval=self.monitor_config.refresh_interval
                     )
 
-                    def _callback(matched, total):
-                        self.progress_updated.emit(matched, total)
-                        if total > 0:
-                            self.status_updated.emit(f"监视中... ({matched}/{total})")
+                    def _callback(stats: dict):
+                        self.stats_updated.emit(stats)
+
+                        self.status_updated.emit(f"监视中 (存活: {stats['verified']})")
+
+                        msg = (
+                            f"监视中... 总计:{stats['total']} | "
+                            f"✅存活:{stats['verified']} | "
+                            f"⏳待验:{stats['pending']}"
+                        )
+                        if stats.get('lost', 0) > 0:
+                            msg += f" | ❌丢失:{stats['lost']}"
+                            
+                        self.log_message.emit(msg)
 
                     monitor.run(self.stop_event, _callback)
         

@@ -56,7 +56,6 @@ class SenderConfig:
 class MonitorConfig:
     """监视器的配置数据"""
     refresh_interval: int = 60  # 刷新间隔，单位秒
-    tolerance: int = 500
     
     # 复用全局设置
     prevent_sleep: bool = True
