@@ -103,8 +103,21 @@ class BiliDanmakuSender:
             for dm in danmakus:
                 self.unsent_danmakus.append({'dm': dm, 'reason': reason})
     
-    def send_danmaku_from_list(self, target: VideoTarget, danmakus: list[Danmaku], config: 'SenderConfig', stop_event: Event, progress_callback=None):
-        """从一个弹幕字典列表发送弹幕，并响应停止事件"""
+    def send_danmaku_from_list(
+        self,
+        target: VideoTarget,
+        danmakus: list[Danmaku],
+        config: 'SenderConfig',
+        stop_event: Event,
+        progress_callback=None,
+        result_callback=None
+    ):
+        """
+        从一个弹幕字典列表发送弹幕，并响应停止事件
+        
+        Args:
+            result_callback: Callable[[Danmaku, DanmakuSendResult], None] 发送结果回调
+        """
         self.logger.info(f"开始发送... 目标: {target.display_string} (CID: {target.cid})")
         self.unsent_danmakus = []  # 开始新任务时清空列表
 
@@ -145,6 +158,9 @@ class BiliDanmakuSender:
 
             if progress_callback:
                 progress_callback(attempted_count, total)
+
+            if result_callback:
+                result_callback(dm, result)
 
             sent_successfully, is_fatal = self._process_send_result(result)
             if is_fatal:

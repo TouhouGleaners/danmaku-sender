@@ -5,6 +5,9 @@ from pathlib import Path
 from platformdirs import user_data_dir
 from enum import IntEnum
 
+from .models.danmaku import Danmaku
+from .models.structs import VideoTarget
+
 from ..config.app_config import AppInfo
 
 
@@ -43,49 +46,56 @@ class HistoryManager:
                         dmid TEXT PRIMARY KEY,
                         cid INTEGER,
                         bvid TEXT,
-                        content TEXT,
+                        msg TEXT,
                         progress INTEGER,
-                        send_time REAL,
+                        mode INTEGER,
+                        fontsize INTEGER,
+                        color INTEGER,
+                        ctime REAL,
                         is_visible INTEGER,
                         status INTEGER DEFAULT 0
                     )
                 ''')
-                cursor.execute('CREATE INDEX IF NOT EXISTS idx_cid ON sent_danmaku (cid)')
+
+                cursor.execute('CREATE INDEX IF NOT EXISTS idx_cid_status ON sent_danmaku (cid, status)')
 
         finally:
             conn.close()
 
         logger.debug(f"数据库初始化完成: {self.db_path}")
 
-    def record_send(self, dmid: str, cid: int, bvid: str, content: str, progress: int, is_visible: bool):
+    def record_danmaku(self, target: VideoTarget, dm: Danmaku, is_visible_api: bool = True):
         """
         [存证] 记录一条刚刚发送成功的弹幕。
         对应状态: STATUS_PENDING (0)
         """
-        if not dmid:
-            logger.warning("尝试记录弹幕但 dmid 为空，操作跳过。")
+        if not dm.dmid:
+            logger.warning("尝试记录无 ID 的弹幕，操作跳过。")
             return
         
         try:
             with self._get_conn() as conn:
                 conn.execute('''
                     INSERT OR IGNORE INTO sent_danmaku (
-                        dmid, cid, bvid, content, progress, send_time, is_visible, status
+                        dmid, cid, bvid, msg, progress, mode,
+                        fontsize, color, ctime, is_visible, status
                     ) 
-                    VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                 ''', (
-                    str(dmid),
-                    cid,
-                    bvid,
-                    content,
-                    progress,
+                    str(dm.dmid),
+                    target.cid,
+                    target.bvid,
+                    dm.msg,
+                    dm.progress,
+                    dm.mode,
+                    dm.fontsize,
+                    dm.color,
                     time.time(),
-                    1 if is_visible else 0,
+                    1 if is_visible_api else 0,
                     DanmakuStatus.PENDING.value
                 ))
-            logger.debug(f"弹幕入库: {content[:10]}... [dmid:{dmid}]")
         except Exception as e:
-            logger.error(f"记录弹幕历史失败: {e}", exc_info=True)
+            logger.error(f"存证失败: {e}")
         finally:
             conn.close()
 
