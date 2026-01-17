@@ -58,9 +58,8 @@ class HistoryManager:
                 ''')
 
                 cursor.execute('CREATE INDEX IF NOT EXISTS idx_cid_status ON sent_danmaku (cid, status)')
-
-        finally:
-            conn.close()
+        except Exception as e:
+            logger.error(f"数据库初始化失败: {e}", exc_info=True)
 
         logger.debug(f"数据库初始化完成: {self.db_path}")
 
@@ -95,9 +94,7 @@ class HistoryManager:
                     DanmakuStatus.PENDING.value
                 ))
         except Exception as e:
-            logger.error(f"存证失败: {e}")
-        finally:
-            conn.close()
+            logger.error(f"存证失败: {e}", exc_info=True)
 
     def verify_dmids(self, verified_dmids: list[str]):
         """
@@ -116,8 +113,6 @@ class HistoryManager:
             logger.info(f"已核销(确认存活) {len(verified_dmids)} 条弹幕。")
         except Exception as e:
             logger.error(f"批量验证状态失败: {e}", exc_info=True)
-        finally:
-            conn.close()
 
     def mark_as_lost(self, cid: int, verified_dmids: list[str]):
         """
@@ -147,29 +142,24 @@ class HistoryManager:
 
         except Exception as e:
             logger.error(f"标记丢失状态失败: {e}", exc_info=True)
-        finally:
-            conn.close()
 
     def get_pending_records(self, cid: int) -> list[dict]:
         """获取 Pending 弹幕"""
-        conn = self._get_conn()
         try:
-            cursor = conn.execute(
-                'SELECT dmid, content, progress, send_time FROM sent_danmaku WHERE cid = ? AND status = ?', 
-                (cid, DanmakuStatus.PENDING.value)
-            )
-            return [
-                {"dmid": row[0], "content": row[1], "progress": row[2], "send_time": row[3]}
-                for row in cursor.fetchall()
-            ]
+            with self._get_conn() as conn:
+                cursor = conn.execute(
+                    'SELECT dmid, msg, progress, ctime FROM sent_danmaku WHERE cid = ? AND status = ?', 
+                    (cid, DanmakuStatus.PENDING.value)
+                )
+                return [
+                    {"dmid": row[0], "msg": row[1], "progress": row[2], "ctime": row[3]}
+                    for row in cursor.fetchall()
+                ]
 
         except Exception as e:
-            logger.error(f"查询 Pending 记录失败: {e}")
+            logger.error(f"查询 Pending 记录失败: {e}", exc_info=True)
             return []
 
-        finally:
-            conn.close()
-    
     def get_stats(self, cid: int) -> tuple[int, int, int]:
         """
         获取统计数据 (UI使用)。
@@ -190,7 +180,5 @@ class HistoryManager:
                     return (row[0] or 0, row[1] or 0, row[2] or 0)
         except Exception as e:
             logger.error(f"获取统计失败: {e}")
-        finally:
-            conn.close()
             
         return 0, 0, 0
