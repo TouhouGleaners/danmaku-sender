@@ -3,7 +3,10 @@ from PySide6.QtCore import QThread, Signal
 
 from .bili_sender import BiliDanmakuSender
 from .bili_monitor import BiliDanmakuMonitor
+from .history_manager import HistoryManager
 from .state import ApiAuthConfig, SenderConfig, MonitorConfig
+from .models.danmaku import Danmaku
+from .models.result import DanmakuSendResult 
 from .models.structs import VideoTarget
 
 from ..api.bili_api_client import BiliApiClient
@@ -90,6 +93,7 @@ class SendTaskWorker(BaseWorker):
         self.strategy_config = strategy_config
         self.stop_event = stop_event
         self.sender_instance = None
+        self.history_manager = HistoryManager()
 
     def run(self):
         try:
@@ -97,15 +101,22 @@ class SendTaskWorker(BaseWorker):
                 with BiliApiClient.from_config(self.auth_config) as client:
                     self.sender_instance = BiliDanmakuSender(client)
 
-                    def _callback(attempted, total):
+                    def _progress_cb(attempted, total):
                         self.progress_updated.emit(attempted, total)
+
+                    def _save_to_db_cb(dm: Danmaku, result: DanmakuSendResult):
+                        if result.is_success and result.dmid:
+                            if not dm.dmid:
+                                dm.dmid = result.dmid
+                            self.history_manager.record_danmaku(self.target, dm, result.is_visible)
 
                     self.sender_instance.send_danmaku_from_list(
                         target=self.target,
                         danmakus=self.danmakus,
                         config=self.strategy_config,
                         stop_event=self.stop_event,
-                        progress_callback=_callback
+                        progress_callback=_progress_cb,
+                        result_callback=_save_to_db_cb
                     )
         except Exception as e:
             self.report_error("任务发生严重错误", e)

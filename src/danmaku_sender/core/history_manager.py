@@ -5,6 +5,9 @@ from pathlib import Path
 from platformdirs import user_data_dir
 from enum import IntEnum
 
+from .models.danmaku import Danmaku
+from .models.structs import VideoTarget
+
 from ..config.app_config import AppInfo
 
 
@@ -43,51 +46,56 @@ class HistoryManager:
                         dmid TEXT PRIMARY KEY,
                         cid INTEGER,
                         bvid TEXT,
-                        content TEXT,
+                        msg TEXT,
                         progress INTEGER,
-                        send_time REAL,
+                        mode INTEGER,
+                        fontsize INTEGER,
+                        color INTEGER,
+                        ctime REAL,
                         is_visible INTEGER,
                         status INTEGER DEFAULT 0
                     )
                 ''')
-                cursor.execute('CREATE INDEX IF NOT EXISTS idx_cid ON sent_danmaku (cid)')
 
-        finally:
-            conn.close()
+                cursor.execute('CREATE INDEX IF NOT EXISTS idx_cid_status ON sent_danmaku (cid, status)')
+            logger.debug(f"数据库初始化完成: {self.db_path}")
 
-        logger.debug(f"数据库初始化完成: {self.db_path}")
+        except Exception as e:
+            logger.critical(f"数据库初始化致命错误: {e}", exc_info=True)
+            raise RuntimeError(f"HistoryManager 数据库初始化失败: {e}") from e
 
-    def record_send(self, dmid: str, cid: int, bvid: str, content: str, progress: int, is_visible: bool):
+    def record_danmaku(self, target: VideoTarget, dm: Danmaku, is_visible_api: bool = True):
         """
         [存证] 记录一条刚刚发送成功的弹幕。
         对应状态: STATUS_PENDING (0)
         """
-        if not dmid:
-            logger.warning("尝试记录弹幕但 dmid 为空，操作跳过。")
+        if not dm.dmid:
+            logger.warning("尝试记录无 ID 的弹幕，操作跳过。")
             return
         
         try:
             with self._get_conn() as conn:
                 conn.execute('''
                     INSERT OR IGNORE INTO sent_danmaku (
-                        dmid, cid, bvid, content, progress, send_time, is_visible, status
+                        dmid, cid, bvid, msg, progress, mode,
+                        fontsize, color, ctime, is_visible, status
                     ) 
-                    VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                 ''', (
-                    str(dmid),
-                    cid,
-                    bvid,
-                    content,
-                    progress,
+                    str(dm.dmid),
+                    target.cid,
+                    target.bvid,
+                    dm.msg,
+                    dm.progress,
+                    dm.mode,
+                    dm.fontsize,
+                    dm.color,
                     time.time(),
-                    1 if is_visible else 0,
+                    1 if is_visible_api else 0,
                     DanmakuStatus.PENDING.value
                 ))
-            logger.debug(f"弹幕入库: {content[:10]}... [dmid:{dmid}]")
         except Exception as e:
-            logger.error(f"记录弹幕历史失败: {e}", exc_info=True)
-        finally:
-            conn.close()
+            logger.error(f"存证失败: {e}", exc_info=True)
 
     def verify_dmids(self, verified_dmids: list[str]):
         """
@@ -106,8 +114,6 @@ class HistoryManager:
             logger.info(f"已核销(确认存活) {len(verified_dmids)} 条弹幕。")
         except Exception as e:
             logger.error(f"批量验证状态失败: {e}", exc_info=True)
-        finally:
-            conn.close()
 
     def mark_as_lost(self, cid: int, verified_dmids: list[str]):
         """
@@ -137,29 +143,24 @@ class HistoryManager:
 
         except Exception as e:
             logger.error(f"标记丢失状态失败: {e}", exc_info=True)
-        finally:
-            conn.close()
 
     def get_pending_records(self, cid: int) -> list[dict]:
         """获取 Pending 弹幕"""
-        conn = self._get_conn()
         try:
-            cursor = conn.execute(
-                'SELECT dmid, content, progress, send_time FROM sent_danmaku WHERE cid = ? AND status = ?', 
-                (cid, DanmakuStatus.PENDING.value)
-            )
-            return [
-                {"dmid": row[0], "content": row[1], "progress": row[2], "send_time": row[3]}
-                for row in cursor.fetchall()
-            ]
+            with self._get_conn() as conn:
+                cursor = conn.execute(
+                    'SELECT dmid, msg, progress, ctime FROM sent_danmaku WHERE cid = ? AND status = ?', 
+                    (cid, DanmakuStatus.PENDING.value)
+                )
+                return [
+                    {"dmid": row[0], "msg": row[1], "progress": row[2], "ctime": row[3]}
+                    for row in cursor.fetchall()
+                ]
 
         except Exception as e:
-            logger.error(f"查询 Pending 记录失败: {e}")
+            logger.error(f"查询 Pending 记录失败: {e}", exc_info=True)
             return []
 
-        finally:
-            conn.close()
-    
     def get_stats(self, cid: int) -> tuple[int, int, int]:
         """
         获取统计数据 (UI使用)。
@@ -180,7 +181,5 @@ class HistoryManager:
                     return (row[0] or 0, row[1] or 0, row[2] or 0)
         except Exception as e:
             logger.error(f"获取统计失败: {e}")
-        finally:
-            conn.close()
             
         return 0, 0, 0
