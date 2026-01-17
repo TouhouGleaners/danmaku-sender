@@ -58,10 +58,11 @@ class HistoryManager:
                 ''')
 
                 cursor.execute('CREATE INDEX IF NOT EXISTS idx_cid_status ON sent_danmaku (cid, status)')
-        except Exception as e:
-            logger.error(f"数据库初始化失败: {e}", exc_info=True)
+            logger.debug(f"数据库初始化完成: {self.db_path}")
 
-        logger.debug(f"数据库初始化完成: {self.db_path}")
+        except Exception as e:
+            logger.critical(f"数据库初始化致命错误: {e}", exc_info=True)
+            raise RuntimeError(f"HistoryManager 数据库初始化失败: {e}") from e
 
     def record_danmaku(self, target: VideoTarget, dm: Danmaku, is_visible_api: bool = True):
         """

@@ -160,11 +160,14 @@ class BiliDanmakuSender:
                 progress_callback(attempted_count, total)
 
             if result_callback:
-                result_callback(dm, result)
+                try:
+                    result_callback(dm, result)
+                except Exception as e:
+                    self.logger.error(f"结果回调执行异常 (不影响发送任务): {e}", exc_info=True)
 
             sent_successfully, is_fatal = self._process_send_result(result)
             if is_fatal:
-                fatal_error_occurred = True 
+                fatal_error_occurred = True
                 fatal_err = f"致命错误: {result.display_message}"
                 self._record_unsent_danmakus(dm, fatal_err)
                 self._record_unsent_danmakus(danmakus[i+1:], "由于前序致命错误停止任务")
