@@ -134,7 +134,8 @@ class BiliDanmakuMonitor:
 
                     if (l_text == o_text and 
                         abs(l_time - o_time) <= self.time_tolerance and
-                        (not o_id or o_id not in self.unique_matched_online_ids)):
+                        o_id and
+                        o_id not in self.unique_matched_online_ids):
                         
                         new_matches_this_round.append((i, l_time, l_text))
                         self.matched_local_indices.add(i)

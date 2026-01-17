@@ -3,7 +3,8 @@ from PySide6.QtCore import QThread, Signal
 
 from .bili_sender import BiliDanmakuSender
 from .bili_monitor import BiliDanmakuMonitor
-from .state import ApiAuthConfig, SenderConfig, MonitorConfig, VideoTarget
+from .state import ApiAuthConfig, SenderConfig, MonitorConfig
+from .models.structs import VideoTarget
 
 from ..api.bili_api_client import BiliApiClient
 from ..api.update_checker import UpdateChecker

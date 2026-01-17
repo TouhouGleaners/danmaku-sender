@@ -2,10 +2,9 @@ import copy
 import logging
 from typing import Any, TypedDict
 
-from .bili_danmaku_utils import validate_danmaku_list
+from .bili_danmaku_utils import validate_danmaku_list, ValidationIssue
 from .models.danmaku import Danmaku
 from .state import AppState
-
 
 
 class ChangedRecord(TypedDict):
@@ -59,7 +58,7 @@ class ValidatorSession:
         self.logger.info(f"启动校验会话... 原始弹幕总数: {len(self.original_snapshot)}")
         
         # 执行校验
-        raw_issues: list[dict[str, Danmaku]] = validate_danmaku_list(self.original_snapshot, duration_ms)
+        raw_issues: list[ValidationIssue] = validate_danmaku_list(self.original_snapshot, duration_ms)
         
         # 转换结构
         self.current_issues = []

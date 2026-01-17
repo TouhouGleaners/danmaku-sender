@@ -1,4 +1,3 @@
-import uuid
 import logging
 import xml.etree.ElementTree as ET
 from xml.dom import minidom
@@ -11,6 +10,12 @@ logger = logging.getLogger("BiliUtils")
 
 class UnsentDanmakusRecord(TypedDict):
     dm: Danmaku
+    reason: str
+
+
+class ValidationIssue(TypedDict):
+    original_index: int
+    danmaku: Danmaku
     reason: str
 
 
@@ -100,7 +105,7 @@ def format_ms_to_hhmmss(ms: int) -> str:
 
 FORBIDDEN_SYMBOLS = "☢⚠☣☠⚡💣⚔🔥"
 
-def validate_danmaku_list(danmaku_list: list[Danmaku], video_duration_ms: int = -1) -> list:
+def validate_danmaku_list(danmaku_list: list[Danmaku], video_duration_ms: int = -1) -> list[ValidationIssue]:
     """
     校验弹幕列表，找出不符合B站发送规则的弹幕。
     Args:
@@ -110,7 +115,7 @@ def validate_danmaku_list(danmaku_list: list[Danmaku], video_duration_ms: int = 
         list: 一个包含问题弹幕信息的字典列表，每个字典包含：
               {'original_index': 原始索引, 'danmaku': 弹幕本身, 'reason': '问题描述'}
     """
-    problems = []
+    problems: list[ValidationIssue] = []
     for i, dm in enumerate(danmaku_list):
         msg = dm.msg
         progress = dm.progress
