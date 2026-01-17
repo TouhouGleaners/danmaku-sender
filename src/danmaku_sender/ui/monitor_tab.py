@@ -2,13 +2,13 @@ import logging
 import threading
 
 from PySide6.QtWidgets import (
-    QWidget, QVBoxLayout, QHBoxLayout, QFormLayout, 
-    QLabel, QGroupBox, QTextEdit, QProgressBar, 
-    QPushButton, QSpinBox, QFrame, QMessageBox
+    QWidget, QVBoxLayout, QHBoxLayout, QLabel, QGroupBox, QTextEdit, 
+    QPushButton, QSpinBox, QMessageBox, QGridLayout
 )
 from PySide6.QtGui import QTextCursor
 from PySide6.QtCore import Qt
 
+from ..core.models.structs import VideoTarget
 from ..core.workers import MonitorTaskWorker
 
 
@@ -30,89 +30,81 @@ class MonitorTab(QWidget):
         main_layout.setSpacing(10)
         main_layout.setContentsMargins(10, 10, 10, 10)
 
-        # --- 监视状态与设置 ---
-        settings_group = QGroupBox("监视状态与设置")
-        settings_layout = QVBoxLayout()
-        settings_layout.setContentsMargins(15, 15, 15, 15)
+        # --- 顶部：目标信息 ---
+        info_group = QGroupBox("监视目标")
+        info_layout = QHBoxLayout()
 
-        # 当前视频详细信息
-        info_layout = QFormLayout()
-        info_layout.setLabelAlignment(Qt.AlignRight)
-        info_layout.setVerticalSpacing(8)
+        self.target_label = QLabel("尚未选择视频")
+        self.target_label.setStyleSheet("font-size: 14px; font-weight: bold; color: #34495e;")
+
+        info_layout.addWidget(QLabel("当前目标:"))
+        info_layout.addWidget(self.target_label, stretch=1)
         
-        self.bvid_label = QLabel("尚未加载视频")
-        self.bvid_label.setStyleSheet("font-weight: bold; color: #3498db;")
-        
-        self.part_label = QLabel("尚未选择分P")
-        self.part_label.setStyleSheet("font-weight: bold; color: #3498db;")
-        
-        self.file_label = QLabel("尚未选择弹幕文件")
-        self.file_label.setWordWrap(True)
-        
-        info_layout.addRow("当前视频:", self.bvid_label)
-        info_layout.addRow("当前分P:", self.part_label)
-        info_layout.addRow("本地文件:", self.file_label)
-        
-        settings_layout.addLayout(info_layout)
-        
-        # 分割线
-        line = QFrame()
-        line.setFrameShape(QFrame.HLine)
-        line.setFrameShadow(QFrame.Sunken)
-        line.setStyleSheet("margin: 5px 0;")
-        settings_layout.addWidget(line)
-        
-        # 监视参数设置
-        adv_layout = QHBoxLayout()
-        
-        adv_layout.addWidget(QLabel("检查间隔(秒):"))
+        info_group.setLayout(info_layout)
+        main_layout.addWidget(info_group)
+
+        # --- 核心：数据仪表盘 ---
+        stats_group = QGroupBox("数据审计")
+        stats_layout = QGridLayout()
+        stats_layout.setContentsMargins(20, 20, 20, 20)
+        stats_layout.setHorizontalSpacing(30)
+
+        def create_stat_block(title, color):
+            lbl_num = QLabel("0")
+            lbl_num.setAlignment(Qt.AlignCenter)
+            lbl_num.setStyleSheet(f"font-size: 32px; font-weight: bold; color: {color}; font-family: 'Segoe UI', sans-serif;")
+            
+            lbl_title = QLabel(title)
+            lbl_title.setAlignment(Qt.AlignCenter)
+            lbl_title.setStyleSheet("color: #7f8c8d; font-size: 12px;")
+
+            container = QVBoxLayout()
+            container.addWidget(lbl_num)
+            container.addWidget(lbl_title)
+            return lbl_num, container
+
+        # 总发送
+        self.lbl_total, layout_total = create_stat_block("已发送 (Total)", "#2c3e50")
+        # 存活
+        self.lbl_verified, layout_verified = create_stat_block("已存活 (Verified)", "#27ae60")
+        # 待验
+        self.lbl_pending, layout_pending = create_stat_block("待验证 (Pending)", "#f39c12")
+        # 丢失
+        self.lbl_lost, layout_lost = create_stat_block("疑似丢失 (Lost)", "#c0392b")
+
+        stats_layout.addLayout(layout_total, 0, 0)
+        stats_layout.addLayout(layout_verified, 0, 1)
+        stats_layout.addLayout(layout_pending, 0, 2)
+        stats_layout.addLayout(layout_lost, 0, 3)
+
+        stats_group.setLayout(stats_layout)
+        main_layout.addWidget(stats_group)
+
+        # --- 设置与日志 ---
+        param_layout = QHBoxLayout()
+        param_layout.addWidget(QLabel("轮询间隔(秒):"))
         self.interval_spin = QSpinBox()
-        self.interval_spin.setRange(5, 3600)
+        self.interval_spin.setRange(10, 3600)
         self.interval_spin.setValue(60)
-        self.interval_spin.setFixedWidth(80)
-        adv_layout.addWidget(self.interval_spin)
+        param_layout.addWidget(self.interval_spin)
         
-        adv_layout.addSpacing(30)
+        param_layout.addStretch()
         
-        adv_layout.addWidget(QLabel("时间容差(ms):"))
-        self.tolerance_spin = QSpinBox()
-        self.tolerance_spin.setRange(0, 5000)
-        self.tolerance_spin.setValue(500)
-        self.tolerance_spin.setSingleStep(100)
-        self.tolerance_spin.setFixedWidth(80)
-        adv_layout.addWidget(self.tolerance_spin)
-        
-        adv_layout.addStretch()
-        
-        settings_layout.addLayout(adv_layout)
-        settings_group.setLayout(settings_layout)
-        main_layout.addWidget(settings_group)
+        main_layout.addLayout(param_layout)
 
-        # --- 运行日志区 ---
-        log_group = QGroupBox("监视运行日志")
+        # 日志区
+        log_group = QGroupBox("监视日志")
         log_layout = QVBoxLayout()
-        log_layout.setContentsMargins(5, 10, 5, 5)
-        
         self.log_output = QTextEdit()
         self.log_output.setReadOnly(True)
-        self.log_output.setStyleSheet("font-family: 'Consolas', 'Monaco', monospace; font-size: 12px;")
-        
+        self.log_output.setStyleSheet("font-family: 'Consolas', monospace; font-size: 11px;")
         log_layout.addWidget(self.log_output)
         log_group.setLayout(log_layout)
-        
         main_layout.addWidget(log_group, stretch=1)
 
-        # --- 底部控制栏 ---
+        # --- 底部控制 ---
         action_layout = QHBoxLayout()
-        action_layout.setSpacing(15)
-        
         self.status_label = QLabel("监视器：待命")
-        self.status_label.setStyleSheet("color: #7f8c8d;")
-        
-        self.progress_bar = QProgressBar()
-        self.progress_bar.setRange(0, 100)
-        self.progress_bar.setValue(0)
-        self.progress_bar.setTextVisible(True)
         
         self.start_btn = QPushButton("开始监视")
         self.start_btn.setFixedWidth(100)
@@ -120,8 +112,7 @@ class MonitorTab(QWidget):
         self.start_btn.setProperty("action", "true")
         self.start_btn.setProperty("state", "ready")
         
-        action_layout.addWidget(self.status_label)
-        action_layout.addWidget(self.progress_bar, stretch=1)
+        action_layout.addWidget(self.status_label, stretch=1)
         action_layout.addWidget(self.start_btn)
         
         main_layout.addLayout(action_layout)
@@ -149,31 +140,19 @@ class MonitorTab(QWidget):
 
         # 初始化与绑定
         self.interval_spin.blockSignals(True)
-        self.tolerance_spin.blockSignals(True)
-
         self.interval_spin.setValue(config.refresh_interval)
-        self.tolerance_spin.setValue(config.tolerance)
-
         self.interval_spin.blockSignals(False)
-        self.tolerance_spin.blockSignals(False)
-
         self.interval_spin.valueChanged.connect(self._on_interval_changed)
-        self.tolerance_spin.valueChanged.connect(self._on_tolerance_changed)
 
     def _disconnect_signals(self):
         try:
             self.interval_spin.valueChanged.disconnect(self._on_interval_changed)
-            self.tolerance_spin.valueChanged.disconnect(self._on_tolerance_changed)
         except (RuntimeError, TypeError):
             pass
 
     def _on_interval_changed(self, value):
         if self._state:
             self._state.monitor_config.refresh_interval = value
-
-    def _on_tolerance_changed(self, value):
-        if self._state:
-            self._state.monitor_config.tolerance = value
 
     def showEvent(self, event):
         super().showEvent(event)
@@ -185,9 +164,12 @@ class MonitorTab(QWidget):
         
         video_state = self._state.video_state
         
-        self.bvid_label.setText(video_state.bvid if video_state.bvid else "尚未加载")
-        self.part_label.setText(video_state.selected_part_name if video_state.selected_part_name else "尚未选择")
-        self.file_label.setText(f"已加载 {len(video_state.loaded_danmakus)} 条弹幕" if video_state.loaded_danmakus else "尚未选择文件")
+        if video_state.selected_cid:
+            title = video_state.video_title[:20] + "..." if len(video_state.video_title) > 20 else video_state.video_title
+            part = video_state.selected_part_name
+            self.target_label.setText(f"{title} - {part} (CID: {video_state.selected_cid})")
+        else:
+            self.target_label.setText("尚未选择视频 (请在发射器页面加载)")
 
     def toggle_task(self):
         if not self._state:
@@ -203,9 +185,12 @@ class MonitorTab(QWidget):
             self.logger.warning("上一轮任务尚未彻底结束，请稍候...")
             return
         
-        video_state = self._state.video_state
-        if not video_state.is_ready_to_send:
-            QMessageBox.warning(self, "无法启动", "请先在“发射器”页面加载视频和弹幕文件。")
+        cid = self._state.video_state.selected_cid
+        bvid = self._state.video_state.bvid
+        title = self._state.video_state.video_title
+
+        if not cid:
+            QMessageBox.warning(self, "无法启动", "请先在“发射器”页面获取视频信息并选择分P。\n(监视器需要 CID 来查询数据库)")
             return
         
         if not self._state.sessdata:
@@ -217,15 +202,16 @@ class MonitorTab(QWidget):
         auth = self._state.get_api_auth()
         monitor_config = self._state.monitor_config
 
+        target = VideoTarget(bvid=bvid, cid=cid, title=title)
+
         self._monitor_worker = MonitorTaskWorker(
-            cid=video_state.selected_cid,
-            danmakus=video_state.loaded_danmakus,
+            target=target,
             auth_config=auth,
             monitor_config=monitor_config,
             stop_event=self.stop_event,
             parent=self
         )
-        self._monitor_worker.progress_updated.connect(self._on_progress)
+        self._monitor_worker.stats_updated.connect(self._on_stats_updated)
         self._monitor_worker.status_updated.connect(self.status_label.setText)
         self._monitor_worker.log_message.connect(self.append_log)
         self._monitor_worker.task_finished.connect(self._on_finished)
@@ -237,24 +223,27 @@ class MonitorTab(QWidget):
         self.stop_event.clear()
         
         self.interval_spin.setEnabled(not running)
-        self.tolerance_spin.setEnabled(not running)
         self.start_btn.setEnabled(True)
         
         if running:
             self.start_btn.setText("停止监视")
             self._update_btn_style(True)
             self.log_output.clear()
-            self.progress_bar.setValue(0)
             self.status_label.setText("监视器：启动中...")
         else:
             self.start_btn.setText("开始监视")
             self._update_btn_style(False)
             self.status_label.setText("监视器：已停止")
 
-    def _on_progress(self, matched, total):
-        if total > 0:
-            val = int((matched / total) * 100)
-            self.progress_bar.setValue(val)
+    def _on_stats_updated(self, stats: dict):
+        """
+        处理后端传回的统计数据
+        stats: {'total': int, 'verified': int, 'pending': int, 'lost': int}
+        """
+        self.lbl_total.setText(str(stats.get('total', 0)))
+        self.lbl_verified.setText(str(stats.get('verified', 0)))
+        self.lbl_pending.setText(str(stats.get('pending', 0)))
+        self.lbl_lost.setText(str(stats.get('lost', 0)))
 
     def _on_finished(self):
         self._set_ui_running(False)

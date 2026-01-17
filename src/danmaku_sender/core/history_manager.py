@@ -97,23 +97,31 @@ class HistoryManager:
         except Exception as e:
             logger.error(f"存证失败: {e}", exc_info=True)
 
-    def verify_dmids(self, verified_dmids: list[str]):
+    def verify_dmids(self, verified_dmids: list[str]) -> int:
         """
         [核销] 监视器确认存活后，批量更新状态。
         将状态更新为: STATUS_VERIFIED (1)
         """
         if not verified_dmids:
             return
-        
+
         try:
             with self._get_conn() as conn:
                 placeholders = ','.join(['?'] * len(verified_dmids))
-                sql = f"UPDATE sent_danmaku SET status = ? WHERE dmid IN ({placeholders})"
-                conn.execute(sql, [DanmakuStatus.VERIFIED.value] + verified_dmids)
-            
-            logger.info(f"已核销(确认存活) {len(verified_dmids)} 条弹幕。")
+                sql = f'''
+                    UPDATE sent_danmaku 
+                    SET status = ? 
+                    WHERE dmid IN ({placeholders}) AND status = ?
+                '''
+
+                params = [DanmakuStatus.VERIFIED.value] + verified_dmids + [DanmakuStatus.PENDING.value]
+
+                cursor = conn.execute(sql, params)
+                return cursor.rowcount
+
         except Exception as e:
             logger.error(f"批量验证状态失败: {e}", exc_info=True)
+            return 0
 
     def mark_as_lost(self, cid: int, verified_dmids: list[str]):
         """
