@@ -3,11 +3,13 @@ import logging
 from threading import Event
 
 from .state import SenderConfig, VideoTarget
-from .bili_danmaku_utils import DanmakuSendResult, DanmakuParser, UnsentDanmakusRecord
+from .bili_danmaku_utils import DanmakuParser, UnsentDanmakusRecord
 from .delay_manager import DelayManager
 from .error_handler import resolve_bili_error, normalize_exception
 from .exceptions import BiliApiException
+from .models.danmaku import Danmaku
 from .models.errors import BiliDmErrorCode
+from .models.result import DanmakuSendResult
 
 from ..api.bili_api_client import BiliApiClient
 from ..utils.notification_utils import send_windows_notification
@@ -43,24 +45,26 @@ class BiliDanmakuSender:
             self.logger.error(log_msg)
             raise RuntimeError(log_msg) from e
 
-    def _send_single_danmaku(self, target: VideoTarget, danmaku: dict) -> DanmakuSendResult:
+    def _send_single_danmaku(self, target: VideoTarget, danmaku: Danmaku) -> DanmakuSendResult:
         """发送单条弹幕"""
         try:
-            result_json = self.api_client.post_danmaku(target.cid, target.bvid, danmaku)
-            
-            code = result_json.get('code', BiliDmErrorCode.GENERIC_FAILURE.code)
-            raw_message = result_json.get('message', '无B站原始消息')
-            _, display_msg = resolve_bili_error(code, raw_message)
+            params = danmaku.to_api_params()
 
-            if code == BiliDmErrorCode.SUCCESS.code:
-                self.logger.info(f"✅ 成功发送: '{danmaku['msg']}'")
-                return DanmakuSendResult(code=code, success=True, message=raw_message, display_message=BiliDmErrorCode.SUCCESS.description_str)
+            resp_json = self.api_client.post_danmaku(target.cid, target.bvid, params)
+            
+            result = DanmakuSendResult.from_api_response(resp_json)
+
+            if result.is_success:
+                if result.dmid:
+                    danmaku.dmid = result.dmid
+                self.logger.info(f"✅ 发送成功 [ID:{result.dmid}]: {danmaku.msg}")
             else:
-                if code == BiliDmErrorCode.FREQ_LIMIT.code:
-                    self.logger.warning(f"检测到弹幕发送过于频繁 (Code: {code}: {display_msg})，将额外等待10秒...")
+                if result.code == BiliDmErrorCode.FREQ_LIMIT.code:
                     time.sleep(10)
-                self.logger.warning(f"发送失败 (API响应)! 内容: '{danmaku['msg']}', Code: {code}, 消息: {display_msg} (原始: {raw_message})")
-                return DanmakuSendResult(code=code, success=False, message=raw_message, display_message=display_msg)
+                self.logger.warning(f"❌ 发送失败: {result.display_message}")
+            
+            return result
+
         except BiliApiException as e:
             error_code_enum = normalize_exception(e)
             
@@ -78,7 +82,7 @@ class BiliDanmakuSender:
         处理单条弹幕的发送结果，判断是否成功以及是否遇到致命错误。
         返回 (是否成功发送, 是否遇到致命错误)
         """
-        if not result.success:
+        if not result.is_success:
             error_enum = BiliDmErrorCode.from_code(result.code)
             if error_enum is None:
                 error_enum = BiliDmErrorCode.UNKNOWN_ERROR
@@ -90,15 +94,15 @@ class BiliDanmakuSender:
             return False, False  # 失败，但不是致命错误
         return True, False  # 成功发送
     
-    def _record_unsent_danmakus(self, danmakus: dict | list[dict], reason: str) -> None:
+    def _record_unsent_danmakus(self, danmakus: Danmaku | list[Danmaku], reason: str) -> None:
         """记录未发送成功的弹幕及其原因"""
-        if isinstance(danmakus, dict):
+        if isinstance(danmakus, Danmaku):
             self.unsent_danmakus.append({'dm': danmakus, 'reason': reason})
         else:
             for dm in danmakus:
                 self.unsent_danmakus.append({'dm': dm, 'reason': reason})
     
-    def send_danmaku_from_list(self, target: VideoTarget, danmakus: list, config: 'SenderConfig', stop_event: Event, progress_callback=None):
+    def send_danmaku_from_list(self, target: VideoTarget, danmakus: list[Danmaku], config: 'SenderConfig', stop_event: Event, progress_callback=None):
         """从一个弹幕字典列表发送弹幕，并响应停止事件"""
         self.logger.info(f"开始发送... 目标: {target.display_string} (CID: {target.cid})")
         self.unsent_danmakus = []  # 开始新任务时清空列表
@@ -135,9 +139,8 @@ class BiliDanmakuSender:
 
             attempted_count += 1
 
-            self.logger.info(f"[{i+1}/{total}] 准备发送: {dm.get('msg', 'N/A')}")
+            self.logger.info(f"[{i+1}/{total}] 准备发送: {dm.msg}")
             result = self._send_single_danmaku(target, dm)
-            self.logger.info(str(result))
 
             if progress_callback:
                 progress_callback(attempted_count, total)

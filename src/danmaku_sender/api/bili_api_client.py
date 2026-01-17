@@ -1,6 +1,5 @@
-import time
 import logging
-from typing import Generator, Protocol
+from typing import Any, Generator, Protocol
 from contextlib import contextmanager
 
 import requests
@@ -133,10 +132,10 @@ class BiliApiClient:
                 is_network_error=True
             ) from e
         
-    def _request(self, method: str, url: str, **kwargs) -> dict:
+    def _request(self, method: str, url: str, return_raw: bool = False, **kwargs) -> Any:
         """
-        通用的JSON API请求方法，包含错误处理逻辑。
-        成功时返回API响应中的 'data' 字段内容，失败时抛出 BiliApiException。
+        通用的JSON API请求方法。
+        return_raw=True 时返回完整 JSON，不抛出业务异常（用于发送接口）。
         """
         kwargs.setdefault('timeout', 10)
 
@@ -145,6 +144,10 @@ class BiliApiClient:
             response.raise_for_status()
             data = response.json()
 
+            if return_raw:
+                return data
+
+            # 标准模式：自动拆包，有错误码直接抛异常
             code = data.get('code', BiliDmErrorCode.GENERIC_FAILURE.code)
             if code == BiliDmErrorCode.SUCCESS.code:
                 return data.get('data', {})
@@ -169,17 +172,18 @@ class BiliApiClient:
             response.raise_for_status()
             return response.content.decode('utf-8')
 
-    def post_danmaku(self, cid: int, bvid: str, danmaku: dict) -> dict:
+    def post_danmaku(self, cid: int, bvid: str, danmaku_params: dict) -> dict:
         """发送单条弹幕"""
         url = "https://api.bilibili.com/x/v2/dm/post"
         img_key, sub_key = self.wbi_keys
-        base_params = {
-            'type': '1', 'oid': cid, 'msg': danmaku['msg'], 'bvid': bvid,
-            'progress': danmaku['progress'], 'mode': danmaku['mode'],
-            'fontsize': danmaku['fontsize'], 'color': danmaku['color'],
-            'pool': '0', 'rnd': int(time.time()), 'csrf': self.bili_jct
-        }
+        final_params = danmaku_params.copy()
 
-        signed_params = WbiSigner.enc_wbi(params=base_params, img_key=img_key, sub_key=sub_key)
+        final_params.update({
+            'oid': cid,
+            'bvid': bvid,
+            'csrf': self.bili_jct
+        })
 
-        return self._request('POST', url, data=signed_params)
+        signed_params = WbiSigner.enc_wbi(params=final_params, img_key=img_key, sub_key=sub_key)
+
+        return self._request('POST', url, data=signed_params, return_raw=True)

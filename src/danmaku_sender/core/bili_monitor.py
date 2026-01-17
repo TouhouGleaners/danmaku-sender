@@ -4,8 +4,10 @@ from datetime import timedelta
 
 from .exceptions import BiliApiException
 
+from .bili_danmaku_utils import DanmakuParser
+from .models.danmaku import Danmaku
+
 from ..api.bili_api_client import BiliApiClient
-from ..core.bili_danmaku_utils import DanmakuParser
 
 
 class BiliDanmakuMonitor:
@@ -33,7 +35,7 @@ class BiliDanmakuMonitor:
         self.danmaku_parser = DanmakuParser()
         self.logger = logging.getLogger("DanmakuMonitor")
         self.source_danmaku_filepath = source_danmaku_filepath
-        self.loaded_danmakus = loaded_danmakus if loaded_danmakus is not None else []  
+        self.loaded_danmakus: list[Danmaku] = loaded_danmakus if loaded_danmakus is not None else []  
         self.total_danmakus = len(self.loaded_danmakus)
         self.matched_local_indices = set()
         self.unique_matched_online_ids = set()
@@ -72,7 +74,7 @@ class BiliDanmakuMonitor:
         
         return False  # 理论上不应该到达这里
 
-    def _fetch_online_danmakus(self) -> list:
+    def _fetch_online_danmakus(self) -> list[Danmaku]:
         """获取在线弹幕列表"""
         try:
             xml_content = self.api_client.get_danmaku_list_xml(self.cid)
@@ -124,15 +126,15 @@ class BiliDanmakuMonitor:
                 if i in self.matched_local_indices:
                     continue
 
-                l_time, l_text = local_dm['progress'], local_dm['msg']
+                l_time, l_text = local_dm.progress, local_dm.msg
                 
                 for online_dm in online_danmakus:
-                    o_time, o_text = online_dm['progress'], online_dm['msg']
-                    o_id = online_dm.get('id')
+                    o_time, o_text = online_dm.progress, online_dm.msg
+                    o_id = online_dm.dmid
 
                     if (l_text == o_text and 
                         abs(l_time - o_time) <= self.time_tolerance and
-                        (o_id is None or o_id not in self.unique_matched_online_ids)):
+                        (not o_id or o_id not in self.unique_matched_online_ids)):
                         
                         new_matches_this_round.append((i, l_time, l_text))
                         self.matched_local_indices.add(i)
