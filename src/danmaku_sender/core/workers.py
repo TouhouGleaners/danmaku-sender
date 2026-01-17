@@ -106,6 +106,8 @@ class SendTaskWorker(BaseWorker):
 
                     def _save_to_db_cb(dm: Danmaku, result: DanmakuSendResult):
                         if result.is_success and result.dmid:
+                            if not dm.dmid:
+                                dm.dmid = result.dmid
                             self.history_manager.record_danmaku(self.target, dm, result.is_visible)
 
                     self.sender_instance.send_danmaku_from_list(
