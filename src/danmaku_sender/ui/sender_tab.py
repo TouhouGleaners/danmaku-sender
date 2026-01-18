@@ -11,7 +11,8 @@ from PySide6.QtWidgets import (
 from PySide6.QtGui import QTextCursor
 from PySide6.QtCore import Qt
 
-from ..core.bili_danmaku_utils import DanmakuParser, create_xml_from_danmakus
+from ..core.bili_danmaku_utils import DanmakuParser
+from ..core.services.exporter import create_xml_from_danmakus
 from ..core.workers import FetchInfoWorker, SendTaskWorker
 
 
