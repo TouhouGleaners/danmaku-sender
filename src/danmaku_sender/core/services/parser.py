@@ -1,7 +1,7 @@
 import logging
 import xml.etree.ElementTree as ET
 
-from .models.danmaku import Danmaku
+from ..models.danmaku import Danmaku
 
 
 logger = logging.getLogger("BiliUtils")
