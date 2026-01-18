@@ -2,7 +2,7 @@ import copy
 import logging
 from typing import Any, TypedDict
 
-from .bili_danmaku_utils import validate_danmaku_list, ValidationIssue
+from .services.validator import ValidationIssue, validate_danmaku_list
 from .models.danmaku import Danmaku
 from .state import AppState
 
