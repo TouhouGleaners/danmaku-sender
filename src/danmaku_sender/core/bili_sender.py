@@ -2,8 +2,6 @@ import time
 import logging
 from threading import Event
 
-from .state import SenderConfig
-from .bili_danmaku_utils import DanmakuParser, UnsentDanmakusRecord
 from .delay_manager import DelayManager
 from .error_handler import normalize_exception
 from .exceptions import BiliApiException
@@ -11,6 +9,9 @@ from .models.danmaku import Danmaku
 from .models.errors import BiliDmErrorCode
 from .models.result import DanmakuSendResult
 from .models.structs import VideoTarget
+from .services.exporter import UnsentDanmakusRecord
+from .services.parser import DanmakuParser
+from .state import SenderConfig
 
 from ..api.bili_api_client import BiliApiClient
 from ..utils.notification_utils import send_windows_notification

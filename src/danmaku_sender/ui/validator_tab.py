@@ -8,7 +8,7 @@ from PySide6.QtWidgets import (
 from PySide6.QtCore import Qt
 
 from ..core.validator_session import ValidatorSession
-from ..core.bili_danmaku_utils import format_ms_to_hhmmss
+from ..utils.time_utils import format_ms_to_hhmmss
 
 
 class ValidatorTab(QWidget):
