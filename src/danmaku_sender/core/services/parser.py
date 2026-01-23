@@ -4,29 +4,24 @@ import xml.etree.ElementTree as ET
 from ..models.danmaku import Danmaku
 
 
-logger = logging.getLogger("BiliUtils")
-
-
 class DanmakuParser:
     """
-    解析Bilibili弹幕XML内容
-    返回标准化弹幕字典列表的类。
+    解析 Bilibili 弹幕 XML 内容
+    返回 Danmaku 实体对象列表的类。
     """
     def __init__(self):
         self.logger = logging.getLogger("DanmakuParser")
 
     def parse_xml_content(self, xml_content: str, is_online_data: bool = False) -> list[Danmaku]:
         """
-        解析Bilibili的XML弹幕内容字符串，返回一个标准化的弹幕字典列表。
+        解析Bilibili的XML弹幕内容字符串，返回一个 Danmaku 对象列表。
         
         Args:
             xml_content (str): XML弹幕内容的字符串。
             is_online_data (bool): 如果为True，表示解析的是在线实时弹幕数据，此时会尝试提取弹幕ID (p_attr[7])。
         
         Returns:
-            list: 一个包含弹幕字典的列表，例如：
-                  本地弹幕: [{'progress': 12345, 'msg': '内容', 'mode': 1, 'fontsize': 25, 'color': 16777215}]
-                  在线弹幕: [{'progress': 12345, 'msg': '内容', 'id': '弹幕唯一ID'}] (mode, fontsize, color可以省略或给默认值)
+            list[Danmaku]: 一个包含 Danmaku 对象的列表。
         """
         danmakus = []
         try:
@@ -61,8 +56,8 @@ class DanmakuParser:
             self.logger.critical(f"❌ 错误: 解析XML内容时发生意外异常: {e}", exc_info=True)
             return []
         
-    def parse_xml_file(self, xml_path: str) -> list:
-        """从XML文件读取内容并解析，返回一个标准化的弹幕字典列表。"""
+    def parse_xml_file(self, xml_path: str) -> list[Danmaku]:
+        """从XML文件读取内容并解析，返回一个 Danmaku 对象列表。"""
         try:
             with open(xml_path, 'r', encoding='utf-8') as f:
                 content = f.read()
