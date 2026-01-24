@@ -192,7 +192,7 @@ class BiliDanmakuSender:
         处理发送结果，更新上下文状态。
 
         Returns:
-            True 表示可以继续，False 表示遇到致命错误需中断。
+            SendFlowAction: 指示后续流程 (CONTINUE: 继续发送, STOP_FATAL: 因致命错误中断)。
         """
         # 执行回调
         if result_callback:
