@@ -1,9 +1,15 @@
+from importlib.metadata import version, PackageNotFoundError
+
+
 class AppInfo:
     """存放应用元数据"""
     NAME = "B站弹幕补档工具"
     NAME_EN = "BiliDanmakuSender"
     AUTHOR = "Miku_oso"
-    VERSION = "2.1.0"
+    try:
+        VERSION = version("danmaku-sender")
+    except PackageNotFoundError:
+        VERSION = "0.0.0-dev"
     LOG_FILE_NAME = "latest.log"
     LOG_DIR_NAME = "logs"
     
