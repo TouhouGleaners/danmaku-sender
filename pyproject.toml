@@ -1,0 +1,46 @@
+[build-system]
+requires = ["setuptools>=61.0", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "danmaku-sender"
+version = "2.1.0"
+description = "Bilibili 弹幕发送与补档工具 (PySide6)"
+readme = "README.md"
+authors = [
+    { name = "Miku_oso", email = "mikuoso@qq.com" }
+]
+license = { text = "MIT" }
+requires-python = ">=3.12"
+
+dependencies = [
+    "PySide6>=6.10.1",
+    "requests>=2.32.5",
+    "platformdirs>=4.5.1",
+    "keyring>=25.7.0",
+    "win11toast>=0.36.2",
+    "cryptography>=46.0.3",
+]
+
+[project.urls]
+"Homepage" = "https://github.com/TouhouGleaners/danmaku-sender"
+"Bug Tracker" = "https://github.com/TouhouGleaners/danmaku-sender/issues"
+
+[project.optional-dependencies]
+build = [
+    "nuitka>=2.0",
+    "zstandard>=0.15.0",
+]
+
+dev = [
+    "pytest>=8.0.0",
+    "nuitka>=2.0",
+    "zstandard>=0.15.0",
+]
+
+[project.scripts]
+danmaku-sender = "danmaku_sender.main:main"
+
+[tool.pytest.ini_options]
+pythonpath = "src"
+testpaths = ["tests"]
