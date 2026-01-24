@@ -2,6 +2,7 @@ import time
 import logging
 from threading import Event
 from dataclasses import dataclass, field
+from typing import Callable
 
 from .delay_manager import DelayManager
 from .error_handler import normalize_exception
@@ -17,6 +18,9 @@ from .state import SenderConfig
 
 from ..api.bili_api_client import BiliApiClient
 from ..utils.notification_utils import send_windows_notification
+
+
+DanmakuFingerprint = tuple[str, int, int, int, int]
 
 
 @dataclass
@@ -40,8 +44,10 @@ class SendingContext:
     unsent_records: list[UnsentDanmakusRecord] = field(default_factory=list)
 
     # 去重缓存
-    local_counter: dict = field(default_factory=dict)   # Key: (msg, progress, mode, fontsize, color) -> Value: int
-    db_count_cache: dict = field(default_factory=dict)  # Key: fingerprint -> Value: db_count
+    # Key: 指纹 -> Value: 出现次数
+    local_counter: dict[DanmakuFingerprint, int] = field(default_factory=dict)
+    # Key: 指纹 -> Value: 数据库中记录的次数
+    db_count_cache: dict[DanmakuFingerprint, int] = field(default_factory=dict)
 
     @property
     def elapsed_minutes(self) -> float:
@@ -147,7 +153,9 @@ class BiliDanmakuSender:
     def _process_send_result(self, result: DanmakuSendResult) -> tuple[bool, bool]:
         """
         解析发送结果。
-        Returns: (is_success, is_fatal_error)
+
+        Returns: 
+            (is_success, is_fatal_error)
         """
         if not result.is_success:
             error_enum = BiliDmErrorCode.from_code(result.code)
@@ -161,11 +169,18 @@ class BiliDanmakuSender:
             return False, False  # 失败，但不是致命错误
         return True, False  # 成功发送
     
-    def _handle_send_result(self, dm: Danmaku, result: DanmakuSendResult, ctx: SendingContext, result_callback) -> bool:
+    def _handle_send_result(
+        self,
+        dm: Danmaku,
+        result: DanmakuSendResult,
+        ctx: SendingContext,
+        result_callback: Callable[[Danmaku, DanmakuSendResult], None] | None
+    ) -> bool:
         """
         处理发送结果，更新上下文状态。
 
-        Returns: True 表示可以继续，False 表示遇到致命错误需中断。
+        Returns:
+            True 表示可以继续，False 表示遇到致命错误需中断。
         """
         # 执行回调
         if result_callback:
@@ -282,7 +297,8 @@ class BiliDanmakuSender:
             # 检查自动停止 (数量/时间)
             if self._check_auto_stop(ctx, stop_event):
                 if i + 1 < ctx.total:
-                    ctx.add_unsent(danmakus[i+1:], "达到自动停止条件")
+                    reason = ctx.auto_stop_reason if ctx.auto_stop_reason else "达到自动停止条件"
+                    ctx.add_unsent(danmakus[i+1:], f"自动停止: {reason}")
                 break
 
             # 延时管理
