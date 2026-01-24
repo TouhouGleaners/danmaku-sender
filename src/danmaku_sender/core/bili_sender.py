@@ -5,6 +5,7 @@ from threading import Event
 from .delay_manager import DelayManager
 from .error_handler import normalize_exception
 from .exceptions import BiliApiException
+from .history_manager import HistoryManager
 from .models.danmaku import Danmaku
 from .models.errors import BiliDmErrorCode
 from .models.result import DanmakuSendResult
@@ -108,16 +109,18 @@ class BiliDanmakuSender:
         self,
         target: VideoTarget,
         danmakus: list[Danmaku],
-        config: 'SenderConfig',
+        config: SenderConfig,
         stop_event: Event,
         progress_callback=None,
-        result_callback=None
+        result_callback=None,
+        history_manager: HistoryManager = None
     ):
         """
         从一个弹幕字典列表发送弹幕，并响应停止事件
         
         Args:
             result_callback: Callable[[Danmaku, DanmakuSendResult], None] 发送结果回调
+            history_manager: 用于查重的数据库管理器
         """
         self.logger.info(f"开始发送... 目标: {target.display_string} (CID: {target.cid})")
         self.unsent_danmakus = []  # 开始新任务时清空列表
@@ -140,6 +143,8 @@ class BiliDanmakuSender:
         )
         
         total = len(danmakus)
+        local_counter = {}  # Key: (msg, progress, mode, fontsize, color) -> Value: int
+        skipped_count = 0
         success_count = 0
         attempted_count = 0
         fatal_error_occurred = False
@@ -148,17 +153,30 @@ class BiliDanmakuSender:
             progress_callback(0, total)
 
         for i, dm in enumerate(danmakus):
+            if progress_callback:
+                progress_callback(i + 1, total)
+
             if stop_event.is_set():
                 self._record_unsent_danmakus(danmakus[i:], "任务手动停止")
                 break
+
+            if config.skip_sent and history_manager:
+                dm_fingerprint = (dm.msg, dm.progress, dm.mode, dm.fontsize, dm.color)
+
+                local_counter[dm_fingerprint] = local_counter.get(dm_fingerprint, 0) + 1
+                current_occurrence = local_counter[dm_fingerprint]
+
+                db_count = history_manager.count_records(target, dm)
+
+                if current_occurrence <= db_count:
+                    self.logger.info(f"⏭️ [跳过] 已发送 ({current_occurrence}/{db_count}): {dm.msg}")
+                    skipped_count += 1
+                    continue
 
             attempted_count += 1
 
             self.logger.info(f"[{i+1}/{total}] 准备发送: {dm.msg}")
             result = self._send_single_danmaku(target, dm)
-
-            if progress_callback:
-                progress_callback(attempted_count, total)
 
             if result_callback:
                 try:
@@ -202,9 +220,9 @@ class BiliDanmakuSender:
                 self._record_unsent_danmakus(danmakus[i+1:], "任务手动停止")
                 break
 
-        self._log_send_summary(total, attempted_count, success_count, stop_event, fatal_error_occurred, auto_stop_reason)
+        self._log_send_summary(total, attempted_count, success_count, skipped_count, stop_event, fatal_error_occurred, auto_stop_reason)
 
-    def _log_send_summary(self, total: int, attempted_count: int, success_count: int, stop_event: Event, fatal_error_occurred: bool, auto_stop_reason: str = ""):
+    def _log_send_summary(self, total: int, attempted_count: int, success_count: int, skipped_count: int, stop_event: Event, fatal_error_occurred: bool, auto_stop_reason: str = ""):
         """记录弹幕发送任务的总结信息。"""
         self.logger.info("--- 发送任务结束 ---")
         if auto_stop_reason:
@@ -218,6 +236,7 @@ class BiliDanmakuSender:
         else:
             self.logger.info("原因：所有弹幕已发送完毕。")
         self.logger.info(f"弹幕总数: {total} 条")
+        self.logger.info(f"智能跳过: {skipped_count} 条")
         self.logger.info(f"尝试发送: {attempted_count} 条")
         self.logger.info(f"发送成功: {success_count} 条")
         self.logger.info(f"发送失败: {attempted_count - success_count} 条")

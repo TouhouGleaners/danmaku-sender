@@ -191,3 +191,37 @@ class HistoryManager:
             logger.error(f"获取统计失败: {e}")
             
         return 0, 0, 0
+    
+    def count_records(self, target: VideoTarget, dm: Danmaku) -> int:
+        """
+        统计数据库中与传入弹幕完全匹配的记录数量，
+        用于断点续传的计数对账
+        """
+        try:
+            with self._get_conn() as conn:
+                sql = '''
+                    SELECT COUNT(*) FROM sent_danmaku
+                    WHERE cid = ?
+                    AND msg = ?
+                    AND mode = ?
+                    AND color = ?
+                    AND fontsize = ?
+                    AND abs(progress - ?) < 100
+                    AND status IN (?, ?)  -- 只统计 PENDING(0) 和 VERIFIED(1)
+                '''
+                params = (
+                    target.cid,
+                    dm.msg,
+                    dm.mode,
+                    dm.color,
+                    dm.fontsize,
+                    dm.progress,
+                    DanmakuStatus.PENDING.value,
+                    DanmakuStatus.VERIFIED.value
+                )
+
+                cursor = conn.execute(sql, params)
+                return cursor.fetchone()[0]
+        except Exception as e:
+            logger.error(f"查重失败: {e}", exc_info=True)
+            return 0

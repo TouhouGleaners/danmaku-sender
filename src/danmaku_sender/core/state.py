@@ -32,6 +32,9 @@ class SenderConfig:
     prevent_sleep: bool = True
     use_system_proxy: bool = True
 
+    # 断点续传
+    skip_sent: bool = True
+
     def is_valid(self) -> bool:
         """简单的逻辑校验"""
         if self.min_delay > self.max_delay:
