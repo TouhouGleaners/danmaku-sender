@@ -34,7 +34,8 @@ build = [
 
 dev = [
     "pytest>=8.0.0",
-    "danmaku-sender[build]",
+    "nuitka>=2.0",
+    "zstandard>=0.15.0",
 ]
 
 [project.scripts]
