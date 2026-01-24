@@ -14,6 +14,7 @@ from PySide6.QtCore import Qt
 from ..core.services.exporter import create_xml_from_danmakus
 from ..core.services.parser import DanmakuParser
 from ..core.workers import FetchInfoWorker, SendTaskWorker
+from ..utils.string_utils import parse_bilibili_link
 
 
 class SenderTab(QWidget):
@@ -28,6 +29,8 @@ class SenderTab(QWidget):
 
         self._fetch_worker = None
         self._send_worker = None
+
+        self._pending_part_index: int | None = None 
 
         self._create_ui()
         self._connect_ui_logic()
@@ -322,10 +325,20 @@ class SenderTab(QWidget):
             self.logger.warning("正在获取视频信息，请稍候...")
             return
 
-        bvid = self.bv_input.text().strip()
-        if not bvid:
-            QMessageBox.warning(self, "输入错误", "请输入BV号")
+        raw_input = self.bv_input.text().strip()
+        if not raw_input:
+            QMessageBox.warning(self, "输入错误", "请输入BV号或视频链接")
             return
+        
+        bvid, p_index = parse_bilibili_link(raw_input)
+
+        if not bvid:
+            QMessageBox.warning(self, "格式错误", "未能识别有效的 BV 号。\n请检查输入内容是否正确。")
+            self._pending_part_index = None
+            return
+        
+        self.bv_input.setText(bvid)
+        self._pending_part_index = p_index
         
         self.fetch_btn.setEnabled(False)
         self.fetch_btn.setText("获取中")
@@ -368,12 +381,22 @@ class SenderTab(QWidget):
             self._state.video_state.cid_parts_map[cid] = part_name
 
         if pages:
-            self.part_combo.setCurrentIndex(0)
+            if (self._pending_part_index is not None and 
+                0 <= self._pending_part_index < self.part_combo.count()):
+                
+                self.part_combo.setCurrentIndex(self._pending_part_index)
+                self.logger.info(f"🔗 智能链接解析: 自动定位到第 {self._pending_part_index + 1} P")
+            else:
+                self.part_combo.setCurrentIndex(0)
+            
+            self._pending_part_index = None
 
     def _on_fetch_error(self, err_msg: str):
         self.fetch_btn.setEnabled(True)
         self.fetch_btn.setText("获取分P")
         self._fetch_worker = None
+
+        self._pending_part_index = None
 
         self.part_combo.clear()
         self.part_combo.addItem(f"获取失败，请重试")
