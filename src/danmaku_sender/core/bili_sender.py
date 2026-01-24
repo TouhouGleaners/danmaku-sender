@@ -113,7 +113,7 @@ class BiliDanmakuSender:
         stop_event: Event,
         progress_callback=None,
         result_callback=None,
-        history_manager: HistoryManager = None
+        history_manager: HistoryManager | None = None
     ):
         """
         从一个弹幕字典列表发送弹幕，并响应停止事件
@@ -154,12 +154,12 @@ class BiliDanmakuSender:
             progress_callback(0, total)
 
         for i, dm in enumerate(danmakus):
-            if progress_callback:
-                progress_callback(i + 1, total)
-
             if stop_event.is_set():
                 self._record_unsent_danmakus(danmakus[i:], "任务手动停止")
                 break
+
+            if progress_callback:
+                progress_callback(i + 1, total)
 
             if config.skip_sent and history_manager:
                 dm_fingerprint = (dm.msg, dm.progress, dm.mode, dm.fontsize, dm.color)
