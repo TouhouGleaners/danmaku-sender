@@ -1,9 +1,14 @@
 import re
 
 
+BV_PATTERN = re.compile(r"(BV[a-zA-Z0-9]{10})", re.IGNORECASE)  # 匹配 BV 号 (BV + 10位字母数字)
+P_PATTERN = re.compile(r"[?&]p=(\d+)")  # 匹配分P参数
+
+
 def parse_bilibili_link(text: str) -> tuple[str | None, int | None]:
     """
     从文本中提取 BVID 和 分P索引 (p=X)。
+    如果文本本身就是一个纯 BVID，也可正常提取。
     
     Returns:
         (bvid, p_index)
@@ -13,16 +18,13 @@ def parse_bilibili_link(text: str) -> tuple[str | None, int | None]:
     if not text:
         return None, None
 
-    # 提取 BVID (BV + 10位字母数字)
-    bv_pattern = re.compile(r"(BV[a-zA-Z0-9]{10})", re.IGNORECASE)
-    bv_match = bv_pattern.search(text)
-
+    # 提取 BVID
+    bv_match = BV_PATTERN.search(text)
     bvid = bv_match.group(1) if bv_match else None
 
-    # 提取分P参数 (?p=3 或 &p=3)
+    # 提取分P参数
     p_index = None
-    p_pattern = re.compile(r"[?&]p=(\d+)")
-    p_match = p_pattern.search(text)
+    p_match = P_PATTERN.search(text)
 
     if p_match:
         try:

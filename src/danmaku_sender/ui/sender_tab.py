@@ -332,11 +332,12 @@ class SenderTab(QWidget):
         
         bvid, p_index = parse_bilibili_link(raw_input)
 
-        if bvid:
-            self.bv_input.setText(bvid) 
-        else:
-            bvid = raw_input
-
+        if not bvid:
+            QMessageBox.warning(self, "格式错误", "未能识别有效的 BV 号。\n请检查输入内容是否正确。")
+            self._pending_part_index = None
+            return
+        
+        self.bv_input.setText(bvid)
         self._pending_part_index = p_index
         
         self.fetch_btn.setEnabled(False)
@@ -394,6 +395,8 @@ class SenderTab(QWidget):
         self.fetch_btn.setEnabled(True)
         self.fetch_btn.setText("获取分P")
         self._fetch_worker = None
+
+        self._pending_part_index = None
 
         self.part_combo.clear()
         self.part_combo.addItem(f"获取失败，请重试")
