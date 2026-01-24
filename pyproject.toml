@@ -27,10 +27,14 @@ dependencies = [
 "Bug Tracker" = "https://github.com/TouhouGleaners/danmaku-sender/issues"
 
 [project.optional-dependencies]
-dev = [
-    "pytest>=8.0.0",
+build = [
     "nuitka>=2.0",
     "zstandard>=0.15.0",
+]
+
+dev = [
+    "pytest>=8.0.0",
+    "danmaku-sender[build]",
 ]
 
 [project.scripts]
