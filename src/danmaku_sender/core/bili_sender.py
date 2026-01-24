@@ -3,6 +3,7 @@ import logging
 from threading import Event
 from dataclasses import dataclass, field
 from typing import Callable
+from enum import Enum, auto
 
 from .delay_manager import DelayManager
 from .error_handler import normalize_exception
@@ -21,6 +22,12 @@ from ..utils.notification_utils import send_windows_notification
 
 
 DanmakuFingerprint = tuple[str, int, int, int, int]
+
+
+class SendFlowAction(Enum):
+    """发送流程控制动作"""
+    CONTINUE = auto()     # 继续发送
+    STOP_FATAL = auto()   # 遇到致命错误，立即停止
 
 
 @dataclass
@@ -92,6 +99,11 @@ class BiliDanmakuSender:
             log_msg = f"获取视频信息失败, Code: {e.code}, 信息: {e.message}"
             self.logger.error(log_msg)
             raise RuntimeError(log_msg) from e
+        
+    @staticmethod
+    def _get_fingerprint(dm: Danmaku) -> DanmakuFingerprint:
+        """统一生成弹幕指纹，用于去重"""
+        return (dm.msg, dm.progress, dm.mode, dm.fontsize, dm.color)
 
     def _send_single_danmaku(self, target: VideoTarget, danmaku: Danmaku) -> DanmakuSendResult:
         """发送单条弹幕"""
@@ -131,7 +143,7 @@ class BiliDanmakuSender:
             return False
 
         # 构建指纹
-        dm_fingerprint = (dm.msg, dm.progress, dm.mode, dm.fontsize, dm.color)
+        dm_fingerprint = self._get_fingerprint(dm)
 
         # 本地本次任务计数
         ctx.local_counter[dm_fingerprint] = ctx.local_counter.get(dm_fingerprint, 0) + 1
@@ -175,7 +187,7 @@ class BiliDanmakuSender:
         result: DanmakuSendResult,
         ctx: SendingContext,
         result_callback: Callable[[Danmaku, DanmakuSendResult], None] | None
-    ) -> bool:
+    ) -> SendFlowAction:
         """
         处理发送结果，更新上下文状态。
 
@@ -195,14 +207,14 @@ class BiliDanmakuSender:
         if is_fatal:
             ctx.fatal_error_occurred = True
             ctx.add_unsent(dm, f"致命错误: {result.display_message}")
-            return False
+            return SendFlowAction.STOP_FATAL
 
         if not sent_successfully:
             ctx.add_unsent(dm, result.display_message)
         else:
             ctx.success_count += 1
             
-        return True
+        return SendFlowAction.CONTINUE
     
     def _check_auto_stop(self, ctx: SendingContext, stop_event: Event) -> bool:
         """
@@ -287,8 +299,8 @@ class BiliDanmakuSender:
             result = self._send_single_danmaku(target, dm)
 
             # 处理结果 (更新状态/判断致命错误)
-            should_continue = self._handle_send_result(dm, result, ctx, result_callback)
-            if not should_continue:
+            action = self._handle_send_result(dm, result, ctx, result_callback)
+            if action == SendFlowAction.STOP_FATAL:
                 # 遇到致命错误，记录剩余所有弹幕并退出
                 if i + 1 < ctx.total:
                     ctx.add_unsent(danmakus[i+1:], "由于前序致命错误停止任务")
