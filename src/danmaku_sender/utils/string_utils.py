@@ -1,7 +1,7 @@
 import re
 
 
-BV_PATTERN = re.compile(r"(BV[a-zA-Z0-9]{10})", re.IGNORECASE)  # 匹配 BV 号 (BV + 10位字母数字)
+BV_PATTERN = re.compile(r"(BV[a-zA-Z0-9]{10})")  # 匹配 BV 号 (BV + 10位字母数字)
 P_PATTERN = re.compile(r"[?&]p=(\d+)")  # 匹配分P参数
 
 
@@ -20,7 +20,7 @@ def parse_bilibili_link(text: str) -> tuple[str | None, int | None]:
 
     # 提取 BVID
     bv_match = BV_PATTERN.search(text)
-    bvid = bv_match.group(1) if bv_match else None
+    bvid = bv_match.group(0) if bv_match else None
 
     # 提取分P参数
     p_index = None
