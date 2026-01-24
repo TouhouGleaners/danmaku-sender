@@ -116,7 +116,8 @@ class SendTaskWorker(BaseWorker):
                         config=self.strategy_config,
                         stop_event=self.stop_event,
                         progress_callback=_progress_cb,
-                        result_callback=_save_to_db_cb
+                        result_callback=_save_to_db_cb,
+                        history_manager=self.history_manager
                     )
         except Exception as e:
             self.report_error("任务发生严重错误", e)

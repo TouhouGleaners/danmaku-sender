@@ -4,7 +4,7 @@ from pathlib import Path
 
 from PySide6.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout, QFormLayout, QLineEdit,
-    QPushButton, QComboBox, QLabel, QGroupBox, QTextEdit,
+    QPushButton, QComboBox, QLabel, QGroupBox, QTextEdit, QCheckBox,
     QProgressBar, QTabWidget, QSpinBox, QDoubleSpinBox, QFrame,
     QFileDialog, QMessageBox
 )
@@ -67,6 +67,15 @@ class SenderTab(QWidget):
         basic_layout.addRow(QLabel("视频BV号:"), bv_layout)
         basic_layout.addRow(QLabel("分P选择:"), self.part_combo)
         basic_layout.addRow(QLabel("弹幕文件:"), file_layout)
+
+        self.skip_sent_cb = QCheckBox("启用断点续传 (跳过已发送)")
+        self.skip_sent_cb.setToolTip(
+            "开启后，发送前会自动检查数据库。\n"
+            "如果发现完全一致的弹幕（内容、时间、样式）已发送过，则自动跳过。\n"
+            "支持处理文件中的重复弹幕。"
+        )
+        # 把它加在基础参数组的最后一行
+        basic_layout.addRow(QLabel(""), self.skip_sent_cb) 
 
         basic_group.setLayout(basic_layout)
         main_layout.addWidget(basic_group)
@@ -230,6 +239,7 @@ class SenderTab(QWidget):
         self.burst_rest_max.setValue(config.rest_max)
         self.stop_count.setValue(config.stop_after_count)
         self.stop_time.setValue(config.stop_after_time)
+        self.skip_sent_cb.setChecked(config.skip_sent)
 
         # 视频状态初始化
         self.bv_input.setText(video_state.bvid)
@@ -253,6 +263,9 @@ class SenderTab(QWidget):
         # BV号同步
         self.bv_input.textChanged.connect(lambda t: setattr(video_state, 'bvid', t.strip()))
 
+        # 断点续传
+        self.skip_sent_cb.stateChanged.connect(lambda v: setattr(config, 'skip_sent', self.skip_sent_cb.isChecked()))
+
     def _disconnect_signals(self):
         """安全断开所有信号连接"""
         signals = [
@@ -263,7 +276,8 @@ class SenderTab(QWidget):
             self.burst_rest_max.valueChanged,
             self.stop_count.valueChanged,
             self.stop_time.valueChanged,
-            self.bv_input.textChanged
+            self.bv_input.textChanged,
+            self.skip_sent_cb.stateChanged
         ]
         for sig in signals:
             try:
