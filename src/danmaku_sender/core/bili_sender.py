@@ -143,7 +143,8 @@ class BiliDanmakuSender:
         )
         
         total = len(danmakus)
-        local_counter = {}  # Key: (msg, progress, mode, fontsize, color) -> Value: int
+        local_counter = {}   # Key: (msg, progress, mode, fontsize, color) -> Value: int
+        db_count_cache = {}  # Key: fingerprint -> Value: db_count
         skipped_count = 0
         success_count = 0
         attempted_count = 0
@@ -166,7 +167,11 @@ class BiliDanmakuSender:
                 local_counter[dm_fingerprint] = local_counter.get(dm_fingerprint, 0) + 1
                 current_occurrence = local_counter[dm_fingerprint]
 
-                db_count = history_manager.count_records(target, dm)
+                if dm_fingerprint in db_count_cache:
+                    db_count = db_count_cache[dm_fingerprint]
+                else:
+                    db_count = history_manager.count_records(target, dm)
+                    db_count_cache[dm_fingerprint] = db_count
 
                 if current_occurrence <= db_count:
                     self.logger.info(f"⏭️ [跳过] 已发送 ({current_occurrence}/{db_count}): {dm.msg}")

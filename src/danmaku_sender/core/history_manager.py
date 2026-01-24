@@ -206,7 +206,7 @@ class HistoryManager:
                     AND mode = ?
                     AND color = ?
                     AND fontsize = ?
-                    AND abs(progress - ?) < 100
+                    AND progress = ?
                     AND status IN (?, ?)  -- 只统计 PENDING(0) 和 VERIFIED(1)
                 '''
                 params = (
