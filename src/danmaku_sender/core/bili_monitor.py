@@ -5,7 +5,7 @@ from .exceptions import BiliApiException
 from .history_manager import HistoryManager
 from .models.danmaku import Danmaku
 from .models.structs import VideoTarget
-from .services.parser import DanmakuParser
+from .services.danmaku_parser import DanmakuParser
 
 from ..api.bili_api_client import BiliApiClient
 
