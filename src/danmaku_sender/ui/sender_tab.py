@@ -12,8 +12,8 @@ from PySide6.QtGui import QTextCursor
 from PySide6.QtCore import Qt
 
 from ..core.models.video import VideoInfo
-from ..core.services.exporter import create_xml_from_danmakus
-from ..core.services.parser import DanmakuParser
+from ..core.services.danmaku_exporter import create_xml_from_danmakus
+from ..core.services.danmaku_parser import DanmakuParser
 from ..core.workers import FetchInfoWorker, SendTaskWorker
 from ..utils.string_utils import parse_bilibili_link
 

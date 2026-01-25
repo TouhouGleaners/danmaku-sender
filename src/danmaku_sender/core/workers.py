@@ -9,7 +9,7 @@ from .models.danmaku import Danmaku
 from .models.result import DanmakuSendResult
 from .models.structs import VideoTarget
 from .models.video import VideoInfo
-from .services.video_service import VideoService
+from .services.video_fetcher import VideoFetcher
 
 from ..api.bili_api_client import BiliApiClient
 from ..api.update_checker import UpdateChecker
@@ -87,7 +87,7 @@ class FetchInfoWorker(BaseWorker):
             silent_logger = _get_silent_logger()
 
             with BiliApiClient.from_config(self.auth_config, silent_logger) as client:
-                service = VideoService(client, logger=silent_logger)
+                service = VideoFetcher(client, logger=silent_logger)
                 video_info = service.fetch_info(self.bvid)
                 self.finished_success.emit(video_info)
 

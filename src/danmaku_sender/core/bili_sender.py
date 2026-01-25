@@ -13,8 +13,8 @@ from .models.danmaku import Danmaku
 from .models.errors import BiliDmErrorCode
 from .models.result import DanmakuSendResult
 from .models.structs import VideoTarget
-from .services.exporter import UnsentDanmakusRecord
-from .services.parser import DanmakuParser
+from .services.danmaku_exporter import UnsentDanmakusRecord
+from .services.danmaku_parser import DanmakuParser
 from .state import SenderConfig
 
 from ..api.bili_api_client import BiliApiClient

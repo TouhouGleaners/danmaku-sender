@@ -6,14 +6,14 @@ from ..models.video import VideoInfo, VideoPart
 from ...api.bili_api_client import BiliApiClient
 
 
-class VideoService:
+class VideoFetcher:
     """
     视频业务服务层
     负责协调 API 调用与数据转换
     """
     def __init__(self, api_client: BiliApiClient, logger: logging.Logger = None):
         self.client = api_client
-        self.logger = logger if logger else logging.getLogger("VideoService")
+        self.logger = logger if logger else logging.getLogger("VideoFetcher")
 
     def fetch_info(self, bvid: str) -> VideoInfo:
         """
