@@ -17,6 +17,20 @@ from ..config.app_config import AppInfo
 from ..utils.system_utils import KeepSystemAwake
 
 
+def _get_silent_logger(name="SilentWorker"):
+    """
+    模块级辅助函数：获取一个配置好的静音 Logger。
+    利用 logging 的单例特性，并检查是否已配置，避免重复操作。
+    """
+    logger = logging.getLogger(name)
+    
+    if not logger.handlers:
+        logger.propagate = False
+        logger.addHandler(logging.NullHandler())
+        
+    return logger
+
+
 class BaseWorker(QThread):
     """
     所有 Worker 线程的基类。
@@ -59,8 +73,8 @@ class UpdateCheckWorker(BaseWorker):
 
 class FetchInfoWorker(BaseWorker):
     """用于后台获取视频信息的线程"""
-    finished_success = Signal(object)  # 成功信号，携带视频信息 VideoInfo
-    finished_error = Signal(str)       # 失败信号，携带错误信息
+    finished_success = Signal(VideoInfo)  # 成功信号，携带视频信息 VideoInfo
+    finished_error = Signal(str)          # 失败信号，携带错误信息
 
     def __init__(self, bvid, auth_config: ApiAuthConfig, parent=None):
         super().__init__(parent)
@@ -69,10 +83,7 @@ class FetchInfoWorker(BaseWorker):
 
     def run(self):
         try:
-            silent_logger = logging.getLogger("SilentWorker")
-            silent_logger.handlers = []
-            silent_logger.propagate = False
-            silent_logger.addHandler(logging.NullHandler())
+            silent_logger = _get_silent_logger()
 
             with BiliApiClient.from_config(self.auth_config, silent_logger) as client:
                 service = VideoService(client)
