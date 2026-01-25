@@ -17,12 +17,12 @@ from ..config.app_config import AppInfo
 from ..utils.system_utils import KeepSystemAwake
 
 
-def _get_silent_logger(name="SilentWorker"):
+def _get_silent_logger():
     """
     模块级辅助函数：获取一个配置好的静音 Logger。
     利用 logging 的单例特性，并检查是否已配置，避免重复操作。
     """
-    logger = logging.getLogger(name)
+    logger = logging.getLogger("SilentWorker")
 
     logger.propagate = False
 
@@ -84,10 +84,10 @@ class FetchInfoWorker(BaseWorker):
 
     def run(self):
         try:
-            silent_logger = _get_silent_logger(f"SilentWorker.{self.bvid}")
+            silent_logger = _get_silent_logger()
 
             with BiliApiClient.from_config(self.auth_config, silent_logger) as client:
-                service = VideoService(client)
+                service = VideoService(client, logger=silent_logger)
                 video_info = service.fetch_info(self.bvid)
                 self.finished_success.emit(video_info)
 
