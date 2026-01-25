@@ -6,13 +6,30 @@ from .bili_monitor import BiliDanmakuMonitor
 from .history_manager import HistoryManager
 from .state import ApiAuthConfig, SenderConfig, MonitorConfig
 from .models.danmaku import Danmaku
-from .models.result import DanmakuSendResult 
+from .models.result import DanmakuSendResult
 from .models.structs import VideoTarget
+from .models.video import VideoInfo
+from .services.video_service import VideoService
 
 from ..api.bili_api_client import BiliApiClient
 from ..api.update_checker import UpdateChecker
 from ..config.app_config import AppInfo
 from ..utils.system_utils import KeepSystemAwake
+
+
+def _get_silent_logger():
+    """
+    模块级辅助函数：获取一个配置好的静音 Logger。
+    利用 logging 的单例特性，并检查是否已配置，避免重复操作。
+    """
+    logger = logging.getLogger("SilentWorker")
+
+    logger.propagate = False
+
+    if not logger.handlers:
+        logger.addHandler(logging.NullHandler())
+        
+    return logger
 
 
 class BaseWorker(QThread):
@@ -57,8 +74,8 @@ class UpdateCheckWorker(BaseWorker):
 
 class FetchInfoWorker(BaseWorker):
     """用于后台获取视频信息的线程"""
-    finished_success = Signal(dict)  # 成功信号，携带视频信息字典
-    finished_error = Signal(str)     # 失败信号，携带错误信息
+    finished_success = Signal(VideoInfo)  # 成功信号，携带视频信息 VideoInfo
+    finished_error = Signal(str)          # 失败信号，携带错误信息
 
     def __init__(self, bvid, auth_config: ApiAuthConfig, parent=None):
         super().__init__(parent)
@@ -67,10 +84,13 @@ class FetchInfoWorker(BaseWorker):
 
     def run(self):
         try:
-            with BiliApiClient.from_config(self.auth_config) as client:
-                sender = BiliDanmakuSender(client)
-                info = sender.get_video_info(self.bvid)
-                self.finished_success.emit(info)
+            silent_logger = _get_silent_logger()
+
+            with BiliApiClient.from_config(self.auth_config, silent_logger) as client:
+                service = VideoService(client, logger=silent_logger)
+                video_info = service.fetch_info(self.bvid)
+                self.finished_success.emit(video_info)
+
         except Exception as e:
             self.report_error("获取视频信息失败", e)
             self.finished_error.emit(str(e))

@@ -26,14 +26,14 @@ class BiliApiClient:
         'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
         'Referer': 'https://www.bilibili.com/'
     }
-    def __init__(self, sessdata: str, bili_jct: str, use_system_proxy: bool):
+    def __init__(self, sessdata: str, bili_jct: str, use_system_proxy: bool, logger: logging.Logger = None):
         if not all([sessdata, bili_jct]):
             raise ValueError("SESSDATA 和 BILI_JCT 不能为空")
         
         self.sessdata = sessdata
         self.bili_jct = bili_jct
         self.use_system_proxy = use_system_proxy
-        self.logger = logging.getLogger("BiliApiClient")
+        self.logger = logger if logger else logging.getLogger("BiliApiClient")
         self.session = self._create_session()
 
         try:
@@ -43,7 +43,7 @@ class BiliApiClient:
             raise BiliApiException(code=-1, message=f"获取WBI签名密钥失败: {e}") from e
 
     @classmethod
-    def from_config(cls, config: BiliConfigProto):
+    def from_config(cls, config: BiliConfigProto, logger: logging.Logger = None):
         """
         工厂方法：直接从配置对象创建实例。
         鸭子类型：只要 config 对象里有 sessdata, bili_jct, use_system_proxy 属性即可。
@@ -51,7 +51,8 @@ class BiliApiClient:
         return cls(
             sessdata=config.sessdata,
             bili_jct=config.bili_jct,
-            use_system_proxy=config.use_system_proxy
+            use_system_proxy=config.use_system_proxy,
+            logger=logger
         )
 
     def _create_session(self) -> requests.Session:

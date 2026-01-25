@@ -11,6 +11,7 @@ from PySide6.QtWidgets import (
 from PySide6.QtGui import QTextCursor
 from PySide6.QtCore import Qt
 
+from ..core.models.video import VideoInfo
 from ..core.services.exporter import create_xml_from_danmakus
 from ..core.services.parser import DanmakuParser
 from ..core.workers import FetchInfoWorker, SendTaskWorker
@@ -353,24 +354,24 @@ class SenderTab(QWidget):
         self._fetch_worker.finished.connect(self._fetch_worker.deleteLater)
         self._fetch_worker.start()
 
-    def _on_fetch_success(self, info: dict):
+    def _on_fetch_success(self, info: VideoInfo):
         """视频信息获取成功"""
         self.fetch_btn.setEnabled(True)
         self.fetch_btn.setText("获取分P")
         self.part_combo.setEnabled(True)
         self._fetch_worker = None
         
-        self._state.video_state.video_title = info.get('title', '未知标题')
+        self._state.video_state.video_title = info.title
         self._state.video_state.cid_parts_map = {}
 
-        pages = info.get('pages', [])
-        self.logger.info(f"获取成功: {info.get('title')}, 共 {len(pages)} 个分P")
+        parts = info.parts
+        self.logger.info(f"获取成功: {info.title}, 共 {len(parts)} 个分P")
 
-        for p in pages:
-            cid = p.get('cid')
-            page_num = p.get('page', '?')
-            part_title = p.get('part', '未知分P标题')
-            duration = p.get('duration', 0)
+        for p in parts:
+            cid = p.cid
+            page_num = p.page
+            part_title = p.title
+            duration = p.duration
 
             if not cid:
                 continue
@@ -380,10 +381,10 @@ class SenderTab(QWidget):
             self.part_combo.addItem(part_name, userData={'cid': cid, 'duration': duration})
             self._state.video_state.cid_parts_map[cid] = part_name
 
-        if pages:
+        if parts:
             if (self._pending_part_index is not None and 
                 0 <= self._pending_part_index < self.part_combo.count()):
-                
+
                 self.part_combo.setCurrentIndex(self._pending_part_index)
                 self.logger.info(f"🔗 智能链接解析: 自动定位到第 {self._pending_part_index + 1} P")
             else:

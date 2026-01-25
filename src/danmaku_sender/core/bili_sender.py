@@ -77,28 +77,6 @@ class BiliDanmakuSender:
         self.api_client = api_client
         self.danmaku_parser = DanmakuParser()
         self.unsent_danmakus: list[UnsentDanmakusRecord] = []
-
-    def get_video_info(self, bvid: str) -> dict:
-        """根据BVID获取视频详细信息"""
-        try:
-            video_data = self.api_client.get_video_info(bvid)
-            
-            pages_info = [
-                {'cid': p['cid'], 'page': p['page'], 'part': p['part'], 'duration': p.get('duration', 0)}
-                for p in video_data.get('pages', [])
-            ]
-            info = {
-                'title': video_data.get('title', '未知标题'),
-                'duration': video_data.get('duration', 0),
-                'pages': pages_info
-            }
-            self.logger.info(f"成功获取到视频《{info['title']}》的信息，共 {len(info['pages'])} 个分P")
-            return info
-        except BiliApiException as e:
-            # 将底层的API异常，转换为对用户更友好的运行时错误
-            log_msg = f"获取视频信息失败, Code: {e.code}, 信息: {e.message}"
-            self.logger.error(log_msg)
-            raise RuntimeError(log_msg) from e
         
     @staticmethod
     def _get_fingerprint(dm: Danmaku) -> DanmakuFingerprint:
