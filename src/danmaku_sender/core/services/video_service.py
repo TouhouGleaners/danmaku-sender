@@ -1,6 +1,8 @@
 import logging
 
+from ..exceptions import BiliApiException
 from ..models.video import VideoInfo, VideoPart
+
 from ...api.bili_api_client import BiliApiClient
 
 
@@ -11,6 +13,7 @@ class VideoService:
     """
     def __init__(self, api_client: BiliApiClient):
         self.client = api_client
+        self.logger = logging.getLogger("VideoService")
 
     def fetch_info(self, bvid: str) -> VideoInfo:
         """
@@ -18,20 +21,37 @@ class VideoService:
 
         Returns:
             VideoInfo 对象
+
+        Raises:
+            RuntimeError 当 API 失败或数据解析错误时
         """
-        raw_data = self.client.get_video_info(bvid)
+        try:
+            raw_data = self.client.get_video_info(bvid)
+        except BiliApiException as e:
+            error_msg = f"API 请求失败 [Code: {e.code}]: {e.message}"
+            self.logger.error(f"获取 {bvid} 失败: {error_msg}")
+            raise RuntimeError(error_msg) from e
 
         parts = []
         raw_pages: list[dict] = raw_data.get('pages', [])
 
-        for p in raw_pages:
+        if not raw_pages:
+            self.logger.warning(f"视频 {bvid} 返回的分P列表为空。")
+
+        for i, p in enumerate(raw_pages):
+            cid = p.get('cid')
+            if not cid:
+                msg = f"解析错误: 第 {i+1} 个分P缺失关键字段 'cid'。"
+                self.logger.error(msg)
+                raise ValueError(msg)
+
             parts.append(VideoPart(
-                cid=p.get('cid', 0),
-                page=p.get('page', 1),
-                title=p.get('part', ''),
+                cid=cid,
+                page=p.get('page', i + 1),
+                title=p.get('part', f"分P {i+1}"),
                 duration=p.get('duration', 0)
             ))
-
+            
         return VideoInfo(
             bvid=bvid,
             title=raw_data.get('title', '未知标题'),

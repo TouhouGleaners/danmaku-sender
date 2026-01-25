@@ -23,9 +23,10 @@ def _get_silent_logger(name="SilentWorker"):
     利用 logging 的单例特性，并检查是否已配置，避免重复操作。
     """
     logger = logging.getLogger(name)
-    
+
+    logger.propagate = False
+
     if not logger.handlers:
-        logger.propagate = False
         logger.addHandler(logging.NullHandler())
         
     return logger
@@ -83,12 +84,12 @@ class FetchInfoWorker(BaseWorker):
 
     def run(self):
         try:
-            silent_logger = _get_silent_logger()
+            silent_logger = _get_silent_logger(f"SilentWorker.{self.bvid}")
 
             with BiliApiClient.from_config(self.auth_config, silent_logger) as client:
                 service = VideoService(client)
-                video_info_obj = service.fetch_info(self.bvid)
-                self.finished_success.emit(video_info_obj)
+                video_info = service.fetch_info(self.bvid)
+                self.finished_success.emit(video_info)
 
         except Exception as e:
             self.report_error("获取视频信息失败", e)
