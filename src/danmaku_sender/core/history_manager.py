@@ -225,3 +225,38 @@ class HistoryManager:
         except Exception as e:
             logger.error(f"查重失败: {e}", exc_info=True)
             return 0
+        
+    def query_history(self, keyword: str = "", status: int = -1, limit: int = 500) -> list[dict]:
+        """
+        查询接口
+
+        支持关键词和状态筛选
+        返回数据库原始 dict，后续 UI 层会结合 API 数据进行展示
+        """
+        try:
+            with self._get_conn() as conn:
+                sql = "SELECT dmid, cid, bvid, msg, progress, mode, fontsize, color, ctime, status, is_visible FROM sent_danmaku WHERE 1=1"
+                params = []
+
+                if keyword:
+                    sql += " AND (msg LIKE ? OR bvid LIKE ?)"
+                    params.extend([f"%{keyword}%", f"%{keyword}%"])
+
+                if status != -1:
+                    sql += " AND status = ?"
+                    params.append(status)
+
+                sql += " ORDER BY ctime DESC LIMIT ?"
+                params.append(limit)
+
+                cursor = conn.execute(sql, params)
+                return [{
+                    "dmid": row[0], "cid": row[1], "bvid": row[2], "msg": row[3],
+                    "progress": row[4], "mode": row[5], "fontsize": row[6],
+                    "color": row[7], "ctime": row[8], "status": row[9],
+                    "is_visible": row[10]
+                } for row in cursor.fetchall()]
+
+        except Exception as e:
+            logger.error(f"查询历史记录失败: {e}", exc_info=True)
+            return []

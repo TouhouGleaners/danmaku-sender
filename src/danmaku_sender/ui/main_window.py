@@ -10,7 +10,8 @@ from .sender_tab import SenderTab
 from .settings_tab import SettingsTab
 from .monitor_tab import MonitorTab
 from .validator_tab import ValidatorTab
-from .dialogs import AboutDialog, HelpDialog 
+from .dialogs import AboutDialog, HelpDialog
+from .history_tab import HistoryTab
 
 from ..config.app_config import AppInfo, UI
 from ..core.state import AppState
@@ -59,12 +60,14 @@ class MainWindow(QMainWindow):
         self.tab_sender = SenderTab()
         self.tab_validator = ValidatorTab()
         self.tab_monitor = MonitorTab()
+        self.tab_history = HistoryTab()
 
         # 添加至选项卡
         self.tabs.addTab(self.tab_settings, "全局设置")
         self.tabs.addTab(self.tab_sender, "弹幕发射器")
         self.tabs.addTab(self.tab_validator, "弹幕校验器")
         self.tabs.addTab(self.tab_monitor, "弹幕监视器")
+        self.tabs.addTab(self.tab_history, "弹幕历史记录")
 
         # 默认选中发射器
         self.tabs.setCurrentWidget(self.tab_sender)
@@ -145,6 +148,7 @@ class MainWindow(QMainWindow):
         self.tab_sender.bind_state(self.state)
         self.tab_validator.bind_state(self.state)
         self.tab_monitor.bind_state(self.state)
+        self.tab_history.bind_state(self.state)
 
         # 日志分流：信号 -> Tab 接口
         if self._log_signals_connected:
