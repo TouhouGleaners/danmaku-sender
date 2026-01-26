@@ -224,7 +224,7 @@ class HistoryTab(QWidget):
         self._state: AppState | None = None
         self._history_manager = HistoryManager()
 
-        self._active_workers = {}
+        self._active_workers: dict[str, FetchInfoWorker] = {}
         self._fetched_bvids = set()
 
         self._create_ui()
@@ -314,13 +314,14 @@ class HistoryTab(QWidget):
         worker.finished_success.connect(partial(self._on_worker_success, bvid))
         worker.finished_error.connect(partial(self._on_worker_error, bvid))
 
+        worker.finished.connect(partial(self._cleanup_worker, bvid, worker))
+
         self._active_workers[bvid] = worker
         worker.start()
 
     def _on_worker_success(self, bvid, video_info: VideoInfo):
         """Worker 回调：接收 VideoInfo 对象"""
         self._model.update_video_cache(bvid, video_info)
-        self._cleanup_worker(bvid)
 
     def _on_worker_error(self, bvid, error_msg):
         """Worker 失败回调"""
@@ -328,11 +329,12 @@ class HistoryTab(QWidget):
             self._fetched_bvids.remove(bvid)
         
         self._model.update_video_cache(bvid, None)
-        self._cleanup_worker(bvid)
 
-    def _cleanup_worker(self, bvid):
+    def _cleanup_worker(self, bvid, worker: FetchInfoWorker):
         if bvid in self._active_workers:
             del self._active_workers[bvid]
+
+        worker.deleteLater()
 
     def _on_row_double_clicked(self, index: QModelIndex):
         if index.isValid():
