@@ -112,6 +112,7 @@ class HistoryTableModel(QAbstractTableModel):
 
     def mark_as_loading(self, bvid):
         self._loading_bvids.add(bvid)
+        self.layoutChanged.emit()
 
     def update_video_cache(self, bvid: str, info: VideoInfo | None):
         if info:
@@ -302,11 +303,11 @@ class HistoryTab(QWidget):
                 self._start_worker(bvid)
 
     def _start_worker(self, bvid):
-        self._fetched_bvids.add(bvid)
-        self._model.mark_as_loading(bvid)
-        
         if not self._state:
             return
+        
+        self._fetched_bvids.add(bvid)
+        self._model.mark_as_loading(bvid)
 
         auth_config = self._state.get_api_auth()
         worker = FetchInfoWorker(bvid, auth_config)
