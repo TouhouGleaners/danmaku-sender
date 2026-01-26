@@ -1,6 +1,7 @@
 import logging
 import sqlite3
 import time
+import threading
 from pathlib import Path
 from platformdirs import user_data_dir
 from enum import IntEnum
@@ -24,12 +25,36 @@ class HistoryManager:
     """
     基于 SQLite 的弹幕生命周期管理系统。
     负责实现“发送 -> 存证 -> 核销”的数据层逻辑。
+
+    注意：当前的单例实现仅针对单进程多线程环境。
+    如果在多进程环境中使用，SQLite 的文件锁机制会处理并发，但单例逻辑会失效。
     """
+    _instance = None
+    _lock = threading.Lock()
+    _initialized = False
+    
+    def __new__(cls, *args, **kwargs):
+        if not cls._instance:
+            with cls._lock:
+                if not cls._instance:
+                    cls._instance = super(HistoryManager, cls).__new__(cls)
+        return cls._instance
+
     def __init__(self):
-        data_dir = Path(user_data_dir(AppInfo.NAME_EN, AppInfo.AUTHOR))
-        data_dir.mkdir(parents=True, exist_ok=True)
-        self.db_path = data_dir / "history.db"
-        self._init_db()
+        if self._initialized:
+            return
+
+        with self._lock:
+            if self._initialized:
+                return
+
+            data_dir = Path(user_data_dir(AppInfo.NAME_EN, AppInfo.AUTHOR))
+            data_dir.mkdir(parents=True, exist_ok=True)
+            self.db_path = data_dir / "history.db"
+            self._init_db()
+
+            HistoryManager._initialized = True
+            logger.debug("HistoryManager 单例初始化完成")
 
     def _get_conn(self) -> sqlite3.Connection:
         """获取数据库连接"""
