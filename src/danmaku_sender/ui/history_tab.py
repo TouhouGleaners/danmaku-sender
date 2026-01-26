@@ -299,7 +299,7 @@ class HistoryTab(QWidget):
             bvid = row['bvid']
             if (self._model.get_video_info(bvid) is None
                 and bvid not in self._fetched_bvids):
-                self. _start_worker(bvid)
+                self._start_worker(bvid)
 
     def _start_worker(self, bvid):
         self._fetched_bvids.add(bvid)
@@ -323,6 +323,10 @@ class HistoryTab(QWidget):
         self._cleanup_worker(bvid)
 
     def _on_worker_error(self, bvid, error_msg):
+        """Worker 失败回调"""
+        if bvid in self._fetched_bvids:
+            self._fetched_bvids.remove(bvid)
+        
         self._model.update_video_cache(bvid, None)
         self._cleanup_worker(bvid)
 
