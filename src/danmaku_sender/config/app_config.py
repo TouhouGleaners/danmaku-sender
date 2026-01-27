@@ -1,4 +1,4 @@
-from importlib.metadata import version, PackageNotFoundError
+from .._version import __version__
 
 
 class AppInfo:
@@ -6,10 +6,7 @@ class AppInfo:
     NAME = "B站弹幕补档工具"
     NAME_EN = "BiliDanmakuSender"
     AUTHOR = "Miku_oso"
-    try:
-        VERSION = version("danmaku-sender")
-    except PackageNotFoundError:
-        VERSION = "0.0.0-dev"
+    VERSION = __version__
     LOG_FILE_NAME = "latest.log"
     LOG_DIR_NAME = "logs"
     

@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "danmaku-sender"
-version = "2.1.0"
+dynamic = ["version"]
 description = "Bilibili 弹幕发送与补档工具 (PySide6)"
 readme = "README.md"
 authors = [
@@ -44,3 +44,6 @@ danmaku-sender = "danmaku_sender.main:main"
 [tool.pytest.ini_options]
 pythonpath = "src"
 testpaths = ["tests"]
+
+[tool.setuptools.dynamic]
+version = {attr = "danmaku_sender._version.__version__"}
