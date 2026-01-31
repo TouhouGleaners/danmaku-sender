@@ -10,7 +10,7 @@ from .sender_tab import SenderTab
 from .settings_tab import SettingsTab
 from .monitor_tab import MonitorTab
 from .validator_tab import ValidatorTab
-from .dialogs import AboutDialog, HelpDialog
+from .dialogs import AboutDialog, HelpDialog, UpdateDialog
 from .history_tab import HistoryTab
 
 from ..config.app_config import AppInfo, UI
@@ -213,16 +213,7 @@ class MainWindow(QMainWindow):
 
     def _on_update_found(self, ver, notes, url):
         """发现新版本时的弹窗"""
-        # 简单的文本截断
-        if len(notes) > 500:
-            notes = notes[:500] + "\n... (更多内容请查看网页)"
-            
-        reply = QMessageBox.question(
-            self, 
-            f"发现新版本 v{ver}",
-            f"发现新版本: v{ver}\n\n--- 更新内容 ---\n{notes}\n\n是否前往下载？",
-            QMessageBox.Yes | QMessageBox.No
-        )
-        
-        if reply == QMessageBox.Yes:
+        dialog = UpdateDialog(ver, notes, self)
+
+        if dialog.exec():
             QDesktopServices.openUrl(QUrl(url))

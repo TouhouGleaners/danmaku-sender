@@ -1,3 +1,4 @@
+import re
 import logging
 from PySide6.QtWidgets import (
     QDialog, QVBoxLayout, QHBoxLayout, QTabWidget,
@@ -126,3 +127,85 @@ class AboutDialog(QDialog):
         close_btn.setFixedWidth(100)
         close_btn.clicked.connect(self.accept)
         layout.addWidget(close_btn, alignment=Qt.AlignCenter)
+
+
+class UpdateDialog(QDialog):
+    def __init__(self, version: str, notes: str, parent=None):
+        super().__init__(parent)
+        self.setWindowTitle(f"发现新版本 v{version}")
+        self.resize(600, 450)
+
+        self._create_ui(version, notes)
+
+    def _create_ui(self, version, notes):
+        layout = QVBoxLayout(self)
+        layout.setSpacing(10)
+
+        # --- Title ---
+        title_label = QLabel(f"🎉 发现新版本: <b>{version}</b>")
+        title_label.setStyleSheet("font-size: 16px; margin-bottom: 5px;")
+        layout.addWidget(title_label)
+
+        # --- Content ---
+        self.browser = QTextBrowser()
+        self.browser.setOpenExternalLinks(True)
+
+        clean_notes = self._preprocess_markdown(notes)
+        self.browser.setMarkdown(clean_notes)
+
+        self.browser.setStyleSheet("""
+            QTextBrowser {
+                font-family: "Segoe UI", "Microsoft YaHei UI", "Microsoft YaHei", sans-serif;
+                font-size: 10px;
+                line-height: 1.6;
+                color: #24292e;
+                background-color: #ffffff;
+                border: 1px solid #e1e4e8;
+                border-radius: 6px;
+                padding: 20px;
+            }
+        """)
+        layout.addWidget(self.browser)
+
+        # --- Button ---
+        btn_box = QHBoxLayout()
+        btn_box.addStretch()
+
+        self.btn_ignore = QPushButton("稍后")
+        self.btn_ignore.clicked.connect(self.reject)
+
+        self.btn_update = QPushButton("前往下载")
+        self.btn_update.setStyleSheet("""
+            QPushButton {
+                background-color: #00a1d6;
+                color: white;
+                font-weight: bold;
+                padding: 6px 15px;
+                border-radius: 4px;
+            }
+            QPushButton:hover { background-color: #00b5e5; }
+        """)
+        self.btn_update.clicked.connect(self.accept)
+
+        btn_box.addWidget(self.btn_ignore)
+        btn_box.addWidget(self.btn_update)
+
+        layout.addLayout(btn_box)
+
+    def _preprocess_markdown(self, text: str) -> str:
+        """清洗 GitHub Markdown，使其适配 Qt 的富文本引擎"""
+        if not text:
+            return ""
+
+        # 处理 <summary>：替换为 H4 标题或粗体，并强制换行
+        text = re.sub(r'<summary>\s*(.*?)\s*</summary>', r'\n#### \1\n', text, flags=re.IGNORECASE)
+        text = text.replace('<details>', '').replace('</details>', '')
+
+        # 修复 GitHub Compare 链接 (包含 ... 的链接)
+        text = re.sub(
+            r'\*\*Full Changelog\*\*: (https://github\.com/\S+/compare/(\S+))', 
+            r'**Full Changelog**: [👉 查看 \2 变更对比](\1)', 
+            text
+        )
+
+        return text
