@@ -534,6 +534,16 @@ class SenderTab(QWidget):
         self.part_combo.setEnabled(False)
         self.bv_input.setReadOnly(True)
 
+        # 锁定参数
+        self.min_delay.setEnabled(False)
+        self.max_delay.setEnabled(False)
+        self.burst_size.setEnabled(False)
+        self.burst_rest_min.setEnabled(False)
+        self.burst_rest_max.setEnabled(False)
+        self.stop_count.setEnabled(False)
+        self.stop_time.setEnabled(False)
+        self.skip_sent_cb.setEnabled(False)
+
         # 重置进度
         self.log_output.clear()
         self.progress_bar.setValue(0)
@@ -552,3 +562,13 @@ class SenderTab(QWidget):
         self.file_btn.setEnabled(True)
         self.part_combo.setEnabled(True)
         self.bv_input.setReadOnly(False)
+
+        # 解锁参数
+        self.min_delay.setEnabled(True)
+        self.max_delay.setEnabled(True)
+        self.burst_size.setEnabled(True)
+        self.burst_rest_min.setEnabled(True)
+        self.burst_rest_max.setEnabled(True)
+        self.stop_count.setEnabled(True)
+        self.stop_time.setEnabled(True)
+        self.skip_sent_cb.setEnabled(True)
