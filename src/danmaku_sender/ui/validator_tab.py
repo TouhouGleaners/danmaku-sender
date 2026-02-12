@@ -67,22 +67,22 @@ class ValidatorTab(QWidget):
         self.table.setHorizontalHeaderLabels(["序号", "时间", "问题描述", "弹幕内容 (双击编辑)"])
 
         # 设置表格行为
-        self.table.setSelectionBehavior(QAbstractItemView.SelectRows)
-        self.table.setEditTriggers(QAbstractItemView.NoEditTriggers)
+        self.table.setSelectionBehavior(QAbstractItemView.SelectionBehavior.SelectRows)
+        self.table.setEditTriggers(QAbstractItemView.EditTrigger.NoEditTriggers)
         self.table.setAlternatingRowColors(True)
         self.table.setSortingEnabled(False)
         self.table.itemDoubleClicked.connect(self.on_table_double_click)
 
         # 右键菜单
-        self.table.setContextMenuPolicy(Qt.CustomContextMenu)
+        self.table.setContextMenuPolicy(Qt.ContextMenuPolicy.CustomContextMenu)
         self.table.customContextMenuRequested.connect(self.open_context_menu)
 
         # 设置列宽调整模式
         header = self.table.horizontalHeader()
-        header.setSectionResizeMode(0, QHeaderView.ResizeToContents)
-        header.setSectionResizeMode(1, QHeaderView.ResizeToContents)
-        header.setSectionResizeMode(2, QHeaderView.ResizeToContents)
-        header.setSectionResizeMode(3, QHeaderView.Stretch)
+        header.setSectionResizeMode(0, QHeaderView.ResizeMode.ResizeToContents)
+        header.setSectionResizeMode(1, QHeaderView.ResizeMode.ResizeToContents)
+        header.setSectionResizeMode(2, QHeaderView.ResizeMode.ResizeToContents)
+        header.setSectionResizeMode(3, QHeaderView.ResizeMode.Stretch)
 
         main_layout.addWidget(self.table)
 
@@ -184,7 +184,7 @@ class ValidatorTab(QWidget):
         # 检查未保存修改
         if self.session.is_dirty:
             reply = QMessageBox.question(self, "确认", "当前有未应用的修改，重新验证将丢弃这些修改。\n是否继续？", QMessageBox.Yes | QMessageBox.No)
-            if reply == QMessageBox.No:
+            if reply == QMessageBox.StandardButton.No:
                 return
             
         # 执行验证
@@ -206,7 +206,7 @@ class ValidatorTab(QWidget):
         self.table.setRowCount(len(items))
         for row, item in enumerate(items):
             idx_item = QTableWidgetItem(str(item['original_index'] + 1))
-            idx_item.setData(Qt.UserRole, item['original_index'])
+            idx_item.setData(Qt.ItemDataRole.UserRole, item['original_index'])
             
             time_str = format_ms_to_hhmmss(item['time_ms'])
             
@@ -233,7 +233,7 @@ class ValidatorTab(QWidget):
             self._edit_row(item.row())
         elif action == delete_action:
             # 获取原始索引并删除
-            original_index = self.table.item(item.row(), 0).data(Qt.UserRole)
+            original_index = self.table.item(item.row(), 0).data(Qt.ItemDataRole.UserRole)
             self.session.delete_item(original_index)
             self._refresh_table()
 
@@ -247,7 +247,7 @@ class ValidatorTab(QWidget):
         if not idx_item:
             return
         
-        original_index = idx_item.data(Qt.UserRole)
+        original_index = idx_item.data(Qt.ItemDataRole.UserRole)
         current_text = self.table.item(row, 3).text()
 
         new_text, ok = QInputDialog.getText(self, "编辑弹幕", "请输入修改后的内容：", text=current_text)
@@ -259,8 +259,8 @@ class ValidatorTab(QWidget):
                     self.session.update_item_content(original_index, clean_text)
                     self._refresh_table()
             else:
-                reply = QMessageBox.question(self, "确认删除", "内容为空，是否直接删除该条弹幕？", QMessageBox.Yes | QMessageBox.No)
-                if reply == QMessageBox.Yes:
+                reply = QMessageBox.question(self, "确认删除", "内容为空，是否直接删除该条弹幕？", QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No)
+                if reply == QMessageBox.StandardButton.Yes:
                     self.session.delete_item(original_index)
                     self._refresh_table()
 
@@ -277,7 +277,7 @@ class ValidatorTab(QWidget):
             return
 
         for row in rows:
-            original_index = self.table.item(row, 0).data(Qt.UserRole)
+            original_index = self.table.item(row, 0).data(Qt.ItemDataRole.UserRole)
             self.session.delete_item(original_index)
 
         self._refresh_table()

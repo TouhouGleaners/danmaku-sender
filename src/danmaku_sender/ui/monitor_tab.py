@@ -51,11 +51,11 @@ class MonitorTab(QWidget):
 
         def create_stat_block(title, color):
             lbl_num = QLabel("0")
-            lbl_num.setAlignment(Qt.AlignCenter)
+            lbl_num.setAlignment(Qt.AlignmentFlag.AlignCenter)
             lbl_num.setStyleSheet(f"font-size: 32px; font-weight: bold; color: {color}; font-family: 'Segoe UI', sans-serif;")
             
             lbl_title = QLabel(title)
-            lbl_title.setAlignment(Qt.AlignCenter)
+            lbl_title.setAlignment(Qt.AlignmentFlag.AlignCenter)
             lbl_title.setStyleSheet("color: #7f8c8d; font-size: 12px;")
 
             container = QVBoxLayout()
@@ -108,7 +108,7 @@ class MonitorTab(QWidget):
         
         self.start_btn = QPushButton("开始监视")
         self.start_btn.setFixedWidth(100)
-        self.start_btn.setCursor(Qt.PointingHandCursor)
+        self.start_btn.setCursor(Qt.CursorShape.PointingHandCursor)
         self.start_btn.setProperty("action", "true")
         self.start_btn.setProperty("state", "ready")
         
@@ -251,4 +251,4 @@ class MonitorTab(QWidget):
 
     def append_log(self, message: str):
         self.log_output.append(message)
-        self.log_output.moveCursor(QTextCursor.End)
+        self.log_output.moveCursor(QTextCursor.MoveOperation.End)

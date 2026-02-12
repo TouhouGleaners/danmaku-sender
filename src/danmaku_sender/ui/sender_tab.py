@@ -110,8 +110,8 @@ class SenderTab(QWidget):
         # 分隔线
         delay_layout.addSpacing(15)
         v_line = QFrame()
-        v_line.setFrameShape(QFrame.VLine)
-        v_line.setFrameShadow(QFrame.Sunken)
+        v_line.setFrameShape(QFrame.Shape.VLine)
+        v_line.setFrameShadow(QFrame.Shadow.Sunken)
         delay_layout.addWidget(v_line)
         delay_layout.addSpacing(15)
 
@@ -160,8 +160,8 @@ class SenderTab(QWidget):
 
         stop_layout.addSpacing(20)
         v_line2 = QFrame()
-        v_line2.setFrameShape(QFrame.VLine)
-        v_line2.setFrameShadow(QFrame.Sunken)
+        v_line2.setFrameShape(QFrame.Shape.VLine)
+        v_line2.setFrameShadow(QFrame.Shadow.Sunken)
         stop_layout.addWidget(v_line2)
         stop_layout.addSpacing(20)
 
@@ -198,7 +198,7 @@ class SenderTab(QWidget):
         self.progress_bar.setValue(0)
         self.start_btn = QPushButton("开始发送")
         self.start_btn.setFixedWidth(100)
-        self.start_btn.setCursor(Qt.PointingHandCursor)
+        self.start_btn.setCursor(Qt.CursorShape.PointingHandCursor)
         self.start_btn.setProperty("action", "true")
         self.start_btn.setProperty("state", "ready")
 
@@ -292,7 +292,7 @@ class SenderTab(QWidget):
     def append_log(self, message: str):
         """外部调用的日志接口"""
         self.log_output.append(message) 
-        self.log_output.moveCursor(QTextCursor.End)
+        self.log_output.moveCursor(QTextCursor.MoveOperation.End)
 
     def select_file(self):
         """文件选择逻辑"""
@@ -504,9 +504,9 @@ class SenderTab(QWidget):
             reply = QMessageBox.question(
                 self, "保存失败弹幕", 
                 f"有 {count} 条弹幕发送失败。\n是否保存为新的 XML 文件以便重新发送？",
-                QMessageBox.Yes | QMessageBox.No
+                QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No
             )
-            if reply == QMessageBox.Yes:
+            if reply == QMessageBox.StandardButton.Yes:
                 file_path, _ = QFileDialog.getSaveFileName(self, "保存XML", "unsent.xml", "XML Files (*.xml)")
                 if file_path:
                     try:

@@ -23,16 +23,16 @@ class SettingsTab(QWidget):
         # --- 身份凭证 ---
         auth_group = QGroupBox("身份凭证 (Cookie)")
         auth_layout = QFormLayout()
-        auth_layout.setLabelAlignment(Qt.AlignRight)
+        auth_layout.setLabelAlignment(Qt.AlignmentFlag.AlignRight)
 
         self.sessdata_input = QLineEdit()
         self.sessdata_input.setPlaceholderText("请输入您的 SESSDATA")
-        self.sessdata_input.setEchoMode(QLineEdit.Password)
+        self.sessdata_input.setEchoMode(QLineEdit.EchoMode.Password)
         self.sessdata_input.setToolTip("SESSDATA 用于身份验证，请妥善保管。")
 
         self.bili_jct_input = QLineEdit()
         self.bili_jct_input.setPlaceholderText("请输入您的 bili_jct")
-        self.bili_jct_input.setEchoMode(QLineEdit.Password)
+        self.bili_jct_input.setEchoMode(QLineEdit.EchoMode.Password)
         self.bili_jct_input.setToolTip("bili_jct 用于请求验证，请妥善保管。")
 
         auth_layout.addRow(QLabel("SESSDATA:"), self.sessdata_input)

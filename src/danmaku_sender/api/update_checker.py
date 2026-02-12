@@ -24,7 +24,7 @@ class UpdateChecker:
         session = requests.Session()
         if not use_system_proxy:
             session.trust_env = False
-            session.proxies = {"http": None, "https": None}
+            session.proxies = {}
 
         api_url = f"{Links.GITHUB_API_RELEASES}?per_page=1"
         logger.info("正在连接 GitHub 检查更新...")

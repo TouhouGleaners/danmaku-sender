@@ -19,7 +19,7 @@ class MarkdownBrowser(QTextBrowser):
     def __init__(self, doc_name: str):
         super().__init__()
         self.setOpenExternalLinks(True)
-        self.setFrameShape(QTextBrowser.NoFrame)
+        self.setFrameShape(QTextBrowser.Shape.NoFrame)
         self.setStyleSheet("padding: 1px;") 
         
         md_path = get_assets_path() / "docs" / f"{doc_name}.md"
@@ -81,26 +81,26 @@ class AboutDialog(QDialog):
 
     def _create_ui(self):
         layout = QVBoxLayout(self)
-        layout.setAlignment(Qt.AlignCenter)
+        layout.setAlignment(Qt.AlignmentFlag.AlignCenter)
         layout.setSpacing(8)
         
         # 标题
         title = QLabel(AppInfo.NAME)
         title.setStyleSheet("font-size: 18px; font-weight: bold; color: #fb7299;")
-        layout.addWidget(title, alignment=Qt.AlignCenter)
+        layout.addWidget(title, alignment=Qt.AlignmentFlag.AlignCenter)
 
         # 版本与作者
-        layout.addWidget(QLabel(f"v{AppInfo.VERSION}"), alignment=Qt.AlignCenter)
-        layout.addWidget(QLabel(f"By {AppInfo.AUTHOR}"), alignment=Qt.AlignCenter)
+        layout.addWidget(QLabel(f"v{AppInfo.VERSION}"), alignment=Qt.AlignmentFlag.AlignCenter)
+        layout.addWidget(QLabel(f"By {AppInfo.AUTHOR}"), alignment=Qt.AlignmentFlag.AlignCenter)
 
         layout.addSpacing(15)
 
         # 链接区域
         repo_btn = QPushButton("GitHub 仓库")
-        repo_btn.setCursor(Qt.PointingHandCursor)
+        repo_btn.setCursor(Qt.CursorShape.PointingHandCursor)
         repo_btn.setStyleSheet("color: #00a1d6; border: none; text-decoration: underline; background: transparent;")
         repo_btn.clicked.connect(lambda: QDesktopServices.openUrl(QUrl(Links.GITHUB_REPO)))
-        layout.addWidget(repo_btn, alignment=Qt.AlignCenter)
+        layout.addWidget(repo_btn, alignment=Qt.AlignmentFlag.AlignCenter)
 
         # 反馈文案 (直接写在这里，修改看这里就行)
         feedback_text = (
@@ -108,14 +108,14 @@ class AboutDialog(QDialog):
             "欢迎前往 GitHub Issues 页面提交反馈。"
         )
         feedback = QLabel(feedback_text)
-        feedback.setAlignment(Qt.AlignCenter)
+        feedback.setAlignment(Qt.AlignmentFlag.AlignCenter)
         feedback.setWordWrap(True)
         feedback.setStyleSheet("color: #666; font-size: 12px; margin: 10px;")
         layout.addWidget(feedback)
 
         # Issue 链接
         issue_btn = QPushButton(">>> 前往反馈页面 <<<")
-        issue_btn.setCursor(Qt.PointingHandCursor)
+        issue_btn.setCursor(Qt.CursorShape.PointingHandCursor)
         issue_btn.setStyleSheet("color: #00a1d6; border: none; background: transparent;")
         issue_btn.clicked.connect(lambda: QDesktopServices.openUrl(QUrl(Links.GITHUB_ISSUES)))
         layout.addWidget(issue_btn)
@@ -126,7 +126,7 @@ class AboutDialog(QDialog):
         close_btn = QPushButton("关闭")
         close_btn.setFixedWidth(100)
         close_btn.clicked.connect(self.accept)
-        layout.addWidget(close_btn, alignment=Qt.AlignCenter)
+        layout.addWidget(close_btn, alignment=Qt.AlignmentFlag.AlignCenter)
 
 
 class UpdateDialog(QDialog):
