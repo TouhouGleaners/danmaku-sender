@@ -519,30 +519,42 @@ class SenderTab(QWidget):
 
         self._send_worker = None
 
+    def _set_inputs_locked(self, locked: bool):
+        """
+        辅助方法：设置输入控件的锁定状态。
+
+        Args:
+            locked (bool): True 表示锁定(不可编辑)，False 表示解锁(可编辑)。
+        """
+        enabled = not locked
+
+        # 基础参数
+        self.fetch_btn.setEnabled(enabled)
+        self.file_btn.setEnabled(enabled)
+        self.part_combo.setEnabled(enabled)
+        self.bv_input.setReadOnly(locked)
+
+        # 策略参数
+        self.min_delay.setEnabled(enabled)
+        self.max_delay.setEnabled(enabled)
+        self.burst_size.setEnabled(enabled)
+        self.burst_rest_min.setEnabled(enabled)
+        self.burst_rest_max.setEnabled(enabled)
+        self.stop_count.setEnabled(enabled)
+        self.stop_time.setEnabled(enabled)
+        self.skip_sent_cb.setEnabled(enabled)
+
     def _set_ui_for_task_start(self):
         """任务开始时的 UI 状态设置"""
         self._is_task_running = True
         self.stop_event.clear()
-        
+
         # 按钮变红
         self.start_btn.setText("紧急停止")
         self._update_btn_style(True)
-        
-        # 锁定输入
-        self.fetch_btn.setEnabled(False)
-        self.file_btn.setEnabled(False)
-        self.part_combo.setEnabled(False)
-        self.bv_input.setReadOnly(True)
 
-        # 锁定参数
-        self.min_delay.setEnabled(False)
-        self.max_delay.setEnabled(False)
-        self.burst_size.setEnabled(False)
-        self.burst_rest_min.setEnabled(False)
-        self.burst_rest_max.setEnabled(False)
-        self.stop_count.setEnabled(False)
-        self.stop_time.setEnabled(False)
-        self.skip_sent_cb.setEnabled(False)
+        # 锁定输入
+        self._set_inputs_locked(True)
 
         # 重置进度
         self.log_output.clear()
@@ -558,17 +570,4 @@ class SenderTab(QWidget):
         self._update_btn_style(False)
 
         # 解锁输入
-        self.fetch_btn.setEnabled(True)
-        self.file_btn.setEnabled(True)
-        self.part_combo.setEnabled(True)
-        self.bv_input.setReadOnly(False)
-
-        # 解锁参数
-        self.min_delay.setEnabled(True)
-        self.max_delay.setEnabled(True)
-        self.burst_size.setEnabled(True)
-        self.burst_rest_min.setEnabled(True)
-        self.burst_rest_max.setEnabled(True)
-        self.stop_count.setEnabled(True)
-        self.stop_time.setEnabled(True)
-        self.skip_sent_cb.setEnabled(True)
+        self._set_inputs_locked(False)
