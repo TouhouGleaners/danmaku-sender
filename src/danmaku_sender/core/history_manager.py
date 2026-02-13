@@ -128,7 +128,7 @@ class HistoryManager:
         将状态更新为: STATUS_VERIFIED (1)
         """
         if not verified_dmids:
-            return
+            return 0
 
         try:
             with self._get_conn() as conn:

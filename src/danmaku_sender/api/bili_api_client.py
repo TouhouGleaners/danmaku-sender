@@ -26,7 +26,7 @@ class BiliApiClient:
         'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
         'Referer': 'https://www.bilibili.com/'
     }
-    def __init__(self, sessdata: str, bili_jct: str, use_system_proxy: bool, logger: logging.Logger = None):
+    def __init__(self, sessdata: str, bili_jct: str, use_system_proxy: bool, logger: logging.Logger | None = None):
         if not all([sessdata, bili_jct]):
             raise ValueError("SESSDATA 和 BILI_JCT 不能为空")
         
@@ -43,7 +43,7 @@ class BiliApiClient:
             raise BiliApiException(code=-1, message=f"获取WBI签名密钥失败: {e}") from e
 
     @classmethod
-    def from_config(cls, config: BiliConfigProto, logger: logging.Logger = None):
+    def from_config(cls, config: BiliConfigProto, logger: logging.Logger | None = None):
         """
         工厂方法：直接从配置对象创建实例。
         鸭子类型：只要 config 对象里有 sessdata, bili_jct, use_system_proxy 属性即可。
@@ -67,7 +67,7 @@ class BiliApiClient:
         if not self.use_system_proxy:
             self.logger.info("用户已关闭系统代理选项，将强制直连。")
             session.trust_env = False
-            session.proxies = {"http": None, "https": None}
+            session.proxies = {}
         return session
     
     def close(self):

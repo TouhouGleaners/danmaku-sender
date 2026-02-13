@@ -106,15 +106,15 @@ class BiliDanmakuSender:
         except BiliApiException as e:
             error_code_enum = normalize_exception(e)
             
-            log_message = f"❌ 发送异常! 内容: '{danmaku.get('msg', 'N/A')}', 错误: {e.message}"
+            log_message = f"❌ 发送异常! 内容: '{danmaku.msg}', 错误: {e.message}"
             self.logger.error(log_message)
             return DanmakuSendResult(
                 code=error_code_enum.code,
-                success=False,
-                message=str(e),
+                is_success=False,
+                raw_message=str(e),
                 display_message=error_code_enum.description_str
             )
-        
+
     def _should_skip(self, dm: Danmaku, ctx: SendingContext, history_manager: HistoryManager | None) -> bool:
         """判断是否需要跳过当前弹幕"""
         if not ctx.config.skip_sent or not history_manager:
