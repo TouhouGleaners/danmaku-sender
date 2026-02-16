@@ -42,6 +42,8 @@ class MonitorTab(QWidget):
             padding: 2px 0px;
         """)
         self.target_label.setWordWrap(True)
+        self.target_label.setMaximumHeight(70)
+        self.target_label.setAlignment(Qt.AlignmentFlag.AlignLeft | Qt.AlignmentFlag.AlignTop)
 
         info_layout.addWidget(QLabel("当前目标:"))
         info_layout.addWidget(self.target_label, stretch=1)
@@ -171,12 +173,21 @@ class MonitorTab(QWidget):
         video_state = self._state.video_state
         
         if video_state.selected_cid:
-            title = video_state.video_title 
-            part = video_state.selected_part_name
+            info_parts = []
+            if title := video_state.video_title:
+                info_parts.append(title)
+            
+            if part := video_state.selected_part_name:
+                info_parts.append(part)
 
-            self.target_label.setText(f"{title}\n{part} (CID: {video_state.selected_cid})")
+            display_text = "\n".join(info_parts)
+            display_text += f" (CID: {video_state.selected_cid})"
+
+            self.target_label.setText(display_text)
+            self.target_label.setToolTip(display_text)
         else:
             self.target_label.setText("尚未选择视频 (请在发射器页面加载)")
+            self.target_label.setToolTip("")
 
     def toggle_task(self):
         if not self._state:
