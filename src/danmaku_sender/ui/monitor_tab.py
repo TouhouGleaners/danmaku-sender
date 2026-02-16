@@ -35,7 +35,13 @@ class MonitorTab(QWidget):
         info_layout = QHBoxLayout()
 
         self.target_label = QLabel("尚未选择视频")
-        self.target_label.setStyleSheet("font-size: 14px; font-weight: bold; color: #34495e;")
+        self.target_label.setStyleSheet("""
+            font-size: 14px; 
+            font-weight: bold; 
+            color: #34495e;
+            padding: 2px 0px;
+        """)
+        self.target_label.setWordWrap(True)
 
         info_layout.addWidget(QLabel("当前目标:"))
         info_layout.addWidget(self.target_label, stretch=1)
@@ -165,9 +171,10 @@ class MonitorTab(QWidget):
         video_state = self._state.video_state
         
         if video_state.selected_cid:
-            title = video_state.video_title[:20] + "..." if len(video_state.video_title) > 20 else video_state.video_title
+            title = video_state.video_title 
             part = video_state.selected_part_name
-            self.target_label.setText(f"{title} - {part} (CID: {video_state.selected_cid})")
+
+            self.target_label.setText(f"{title}\n{part} (CID: {video_state.selected_cid})")
         else:
             self.target_label.setText("尚未选择视频 (请在发射器页面加载)")
 
