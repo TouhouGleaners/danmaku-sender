@@ -3,7 +3,7 @@ import threading
 
 from PySide6.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout, QLabel, QGroupBox, QTextEdit, 
-    QPushButton, QSpinBox, QMessageBox, QGridLayout
+    QPushButton, QSpinBox, QMessageBox, QGridLayout, QSizePolicy
 )
 from PySide6.QtGui import QTextCursor
 from PySide6.QtCore import Qt
@@ -41,8 +41,12 @@ class MonitorTab(QWidget):
             color: #34495e;
             padding: 2px 0px;
         """)
+        self.target_label.setSizePolicy(QSizePolicy.Policy.Ignored, QSizePolicy.Policy.Preferred)
+        self.target_label.setMinimumWidth(0)
+        line_height = self.target_label.fontMetrics().lineSpacing()
+        self.target_label.setMaximumHeight(line_height * 3 + 10)
+
         self.target_label.setWordWrap(True)
-        self.target_label.setMaximumHeight(70)
         self.target_label.setAlignment(Qt.AlignmentFlag.AlignLeft | Qt.AlignmentFlag.AlignTop)
 
         info_layout.addWidget(QLabel("当前目标:"))
