@@ -9,13 +9,14 @@ from PySide6.QtWidgets import (
     QFileDialog, QMessageBox
 )
 from PySide6.QtGui import QTextCursor
-from PySide6.QtCore import Qt
+from PySide6.QtCore import Qt, QDateTime
 
 from ..core.models.video import VideoInfo
 from ..core.services.danmaku_exporter import create_xml_from_danmakus
 from ..core.services.danmaku_parser import DanmakuParser
 from ..core.workers import FetchInfoWorker, SendTaskWorker
 from ..utils.string_utils import parse_bilibili_link
+from ..utils.time_utils import format_seconds_to_duration
 
 
 class SenderTab(QWidget):
@@ -193,9 +194,14 @@ class SenderTab(QWidget):
         # --- 操作区 ---
         action_layout = QHBoxLayout()
 
+        # 状态
         self.status_label = QLabel("发送器：待命")
+
+        # 进度条
         self.progress_bar = QProgressBar()
         self.progress_bar.setValue(0)
+
+        # 按钮
         self.start_btn = QPushButton("开始发送")
         self.start_btn.setFixedWidth(100)
         self.start_btn.setCursor(Qt.CursorShape.PointingHandCursor)
@@ -433,8 +439,9 @@ class SenderTab(QWidget):
         if self._is_task_running:
             self.stop_event.set()
             self.start_btn.setEnabled(False)
-            self.start_btn.setText("正在停止...")
-            self.logger.info("正在请求停止任务...")
+            self.start_btn.setText("停止中...")
+            self.logger.info("发送器：正在请求中止...")
+            self.progress_bar.setFormat("%p% (正在停止...)")
             return
 
         # 防并发
@@ -490,13 +497,50 @@ class SenderTab(QWidget):
         if total > 0:
             val = int((attempted / total) * 100)
             self.progress_bar.setValue(val)
+
+            # ETA 计算逻辑
+            remaining = total - attempted
+            if remaining > 0:
+                eta_sec = self._calculate_eta_seconds(attempted, total)
+                duration = format_seconds_to_duration(eta_sec)
+                finish_time = QDateTime.currentDateTime().addSecs(int(eta_sec)).toString("HH:mm:ss")
+                display_text = f"%p% (剩余 {duration} | 预计 {finish_time} 结束)"
+                self.progress_bar.setFormat(display_text)
+                self.progress_bar.setAlignment(Qt.AlignmentFlag.AlignCenter)
+            else:
+                self.progress_bar.setFormat("%p%")
+
         self.status_label.setText(f"发送中: {attempted}/{total}")
+
+    def _calculate_eta_seconds(self, attempted: int, total: int) -> float:
+        """根据配置计算剩余时间的期望值 (秒)"""
+        cfg = self._state.sender_config
+        avg_normal = (cfg.min_delay + cfg.max_delay) / 2
+        avg_rest = (cfg.rest_min + cfg.rest_max) / 2
+        
+        eta = 0.0
+
+        for k in range(attempted, total):
+            # 判断第 k 条发完后，根据 DelayManager 逻辑是否触发爆发
+            if cfg.burst_size > 1 and k % cfg.burst_size == 0:
+                eta += avg_rest
+            else:
+                eta += avg_normal
+        
+        return eta
 
     def _on_send_finished(self, sender_instance):
         """任务结束后的清理与保存逻辑"""
         # 恢复 UI
         self._reset_ui_after_task()
-        self.status_label.setText("发送器：任务结束")
+        
+        
+        if self.stop_event.is_set():
+            self.status_label.setText("发送器：任务中止")
+            self.progress_bar.setFormat("%p% (已停止)")
+        else:
+            self.status_label.setText("发送器：任务结束")
+            self.progress_bar.setFormat("%p% (已完成)")
         
         # 检查是否有失败弹幕
         if sender_instance and sender_instance.unsent_danmakus:
@@ -564,10 +608,14 @@ class SenderTab(QWidget):
         """任务结束后的 UI 状态复位"""
         self._is_task_running = False
 
-        # 按钮变绿
+        # 恢复按钮状态
         self.start_btn.setText("开始发送")
         self.start_btn.setEnabled(True)
         self._update_btn_style(False)
 
-        # 解锁输入
+        # 解锁所有输入控件
         self._set_inputs_locked(False)
+
+        # 重置进度条格式
+        self.progress_bar.setFormat("%p%")
+        
