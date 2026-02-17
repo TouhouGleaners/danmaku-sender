@@ -439,8 +439,9 @@ class SenderTab(QWidget):
         if self._is_task_running:
             self.stop_event.set()
             self.start_btn.setEnabled(False)
-            self.start_btn.setText("正在停止...")
-            self.logger.info("正在请求停止任务...")
+            self.start_btn.setText("停止中...")
+            self.logger.info("发送器：正在请求中止...")
+            self.progress_bar.setFormat("%p% (正在停止...)")
             return
 
         # 防并发
@@ -532,7 +533,14 @@ class SenderTab(QWidget):
         """任务结束后的清理与保存逻辑"""
         # 恢复 UI
         self._reset_ui_after_task()
-        self.status_label.setText("发送器：任务结束")
+        
+        
+        if self.stop_event.is_set():
+            self.status_label.setText("发送器：任务中止")
+            self.progress_bar.setFormat("%p% (已停止)")
+        else:
+            self.status_label.setText("发送器：任务结束")
+            self.progress_bar.setFormat("%p% (已完成)")
         
         # 检查是否有失败弹幕
         if sender_instance and sender_instance.unsent_danmakus:
@@ -600,10 +608,14 @@ class SenderTab(QWidget):
         """任务结束后的 UI 状态复位"""
         self._is_task_running = False
 
-        # 按钮变绿
+        # 恢复按钮状态
         self.start_btn.setText("开始发送")
         self.start_btn.setEnabled(True)
         self._update_btn_style(False)
 
-        # 解锁输入
+        # 解锁所有输入控件
         self._set_inputs_locked(False)
+
+        # 重置进度条格式
+        self.progress_bar.setFormat("%p%")
+        
