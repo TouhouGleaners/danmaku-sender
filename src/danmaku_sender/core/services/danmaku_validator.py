@@ -1,6 +1,7 @@
 from typing import TypedDict
 
 from ..models.danmaku import Danmaku
+from ..state import ValidatorConfig
 
 
 FORBIDDEN_SYMBOLS = "☢⚠☣☠⚡💣⚔🔥"
@@ -12,7 +13,11 @@ class ValidationIssue(TypedDict):
     reason: str
 
 
-def validate_danmaku_list(danmaku_list: list[Danmaku], video_duration_ms: int = -1) -> list[ValidationIssue]:
+def validate_danmaku_list(
+        danmaku_list: list[Danmaku],
+        video_duration_ms: int = -1,
+        validator_config: ValidatorConfig | None = None
+    ) -> list[ValidationIssue]:
     """
     校验弹幕列表，找出不符合B站发送规则的弹幕。
     Args:
@@ -21,11 +26,15 @@ def validate_danmaku_list(danmaku_list: list[Danmaku], video_duration_ms: int = 
     Returns:
         list: 一个包含问题弹幕信息的字典列表。
     """
+    # 提取用户规则
+    custom_enabled = validator_config.enabled if validator_config else False
+    keywords = validator_config.blocked_keywords if validator_config else []
+
     problems: list[ValidationIssue] = []
     for i, dm in enumerate(danmaku_list):
         msg = dm.msg
         progress = dm.progress
-        
+
         reasons = []
 
         # 换行符检查
@@ -45,7 +54,18 @@ def validate_danmaku_list(danmaku_list: list[Danmaku], video_duration_ms: int = 
         if found_forbidden:
             # 只报告第一个禁用符号，避免信息过长
             reasons.append(f"包含禁用符号'{found_forbidden[0]}'")
-        
+
+        # 自定义关键词检查
+        if custom_enabled and keywords:
+            msg_lower = msg.lower()
+
+            found_ks = [k for k in keywords if k and k in msg_lower]
+            
+            if found_ks:
+                # 格式化输出：命中自定义过滤词: '词A', '词B'
+                ks = ", ".join(f"'{k}'" for k in found_ks)
+                reasons.append(f"命中自定义过滤词: {ks}")
+
         # 问题汇总
         if reasons:
             dm.is_valid = False
@@ -56,5 +76,5 @@ def validate_danmaku_list(danmaku_list: list[Danmaku], video_duration_ms: int = 
             })
         else:
             dm.is_valid = True
-    
+
     return problems

@@ -18,7 +18,8 @@ def save_app_config(state: AppState):
     """保存非敏感配置到 config.json"""
     config_data = {
         "sender": state.sender_config.to_dict(),
-        "monitor": state.monitor_config.to_dict()
+        "monitor": state.monitor_config.to_dict(),
+        "validator": state.validator_config.to_dict()
     }
 
     try:
@@ -39,12 +40,14 @@ def load_app_config(state: AppState):
     try:
         with open(path, 'r', encoding='utf-8') as f:
             data = json.load(f)
-            
+
         if "sender" in data:
             state.sender_config.from_dict(data["sender"])
         if "monitor" in data:
             state.monitor_config.from_dict(data["monitor"])
-            
+        if "validator" in data:
+            state.validator_config.from_dict(data["validator"])
+
         logger.info("配置加载成功。")
     except Exception as e:
         logger.warning(f"加载配置失败（可能是格式损坏），将使用默认值: {e}")

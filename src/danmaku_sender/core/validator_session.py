@@ -58,7 +58,7 @@ class ValidatorSession:
         self.logger.info(f"启动校验会话... 原始弹幕总数: {len(self.original_snapshot)}")
         
         # 执行校验
-        raw_issues: list[ValidationIssue] = validate_danmaku_list(self.original_snapshot, duration_ms)
+        raw_issues: list[ValidationIssue] = validate_danmaku_list(self.original_snapshot, duration_ms, self.state.validator_config)
         
         # 转换结构
         self.current_issues = []

@@ -3,10 +3,11 @@ import logging
 from PySide6.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout, QPushButton, QLabel, 
     QTableWidget, QTableWidgetItem, QHeaderView, QAbstractItemView,
-    QMessageBox, QMenu, QInputDialog
+    QMessageBox, QMenu, QInputDialog, QLineEdit, QFrame, QCheckBox
 )
 from PySide6.QtCore import Qt
 
+from ..core.state import AppState
 from ..core.validator_session import ValidatorSession
 from ..utils.time_utils import format_ms_to_hhmmss
 
@@ -14,8 +15,8 @@ from ..utils.time_utils import format_ms_to_hhmmss
 class ValidatorTab(QWidget):
     def __init__(self):
         super().__init__()
-        self._state = None
-        self.session = None
+        self._state: AppState | None = None
+        self.session: ValidatorSession | None = None
         self.logger = logging.getLogger("ValidatorTab")
 
         self._create_ui()
@@ -27,6 +28,31 @@ class ValidatorTab(QWidget):
         main_layout = QVBoxLayout()
         main_layout.setSpacing(10)
         main_layout.setContentsMargins(10, 10, 10, 10)
+
+        # --- 规则管理区 ---
+        config_bar = QHBoxLayout()
+
+        self.sys_info = QLabel("系统规则: 长度、换行、禁用符号 (已开启)")
+        self.sys_info.setStyleSheet("color: #95a5a6; font-size: 11px; padding-right: 10px;")
+        config_bar.addWidget(self.sys_info)
+
+        # 垂直分隔线
+        v_line = QFrame()
+        v_line.setFrameShape(QFrame.Shape.VLine)
+        v_line.setFrameShadow(QFrame.Shadow.Sunken)
+        config_bar.addWidget(v_line)
+
+        # 关键词输入
+        self.enable_custom_checkbox = QCheckBox("关键词过滤:")
+        self.enable_custom_checkbox.setToolTip("开启后将拦截包含以下关键词的弹幕")
+        config_bar.addWidget(self.enable_custom_checkbox)
+
+        self.keywords_input = QLineEdit()
+        self.keywords_input.setPlaceholderText("用中文或英文逗号分隔，如：应用, 过滤")
+        self.keywords_input.setStyleSheet("padding: 2px 5px;")
+        config_bar.addWidget(self.keywords_input, stretch=1)
+
+        main_layout.addLayout(config_bar)
 
         # --- 顶部控制栏 ---
         top_layout = QHBoxLayout()
@@ -117,10 +143,46 @@ class ValidatorTab(QWidget):
         main_layout.addLayout(bottom_layout)
         self.setLayout(main_layout)
 
-    def bind_state(self, state):
+    def bind_state(self, state: AppState):
+        if self._state is state:
+            return
+
+        if self._state is not None:
+            self._disconnect_signals()
+
         self._state = state
         self.session = ValidatorSession(state)
+
+        cfg = state.validator_config
+
+        # 初始化 UI 值
+        self.enable_custom_checkbox.blockSignals(True)
+        self.enable_custom_checkbox.setChecked(cfg.enabled)
+        self.enable_custom_checkbox.blockSignals(False)
+
+        self.keywords_input.blockSignals(True)
+        self.keywords_input.setText(", ".join(cfg.blocked_keywords))
+        self.keywords_input.blockSignals(False)
+
+        self.keywords_input.setEnabled(cfg.enabled)
+
+        # 重新连接信号
+        self.enable_custom_checkbox.stateChanged.connect(self._on_toggle_custom)
+        self.keywords_input.textChanged.connect(self._on_keywords_changed)
+
         self._set_ui_ready(True)
+
+    def _disconnect_signals(self):
+        """安全断开所有已绑定的信号"""
+        try:
+            self.enable_custom_checkbox.stateChanged.disconnect()
+        except (RuntimeError, TypeError):
+            pass
+
+        try:
+            self.keywords_input.textChanged.disconnect()
+        except (RuntimeError, TypeError):
+            pass
 
     def _set_ui_ready(self, is_ready):
         """控制核心按钮的可用性"""
@@ -129,6 +191,26 @@ class ValidatorTab(QWidget):
             self.status_label.setText("正在初始化...")
         else:
             self.status_label.setText("提示: 请先在“发射器”页面加载文件并选择分P。")
+
+    def _on_toggle_custom(self):
+        """处理总开关切换"""
+        if not self._state:
+            return
+
+        is_on = self.enable_custom_checkbox.isChecked()
+        self._state.validator_config.enabled = is_on
+        self.keywords_input.setEnabled(is_on)
+
+    def _on_keywords_changed(self, text):
+        """处理关键词文本变更"""
+        if not self._state:
+            return
+
+        raw_text = text.replace('，', ',').lower()
+        parts = [k.strip() for k in raw_text.split(',') if k.strip()]
+        unique_keywords = sorted(list(set(parts)))
+
+        self._state.validator_config.blocked_keywords = unique_keywords
 
     def _update_ui_state(self):
         """更新 UI 状态"""
