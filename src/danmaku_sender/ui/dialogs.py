@@ -230,47 +230,55 @@ class EditDanmakuDialog(QDialog):
 
         # --- 计数器与按钮行 ---
         footer_layout = QHBoxLayout()
-        
+
         # 字数显示标签
         self.count_label = QLabel()
         self.count_label.setStyleSheet("color: #7f8c8d; font-size: 12px;")
         footer_layout.addWidget(self.count_label)
-        
+
         footer_layout.addStretch()
-        
+
         self.btn_cancel = QPushButton("取消")
         self.btn_cancel.clicked.connect(self.reject)
-        
+
         self.btn_ok = QPushButton("确定")
         self.btn_ok.setStyleSheet("background-color: #00a1d6; color: white; font-weight: bold;")
         self.btn_ok.clicked.connect(self.accept)
-        
+
         footer_layout.addWidget(self.btn_cancel)
         footer_layout.addWidget(self.btn_ok)
-        
+
         layout.addLayout(footer_layout)
 
         # 绑定更新
         self.editor.textChanged.connect(self._update_counter)
         self._update_counter()
-    
+
+    def _get_cleaned_text(self) -> str:
+        """统一的文本清洗逻辑：去换行 + 首尾去空格"""
+        return self.editor.toPlainText().replace('\n', '').replace('\r', '').strip()
+
     def _update_counter(self):
         """实时更新字数统计"""
-        # 模拟最终提交时的清洗逻辑（去掉换行符）
-        text = self.editor.toPlainText().replace('\n', '').replace('\r', '')
-        count = len(text)
-        
+        # 模拟最终提交时的清洗逻辑
+        cleaned_text = self._get_cleaned_text()
+        count = len(cleaned_text)
+
         self.count_label.setText(f"当前字数: {count} / 100")
-        
-        # 超过 100 字变红警示
+
+        # 超过 100 字变红
         if count > 100:
             self.count_label.setStyleSheet("color: #e74c3c; font-weight: bold;")
-            self.btn_ok.setEnabled(True) # 虽然 B 站不让发，但允许用户先点确定，然后校验器会再次抓出它
+            self.btn_ok.setEnabled(False)
+        # 内容为空也不让点确定
+        elif count == 0:
+            self.count_label.setStyleSheet("color: #7f8c8d;")
+            self.btn_ok.setEnabled(False)
+        # 正常状态
         else:
             self.count_label.setStyleSheet("color: #7f8c8d;")
-
+            self.btn_ok.setEnabled(True)
 
     def get_text(self) -> str:
         """获取修改后的文本，并自动清理多余换行"""
-        raw_text = self.editor.toPlainText()
-        return raw_text.replace('\n', '').replace('\r', '').strip()
+        return self._get_cleaned_text()
