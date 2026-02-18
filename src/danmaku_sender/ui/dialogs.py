@@ -268,15 +268,15 @@ class EditDanmakuDialog(QDialog):
 
         # 超过 100 字变红
         if count > 100:
-            self.count_label.setStyleSheet("color: #e74c3c; font-weight: bold;")
+            self.count_label.setStyleSheet("color: #e74c3c; font-weight: bold; font-size: 12px;")
             self.btn_ok.setEnabled(False)
         # 内容为空也不让点确定
         elif count == 0:
-            self.count_label.setStyleSheet("color: #7f8c8d;")
+            self.count_label.setStyleSheet("color: #7f8c8d; font-size: 12px;")
             self.btn_ok.setEnabled(False)
         # 正常状态
         else:
-            self.count_label.setStyleSheet("color: #7f8c8d;")
+            self.count_label.setStyleSheet("color: #7f8c8d; font-size: 12px;")
             self.btn_ok.setEnabled(True)
 
     def get_text(self) -> str:
