@@ -2,7 +2,7 @@ import re
 import logging
 from PySide6.QtWidgets import (
     QDialog, QVBoxLayout, QHBoxLayout, QTabWidget,
-    QTextBrowser, QPushButton, QLabel
+    QTextBrowser, QPushButton, QLabel, QTextEdit
 )
 from PySide6.QtCore import Qt, QUrl
 from PySide6.QtGui import QDesktopServices
@@ -209,3 +209,76 @@ class UpdateDialog(QDialog):
         )
 
         return text
+
+
+class EditDanmakuDialog(QDialog):
+    """专门用于编辑弹幕内容的多行对话框"""
+    def __init__(self, content: str, parent=None):
+        super().__init__(parent)
+        self.setWindowTitle("编辑弹幕内容")
+        self.resize(450, 220)
+
+        layout = QVBoxLayout(self)
+
+        layout.addWidget(QLabel("请输入修改后的内容 (提交时将自动合并为单行):"))
+
+        self.editor = QTextEdit()
+        self.editor.setPlainText(content)
+        self.editor.setAcceptRichText(False)
+        self.editor.setLineWrapMode(QTextEdit.LineWrapMode.WidgetWidth) 
+        layout.addWidget(self.editor)
+
+        # --- 计数器与按钮行 ---
+        footer_layout = QHBoxLayout()
+
+        # 字数显示标签
+        self.count_label = QLabel()
+        self.count_label.setStyleSheet("color: #7f8c8d; font-size: 12px;")
+        footer_layout.addWidget(self.count_label)
+
+        footer_layout.addStretch()
+
+        self.btn_cancel = QPushButton("取消")
+        self.btn_cancel.clicked.connect(self.reject)
+
+        self.btn_ok = QPushButton("确定")
+        self.btn_ok.setStyleSheet("background-color: #00a1d6; color: white; font-weight: bold;")
+        self.btn_ok.clicked.connect(self.accept)
+
+        footer_layout.addWidget(self.btn_cancel)
+        footer_layout.addWidget(self.btn_ok)
+
+        layout.addLayout(footer_layout)
+
+        # 绑定更新
+        self.editor.textChanged.connect(self._update_counter)
+        self._update_counter()
+
+    def _get_cleaned_text(self) -> str:
+        """统一的文本清洗逻辑：去换行 + 首尾去空格"""
+        return self.editor.toPlainText().replace('\n', '').replace('\r', '').strip()
+
+    def _update_counter(self):
+        """实时更新字数统计"""
+        # 模拟最终提交时的清洗逻辑
+        cleaned_text = self._get_cleaned_text()
+        count = len(cleaned_text)
+
+        self.count_label.setText(f"当前字数: {count} / 100")
+
+        # 超过 100 字变红
+        if count > 100:
+            self.count_label.setStyleSheet("color: #e74c3c; font-weight: bold; font-size: 12px;")
+            self.btn_ok.setEnabled(False)
+        # 内容为空也不让点确定
+        elif count == 0:
+            self.count_label.setStyleSheet("color: #7f8c8d; font-size: 12px;")
+            self.btn_ok.setEnabled(False)
+        # 正常状态
+        else:
+            self.count_label.setStyleSheet("color: #7f8c8d; font-size: 12px;")
+            self.btn_ok.setEnabled(True)
+
+    def get_text(self) -> str:
+        """获取修改后的文本，并自动清理多余换行"""
+        return self._get_cleaned_text()
