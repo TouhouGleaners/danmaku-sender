@@ -52,8 +52,7 @@ class SenderConfig:
         for key, value in data.items():
             if hasattr(self, key):
                 setattr(self, key, value)
-            
-    
+
 
 @dataclass
 class MonitorConfig:
@@ -63,6 +62,24 @@ class MonitorConfig:
     # 复用全局设置
     prevent_sleep: bool = True
     use_system_proxy: bool = True
+
+    def to_dict(self):
+        return asdict(self)
+    
+    def from_dict(self, data: dict):
+        if not data:
+            return
+        for key, value in data.items():
+            if hasattr(self, key):
+                setattr(self, key, value)
+
+
+@dataclass
+class ValidatorConfig:
+    """校验器的配置数据"""
+    # 用户自定义规则
+    enabled: bool = True
+    blocked_keywords: list[str] = field(default_factory=list)
 
     def to_dict(self):
         return asdict(self)
@@ -116,6 +133,7 @@ class AppState(QObject):
         # 各模块配置
         self.sender_config = SenderConfig()
         self.monitor_config = MonitorConfig()
+        self.validator_config = ValidatorConfig()
 
         # 运行时状态
         self.video_state = VideoState()
