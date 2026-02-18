@@ -206,11 +206,11 @@ class ValidatorTab(QWidget):
         if not self._state:
             return
 
-        raw_text = text.replace('，', ',')
-        keywords = [k.strip() for k in raw_text.split(',') if k.strip()]
+        raw_text = text.replace('，', ',').lower()
+        parts = [k.strip() for k in raw_text.split(',') if k.strip()]
+        unique_keywords = sorted(list(set(parts)))
 
-        # 更新回 AppState
-        self._state.validator_config.blocked_keywords = keywords
+        self._state.validator_config.blocked_keywords = unique_keywords
 
     def _update_ui_state(self):
         """更新 UI 状态"""
