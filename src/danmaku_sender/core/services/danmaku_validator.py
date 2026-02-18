@@ -1,6 +1,7 @@
 from typing import TypedDict
 
 from ..models.danmaku import Danmaku
+from ..state import ValidatorConfig
 
 
 FORBIDDEN_SYMBOLS = "☢⚠☣☠⚡💣⚔🔥"
@@ -12,7 +13,11 @@ class ValidationIssue(TypedDict):
     reason: str
 
 
-def validate_danmaku_list(danmaku_list: list[Danmaku], video_duration_ms: int = -1, validator_config = None) -> list[ValidationIssue]:
+def validate_danmaku_list(
+        danmaku_list: list[Danmaku],
+        video_duration_ms: int = -1,
+        validator_config: ValidatorConfig | None = None
+    ) -> list[ValidationIssue]:
     """
     校验弹幕列表，找出不符合B站发送规则的弹幕。
     Args:

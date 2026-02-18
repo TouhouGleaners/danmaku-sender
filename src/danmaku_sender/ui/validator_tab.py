@@ -3,8 +3,7 @@ import logging
 from PySide6.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout, QPushButton, QLabel, 
     QTableWidget, QTableWidgetItem, QHeaderView, QAbstractItemView,
-    QMessageBox, QMenu, QInputDialog, QLineEdit, QFrame, QCheckBox,
-    QTextEdit
+    QMessageBox, QMenu, QInputDialog, QLineEdit, QFrame, QCheckBox
 )
 from PySide6.QtCore import Qt
 
@@ -17,7 +16,7 @@ class ValidatorTab(QWidget):
     def __init__(self):
         super().__init__()
         self._state: AppState | None = None
-        self.session = None
+        self.session: ValidatorSession | None = None
         self.logger = logging.getLogger("ValidatorTab")
 
         self._create_ui()
@@ -26,7 +25,7 @@ class ValidatorTab(QWidget):
 
     def _create_ui(self):
         # 主布局 - 垂直布局
-        main_layout = QVBoxLayout(self)
+        main_layout = QVBoxLayout()
         main_layout.setSpacing(10)
         main_layout.setContentsMargins(10, 10, 10, 10)
 
@@ -43,14 +42,13 @@ class ValidatorTab(QWidget):
         v_line.setFrameShadow(QFrame.Shadow.Sunken)
         config_bar.addWidget(v_line)
 
-        # 关键词输入 (单行模式)
+        # 关键词输入
         self.enable_custom_checkbox = QCheckBox("关键词过滤:")
         self.enable_custom_checkbox.setToolTip("开启后将拦截包含以下关键词的弹幕")
         config_bar.addWidget(self.enable_custom_checkbox)
 
-        self.keywords_input = QLineEdit() # 改为 QLineEdit
-        self.keywords_input.setPlaceholderText("用中文或英文逗号分隔，如：福利, 妈的, G片")
-        # 样式微调
+        self.keywords_input = QLineEdit()
+        self.keywords_input.setPlaceholderText("用中文或英文逗号分隔，如：应用, 过滤")
         self.keywords_input.setStyleSheet("padding: 2px 5px;")
         config_bar.addWidget(self.keywords_input, stretch=1)
 
@@ -146,25 +144,41 @@ class ValidatorTab(QWidget):
         self.setLayout(main_layout)
 
     def bind_state(self, state: AppState):
+        if self._state is state:
+            return
+
+        if self._state is not None:
+            self._disconnect_signals()
+
         self._state = state
         self.session = ValidatorSession(state)
-        
+
         cfg = state.validator_config
-        
-        # 1. 开关
+
+        # 初始化 UI 值
+        self.enable_custom_checkbox.blockSignals(True)
         self.enable_custom_checkbox.setChecked(cfg.enabled)
-        # 2. 关键词 (用逗号连接展示)
+        self.enable_custom_checkbox.blockSignals(False)
+
+        self.keywords_input.blockSignals(True)
         self.keywords_input.setText(", ".join(cfg.blocked_keywords))
-        
-        # 3. 联动
+        self.keywords_input.blockSignals(False)
+
         self.keywords_input.setEnabled(cfg.enabled)
 
-        # 4. 信号
+        # 重新连接信号
         self.enable_custom_checkbox.stateChanged.connect(self._on_toggle_custom)
-        # QLineEdit 是 textChanged
         self.keywords_input.textChanged.connect(self._on_keywords_changed)
 
         self._set_ui_ready(True)
+
+    def _disconnect_signals(self):
+        """安全断开所有已绑定的信号"""
+        try:
+            self.enable_custom_checkbox.stateChanged.disconnect()
+            self.keywords_input.textChanged.disconnect()
+        except (RuntimeError, TypeError):
+            pass
 
     def _set_ui_ready(self, is_ready):
         """控制核心按钮的可用性"""
