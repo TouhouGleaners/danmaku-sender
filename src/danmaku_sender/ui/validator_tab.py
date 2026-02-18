@@ -176,6 +176,10 @@ class ValidatorTab(QWidget):
         """安全断开所有已绑定的信号"""
         try:
             self.enable_custom_checkbox.stateChanged.disconnect()
+        except (RuntimeError, TypeError):
+            pass
+
+        try:
             self.keywords_input.textChanged.disconnect()
         except (RuntimeError, TypeError):
             pass

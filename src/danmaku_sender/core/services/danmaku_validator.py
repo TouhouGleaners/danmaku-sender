@@ -57,10 +57,14 @@ def validate_danmaku_list(
 
         # 自定义关键词检查
         if custom_enabled and keywords:
-            # 找到第一个命中的关键词
-            found = [k for k in keywords if k and k in msg]
-            if found:
-                reasons.append(f"命中自定义过滤词: '{found[0]}'")
+            msg_lower = msg.lower()
+
+            found_ks = [k for k in keywords if k and k.lower() in msg_lower]
+            
+            if found_ks:
+                # 格式化输出：命中自定义过滤词: '词A', '词B'
+                ks = ", ".join(f"'{k}'" for k in found_ks)
+                reasons.append(f"命中自定义过滤词: {ks}")
 
         # 问题汇总
         if reasons:
