@@ -7,6 +7,8 @@ from PySide6.QtWidgets import (
 )
 from PySide6.QtCore import Qt
 
+from .dialogs import EditDanmakuDialog
+
 from ..core.state import AppState
 from ..core.validator_session import ValidatorSession
 from ..utils.time_utils import format_ms_to_hhmmss
@@ -332,13 +334,12 @@ class ValidatorTab(QWidget):
         original_index = idx_item.data(Qt.ItemDataRole.UserRole)
         current_text = self.table.item(row, 3).text()
 
-        new_text, ok = QInputDialog.getText(self, "编辑弹幕", "请输入修改后的内容：", text=current_text)
-
-        if ok:
-            clean_text = new_text.strip()
-            if clean_text:
-                if clean_text != current_text:
-                    self.session.update_item_content(original_index, clean_text)
+        dialog = EditDanmakuDialog(current_text, self)
+        if dialog.exec():
+            new_text = dialog.get_text()
+            if new_text:
+                if new_text != current_text:
+                    self.session.update_item_content(original_index, new_text)
                     self._refresh_table()
             else:
                 reply = QMessageBox.question(self, "确认删除", "内容为空，是否直接删除该条弹幕？", QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No)
