@@ -59,7 +59,7 @@ def validate_danmaku_list(
         if custom_enabled and keywords:
             msg_lower = msg.lower()
 
-            found_ks = [k for k in keywords if k and k.lower() in msg_lower]
+            found_ks = [k for k in keywords if k and k in msg_lower]
             
             if found_ks:
                 # 格式化输出：命中自定义过滤词: '词A', '词B'
