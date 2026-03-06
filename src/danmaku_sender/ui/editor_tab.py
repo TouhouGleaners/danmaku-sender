@@ -10,16 +10,16 @@ from PySide6.QtCore import Qt
 from .dialogs import EditDanmakuDialog
 
 from ..core.state import AppState
-from ..core.validator_session import ValidatorSession
+from ..core.editor_session import EditorSession
 from ..utils.time_utils import format_ms_to_hhmmss
 
 
-class ValidatorTab(QWidget):
+class EditorTab(QWidget):
     def __init__(self):
         super().__init__()
         self._state: AppState | None = None
-        self.session: ValidatorSession | None = None
-        self.logger = logging.getLogger("ValidatorTab")
+        self.session: EditorSession | None = None
+        self.logger = logging.getLogger("EditorTab")
 
         self._create_ui()
 
@@ -153,20 +153,20 @@ class ValidatorTab(QWidget):
             self._disconnect_signals()
 
         self._state = state
-        self.session = ValidatorSession(state)
+        self.session = EditorSession(state)
 
-        cfg = state.validator_config
+        validation_cfg = state.validation_config
 
         # 初始化 UI 值
         self.enable_custom_checkbox.blockSignals(True)
-        self.enable_custom_checkbox.setChecked(cfg.enabled)
+        self.enable_custom_checkbox.setChecked(validation_cfg.enabled)
         self.enable_custom_checkbox.blockSignals(False)
 
         self.keywords_input.blockSignals(True)
-        self.keywords_input.setText(", ".join(cfg.blocked_keywords))
+        self.keywords_input.setText(", ".join(validation_cfg.blocked_keywords))
         self.keywords_input.blockSignals(False)
 
-        self.keywords_input.setEnabled(cfg.enabled)
+        self.keywords_input.setEnabled(validation_cfg.enabled)
 
         # 重新连接信号
         self.enable_custom_checkbox.stateChanged.connect(self._on_toggle_custom)
@@ -200,7 +200,7 @@ class ValidatorTab(QWidget):
             return
 
         is_on = self.enable_custom_checkbox.isChecked()
-        self._state.validator_config.enabled = is_on
+        self._state.validation_config.enabled = is_on
         self.keywords_input.setEnabled(is_on)
 
     def _on_keywords_changed(self, text):
@@ -212,7 +212,7 @@ class ValidatorTab(QWidget):
         parts = [k.strip() for k in raw_text.split(',') if k.strip()]
         unique_keywords = sorted(list(set(parts)))
 
-        self._state.validator_config.blocked_keywords = unique_keywords
+        self._state.validation_config.blocked_keywords = unique_keywords
 
     def _update_ui_state(self):
         """更新 UI 状态"""
@@ -267,7 +267,7 @@ class ValidatorTab(QWidget):
 
         # 检查未保存修改
         if self.session.is_dirty:
-            reply = QMessageBox.question(self, "确认", "当前有未应用的修改，重新验证将丢弃这些修改。\n是否继续？", QMessageBox.Yes | QMessageBox.No)
+            reply = QMessageBox.question(self, "确认", "当前有未应用的修改，重新验证将丢弃这些修改。\n是否继续？", QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No)
             if reply == QMessageBox.StandardButton.No:
                 return
             

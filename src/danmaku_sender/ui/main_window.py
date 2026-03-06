@@ -9,7 +9,7 @@ from PySide6.QtCore import QUrl, QTimer
 from .sender_tab import SenderTab
 from .settings_tab import SettingsTab
 from .monitor_tab import MonitorTab
-from .validator_tab import ValidatorTab
+from .editor_tab import EditorTab
 from .dialogs import AboutDialog, HelpDialog, UpdateDialog
 from .history_tab import HistoryTab
 
@@ -58,14 +58,14 @@ class MainWindow(QMainWindow):
     def init_tabs(self):
         self.tab_settings = SettingsTab()
         self.tab_sender = SenderTab()
-        self.tab_validator = ValidatorTab()
+        self.tab_editor = EditorTab()
         self.tab_monitor = MonitorTab()
         self.tab_history = HistoryTab()
 
         # 添加至选项卡
         self.tabs.addTab(self.tab_settings, "全局设置")
         self.tabs.addTab(self.tab_sender, "弹幕发射器")
-        self.tabs.addTab(self.tab_validator, "弹幕校验器")
+        self.tabs.addTab(self.tab_editor, "弹幕校验器")
         self.tabs.addTab(self.tab_monitor, "弹幕监视器")
         self.tabs.addTab(self.tab_history, "弹幕历史记录")
 
@@ -146,7 +146,7 @@ class MainWindow(QMainWindow):
         # 页面数据绑定
         self.tab_settings.bind_state(self.state)
         self.tab_sender.bind_state(self.state)
-        self.tab_validator.bind_state(self.state)
+        self.tab_editor.bind_state(self.state)
         self.tab_monitor.bind_state(self.state)
         self.tab_history.bind_state(self.state)
 

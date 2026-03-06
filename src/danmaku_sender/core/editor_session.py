@@ -13,14 +13,14 @@ class ChangedRecord(TypedDict):
     old_value: Any
 
 
-class ValidatorSession:
+class EditorSession:
     """
     校验器逻辑会话层。
     负责管理数据快照、执行修改逻辑、维护脏状态及撤销栈。
     """
     def __init__(self, state: AppState):
         self.state = state
-        self.logger = logging.getLogger("ValidatorSession")
+        self.logger = logging.getLogger("EditorSession")
         
         self.original_snapshot: list[Danmaku] = []          # 原始数据的深拷贝
         self.current_issues: list[dict[str, Any]] = []   # 当前的问题列表
@@ -28,7 +28,7 @@ class ValidatorSession:
 
     @property
     def is_dirty(self) -> bool:
-        return self.state.validator_is_dirty
+        return self.state.editor_is_dirty
     
     @property
     def has_active_session(self) -> bool:
@@ -39,7 +39,7 @@ class ValidatorSession:
         return bool(self.undo_stack)
 
     def set_dirty(self, dirty: bool):
-        self.state.validator_is_dirty = dirty
+        self.state.editor_is_dirty = dirty
 
     def load_and_validate(self) -> bool:
         """加载数据并执行校验"""
@@ -58,7 +58,7 @@ class ValidatorSession:
         self.logger.info(f"启动校验会话... 原始弹幕总数: {len(self.original_snapshot)}")
         
         # 执行校验
-        raw_issues: list[ValidationIssue] = validate_danmaku_list(self.original_snapshot, duration_ms, self.state.validator_config)
+        raw_issues: list[ValidationIssue] = validate_danmaku_list(self.original_snapshot, duration_ms, self.state.validation_config)
         
         # 转换结构
         self.current_issues = []

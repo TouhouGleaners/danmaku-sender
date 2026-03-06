@@ -14,6 +14,7 @@ from PySide6.QtCore import Qt, QDateTime
 from ..core.models.video import VideoInfo
 from ..core.services.danmaku_exporter import create_xml_from_danmakus
 from ..core.services.danmaku_parser import DanmakuParser
+from ..core.state import AppState
 from ..core.workers import FetchInfoWorker, SendTaskWorker
 from ..utils.string_utils import parse_bilibili_link
 from ..utils.time_utils import format_seconds_to_duration
@@ -22,7 +23,7 @@ from ..utils.time_utils import format_seconds_to_duration
 class SenderTab(QWidget):
     def __init__(self):
         super().__init__()
-        self._state = None
+        self._state: AppState | None = None
         self.logger = logging.getLogger("SenderTab")
         self.stop_event = threading.Event()
         self.danmaku_parser = DanmakuParser()
@@ -453,7 +454,7 @@ class SenderTab(QWidget):
         # 校验
         state = self._state
 
-        if state.validator_is_dirty:
+        if state.editor_is_dirty:
             QMessageBox.warning(
                 self, 
                 "存在未保存的修改", 
