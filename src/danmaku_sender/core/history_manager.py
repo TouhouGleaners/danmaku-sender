@@ -5,7 +5,7 @@ from pathlib import Path
 from platformdirs import user_data_dir
 from enum import IntEnum
 
-from peewee import SqliteDatabase
+from peewee import SqliteDatabase, fn, Case
 from playhouse.migrate import SqliteMigrator, migrate
 
 from .models.danmaku import Danmaku
@@ -63,7 +63,11 @@ class HistoryManager:
         """初始化数据库，自动迁移"""
         try:
             # 开启 WAL 模式提升并发性能
-            sqlite_db = SqliteDatabase(self.db_path, pragmas={'journal_mode': 'wal'})
+            sqlite_db = SqliteDatabase(
+                self.db_path, 
+                pragmas={'journal_mode': 'wal'},
+                check_same_thread=False
+            )
 
             # 绑定代理并连接
             db.initialize(sqlite_db)
@@ -158,23 +162,27 @@ class HistoryManager:
             return []
 
     def get_stats(self, cid: int) -> tuple[int, int, int]:
-        """
-        获取统计数据 (UI使用)。
-        """
+        """获取统计数据 (UI使用)"""
         try:
-            total = SentDanmaku.select().where(SentDanmaku.cid == cid).count()
-            verified = SentDanmaku.select().where(
-                (SentDanmaku.cid == cid) & (SentDanmaku.status == DanmakuStatus.VERIFIED.value)
-            ).count()
-            lost = SentDanmaku.select().where(
-                (SentDanmaku.cid == cid) & (SentDanmaku.status == DanmakuStatus.LOST.value)
-            ).count()
+            stats = (
+                SentDanmaku
+                    .select(
+                        fn.COUNT(SentDanmaku.dmid),
+                        fn.SUM(Case(None, [(SentDanmaku.status == DanmakuStatus.VERIFIED.value, 1)], 0)),
+                        fn.SUM(Case(None, [(SentDanmaku.status == DanmakuStatus.LOST.value, 1)], 0))
+                    )
+                    .where(SentDanmaku.cid == cid)
+                    .scalar(as_tuple=True)
+            )
 
-            return (total, verified, lost)
+            if stats:
+                total, verified, lost = stats
+                return (total or 0, int(verified or 0), int(lost or 0))
 
         except Exception as e:
             logger.error(f"获取统计失败: {e}")
-            return 0, 0, 0
+
+        return 0, 0, 0
     
     def count_records(self, target: VideoTarget, dm: Danmaku) -> int:
         """
