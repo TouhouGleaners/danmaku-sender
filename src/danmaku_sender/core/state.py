@@ -75,8 +75,8 @@ class MonitorConfig:
 
 
 @dataclass
-class ValidatorConfig:
-    """校验器的配置数据"""
+class ValidationConfig:
+    """校验规则"""
     # 用户自定义规则
     enabled: bool = True
     blocked_keywords: list[str] = field(default_factory=list)
@@ -133,13 +133,13 @@ class AppState(QObject):
         # 各模块配置
         self.sender_config = SenderConfig()
         self.monitor_config = MonitorConfig()
-        self.validator_config = ValidatorConfig()
+        self.validation_config = ValidationConfig() 
 
         # 运行时状态
         self.video_state = VideoState()
 
-        # True 表示校验器有未应用的修改，SenderTab 拦截发送
-        self.validator_is_dirty: bool = False
+        # True 表示编辑器有未应用的修改，SenderTab 拦截发送
+        self.editor_is_dirty: bool = False
 
     def update_credentials(self, sessdata: str, bili_jct: str):
         """更新凭证并通知监听者"""

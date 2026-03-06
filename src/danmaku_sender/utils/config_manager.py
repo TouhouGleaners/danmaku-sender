@@ -19,7 +19,7 @@ def save_app_config(state: AppState):
     config_data = {
         "sender": state.sender_config.to_dict(),
         "monitor": state.monitor_config.to_dict(),
-        "validator": state.validator_config.to_dict()
+        "validation": state.validation_config.to_dict()
     }
 
     try:
@@ -46,7 +46,7 @@ def load_app_config(state: AppState):
         if "monitor" in data:
             state.monitor_config.from_dict(data["monitor"])
         if "validator" in data:
-            state.validator_config.from_dict(data["validator"])
+            state.validation_config.from_dict(data["validator"])
 
         logger.info("配置加载成功。")
     except Exception as e:
