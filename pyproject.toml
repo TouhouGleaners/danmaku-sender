@@ -20,6 +20,7 @@ dependencies = [
     "keyring>=25.7.0",
     "win11toast>=0.36.2",
     "cryptography>=46.0.3",
+    "peewee>=4.0.1",
 ]
 
 [project.urls]
@@ -36,6 +37,7 @@ dev = [
     "pytest>=8.0.0",
     "nuitka>=2.0",
     "zstandard>=0.15.0",
+    "types-peewee"
 ]
 
 [project.scripts]

@@ -1,12 +1,15 @@
 import logging
-import sqlite3
 import time
 import threading
 from pathlib import Path
 from platformdirs import user_data_dir
 from enum import IntEnum
 
+from peewee import SqliteDatabase, fn, Case
+from playhouse.migrate import SqliteMigrator, migrate
+
 from .models.danmaku import Danmaku
+from .models.database import db, SentDanmaku
 from .models.structs import VideoTarget
 
 from ..config.app_config import AppInfo
@@ -23,7 +26,7 @@ class DanmakuStatus(IntEnum):
 
 class HistoryManager:
     """
-    基于 SQLite 的弹幕生命周期管理系统。
+    基于 Peewee ORM 的弹幕生命周期管理系统。
     负责实现“发送 -> 存证 -> 核销”的数据层逻辑。
 
     注意：当前的单例实现仅针对单进程多线程环境。
@@ -55,38 +58,26 @@ class HistoryManager:
 
             HistoryManager._initialized = True
             logger.debug("HistoryManager 单例初始化完成")
-
-    def _get_conn(self) -> sqlite3.Connection:
-        """获取数据库连接"""
-        return sqlite3.connect(self.db_path, check_same_thread=False)
     
     def _init_db(self):
-        """初始化数据库"""
+        """初始化数据库，自动迁移"""
         try:
-            with self._get_conn() as conn:
-                cursor = conn.cursor()
+            # 开启 WAL 模式提升并发性能
+            sqlite_db = SqliteDatabase(
+                self.db_path, 
+                pragmas={'journal_mode': 'wal'},
+                check_same_thread=False
+            )
 
-                cursor.execute('''
-                    CREATE TABLE IF NOT EXISTS sent_danmaku (
-                        dmid TEXT PRIMARY KEY,
-                        cid INTEGER,
-                        bvid TEXT,
-                        msg TEXT,
-                        progress INTEGER,
-                        mode INTEGER,
-                        fontsize INTEGER,
-                        color INTEGER,
-                        ctime REAL,
-                        is_visible INTEGER,
-                        status INTEGER DEFAULT 0
-                    )
-                ''')
+            # 绑定代理并连接
+            db.initialize(sqlite_db)
+            sqlite_db.connect(reuse_if_open=True)
 
-                cursor.execute('CREATE INDEX IF NOT EXISTS idx_cid_status ON sent_danmaku (cid, status)')
-            logger.debug(f"数据库初始化完成: {self.db_path}")
+            # 自动建表（已有则跳过）
+            sqlite_db.create_tables([SentDanmaku], safe=True)
 
         except Exception as e:
-            logger.critical(f"数据库初始化致命错误: {e}", exc_info=True)
+            logger.critical(f"数据库初始化/迁移致命错误: {e}", exc_info=True)
             raise RuntimeError(f"HistoryManager 数据库初始化失败: {e}") from e
 
     def record_danmaku(self, target: VideoTarget, dm: Danmaku, is_visible_api: bool = True):
@@ -99,26 +90,19 @@ class HistoryManager:
             return
         
         try:
-            with self._get_conn() as conn:
-                conn.execute('''
-                    INSERT OR IGNORE INTO sent_danmaku (
-                        dmid, cid, bvid, msg, progress, mode,
-                        fontsize, color, ctime, is_visible, status
-                    ) 
-                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-                ''', (
-                    str(dm.dmid),
-                    target.cid,
-                    target.bvid,
-                    dm.msg,
-                    dm.progress,
-                    dm.mode,
-                    dm.fontsize,
-                    dm.color,
-                    time.time(),
-                    1 if is_visible_api else 0,
-                    DanmakuStatus.PENDING.value
-                ))
+            SentDanmaku.insert(
+                dmid=str(dm.dmid),
+                cid=target.cid,
+                bvid=target.bvid,
+                msg=dm.msg,
+                progress=dm.progress,
+                mode=dm.mode,
+                fontsize=dm.fontsize,
+                color=dm.color,
+                ctime=time.time(),
+                is_visible=1 if is_visible_api else 0,
+                status=DanmakuStatus.PENDING.value
+            ).on_conflict_ignore().execute()
         except Exception as e:
             logger.error(f"存证失败: {e}", exc_info=True)
 
@@ -131,18 +115,11 @@ class HistoryManager:
             return 0
 
         try:
-            with self._get_conn() as conn:
-                placeholders = ','.join(['?'] * len(verified_dmids))
-                sql = f'''
-                    UPDATE sent_danmaku 
-                    SET status = ? 
-                    WHERE dmid IN ({placeholders}) AND status = ?
-                '''
-
-                params = [DanmakuStatus.VERIFIED.value] + verified_dmids + [DanmakuStatus.PENDING.value]
-
-                cursor = conn.execute(sql, params)
-                return cursor.rowcount
+            query = SentDanmaku.update(status=DanmakuStatus.VERIFIED.value).where(
+                (SentDanmaku.dmid.in_(verified_dmids)) &
+                (SentDanmaku.status == DanmakuStatus.PENDING.value)
+            )
+            return query.execute()
 
         except Exception as e:
             logger.error(f"批量验证状态失败: {e}", exc_info=True)
@@ -154,25 +131,16 @@ class HistoryManager:
         逻辑：在该 CID 下，所有状态为 PENDING 且 不在 verified_dmids 列表中的弹幕，标记为 LOST。
         """
         try:
-            with self._get_conn() as conn:
-                if verified_dmids:
-                    placeholders = ','.join(['?'] * len(verified_dmids))
-                    sql = f'''
-                        UPDATE sent_danmaku
-                        SET status = ?
-                        WHERE cid = ?
-                            AND status = ?
-                            AND dmid NOT IN ({placeholders})
-                    '''
-                    params = [DanmakuStatus.LOST.value, cid, DanmakuStatus.PENDING.value] + verified_dmids
-                    cursor = conn.execute(sql, params)
-                else:
-                    sql = 'UPDATE sent_danmaku SET status = ? WHERE cid = ? AND status = ?'
-                    params = [DanmakuStatus.LOST.value, cid, DanmakuStatus.PENDING.value]
-                    cursor = conn.execute(sql, params)
+            condition = (SentDanmaku.cid == cid) & (SentDanmaku.status == DanmakuStatus.PENDING.value)
 
-                if cursor.rowcount > 0:
-                    logger.warning(f"标记了 {cursor.rowcount} 条弹幕为'疑似丢失'。")
+            if verified_dmids:
+                condition &= SentDanmaku.dmid.not_in(verified_dmids)
+
+            query = SentDanmaku.update(status=DanmakuStatus.LOST.value).where(condition)
+            rows_updated = query.execute()
+
+            if rows_updated > 0:
+                logger.warning(f"标记了 {rows_updated} 条弹幕为'疑似丢失'。")
 
         except Exception as e:
             logger.error(f"标记丢失状态失败: {e}", exc_info=True)
@@ -180,41 +148,40 @@ class HistoryManager:
     def get_pending_records(self, cid: int) -> list[dict]:
         """获取 Pending 弹幕"""
         try:
-            with self._get_conn() as conn:
-                cursor = conn.execute(
-                    'SELECT dmid, msg, progress, ctime FROM sent_danmaku WHERE cid = ? AND status = ?', 
-                    (cid, DanmakuStatus.PENDING.value)
-                )
-                return [
-                    {"dmid": row[0], "msg": row[1], "progress": row[2], "ctime": row[3]}
-                    for row in cursor.fetchall()
-                ]
+            return list(
+                SentDanmaku.select(
+                    SentDanmaku.dmid, SentDanmaku.msg, SentDanmaku.progress, SentDanmaku.ctime
+                ).where(
+                    (SentDanmaku.cid == cid) & 
+                    (SentDanmaku.status == DanmakuStatus.PENDING.value)
+                ).dicts()
+            )
 
         except Exception as e:
             logger.error(f"查询 Pending 记录失败: {e}", exc_info=True)
             return []
 
     def get_stats(self, cid: int) -> tuple[int, int, int]:
-        """
-        获取统计数据 (UI使用)。
-        """
+        """获取统计数据 (UI使用)"""
         try:
-            with self._get_conn() as conn:
-                cursor = conn.execute(f'''
-                    SELECT 
-                        COUNT(*),
-                        SUM(CASE WHEN status = {DanmakuStatus.VERIFIED.value} THEN 1 ELSE 0 END),
-                        SUM(CASE WHEN status = {DanmakuStatus.LOST.value} THEN 1 ELSE 0 END)
-                    FROM sent_danmaku 
-                    WHERE cid = ?
-                ''', (cid,))
-                
-                row = cursor.fetchone()
-                if row:
-                    return (row[0] or 0, row[1] or 0, row[2] or 0)
+            stats = (
+                SentDanmaku
+                    .select(
+                        fn.COUNT(SentDanmaku.dmid),
+                        fn.SUM(Case(None, [(SentDanmaku.status == DanmakuStatus.VERIFIED.value, 1)], 0)),
+                        fn.SUM(Case(None, [(SentDanmaku.status == DanmakuStatus.LOST.value, 1)], 0))
+                    )
+                    .where(SentDanmaku.cid == cid)
+                    .scalar(as_tuple=True)
+            )
+
+            if stats:
+                total, verified, lost = stats
+                return (total or 0, int(verified or 0), int(lost or 0))
+
         except Exception as e:
             logger.error(f"获取统计失败: {e}")
-            
+
         return 0, 0, 0
     
     def count_records(self, target: VideoTarget, dm: Danmaku) -> int:
@@ -223,30 +190,16 @@ class HistoryManager:
         用于断点续传的计数对账
         """
         try:
-            with self._get_conn() as conn:
-                sql = '''
-                    SELECT COUNT(*) FROM sent_danmaku
-                    WHERE cid = ?
-                    AND msg = ?
-                    AND mode = ?
-                    AND color = ?
-                    AND fontsize = ?
-                    AND progress = ?
-                    AND status IN (?, ?)  -- 只统计 PENDING(0) 和 VERIFIED(1)
-                '''
-                params = (
-                    target.cid,
-                    dm.msg,
-                    dm.mode,
-                    dm.color,
-                    dm.fontsize,
-                    dm.progress,
-                    DanmakuStatus.PENDING.value,
-                    DanmakuStatus.VERIFIED.value
-                )
+            return SentDanmaku.select().where(
+                (SentDanmaku.cid == target.cid) &
+                (SentDanmaku.msg == dm.msg) &
+                (SentDanmaku.mode == dm.mode) &
+                (SentDanmaku.color == dm.color) &
+                (SentDanmaku.fontsize == dm.fontsize) &
+                (SentDanmaku.progress == dm.progress) &
+                (SentDanmaku.status.in_([DanmakuStatus.PENDING.value, DanmakuStatus.VERIFIED.value]))
+            ).count()
 
-                cursor = conn.execute(sql, params)
-                return cursor.fetchone()[0]
         except Exception as e:
             logger.error(f"查重失败: {e}", exc_info=True)
             return 0
@@ -259,28 +212,20 @@ class HistoryManager:
         返回数据库原始 dict，后续 UI 层会结合 API 数据进行展示
         """
         try:
-            with self._get_conn() as conn:
-                sql = "SELECT dmid, cid, bvid, msg, progress, mode, fontsize, color, ctime, status, is_visible FROM sent_danmaku WHERE 1=1"
-                params = []
+            query = SentDanmaku.select()
 
-                if keyword:
-                    sql += " AND (msg LIKE ? OR bvid LIKE ?)"
-                    params.extend([f"%{keyword}%", f"%{keyword}%"])
+            if keyword:
+                query = query.where(
+                    (SentDanmaku.msg.contains(keyword)) | 
+                    (SentDanmaku.bvid.contains(keyword))
+                )
 
-                if status != -1:
-                    sql += " AND status = ?"
-                    params.append(status)
+            if status != -1:
+                query = query.where(SentDanmaku.status == status)
 
-                sql += " ORDER BY ctime DESC LIMIT ?"
-                params.append(limit)
+            query = query.order_by(SentDanmaku.ctime.desc()).limit(limit)
 
-                cursor = conn.execute(sql, params)
-                return [{
-                    "dmid": row[0], "cid": row[1], "bvid": row[2], "msg": row[3],
-                    "progress": row[4], "mode": row[5], "fontsize": row[6],
-                    "color": row[7], "ctime": row[8], "status": row[9],
-                    "is_visible": row[10]
-                } for row in cursor.fetchall()]
+            return list(query.dicts())
 
         except Exception as e:
             logger.error(f"查询历史记录失败: {e}", exc_info=True)
