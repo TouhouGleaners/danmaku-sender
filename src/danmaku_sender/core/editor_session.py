@@ -202,16 +202,9 @@ class EditorSession:
         """标记删除单条弹幕"""
         if 0 <= original_index < len(self.staged_danmakus):
             if original_index not in self.staged_deletions:
-                self.undo_stack.append([
-                    AtomicChange(
-                        original_index,
-                        EditorField.IS_DELETED,
-                        False
-                    )
-                ])
+                self._push_undo_record([AtomicChange(original_index, EditorField.IS_DELETED, False)])
                 self.staged_deletions.add(original_index)
                 self.refresh_validation()
-                self.set_dirty(True)
 
     def update_item_content(self, original_index: int, new_content: str):
         """更新暂存区单条弹幕内容"""
@@ -219,19 +212,9 @@ class EditorSession:
             dm = self.staged_danmakus[original_index]
             if dm.msg != new_content:
                 # 记录撤销
-                self._push_undo_record([
-                    AtomicChange(
-                        source_index=original_index,
-                        field=EditorField.MSG,
-                        initial_value=dm.msg
-                    )
-                ])
-
+                self._push_undo_record([AtomicChange(original_index, EditorField.MSG, dm.msg)])
                 dm.msg = new_content
-
-                # 修改后重新计算校验状态
                 self.refresh_validation()
-                self.set_dirty(True)
 
     def _execute_batch_transform(self, op_name: str, transform_fn: Callable[[Danmaku], bool]) -> tuple[int, int]:
         """通用批量操作引擎
@@ -272,9 +255,8 @@ class EditorSession:
                     modified_count += 1
 
         if current_step_changes:
-            self.undo_stack.append(current_step_changes)
+            self._push_undo_record(current_step_changes)
             self.refresh_validation()
-            self.set_dirty(True)
             self.logger.info(f"批量操作 [{op_name}]: 修改 {modified_count}, 删除 {deleted_count}")
 
         return modified_count, deleted_count
