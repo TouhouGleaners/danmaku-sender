@@ -468,6 +468,8 @@ class EditorTab(QWidget):
             offset_ms = dlg.get_offset_ms()
             if offset_ms != 0:
                 count = self.session.shift_time_axis(offset_ms)
+                self._refresh_table()
                 if count > 0:
-                    self._refresh_table()
                     self.logger.info(f"成功平移了 {count} 条弹幕的时间轴。")
+                else:
+                    self.logger.info("平移操作未导致任何数据变化。")

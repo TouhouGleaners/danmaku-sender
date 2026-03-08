@@ -25,7 +25,7 @@ class AtomicChange:
     """原子变更记录：描述单条弹幕单次属性的变化"""
     source_index: int     # 暂存区索引
     field: EditorField    # 修改字段
-    initial_value: Any    # 初始值 (HEAD 状态的值)
+    previous_value: Any   # 该变化发生前的原始值
 
 
 class ViewItem(TypedDict):
@@ -188,10 +188,10 @@ class EditorSession:
             field = change.field
             if field == EditorField.IS_DELETED:
                 # 恢复删除状态
-                self.staged_deletions.discard(idx) if change.initial_value is False else self.staged_deletions.add(idx)
+                self.staged_deletions.discard(idx) if change.previous_value is False else self.staged_deletions.add(idx)
             else:
                 if 0 <= idx < len(self.staged_danmakus):
-                    setattr(self.staged_danmakus[idx], change.field.value, change.initial_value)
+                    setattr(self.staged_danmakus[idx], change.field.value, change.previous_value)
 
         # 撤销后重新校验
         self.refresh_validation()
