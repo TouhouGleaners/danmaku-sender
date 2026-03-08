@@ -231,7 +231,6 @@ class EditorTab(QWidget):
 
     def _update_ui_state(self):
         """统一状态机控制"""
-
         if not self._state:
             for btn in [self.run_btn, self.batch_btn, self.undo_btn, 
                         self.delete_btn, self.apply_btn, self.offset_btn]:

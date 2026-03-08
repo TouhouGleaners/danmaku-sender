@@ -104,10 +104,14 @@ class EditorSession:
         if not self.staged_danmakus:
             return 0, 0, 0
 
-        # 对账计算 (HEAD vs CURRENT)
-        current_errors = set(self.validation_map.keys())
-        # 修好数 = (检出时错的) - (现在还错的) - (最后扔掉的)
-        fixed_count = len(self.head_errors - current_errors - self.staged_deletions)
+        head_errs = self.head_errors                    # checkout 时的错误索引 (HEAD)
+        current_errs = set(self.validation_map.keys())  # 现在的错误索引 (Current)
+        deleted_indices = self.staged_deletions         # 被标记删除的索引 (Deleted)
+
+        # 计算修好的数量
+        # 逻辑：在 HEAD 错误中，排除掉“现在还错的”和“被删掉的”
+        fixed_indices = head_errs - current_errs - deleted_indices
+        fixed_count = len(fixed_indices)
 
         # 准备提交名单 (过滤掉标记删除的)
         final_list = [
