@@ -1,11 +1,12 @@
 import logging
 
+from PySide6.QtCore import Qt
+from PySide6.QtGui import QColor, QBrush
 from PySide6.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout, QPushButton, QLabel, 
     QTableWidget, QTableWidgetItem, QHeaderView, QAbstractItemView,
-    QMessageBox, QMenu, QInputDialog, QLineEdit, QFrame, QCheckBox
+    QMessageBox, QMenu, QLineEdit, QFrame, QCheckBox
 )
-from PySide6.QtCore import Qt
 
 from .dialogs import EditDanmakuDialog
 
@@ -74,10 +75,16 @@ class EditorTab(QWidget):
         self.batch_menu.addAction("一键截断过长弹幕(>100字)", self.batch_truncate_length)
         self.batch_btn.setMenu(self.batch_menu)
 
+        # 撤销
         self.undo_btn = QPushButton("撤销")
         self.undo_btn.setFixedWidth(80)
         self.undo_btn.setEnabled(False)
         self.undo_btn.clicked.connect(self.undo)
+
+        # 预览切换
+        self.preview_mode_cb = QCheckBox("预览模式 (全量显示)")
+        self.preview_mode_cb.setToolTip("开启后显示所有弹幕，正常的弹幕将以灰色显示。")
+        self.preview_mode_cb.stateChanged.connect(self._refresh_table)
 
         self.status_label = QLabel("提示: 请先在“发射器”页面加载文件并选择分P。")
         self.status_label.setStyleSheet("color: #7f8c8d;")
@@ -85,6 +92,7 @@ class EditorTab(QWidget):
         top_layout.addWidget(self.run_btn)
         top_layout.addWidget(self.batch_btn)
         top_layout.addWidget(self.undo_btn)
+        top_layout.addWidget(self.preview_mode_cb)
         top_layout.addWidget(self.status_label, stretch=1)
 
         main_layout.addLayout(top_layout)
@@ -99,6 +107,7 @@ class EditorTab(QWidget):
         self.table.setEditTriggers(QAbstractItemView.EditTrigger.NoEditTriggers)
         self.table.setAlternatingRowColors(True)
         self.table.setSortingEnabled(False)
+        self.table.verticalHeader().setVisible(False)
         self.table.itemDoubleClicked.connect(self.on_table_double_click)
 
         # 右键菜单
@@ -236,7 +245,7 @@ class EditorTab(QWidget):
             self.status_label.setStyleSheet("color: #d35400;")
         elif self.session.has_active_session:
             if has_items:
-                count = len(self.session.current_issues)
+                count = len(self.session.validation_map)
                 self.status_label.setText(f"❌ 发现 {count} 条问题弹幕，请处理。")
                 self.status_label.setStyleSheet("color: red;")
             else:
@@ -284,20 +293,37 @@ class EditorTab(QWidget):
 
     def _refresh_table(self):
         """刷新表格"""
+        if not self.session:
+            return
+
         self.table.setRowCount(0)
-        items = self.session.get_display_items()
+        items = self.session.generate_view_model(show_all=self.preview_mode_cb.isChecked())
 
         self.table.setRowCount(len(items))
         for row, item in enumerate(items):
-            idx_item = QTableWidgetItem(str(item['original_index'] + 1))
-            idx_item.setData(Qt.ItemDataRole.UserRole, item['original_index'])
+            idx_item = QTableWidgetItem(str(item['source_index'] + 1))
+            idx_item.setData(Qt.ItemDataRole.UserRole, item['source_index'])
             
-            time_str = format_ms_to_hhmmss(item['time_ms'])
-            
+            time_item = QTableWidgetItem(format_ms_to_hhmmss(item['time_ms']))
+            reason_item = QTableWidgetItem(item['error_msg'])
+            content_item = QTableWidgetItem(item['content'])
+
+            if item['is_valid']:
+                # 正常行：文字变灰
+                gray_brush = QBrush(QColor("#95a5a6"))
+                for it in [idx_item, time_item, reason_item, content_item]:
+                    it.setForeground(gray_brush)
+            else:
+                # 异常行：理由变红，背景淡红
+                error_bg = QColor("#fff2f2")
+                reason_item.setForeground(QColor("#e74c3c"))
+                for it in [idx_item, time_item, reason_item, content_item]:
+                    it.setBackground(error_bg)
+
             self.table.setItem(row, 0, idx_item)
-            self.table.setItem(row, 1, QTableWidgetItem(time_str))
-            self.table.setItem(row, 2, QTableWidgetItem(item['reason']))
-            self.table.setItem(row, 3, QTableWidgetItem(item['current_content']))
+            self.table.setItem(row, 1, time_item)
+            self.table.setItem(row, 2, reason_item)
+            self.table.setItem(row, 3, content_item)
 
         self._update_ui_state()
 
