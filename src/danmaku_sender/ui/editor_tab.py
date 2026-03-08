@@ -1,4 +1,5 @@
 import logging
+from turtle import title
 
 from PySide6.QtCore import Qt
 from PySide6.QtGui import QColor, QBrush
@@ -8,7 +9,7 @@ from PySide6.QtWidgets import (
     QMessageBox, QMenu, QLineEdit, QFrame, QCheckBox
 )
 
-from .dialogs import EditDanmakuDialog
+from .dialogs import EditDanmakuDialog, TimeOffsetDialog
 
 from ..core.state import AppState
 from ..core.editor_session import EditorSession
@@ -24,7 +25,7 @@ class EditorTab(QWidget):
 
         self._create_ui()
 
-        self._set_ui_ready(False)
+        self._update_ui_state()
 
     def _create_ui(self):
         # 主布局 - 垂直布局
@@ -69,6 +70,12 @@ class EditorTab(QWidget):
         self.batch_btn.setFixedWidth(100)
         self.batch_btn.setEnabled(False)
 
+        # 时间轴偏移
+        self.offset_btn = QPushButton("时间平移")
+        self.offset_btn.setEnabled(False)
+        self.offset_btn.setToolTip("在已加载弹幕的基础上，整体平移时间轴。")
+        self.offset_btn.clicked.connect(self.open_offset_dialog)
+
         # 创建下拉菜单
         self.batch_menu = QMenu(self)
         self.batch_menu.addAction("一键去除所有换行符", self.batch_remove_newlines)
@@ -91,6 +98,7 @@ class EditorTab(QWidget):
 
         top_layout.addWidget(self.run_btn)
         top_layout.addWidget(self.batch_btn)
+        top_layout.addWidget(self.offset_btn)
         top_layout.addWidget(self.undo_btn)
         top_layout.addWidget(self.preview_mode_cb)
         top_layout.addWidget(self.status_label, stretch=1)
@@ -109,6 +117,7 @@ class EditorTab(QWidget):
         self.table.setSortingEnabled(False)
         self.table.verticalHeader().setVisible(False)
         self.table.itemDoubleClicked.connect(self.on_table_double_click)
+        self.table.itemSelectionChanged.connect(self._update_ui_state)
 
         # 右键菜单
         self.table.setContextMenuPolicy(Qt.ContextMenuPolicy.CustomContextMenu)
@@ -154,6 +163,11 @@ class EditorTab(QWidget):
         main_layout.addLayout(bottom_layout)
         self.setLayout(main_layout)
 
+    # --- Qt Methods ---
+    def showEvent(self, event):
+        super().showEvent(event)
+        self._update_ui_state()
+
     def bind_state(self, state: AppState):
         if self._state is state:
             return
@@ -181,7 +195,7 @@ class EditorTab(QWidget):
         self.enable_custom_checkbox.stateChanged.connect(self._on_toggle_custom)
         self.keywords_input.textChanged.connect(self._on_keywords_changed)
 
-        self._set_ui_ready(True)
+        self._update_ui_state()
 
     def _disconnect_signals(self):
         """安全断开所有已绑定的信号"""
@@ -194,14 +208,6 @@ class EditorTab(QWidget):
             self.keywords_input.textChanged.disconnect()
         except (RuntimeError, TypeError):
             pass
-
-    def _set_ui_ready(self, is_ready):
-        """控制核心按钮的可用性"""
-        self.run_btn.setEnabled(is_ready)
-        if not is_ready:
-            self.status_label.setText("正在初始化...")
-        else:
-            self.status_label.setText("提示: 请先在“发射器”页面加载文件并选择分P。")
 
     def _on_toggle_custom(self):
         """处理总开关切换"""
@@ -224,28 +230,38 @@ class EditorTab(QWidget):
         self._state.validation_config.blocked_keywords = unique_keywords
 
     def _update_ui_state(self):
-        """更新 UI 状态"""
-        if not self._state or not self.session:
-            self.run_btn.setEnabled(False)
-            self.batch_btn.setEnabled(False)
-            self.undo_btn.setEnabled(False)
-            self.delete_btn.setEnabled(False)
-            self.apply_btn.setEnabled(False)
+        """统一状态机控制"""
+        if not self._state:
+            for btn in [self.run_btn, self.batch_btn, self.undo_btn, 
+                        self.delete_btn, self.apply_btn, self.offset_btn]:
+                btn.setEnabled(False)
             return
-        
+
+        has_file = len(self._state.video_state.loaded_danmakus) > 0
+        has_cid = self._state.video_state.selected_cid is not None
+        self.run_btn.setEnabled(has_file and has_cid)
+
+        if not self.session:
+            return
+
+        session_active = self.session.has_active_session
         has_items = self.table.rowCount() > 0
-        self.run_btn.setEnabled(True)
-        self.batch_btn.setEnabled(has_items)
-        self.delete_btn.setEnabled(has_items)
+
+        self.offset_btn.setEnabled(session_active)
+        self.batch_btn.setEnabled(session_active and has_items)
+        self.delete_btn.setEnabled(session_active and len(self.table.selectedItems()) > 0)
+
         self.undo_btn.setEnabled(self.session.can_undo)
         self.apply_btn.setEnabled(self.session.is_dirty)
 
+        # --- 状态文案与样式切换 ---
         if self.session.is_dirty:
             self.status_label.setText("⚠️ 有未应用的修改！请点击“应用所有修改”按钮。")
             self.status_label.setStyleSheet("color: #d35400;")
-        elif self.session.has_active_session:
+        elif session_active:
             if has_items:
-                count = len(self.session.validation_map)
+                # 统计未删除的错误
+                count = self.session.active_error_count
                 self.status_label.setText(f"❌ 发现 {count} 条问题弹幕，请处理。")
                 self.status_label.setStyleSheet("color: red;")
             else:
@@ -276,7 +292,12 @@ class EditorTab(QWidget):
 
         # 检查未保存修改
         if self.session.is_dirty:
-            reply = QMessageBox.question(self, "确认", "当前有未应用的修改，重新验证将丢弃这些修改。\n是否继续？", QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No)
+            reply = QMessageBox.question(
+                self,
+                "确认",
+                "当前有未应用的修改，重新验证将丢弃这些修改。\n是否继续？",
+                buttons=QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No
+            )
             if reply == QMessageBox.StandardButton.No:
                 return
             
@@ -284,7 +305,7 @@ class EditorTab(QWidget):
         self.status_label.setText("正在验证...")
         self.status_label.setStyleSheet("color: blue;")
         
-        has_issues = self.session.load_and_validate()
+        has_issues = self.session.checkout_from_state()
 
         if not has_issues:
             QMessageBox.information(self, "验证通过", "所有弹幕均符合规范！")
@@ -426,7 +447,7 @@ class EditorTab(QWidget):
         if not self.session:
             return
         
-        total, fixed, deleted = self.session.apply_changes()
+        total, fixed, deleted = self.session.commit_to_state()
         
         self.logger.info(f"修改已应用: 修复 {fixed}, 删除 {deleted}")
         QMessageBox.information(self, "应用成功", 
@@ -436,3 +457,18 @@ class EditorTab(QWidget):
         self.status_label.setText("修改已应用。")
         self.status_label.setStyleSheet("color: green;")
         self._update_ui_state()
+
+    def open_offset_dialog(self):
+        if not self.session or not self.session.has_active_session:
+            return
+            
+        dlg = TimeOffsetDialog(self)
+        if dlg.exec():
+            offset_ms = dlg.get_offset_ms()
+            if offset_ms != 0:
+                count = self.session.shift_time_axis(offset_ms)
+                self._refresh_table()
+                if count > 0:
+                    self.logger.info(f"成功平移了 {count} 条弹幕的时间轴。")
+                else:
+                    self.logger.info("平移操作未导致任何数据变化。")

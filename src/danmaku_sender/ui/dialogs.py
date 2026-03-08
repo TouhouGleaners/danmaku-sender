@@ -1,14 +1,15 @@
 import re
 import logging
-from PySide6.QtWidgets import (
-    QDialog, QVBoxLayout, QHBoxLayout, QTabWidget,
-    QTextBrowser, QPushButton, QLabel, QTextEdit
-)
+
 from PySide6.QtCore import Qt, QUrl
 from PySide6.QtGui import QDesktopServices
+from PySide6.QtWidgets import (
+    QDialog, QVBoxLayout, QHBoxLayout, QTabWidget, QGroupBox, QDoubleSpinBox,
+    QTextBrowser, QPushButton, QLabel, QTextEdit
+)
 
 from ..config.app_config import AppInfo, Links
-from ..utils.resource_utils import get_assets_path
+from ..utils.resource_utils import get_assets_path 
 
 
 logger = logging.getLogger("HelpDialog")
@@ -282,3 +283,43 @@ class EditDanmakuDialog(QDialog):
     def get_text(self) -> str:
         """获取修改后的文本，并自动清理多余换行"""
         return self._get_cleaned_text()
+
+
+class TimeOffsetDialog(QDialog):
+    """时间轴平移对话框"""
+    def __init__(self, parent=None):
+        super().__init__(parent)
+        self.setWindowTitle("时间轴平移 / 补偿")
+        self.setFixedSize(300, 180)
+
+        layout = QVBoxLayout(self)
+
+        group = QGroupBox("设置偏移秒数")
+        g_layout = QVBoxLayout()
+
+        self.offset_spin = QDoubleSpinBox()
+        self.offset_spin.setRange(-3600, 3600)  # 支持正负一小时
+        self.offset_spin.setSuffix(" 秒")
+        self.offset_spin.setDecimals(3)         # 支持毫秒
+        self.offset_spin.setSingleStep(1.0)
+        self.offset_spin.setValue(0.0)
+
+        g_layout.addWidget(self.offset_spin)
+        group.setLayout(g_layout)
+        layout.addWidget(group)
+
+        tips = QLabel("提示：正数向后推迟，负数提前。\n平移后会自动重新验证。")
+        tips.setStyleSheet("color: #7f8c8d; font-size: 11px;")
+        layout.addWidget(tips)
+
+        btn_layout = QHBoxLayout()
+        btn_layout.addStretch()
+        self.btn_ok = QPushButton("确认应用")
+        self.btn_ok.setStyleSheet("background-color: #00a1d6; color: white; font-weight: bold;")
+        self.btn_ok.clicked.connect(self.accept)
+        btn_layout.addWidget(self.btn_ok)
+        layout.addLayout(btn_layout)
+
+    def get_offset_ms(self) -> int:
+        """获取转换后的毫秒值"""
+        return int(self.offset_spin.value() * 1000)
