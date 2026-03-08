@@ -1,30 +1,54 @@
 import copy
 import logging
-from typing import Any, TypedDict
+from dataclasses import dataclass
+from enum import Enum
+from typing import Any, Callable, TypedDict
 
-from .services.danmaku_validator import ValidationIssue, validate_danmaku_list
+from .services.danmaku_validator import validate_danmaku_list
 from .models.danmaku import Danmaku
 from .state import AppState
 
 
-class ChangedRecord(TypedDict):
-    original_index: int
-    field: str
-    old_value: Any
+class EditorField(Enum):
+    """编辑器可改动的字段枚举"""
+    MSG = "msg"
+    COLOR = "color"
+    FONT_SIZE = "fontsize"
+    MODE = "mode"
+    PROGRESS = "progress"
+    IS_DELETED = "is_deleted"  # 逻辑删除标记
+
+
+@dataclass(frozen=True)
+class AtomicChange:
+    """原子变更记录：描述单条弹幕单次属性的变化"""
+    source_index: int     # 弹幕索引
+    field: EditorField    # 修改了什么（强类型枚举）
+    old_value: Any        # 以前的值
+
+
+class ViewItem(TypedDict):
+    """视图"""
+    source_index: int
+    time_ms: int
+    content: str
+    error_msg: str
+    is_valid: bool
 
 
 class EditorSession:
     """
     校验器逻辑会话层。
-    负责管理数据快照、执行修改逻辑、维护脏状态及撤销栈。
+    管理全量暂存副本、执行校验、撤销以及排序逻辑。
     """
     def __init__(self, state: AppState):
         self.state = state
         self.logger = logging.getLogger("EditorSession")
         
-        self.original_snapshot: list[Danmaku] = []          # 原始数据的深拷贝
-        self.current_issues: list[dict[str, Any]] = []   # 当前的问题列表
-        self.undo_stack: list[list[ChangedRecord]] = []  # 撤销栈: 一次操作产生的一组变更记录
+        self.staged_danmakus: list[Danmaku] = []         # 当前编辑器里全量的弹幕副本
+        self.validation_map: dict[int, str] = {}         # 记录错误索引：{ 原始索引: 错误原因 }
+        self.deleted_indices: set[int] = set()           # 记录被标记删除的索引 (软删除)
+        self.undo_stack: list[list[AtomicChange]] = []   # 撤销栈: 一次操作产生的一组变更记录
 
     @property
     def is_dirty(self) -> bool:
@@ -32,7 +56,7 @@ class EditorSession:
     
     @property
     def has_active_session(self) -> bool:
-        return bool(self.original_snapshot)
+        return bool(self.staged_danmakus)
     
     @property
     def can_undo(self) -> bool:
@@ -44,51 +68,56 @@ class EditorSession:
     def load_and_validate(self) -> bool:
         """加载数据并执行校验"""
         danmakus = self.state.video_state.loaded_danmakus
-        duration_ms = self.state.video_state.selected_part_duration_ms
-
         if not danmakus:
             return False
 
+        # 复制数据
+        self.staged_danmakus = copy.deepcopy(danmakus)  # 存入暂存区
+
+        # 按视频时间排序
+        self.staged_danmakus.sort(key=lambda x: x.progress)
+
+        # 清理 校验
+        self.deleted_indices.clear()
         self.undo_stack.clear()
-        self.set_dirty(False)
-        self.current_issues = []
 
-        # 创建快照
-        self.original_snapshot = copy.deepcopy(danmakus)
-        self.logger.info(f"启动校验会话... 原始弹幕总数: {len(self.original_snapshot)}")
+        self.refresh_validation()  # 执行校验并填充 validation_map
+
+        self.set_dirty(False)
+        return len(self.validation_map) > 0
+    
+    def refresh_validation(self):
+        """运行校验算法并更新 validation_map 查找表"""
+        duration_ms = self.state.video_state.selected_part_duration_ms
+        raw_issues = validate_danmaku_list(self.staged_danmakus, duration_ms, self.state.validation_config)
         
-        # 执行校验
-        raw_issues: list[ValidationIssue] = validate_danmaku_list(self.original_snapshot, duration_ms, self.state.validation_config)
+        # 转换为 O(1) 查找字典：{ 原始索引: 理由 }
+        self.validation_map = {issue['original_index']: issue['reason'] for issue in raw_issues}
+
+    def generate_view_model(self, show_all: bool = False) -> list[ViewItem]:
+        """生成渲染数据"""
+        view_data: list[ViewItem] = []
         
-        # 转换结构
-        self.current_issues = []
-        for issue in raw_issues:
-            self.current_issues.append({
-                'original_index': issue['original_index'],
-                'time_ms': issue['danmaku'].progress,
-                'reason': issue['reason'],
-                'current_content': issue['danmaku'].msg,
-                'is_deleted': False
+        for i, dm in enumerate(self.staged_danmakus):
+            if i in self.deleted_indices:
+                continue
+                
+            error_msg = self.validation_map.get(i, "")
+            
+            # 过滤：如果不是预览模式且没有错误，跳过
+            if not show_all and not error_msg:
+                continue
+                
+            view_data.append({
+                "source_index": i,
+                "time_ms": dm.progress,
+                "content": dm.msg,
+                "error_msg": error_msg or "正常",  # 正常的显示为“正常”
+                "is_valid": not bool(error_msg)
             })
+        return view_data
 
-        self.logger.info(f"校验完成: 发现 {len(self.current_issues)} 个问题。")
-
-        self.undo_stack.clear()    
-        self.set_dirty(False)
-        return len(self.current_issues) > 0
-
-    def get_display_items(self):
-        """获取用于 UI 显示的列表 (排除已标记删除的项)"""
-        return [item for item in self.current_issues if not item['is_deleted']]
-    
-    def _find_issue_by_index(self, original_index: int) -> dict[str, Any] | None:
-        """根据原始索引查找问题记录"""
-        for item in self.current_issues:
-            if item['original_index'] == original_index:
-                return item
-        return None
-    
-    def _push_undo_record(self, changes: list[ChangedRecord]):
+    def _push_undo_record(self, changes: list[AtomicChange]):
         """将一组变更记录推入撤销栈"""
         if changes:
             self.undo_stack.append(changes)
@@ -105,40 +134,110 @@ class EditorSession:
         
         last_changes = self.undo_stack.pop()
 
-        issue_map = {item['original_index']: item for item in self.current_issues}
-        
         for change in last_changes:
-            target_idx = change['original_index']
-            
-            if target_item := issue_map.get(target_idx):
-                target_item[change['field']] = change['old_value']
+            idx = change.source_index
+            field = change.field
+            if field == EditorField.IS_DELETED:
+                if change.old_value is False:  # 撤销删除 = 恢复
+                    self.deleted_indices.discard(idx)
+                else:
+                    self.deleted_indices.add(idx)
 
+            # 通用逻辑处理：属性回滚
+            else:
+                if 0 <= idx < len(self.staged_danmakus):
+                    setattr(self.staged_danmakus[idx], field.value, change.old_value)
+
+        # 撤销后重新校验
+        self.refresh_validation()
         self.set_dirty(bool(self.undo_stack))
         return True
 
     def update_item_content(self, original_index: int, new_content: str):
-        """更新单条内容"""
-        item = self._find_issue_by_index(original_index)
-        if item and item['current_content'] != new_content:
-            self._push_undo_record([{
-                'original_index': original_index,
-                'field': 'current_content',
-                'old_value': item['current_content']
-            }])
+        """更新暂存区单条弹幕内容"""
+        if 0 <= original_index < len(self.staged_danmakus):
+            dm = self.staged_danmakus[original_index]
+            if dm.msg != new_content:
+                # 记录撤销
+                self._push_undo_record([
+                    AtomicChange(
+                        source_index=original_index,
+                        field=EditorField.MSG,
+                        old_value=dm.msg
+                    )
+                ])
 
-            item['current_content'] = new_content
+                dm.msg = new_content
+
+                # 修改后重新计算校验状态
+                self.refresh_validation()
+                self.set_dirty(True)
 
     def delete_item(self, original_index: int):
         """标记删除单条"""
-        item = self._find_issue_by_index(original_index)
-        if item and not item['is_deleted']:
-            self._push_undo_record([{
-                'original_index': original_index,
-                'field': 'is_deleted',
-                'old_value': False
-            }])
+        if 0 <= original_index < len(self.staged_danmakus):
+            if original_index not in self.deleted_indices:
+                self._push_undo_record([
+                    AtomicChange(
+                        source_index=original_index,
+                        field=EditorField.IS_DELETED,
+                        old_value=False
+                    )
+                ])
+                
+                self.deleted_indices.add(original_index)
+                self.refresh_validation()
+                self.set_dirty(True)
 
-            item['is_deleted'] = True
+    def _execute_batch_transform(self, op_name: str, transform_fn: Callable[[Danmaku], bool]) -> tuple[int, int]:
+        """通用批量操作引擎
+
+        Args:
+            op_name (str): 操作名称，用于日志记录
+            transform_fn (Callable[[Danmaku], bool]): 业务逻辑函数。接收 Danmaku 对象，
+                                                      返回 True 表示发生了修改。
+
+        Returns:
+            tuple[int, int]: (修改数, 删除数)
+        """
+        current_changes: list[AtomicChange] = []
+        modified_count = 0
+        deleted_count = 0
+
+        for i, dm in enumerate(self.staged_danmakus):
+            # 基础过滤: 跳过已经删除的
+            if i in self.deleted_indices:
+                continue
+
+            # 记录修改前的快照
+            old_msg = dm.msg
+            old_progress = dm.progress
+
+            # 执行变换
+            is_modified = transform_fn(dm)
+
+            if is_modified:
+                # 字段级的差异对比，自动记录到撤销栈
+                if dm.msg != old_msg:
+                    current_changes.append(AtomicChange(i, EditorField.MSG, old_msg))
+                if dm.progress != old_progress:
+                    current_changes.append(AtomicChange(i, EditorField.PROGRESS, old_progress))
+
+                # 执行“删除逻辑”检查
+                if not dm.msg.strip():
+                    self.deleted_indices.add(i)
+                    current_changes.append(AtomicChange(i, EditorField.IS_DELETED, False))
+                    deleted_count += 1
+                else:
+                    modified_count += 1
+
+        if current_changes:
+            self._push_undo_record(current_changes)
+            self.refresh_validation()
+            self.set_dirty(True)
+            self.logger.info(f"批量操作 [{op_name}] 完成: 修改 {modified_count}, 删除 {deleted_count}")
+
+        return modified_count, deleted_count
 
     def batch_remove_newlines(self) -> tuple[int, int]:
         """批量去除换行符
@@ -146,42 +245,14 @@ class EditorSession:
         Returns:
             tuple[int, int]: 修改数, 删除数
         """
-        modified_count = 0
-        deleted_count = 0
-        current_changes: list[ChangedRecord] = []  # 本次批量操作的变更记录
-        
-        for item in self.current_issues:
-            if item['is_deleted']:
-                continue
-            
-            content = item['current_content']
-            if '\n' in content or '\\n' in content or '/n' in content:
-                new_content = content.replace('\n', '').replace('\\n', '').replace('/n', '')
+        def _rule(dm: Danmaku) -> bool:
+            original = dm.msg
+            dm.msg = dm.msg.replace('\n', '').replace('\\n', '').replace('/n', '').strip()
+            return dm.msg != original
 
-                current_changes.append({
-                    'original_index': item['original_index'],
-                    'field': 'current_content',
-                    'old_value': item['current_content']
-                })
-                
-                if not new_content.strip():
-                    current_changes.append({
-                        'original_index': item['original_index'],
-                        'field': 'is_deleted',
-                        'old_value': item['is_deleted']
-                    })
-                    item['is_deleted'] = True
-                    deleted_count += 1
-                else:
-                    item['current_content'] = new_content
-                    modified_count += 1
-        
-        if current_changes:
-            self._push_undo_record(current_changes)
-            
-        return modified_count, deleted_count
+        return self._execute_batch_transform("去除换行", _rule)
 
-    def batch_truncate_length(self, limit=100) -> int:
+    def batch_truncate_length(self, limit: int = 100) -> int:
         """批量截断弹幕内容。
 
         Args:
@@ -190,27 +261,13 @@ class EditorSession:
         Returns:
             int: 修改数
         """
-        count = 0
-        current_changes: list[ChangedRecord] = []  # 本次批量操作的变更记录
-
-        for item in self.current_issues:
-            if item['is_deleted']:
-                continue
+        def _rule(dm: Danmaku) -> bool:
+            original = dm.msg
+            dm.msg = dm.msg[:limit]
+            return dm.msg != original
             
-            if len(item['current_content']) > limit:
-                current_changes.append({
-                    'original_index': item['original_index'],
-                    'field': 'current_content',
-                    'old_value': item['current_content']
-                })
-
-                item['current_content'] = item['current_content'][:limit]
-                count += 1
-                
-        if current_changes:
-            self._push_undo_record(current_changes)
-
-        return count
+        mod_count, _ = self._execute_batch_transform("长度截断", _rule)
+        return mod_count
 
     def apply_changes(self) -> tuple[int, int, int]:
         """应用修改回 AppState。
@@ -218,57 +275,26 @@ class EditorSession:
         Returns:
             tuple[int, int, int]: 最终剩余总数, 修复数量, 删除数量
         """
-        if not self.original_snapshot:
+        if not self.staged_danmakus:
             return 0, 0, 0
 
-        # 构建查找表：Key: original_index, Value: issue_record
-        changes_map = {item['original_index']: item for item in self.current_issues}
-        
-        new_list = []       # 最终名单
-        fixed_count = 0     # 统计：修好了多少个
-        deleted_count = 0   # 统计：删掉了多少个
-        kept_count = 0      # 统计：原本就是好的，直接保留的
+        # 只保留有效的弹幕
+        final_list = [
+            dm for i, dm in enumerate(self.staged_danmakus) 
+            if i not in self.deleted_indices
+        ]
 
-        for i, dm in enumerate(self.original_snapshot):
-            # 弹幕原本就是好的
-            if dm.is_valid:
-                new_list.append(dm)
-                kept_count += 1
-                continue
-            
-            # 弹幕原本有问题的，检查 changes_map
-            if i in changes_map:
-                issue_record = changes_map[i]
+        total = len(final_list)
+        removed_count = len(self.staged_danmakus) - total
 
-                if issue_record['is_deleted']:
-                    deleted_count += 1
-                else:
-                    # 应用修改
-                    dm.msg = issue_record['current_content']
-                    dm.is_valid = True # 视为已修复
-                    new_list.append(dm)
-                    fixed_count += 1
-            else:
-                # 理论不可达
-                # 弹幕原本有问题，但 changes_map 里找不到它
-                self.logger.error(
-                    f"数据一致性严重错误: 索引 {i} 的弹幕被标记为无效(is_valid=False)，"
-                    f"但在修改记录中丢失。已强制保留原条目以避免数据丢失。"
-                )
-                new_list.append(dm)
-                kept_count += 1  # 算作保留
+        # 写回全局状态
+        self.state.video_state.loaded_danmakus = final_list
 
-        self.logger.info(
-            f"应用修改结果汇总: 原总数={len(self.original_snapshot)} | "
-            f"保留(Kept)={kept_count}, 修复(Fixed)={fixed_count}, 删除(Deleted)={deleted_count} | "
-            f"现总数={len(new_list)}"
-        )
-
-        self.state.video_state.loaded_danmakus = new_list
+        # 清理状态
+        self.staged_danmakus = []
+        self.deleted_indices.clear()
+        self.validation_map = {}
         self.undo_stack.clear()
         self.set_dirty(False)
-        
-        self.original_snapshot = []
-        self.current_issues = []
-        
-        return len(new_list), fixed_count, deleted_count
+
+        return total, 0, removed_count
