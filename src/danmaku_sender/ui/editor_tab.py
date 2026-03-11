@@ -1,12 +1,11 @@
 import logging
-from turtle import title
 
 from PySide6.QtCore import Qt
 from PySide6.QtGui import QColor, QBrush
 from PySide6.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout, QPushButton, QLabel, 
     QTableWidget, QTableWidgetItem, QHeaderView, QAbstractItemView,
-    QMessageBox, QMenu, QLineEdit, QFrame, QCheckBox
+    QMessageBox, QMenu, QLineEdit, QFrame, QCheckBox, QGroupBox
 )
 
 from .dialogs import EditDanmakuDialog, TimeOffsetDialog
@@ -28,35 +27,33 @@ class EditorTab(QWidget):
         self._update_ui_state()
 
     def _create_ui(self):
-        # 主布局 - 垂直布局
+        # 主布局
         main_layout = QVBoxLayout()
         main_layout.setSpacing(10)
         main_layout.setContentsMargins(10, 10, 10, 10)
 
         # --- 规则管理区 ---
-        config_bar = QHBoxLayout()
+        config_group = QGroupBox("校验与过滤规则")
+        config_layout = QVBoxLayout()
+        config_layout.setSpacing(8)
 
-        self.sys_info = QLabel("系统规则: 长度、换行、禁用符号 (已开启)")
-        self.sys_info.setStyleSheet("color: #95a5a6; font-size: 11px; padding-right: 10px;")
-        config_bar.addWidget(self.sys_info)
+        self.sys_info = QLabel("系统规则: 限制长度(≤100字)、禁止换行、拦截特殊符号 (已默认开启)")
+        self.sys_info.setStyleSheet("color: #95a5a6; font-size: 11px;")
+        config_layout.addWidget(self.sys_info)
 
-        # 垂直分隔线
-        v_line = QFrame()
-        v_line.setFrameShape(QFrame.Shape.VLine)
-        v_line.setFrameShadow(QFrame.Shadow.Sunken)
-        config_bar.addWidget(v_line)
-
-        # 关键词输入
-        self.enable_custom_checkbox = QCheckBox("关键词过滤:")
+        keyword_layout = QHBoxLayout()
+        self.enable_custom_checkbox = QCheckBox("关键词拦截:")
         self.enable_custom_checkbox.setToolTip("开启后将拦截包含以下关键词的弹幕")
-        config_bar.addWidget(self.enable_custom_checkbox)
+        keyword_layout.addWidget(self.enable_custom_checkbox)
 
         self.keywords_input = QLineEdit()
         self.keywords_input.setPlaceholderText("用中文或英文逗号分隔，如：应用, 过滤")
         self.keywords_input.setStyleSheet("padding: 2px 5px;")
-        config_bar.addWidget(self.keywords_input, stretch=1)
+        keyword_layout.addWidget(self.keywords_input, stretch=1)
 
-        main_layout.addLayout(config_bar)
+        config_layout.addLayout(keyword_layout)
+        config_group.setLayout(config_layout)
+        main_layout.addWidget(config_group)
 
         # --- 顶部控制栏 ---
         top_layout = QHBoxLayout()
@@ -93,15 +90,21 @@ class EditorTab(QWidget):
         self.preview_mode_cb.setToolTip("开启后显示所有弹幕，正常的弹幕将以灰色显示。")
         self.preview_mode_cb.stateChanged.connect(self._refresh_table)
 
-        self.status_label = QLabel("提示: 请先在“发射器”页面加载文件并选择分P。")
-        self.status_label.setStyleSheet("color: #7f8c8d;")
+        # 分隔线
+        v_line = QFrame()
+        v_line.setFrameShape(QFrame.Shape.VLine)
+        v_line.setFrameShadow(QFrame.Shadow.Sunken)
 
         top_layout.addWidget(self.run_btn)
         top_layout.addWidget(self.batch_btn)
         top_layout.addWidget(self.offset_btn)
         top_layout.addWidget(self.undo_btn)
+        top_layout.addSpacing(10)
+        top_layout.addWidget(v_line)
+        top_layout.addSpacing(10)
         top_layout.addWidget(self.preview_mode_cb)
-        top_layout.addWidget(self.status_label, stretch=1)
+        
+        top_layout.addStretch() 
 
         main_layout.addLayout(top_layout)
 
@@ -132,13 +135,17 @@ class EditorTab(QWidget):
 
         main_layout.addWidget(self.table)
 
-        # --- 底部按钮区 ---
+        # --- 底部按钮与状态区 ---
         bottom_layout = QHBoxLayout()
 
         self.delete_btn = QPushButton("删除选中条目")
         self.delete_btn.setStyleSheet("color: #e74c3c;")
         self.delete_btn.setEnabled(False)
         self.delete_btn.clicked.connect(self.delete_selected_items)
+
+        self.status_label = QLabel("提示: 请先在“发射器”页面加载文件并选择分P。")
+        self.status_label.setStyleSheet("color: #7f8c8d;")
+        self.status_label.setAlignment(Qt.AlignmentFlag.AlignRight | Qt.AlignmentFlag.AlignVCenter)
 
         self.apply_btn = QPushButton("应用所有修改")
         self.apply_btn.setStyleSheet("""
@@ -158,6 +165,8 @@ class EditorTab(QWidget):
 
         bottom_layout.addWidget(self.delete_btn)
         bottom_layout.addStretch()
+        bottom_layout.addWidget(self.status_label)
+        bottom_layout.addSpacing(10)
         bottom_layout.addWidget(self.apply_btn)
 
         main_layout.addLayout(bottom_layout)
