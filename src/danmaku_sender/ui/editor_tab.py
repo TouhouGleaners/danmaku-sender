@@ -288,6 +288,16 @@ class EditorTab(QWidget):
             self.prop_group.setEnabled(False)
             self.current_editing_index = None
             self.prop_text.clear()
+            
+            self.prop_time.blockSignals(True)
+            self.prop_time.setValue(0.0)
+            self.prop_time.blockSignals(False)
+            
+            self.prop_mode.setCurrentIndex(0)
+            self.prop_fontsize.clear()
+            
+            self.current_color_val = 16777215
+            self._update_color_btn_style("#ffffff")
             return
             
         # 仅取选中的第一行展示在属性面板中

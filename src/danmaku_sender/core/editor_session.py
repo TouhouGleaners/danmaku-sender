@@ -19,6 +19,14 @@ class EditorField(Enum):
     PROGRESS = "progress"
     IS_DELETED = "is_deleted"  # 逻辑删除标记
 
+    def get_value(self, dm: Danmaku) -> Any:
+        """获取 Danmaku 实例中对应的属性值，集中管理映射关系"""
+        return getattr(dm, self.value)
+
+    def set_value(self, dm: Danmaku, val: Any) -> None:
+        """设置 Danmaku 实例中对应的属性值"""
+        setattr(dm, self.value, val)
+
 
 @dataclass(frozen=True)
 class AtomicChange:
@@ -195,7 +203,7 @@ class EditorSession:
                 self.staged_deletions.discard(idx) if change.previous_value is False else self.staged_deletions.add(idx)
             else:
                 if 0 <= idx < len(self.staged_danmakus):
-                    setattr(self.staged_danmakus[idx], change.field.value, change.previous_value)
+                    field.set_value(self.staged_danmakus[idx], change.previous_value)
 
         # 撤销后重新校验
         self.refresh_validation()
@@ -230,10 +238,10 @@ class EditorSession:
             changes = []
 
             for field, new_val in new_props.items():
-                old_val = getattr(dm, field.value)
+                old_val = field.get_value(dm)
                 if old_val != new_val:
                     changes.append(AtomicChange(original_index, field, old_val))
-                    setattr(dm, field.value, new_val)
+                    field.set_value(dm, new_val)
 
             if changes:
                 self._push_undo_record(changes)
