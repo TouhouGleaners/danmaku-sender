@@ -5,13 +5,15 @@ from PySide6.QtGui import QColor, QBrush
 from PySide6.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout, QPushButton, QLabel, 
     QTableWidget, QTableWidgetItem, QHeaderView, QAbstractItemView,
-    QMessageBox, QMenu, QLineEdit, QFrame, QCheckBox, QGroupBox
+    QMessageBox, QMenu, QLineEdit, QFrame, QCheckBox, QGroupBox, QSizePolicy,
+    QSplitter, QFormLayout, QDoubleSpinBox, QComboBox, QSpinBox, QTextEdit, QColorDialog
 )
 
 from .dialogs import EditDanmakuDialog, TimeOffsetDialog
 
+from ..core.editor_session import EditorSession, EditorField
+from ..core.models.danmaku import Danmaku
 from ..core.state import AppState
-from ..core.editor_session import EditorSession
 from ..utils.time_utils import format_ms_to_hhmmss
 
 
@@ -21,6 +23,8 @@ class EditorTab(QWidget):
         self._state: AppState | None = None
         self.session: EditorSession | None = None
         self.logger = logging.getLogger("EditorTab")
+
+        self.current_editing_index: int | None = None
 
         self._create_ui()
 
@@ -34,6 +38,7 @@ class EditorTab(QWidget):
 
         # --- 规则管理区 ---
         config_group = QGroupBox("校验与过滤规则")
+        config_group.setSizePolicy(QSizePolicy.Policy.Preferred, QSizePolicy.Policy.Maximum)
         config_layout = QVBoxLayout()
         config_layout.setSpacing(8)
 
@@ -108,32 +113,100 @@ class EditorTab(QWidget):
 
         main_layout.addLayout(top_layout)
 
-        # --- 中间表格区 ---
+        # --- 核心区 ---
+        self.splitter = QSplitter(Qt.Orientation.Horizontal)
+
+        # --- 左侧：表格 ---
         self.table = QTableWidget()
         self.table.setColumnCount(4)
-        self.table.setHorizontalHeaderLabels(["序号", "时间", "问题描述", "弹幕内容 (双击编辑)"])
-
-        # 设置表格行为
+        self.table.setHorizontalHeaderLabels(["序号", "时间", "问题描述", "弹幕内容"])
         self.table.setSelectionBehavior(QAbstractItemView.SelectionBehavior.SelectRows)
         self.table.setEditTriggers(QAbstractItemView.EditTrigger.NoEditTriggers)
         self.table.setAlternatingRowColors(True)
         self.table.setSortingEnabled(False)
         self.table.verticalHeader().setVisible(False)
         self.table.itemDoubleClicked.connect(self.on_table_double_click)
-        self.table.itemSelectionChanged.connect(self._update_ui_state)
+        
+        # 将表格选择变更连接到右侧属性面板
+        self.table.itemSelectionChanged.connect(self._on_selection_changed)
 
-        # 右键菜单
         self.table.setContextMenuPolicy(Qt.ContextMenuPolicy.CustomContextMenu)
         self.table.customContextMenuRequested.connect(self.open_context_menu)
 
-        # 设置列宽调整模式
         header = self.table.horizontalHeader()
         header.setSectionResizeMode(0, QHeaderView.ResizeMode.ResizeToContents)
         header.setSectionResizeMode(1, QHeaderView.ResizeMode.ResizeToContents)
         header.setSectionResizeMode(2, QHeaderView.ResizeMode.ResizeToContents)
         header.setSectionResizeMode(3, QHeaderView.ResizeMode.Stretch)
 
-        main_layout.addWidget(self.table)
+        self.splitter.addWidget(self.table)
+
+        # --- 右侧：属性检查器面板 ---
+        self.prop_group = QGroupBox("属性检查器")
+        self.prop_group.setEnabled(False)  # 初始未选中，禁用
+        prop_layout = QVBoxLayout()
+        form_layout = QFormLayout()
+
+        # 时间
+        self.prop_time = QDoubleSpinBox()
+        self.prop_time.setRange(0, 999999)
+        self.prop_time.setDecimals(3)
+        self.prop_time.setSuffix(" 秒")
+        form_layout.addRow("出现时间:", self.prop_time)
+
+        # 模式
+        self.prop_mode = QComboBox()
+        self.prop_mode.addItem("滚动 (1)", 1)
+        self.prop_mode.addItem("底端 (4)", 4)
+        self.prop_mode.addItem("顶端 (5)", 5)
+        form_layout.addRow("弹幕模式:", self.prop_mode)
+
+        # 字号
+        self.prop_fontsize = QComboBox()
+        self.prop_fontsize.addItem("标准 (25)", 25)
+        self.prop_fontsize.addItem("小 (18)", 18)
+        self.prop_fontsize.addItem("大 (36)", 36)
+        form_layout.addRow("弹幕字号:", self.prop_fontsize)
+
+        # 颜色
+        self.prop_color_btn = QPushButton()
+        self.prop_color_btn.setCursor(Qt.CursorShape.PointingHandCursor)
+        self.prop_color_btn.setFixedHeight(24)
+        self.prop_color_btn.clicked.connect(self._choose_color)
+        self.current_color_val = 16777215
+        form_layout.addRow("弹幕颜色:", self.prop_color_btn)
+
+        prop_layout.addLayout(form_layout)
+
+        # 文本内容
+        prop_layout.addWidget(QLabel("弹幕内容:"))
+        self.prop_text = QTextEdit()
+        self.prop_text.setAcceptRichText(False)
+        prop_layout.addWidget(self.prop_text)
+
+        # 保存修改按钮
+        self.prop_save_btn = QPushButton("保存属性修改")
+        self.prop_save_btn.setStyleSheet("""
+            QPushButton {
+                background-color: #3498db; 
+                color: white; 
+                font-weight: bold; 
+                padding: 6px;
+                border-radius: 4px;
+            }
+            QPushButton:hover { background-color: #2980b9; }
+        """)
+        self.prop_save_btn.clicked.connect(self._apply_properties)
+        prop_layout.addWidget(self.prop_save_btn)
+
+        self.prop_group.setLayout(prop_layout)
+        self.splitter.addWidget(self.prop_group)
+
+        # 设置比例 7:3
+        self.splitter.setStretchFactor(0, 7)
+        self.splitter.setStretchFactor(1, 3)
+
+        main_layout.addWidget(self.splitter, stretch=1)
 
         # --- 底部按钮与状态区 ---
         bottom_layout = QHBoxLayout()
@@ -171,6 +244,116 @@ class EditorTab(QWidget):
 
         main_layout.addLayout(bottom_layout)
         self.setLayout(main_layout)
+
+    # --- 色彩转换工具 ---
+    def int_to_hex(self, color_int: int) -> str:
+        return f"#{color_int & 0xFFFFFF:06x}"
+
+    def hex_to_int(self, hex_str: str) -> int:
+        return int(hex_str.lstrip('#'), 16)
+
+    def _update_color_btn_style(self, hex_str: str):
+        self.prop_color_btn.setStyleSheet(
+            f"background-color: {hex_str}; border: 1px solid #bdc3c7; border-radius: 3px;"
+        )
+
+    def _choose_color(self):
+        """弹出调色板"""
+        bili_colors =[
+            "#FE0302", "#FF7204", "#FFAA02", "#FFD302", "#FFFF00", "#A0EE00", "#00CD00",
+            "#019899", "#4266BE", "#89D5FF", "#CC0273", "#222222", "#9B9B9B", "#FFFFFF"
+        ]
+
+        # 注入到 QColorDialog 的系统自定义颜色插槽中
+        for i, hex_color in enumerate(bili_colors):
+            QColorDialog.setCustomColor(i, QColor(hex_color))
+
+        dialog = QColorDialog(self)
+        dialog.setWindowTitle("选择弹幕颜色 (左下角为B站标准色)")
+        dialog.setCurrentColor(QColor(self.int_to_hex(self.current_color_val)))
+
+        if dialog.exec() == QColorDialog.DialogCode.Accepted:
+            color = dialog.currentColor()
+            hex_str = color.name()
+            self.current_color_val = self.hex_to_int(hex_str)
+            self._update_color_btn_style(hex_str)
+
+    # --- 交互核心逻辑 ---
+    def _on_selection_changed(self):
+        """当表格选中项变化时，同步更新 UI 状态并渲染属性面板"""
+        self._update_ui_state()
+
+        selected = self.table.selectedItems()
+        if not selected or not self.session:
+            self.prop_group.setEnabled(False)
+            self.current_editing_index = None
+            self.prop_text.clear()
+            return
+            
+        # 仅取选中的第一行展示在属性面板中
+        row = selected[0].row()
+        idx_item = self.table.item(row, 0)
+        if not idx_item:
+            return
+            
+        original_index = idx_item.data(Qt.ItemDataRole.UserRole)
+        self.current_editing_index = original_index
+        
+        # 取出对象并赋值
+        dm: Danmaku = self.session.staged_danmakus[original_index]
+        
+        self.prop_time.blockSignals(True)
+        self.prop_time.setValue(dm.progress / 1000.0)
+        self.prop_time.blockSignals(False)
+        
+        idx = self.prop_mode.findData(dm.mode)
+        if idx >= 0:
+            self.prop_mode.setCurrentIndex(idx)
+            
+        # 动态处理字号：重置下拉菜单并自动匹配
+        self.prop_fontsize.clear()
+        self.prop_fontsize.addItem("标准 (25)", 25)
+        self.prop_fontsize.addItem("小 (18)", 18)
+        self.prop_fontsize.addItem("大 (36)", 36)
+        fs_idx = self.prop_fontsize.findData(dm.fontsize)
+        if fs_idx >= 0:
+            self.prop_fontsize.setCurrentIndex(fs_idx)
+        else:
+            # 如果加载的文件里有非标字号，临时显示为“自定义”
+            self.prop_fontsize.addItem(f"自定义 ({dm.fontsize})", dm.fontsize)
+            self.prop_fontsize.setCurrentIndex(3)
+        
+        self.current_color_val = dm.color
+        self._update_color_btn_style(self.int_to_hex(dm.color))
+        
+        self.prop_text.setPlainText(dm.msg)
+        self.prop_group.setEnabled(True)
+
+    def _apply_properties(self):
+        """应用弹幕属性修改"""
+        if self.current_editing_index is None or not self.session:
+            return
+            
+        clean_text = self.prop_text.toPlainText().replace('\n', '').replace('\r', '').strip()
+        if not clean_text:
+            QMessageBox.warning(self, "错误", "弹幕内容不能为空！如需删除请点击下方的删除按钮。")
+            return
+
+        new_props = {
+            EditorField.PROGRESS: int(self.prop_time.value() * 1000),
+            EditorField.MODE: self.prop_mode.currentData(),
+            EditorField.FONT_SIZE: self.prop_fontsize.currentData(),
+            EditorField.COLOR: self.current_color_val,
+            EditorField.MSG: clean_text
+        }
+        
+        changed = self.session.update_item_properties(self.current_editing_index, new_props)
+        if changed:
+            # 记录当前选中的行，刷新表格后恢复选中
+            row = self.table.currentRow()
+            self._refresh_table()
+            if 0 <= row < self.table.rowCount():
+                self.table.selectRow(row)
 
     # --- Qt Methods ---
     def showEvent(self, event):
@@ -361,7 +544,10 @@ class EditorTab(QWidget):
         item = self.table.itemAt(pos)
         if not item:
             return
-        
+
+        if not self.session:
+            return
+
         menu = QMenu(self)
         edit_action = menu.addAction("✏️ 编辑内容")
         delete_action = menu.addAction("🗑️ 删除此条")
@@ -383,10 +569,14 @@ class EditorTab(QWidget):
             self._edit_row(item.row())
 
     def _edit_row(self, row):
+        """兼容原有的双击弹窗功能（与侧边栏属性检查器双线并行）"""
         idx_item = self.table.item(row, 0)
         if not idx_item:
             return
-        
+
+        if not self.session:
+            return
+
         original_index = idx_item.data(Qt.ItemDataRole.UserRole)
         current_text = self.table.item(row, 3).text()
 
@@ -397,6 +587,9 @@ class EditorTab(QWidget):
                 if new_text != current_text:
                     self.session.update_item_content(original_index, new_text)
                     self._refresh_table()
+                    # 重新触发侧边栏更新
+                    if self.current_editing_index == original_index:
+                        self.table.selectRow(row)
             else:
                 reply = QMessageBox.question(self, "确认删除", "内容为空，是否直接删除该条弹幕？", QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No)
                 if reply == QMessageBox.StandardButton.Yes:

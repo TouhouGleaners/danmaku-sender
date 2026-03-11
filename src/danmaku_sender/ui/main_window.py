@@ -65,7 +65,7 @@ class MainWindow(QMainWindow):
         # 添加至选项卡
         self.tabs.addTab(self.tab_settings, "全局设置")
         self.tabs.addTab(self.tab_sender, "弹幕发射器")
-        self.tabs.addTab(self.tab_editor, "弹幕校验器")
+        self.tabs.addTab(self.tab_editor, "弹幕编辑器")
         self.tabs.addTab(self.tab_monitor, "弹幕监视器")
         self.tabs.addTab(self.tab_history, "弹幕历史记录")
 

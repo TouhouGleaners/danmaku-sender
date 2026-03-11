@@ -220,6 +220,28 @@ class EditorSession:
                 dm.msg = new_content
                 self.refresh_validation()
 
+    def update_item_properties(self, original_index: int, new_props: dict[EditorField, Any]) -> bool:
+        """
+        批量更新暂存区单条弹幕的多个属性。
+        如果发生变化，将所有变化打包为一个原子撤销记录。
+        """
+        if 0 <= original_index < len(self.staged_danmakus):
+            dm = self.staged_danmakus[original_index]
+            changes = []
+
+            for field, new_val in new_props.items():
+                old_val = getattr(dm, field.value)
+                if old_val != new_val:
+                    changes.append(AtomicChange(original_index, field, old_val))
+                    setattr(dm, field.value, new_val)
+
+            if changes:
+                self._push_undo_record(changes)
+                self.refresh_validation()
+                return True
+
+        return False
+
     def _execute_batch_transform(self, op_name: str, transform_fn: Callable[[Danmaku], bool]) -> tuple[int, int]:
         """通用批量操作引擎
 
