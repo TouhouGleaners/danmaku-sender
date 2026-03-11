@@ -29,6 +29,7 @@ class EditorTab(QWidget):
         self._create_ui()
 
         self._update_ui_state()
+        self._init_bili_palette()
 
     def _create_ui(self):
         # 主布局
@@ -243,6 +244,11 @@ class EditorTab(QWidget):
         main_layout.addLayout(bottom_layout)
         self.setLayout(main_layout)
 
+    def _init_bili_palette(self):
+        """将 Danmaku.Standards 中定义的标准色注入 QColorDialog"""
+        for i, hex_color in enumerate(Danmaku.Standards.COLORS):
+            QColorDialog.setCustomColor(i, QColor(hex_color))
+
     # --- 色彩转换工具 ---
     def int_to_hex(self, color_int: int) -> str:
         return f"#{color_int & 0xFFFFFF:06x}"
@@ -257,49 +263,37 @@ class EditorTab(QWidget):
 
     def _choose_color(self):
         """弹出调色板"""
-        bili_colors =[
-            "#FE0302", "#FF7204", "#FFAA02", "#FFD302", "#FFFF00", "#A0EE00", "#00CD00",
-            "#019899", "#4266BE", "#89D5FF", "#CC0273", "#222222", "#9B9B9B", "#FFFFFF"
-        ]
-
-        # 注入到 QColorDialog 的系统自定义颜色插槽中
-        for i, hex_color in enumerate(bili_colors):
-            QColorDialog.setCustomColor(i, QColor(hex_color))
-
         dialog = QColorDialog(self)
-        dialog.setWindowTitle("选择弹幕颜色 (左下角为B站标准色)")
+        dialog.setWindowTitle("选择弹幕颜色")
         dialog.setCurrentColor(QColor(self.int_to_hex(self.current_color_val)))
 
         if dialog.exec() == QColorDialog.DialogCode.Accepted:
             color = dialog.currentColor()
-            hex_str = color.name()
-            self.current_color_val = self.hex_to_int(hex_str)
-            self._update_color_btn_style(hex_str)
+            self.current_color_val = self.hex_to_int(color.name())
+            self._update_color_btn_style(color.name())
 
-    def _populate_font_sizes(self, custom_size: int | None = None):
+    def _populate_font_sizes(self, current_val: int | None = None):
         """统一填充字号选项"""
-        STANDARD_FONT_SIZES = {
-            "标准 (25)": 25,
-            "小 (18)": 18,
-            "大 (36)": 36
-        }
         self.prop_fontsize.blockSignals(True)
         self.prop_fontsize.clear()
-        for text, value in STANDARD_FONT_SIZES.items():
+
+        standards = Danmaku.Standards.FONT_SIZES
+        for text, value in standards.items():
             self.prop_fontsize.addItem(text, value)
         
-        # 如果是解析出的非常规字号，添加自定义选项
-        if custom_size and custom_size not in STANDARD_FONT_SIZES.values():
-            self.prop_fontsize.addItem(f"自定义 ({custom_size})", custom_size)
-            self.prop_fontsize.setCurrentIndex(self.prop_fontsize.count() - 1)
+        target = current_val if current_val is not None else 25
+        idx = self.prop_fontsize.findData(target)
+
+        if idx >= 0:
+            self.prop_fontsize.setCurrentIndex(idx)
         else:
-            # 默认选标准
-            idx = self.prop_fontsize.findData(25)
-            self.prop_fontsize.setCurrentIndex(idx if idx >= 0 else 0)
+            self.prop_fontsize.addItem(f"自定义 ({target})", target)
+            self.prop_fontsize.setCurrentIndex(self.prop_fontsize.count() - 1)
+            
         self.prop_fontsize.blockSignals(False)
 
     def _reset_inspector(self):
-        """彻底重置属性面板状态，防止指向失效的 Session 数据"""
+        """重置属性面板状态"""
         self.current_editing_index = None
         self.prop_group.setEnabled(False)
         self.prop_text.clear()
@@ -342,7 +336,7 @@ class EditorTab(QWidget):
         self.prop_time.blockSignals(False)
         
         mode_idx = self.prop_mode.findData(dm.mode)
-        self.prop_mode.setCurrentIndex(mode_idx if mode_idx >= 0 else 1)
+        self.prop_mode.setCurrentIndex(mode_idx if mode_idx >= 0 else 0)
             
         self._populate_font_sizes(dm.fontsize)
         

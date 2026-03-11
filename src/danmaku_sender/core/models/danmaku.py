@@ -6,6 +6,26 @@ from typing import Any
 @dataclass
 class Danmaku:
     """弹幕实体对象"""
+    class Standards:
+        """Bilibili 通用标准"""
+        FONT_SIZES = {
+            "标准 (25)": 25,
+            "小 (18)": 18,
+            "大 (36)": 36
+        }
+
+        COLORS = [
+            "#FE0302", "#FF7204", "#FFAA02", "#FFD302", "#FFFF00", "#A0EE00", "#00CD00",
+            "#019899", "#4266BE", "#89D5FF", "#CC0273", "#222222", "#9B9B9B", "#FFFFFF"
+        ]
+
+        MODES = {
+            1: "滚动",
+            4: "底端",
+            5: "顶端"
+        }
+
+
     # === 发送参数 (Request) ===
     msg: str                # 内容 (API: msg, XML: text)
     progress: int           # 时间毫秒 (API: progress, XML: p[0])
