@@ -163,9 +163,7 @@ class EditorTab(QWidget):
 
         # 字号
         self.prop_fontsize = QComboBox()
-        self.prop_fontsize.addItem("标准 (25)", 25)
-        self.prop_fontsize.addItem("小 (18)", 18)
-        self.prop_fontsize.addItem("大 (36)", 36)
+        self._populate_font_sizes()
         form_layout.addRow("弹幕字号:", self.prop_fontsize)
 
         # 颜色
@@ -278,6 +276,45 @@ class EditorTab(QWidget):
             self.current_color_val = self.hex_to_int(hex_str)
             self._update_color_btn_style(hex_str)
 
+    def _populate_font_sizes(self, custom_size: int | None = None):
+        """统一填充字号选项"""
+        STANDARD_FONT_SIZES = {
+            "标准 (25)": 25,
+            "小 (18)": 18,
+            "大 (36)": 36
+        }
+        self.prop_fontsize.blockSignals(True)
+        self.prop_fontsize.clear()
+        for text, value in STANDARD_FONT_SIZES.items():
+            self.prop_fontsize.addItem(text, value)
+        
+        # 如果是解析出的非常规字号，添加自定义选项
+        if custom_size and custom_size not in STANDARD_FONT_SIZES.values():
+            self.prop_fontsize.addItem(f"自定义 ({custom_size})", custom_size)
+            self.prop_fontsize.setCurrentIndex(self.prop_fontsize.count() - 1)
+        else:
+            # 默认选标准
+            idx = self.prop_fontsize.findData(25)
+            self.prop_fontsize.setCurrentIndex(idx if idx >= 0 else 0)
+        self.prop_fontsize.blockSignals(False)
+
+    def _reset_inspector(self):
+        """彻底重置属性面板状态，防止指向失效的 Session 数据"""
+        self.current_editing_index = None
+        self.prop_group.setEnabled(False)
+        self.prop_text.clear()
+        
+        self.prop_time.blockSignals(True)
+        self.prop_time.setValue(0.0)
+        self.prop_time.blockSignals(False)
+        
+        self.prop_mode.setCurrentIndex(0)
+        self._populate_font_sizes()
+        
+        self.current_color_val = 16777215
+        self._update_color_btn_style("#ffffff")
+        self.logger.debug("Inspector has been explicitly reset.")
+
     # --- 交互核心逻辑 ---
     def _on_selection_changed(self):
         """当表格选中项变化时，同步更新 UI 状态并渲染属性面板"""
@@ -285,19 +322,7 @@ class EditorTab(QWidget):
 
         selected = self.table.selectedItems()
         if not selected or not self.session:
-            self.prop_group.setEnabled(False)
-            self.current_editing_index = None
-            self.prop_text.clear()
-            
-            self.prop_time.blockSignals(True)
-            self.prop_time.setValue(0.0)
-            self.prop_time.blockSignals(False)
-            
-            self.prop_mode.setCurrentIndex(0)
-            self.prop_fontsize.clear()
-            
-            self.current_color_val = 16777215
-            self._update_color_btn_style("#ffffff")
+            self._reset_inspector()
             return
             
         # 仅取选中的第一行展示在属性面板中
@@ -316,22 +341,10 @@ class EditorTab(QWidget):
         self.prop_time.setValue(dm.progress / 1000.0)
         self.prop_time.blockSignals(False)
         
-        idx = self.prop_mode.findData(dm.mode)
-        if idx >= 0:
-            self.prop_mode.setCurrentIndex(idx)
+        mode_idx = self.prop_mode.findData(dm.mode)
+        self.prop_mode.setCurrentIndex(mode_idx if mode_idx >= 0 else 1)
             
-        # 动态处理字号：重置下拉菜单并自动匹配
-        self.prop_fontsize.clear()
-        self.prop_fontsize.addItem("标准 (25)", 25)
-        self.prop_fontsize.addItem("小 (18)", 18)
-        self.prop_fontsize.addItem("大 (36)", 36)
-        fs_idx = self.prop_fontsize.findData(dm.fontsize)
-        if fs_idx >= 0:
-            self.prop_fontsize.setCurrentIndex(fs_idx)
-        else:
-            # 如果加载的文件里有非标字号，临时显示为“自定义”
-            self.prop_fontsize.addItem(f"自定义 ({dm.fontsize})", dm.fontsize)
-            self.prop_fontsize.setCurrentIndex(3)
+        self._populate_font_sizes(dm.fontsize)
         
         self.current_color_val = dm.color
         self._update_color_btn_style(self.int_to_hex(dm.color))
@@ -507,6 +520,7 @@ class EditorTab(QWidget):
         self.status_label.setText("正在验证...")
         self.status_label.setStyleSheet("color: blue;")
         
+        self._reset_inspector()
         has_issues = self.session.checkout_from_state()
 
         if not has_issues:
@@ -658,6 +672,8 @@ class EditorTab(QWidget):
         """应用修改"""
         if not self.session:
             return
+        
+        self._reset_inspector()
         
         total, fixed, deleted = self.session.commit_to_state()
         
