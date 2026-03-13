@@ -19,7 +19,7 @@ jobs:
           cache-dependency-path: "pyproject.toml"
 
       - name: Install Dependencies
-        run: pip install .[docs]
+        run: pip install mkdocs-material
 
       - name: Deploy
         run: mkdocs gh-deploy --force
