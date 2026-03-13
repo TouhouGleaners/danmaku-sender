@@ -40,6 +40,11 @@ dev = [
     "types-peewee"
 ]
 
+docs =[
+    "mkdocs>=1.6.1",
+    "mkdocs-material>=9.7.5",
+]
+
 [project.scripts]
 danmaku-sender = "danmaku_sender.main:main"
 

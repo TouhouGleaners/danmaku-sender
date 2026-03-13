@@ -1,0 +1,41 @@
+site_name: B站弹幕补档工具
+site_description: 现代化 Bilibili 弹幕发送、校验与补档工具
+site_author: Miku_oso
+site_url: https://TouhouGleaners.github.io/danmaku-sender/
+
+# 仓库信息
+repo_name: TouhouGleaners/danmaku-sender
+repo_url: https://github.com/TouhouGleaners/danmaku-sender
+edit_uri: edit/main/docs/
+
+theme:
+  name: material
+  language: zh
+  features:
+    - navigation.tabs   # 顶部横向导航条
+    - navigation.top    # 回到顶部按钮
+    - content.code.copy # 代码块一键复制按钮
+  palette:
+    # 浅色模式
+    - media: "(prefers-color-scheme: light)"
+      scheme: default
+      primary: blue
+      toggle:
+        icon: material/brightness-7
+        name: 切换到深色模式
+    # 深色模式
+    - media: "(prefers-color-scheme: dark)"
+      scheme: slate
+      primary: blue
+      toggle:
+        icon: material/brightness-4
+        name: 切换到浅色模式
+
+nav:
+  - 🏠 首页: index.md
+  - 🚀 快速开始: setup.md
+  - 📖 功能详解:
+      - 弹幕发射: sender.md
+      - 属性编辑: editor.md
+      - 状态监视: monitor.md
+  - ❓ 常见问题: faq.md
