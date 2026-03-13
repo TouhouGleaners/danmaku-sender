@@ -10,7 +10,7 @@ edit_uri: edit/main/docs/
 
 theme:
   name: material
-  language: zh-Hans
+  language: zh
   features:
     - navigation.tabs   # 顶部横向导航条
     - navigation.top    # 回到顶部按钮
