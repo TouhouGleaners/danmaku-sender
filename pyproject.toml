@@ -18,7 +18,7 @@ dependencies = [
     "requests>=2.32.5",
     "platformdirs>=4.5.1",
     "keyring>=25.7.0",
-    "win11toast>=0.36.2",
+    "win11toast>=0.36.2; sys_platform == 'win32'",
     "cryptography>=46.0.3",
     "peewee>=4.0.1",
 ]
