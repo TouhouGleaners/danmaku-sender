@@ -31,11 +31,28 @@ theme:
         icon: material/brightness-4
         name: 切换到浅色模式
 
+markdown_extensions:
+  - attr_list
+  - md_in_html
+  - pymdownx.emoji:
+      emoji_index: !!python/name:material.extensions.emoji.twemoji
+      emoji_generator: !!python/name:material.extensions.emoji.to_svg
+  - pymdownx.superfences
+  - pymdownx.tabbed:
+      alternate_style: true
+  - pymdownx.details
+  - admonition
+
 nav:
   - 🏠 首页: index.md
-  - 🚀 快速开始: setup.md
-  - 📖 功能详解:
-      - 弹幕发射: sender.md
-      - 属性编辑: editor.md
-      - 状态监视: monitor.md
+  - 🚀 快速上手:
+      - 准备工作 (获取 Cookie): setup/credentials.md
+      - 发送你的第一批弹幕: setup/first_send.md
+  - 🛠️ 核心功能指南:
+      - 批量发送与频率控制: guides/sender.md
+      - 弹幕修复与高级编辑: guides/editor.md
+      - 实时监视与丢弹对账: guides/monitor.md
+  - 🎨 进阶技巧:
+      - 解决时间轴偏移: advanced/offset.md
+      - 自定义弹幕包制作: advanced/canvas.md
   - ❓ 常见问题: faq.md
