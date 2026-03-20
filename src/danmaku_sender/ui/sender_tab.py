@@ -514,21 +514,50 @@ class SenderTab(QWidget):
         self.status_label.setText(f"发送中: {attempted}/{total}")
 
     def _calculate_eta_seconds(self, attempted: int, total: int) -> float:
-        """根据配置计算剩余时间的期望值 (秒)"""
+        """从状态中提取配置，并调用纯数学方法计算 ETA"""
         cfg = self._state.sender_config
         avg_normal = (cfg.min_delay + cfg.max_delay) / 2
         avg_rest = (cfg.rest_min + cfg.rest_max) / 2
         
-        eta = 0.0
+        return self._math_calc_eta(
+            attempted=attempted, 
+            total=total, 
+            burst_size=cfg.burst_size, 
+            avg_normal=avg_normal, 
+            avg_rest=avg_rest
+        )
 
-        for k in range(attempted, total):
-            # 判断第 k 条发完后，根据 DelayManager 逻辑是否触发爆发
-            if cfg.burst_size > 1 and k % cfg.burst_size == 0:
-                eta += avg_rest
-            else:
-                eta += avg_normal
+    @staticmethod
+    def _math_calc_eta(attempted: int, total: int, burst_size: int, avg_normal: float, avg_rest: float) -> float:
+        """
+        计算剩余等待时间的纯数学辅助函数 (O(1))。
         
-        return eta
+        契约 (Contract):
+        1. 延时发生在发送动作之后，因此最后一条弹幕发完不产生延时，总延时次数为 total - 1。
+        2. 延时的物理索引从 1 开始（第 k 条弹幕发完后的延时索引为 k）。
+        3. 仅当延时索引能被 burst_size 整除时，触发大休息 (avg_rest)。
+        """
+        # 防御性校验：避免除零及负数异常
+        if burst_size <= 0:
+            burst_size = 1 
+
+        # 统一处理 0 和 1 进度：
+        # 准备开始(0)和准备发第1条(1)时，前面都没有发生过延时，
+        # 其后续的延时索引区间都是 [1, total - 1]。
+        current_k = max(1, attempted)
+        remaining_waits = total - current_k
+
+        if remaining_waits <= 0:
+            return 0.0
+
+        if burst_size == 1:
+            return remaining_waits * avg_normal
+
+        # 在闭区间 [current_k, total - 1] 中，计算能被 burst_size 整除的元素个数
+        rest_count = (total - 1) // burst_size - (current_k - 1) // burst_size
+        normal_count = remaining_waits - rest_count
+
+        return (normal_count * avg_normal) + (rest_count * avg_rest)
 
     def _on_send_finished(self, sender_instance):
         """任务结束后的清理与保存逻辑"""
