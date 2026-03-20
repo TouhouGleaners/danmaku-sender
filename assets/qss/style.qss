@@ -1,3 +1,43 @@
+/* 全局：白 */
+QMainWindow {
+    background-color: #ffffff;
+}
+
+
+
+/* 侧边栏 */
+QListWidget#sidebar {
+    background-color: #f8f9fa;
+    border: none;
+    border-right: 1px solid #e1e4e8;
+    outline: none;
+    show-decoration-selected: 1;
+}
+
+/* 侧边栏item */
+QListWidget#sidebar::item {
+    height: 40px;
+    padding-left: 15px;
+    color: #444d56;
+    border-bottom: 1px solid transparent;
+}
+
+/* 侧边栏item 悬停 */
+QListWidget#sidebar::item:hover {
+    background-color: #f1f3f5;
+}
+
+/* 侧边栏item 选中 */
+QListWidget#sidebar::item:selected {
+    background-color: #ffffff;
+    color: #fb7299;
+    font-weight: 600;
+    border-left: 4px solid #fb7299; 
+    margin-right: -1px; 
+}
+
+
+
 /* --- 操作按钮基础样式 --- */
 QPushButton[action="true"] {
     color: white;

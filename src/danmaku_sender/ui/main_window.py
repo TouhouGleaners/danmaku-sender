@@ -2,8 +2,11 @@ import logging
 from pathlib import Path
 from platformdirs import user_data_dir
 
-from PySide6.QtWidgets import QMainWindow, QTabWidget, QMessageBox
-from PySide6.QtGui import QCloseEvent, QDesktopServices, QAction
+from PySide6.QtWidgets import (
+    QMainWindow, QWidget, QMessageBox, QHBoxLayout,
+    QListWidget, QListWidgetItem, QStackedWidget
+)
+from PySide6.QtGui import QAction, QCloseEvent, QDesktopServices
 from PySide6.QtCore import QUrl, QTimer
 
 from .sender_tab import SenderTab
@@ -19,7 +22,7 @@ from ..core.workers import UpdateCheckWorker
 from ..utils.log_utils import GuiLoggingHandler
 from ..utils.credential_manager import load_credentials, save_credentials
 from ..utils.config_manager import load_app_config, save_app_config
-from ..utils.resource_utils import load_stylesheet
+from ..utils.resource_utils import load_stylesheet, get_svg_icon
 
 
 class MainWindow(QMainWindow):
@@ -27,19 +30,33 @@ class MainWindow(QMainWindow):
         super().__init__()
 
         self.setWindowTitle(UI.MAIN_WINDOW_TITLE)
-        self.resize(710, 650)
+        self.resize(900, 680)
 
         # 核心状态
         self.state = AppState()
         self._log_signals_connected = False
         self.logger = logging.getLogger("MainWindow")
 
-        # 中央部件
-        self.tabs = QTabWidget()
-        self.setCentralWidget(self.tabs)
+        self.central_widget = QWidget()
+        self.setCentralWidget(self.central_widget)
+        
+        # 主布局: 水平布局
+        self.main_layout = QHBoxLayout(self.central_widget)
+        self.main_layout.setContentsMargins(0, 0, 0, 0)
+        self.main_layout.setSpacing(0)
 
-        # 初始化各页面
-        self.init_tabs()
+        # 左侧导航栏
+        self.sidebar = QListWidget()
+        self.sidebar.setObjectName("sidebar")
+        self.sidebar.setFixedWidth(160)
+        
+        # 右侧容器
+        self.content_stack = QStackedWidget()
+        
+        self.main_layout.addWidget(self.sidebar)
+        self.main_layout.addWidget(self.content_stack)
+
+        self.init_pages()
         self.create_menu_bar()
 
         # 从磁盘中加载凭证
@@ -47,7 +64,7 @@ class MainWindow(QMainWindow):
         load_app_config(self.state)
 
         # 绑定 State 到各个 Tab
-        self.bind_state_to_tabs()
+        self.bind_state_to_pages()
         load_stylesheet()
 
         # 存储帮助窗口的引用，防止被垃圾回收
@@ -55,22 +72,30 @@ class MainWindow(QMainWindow):
 
         QTimer.singleShot(1000, lambda: self.run_update_check(is_manual=False))
 
-    def init_tabs(self):
-        self.tab_settings = SettingsTab()
-        self.tab_sender = SenderTab()
-        self.tab_editor = EditorTab()
-        self.tab_monitor = MonitorTab()
-        self.tab_history = HistoryTab()
+    def init_pages(self):
+        """初始化页面并绑定导航"""
+        self.page_settings = SettingsTab()
+        self.page_sender = SenderTab()
+        self.page_editor = EditorTab()
+        self.page_monitor = MonitorTab()
+        self.page_history = HistoryTab()
 
-        # 添加至选项卡
-        self.tabs.addTab(self.tab_settings, "全局设置")
-        self.tabs.addTab(self.tab_sender, "弹幕发射器")
-        self.tabs.addTab(self.tab_editor, "弹幕编辑器")
-        self.tabs.addTab(self.tab_monitor, "弹幕监视器")
-        self.tabs.addTab(self.tab_history, "弹幕历史记录")
+        # 定义页面列表
+        pages = [
+            ("全局设置", self.page_settings, "settings.svg"),
+            ("弹幕发射器", self.page_sender, "send.svg"),
+            ("弹幕编辑器", self.page_editor, "edit.svg"),
+            ("弹幕监视器", self.page_monitor, "monitor.svg"),
+            ("弹幕历史记录", self.page_history, "history.svg"),
+        ]
 
-        # 默认选中发射器
-        self.tabs.setCurrentWidget(self.tab_sender)
+        for title, widget, icon_name in pages:
+            item = QListWidgetItem(get_svg_icon(icon_name), f" {title}")
+            self.sidebar.addItem(item)
+            self.content_stack.addWidget(widget)
+
+        self.sidebar.currentRowChanged.connect(self.content_stack.setCurrentIndex)
+        self.sidebar.setCurrentRow(1)
 
     def create_menu_bar(self):
         menu_bar = self.menuBar()
@@ -141,22 +166,22 @@ class MainWindow(QMainWindow):
         except Exception as e:
             self.logger.warning(f"加载凭证失败: {e}")
 
-    def bind_state_to_tabs(self):
+    def bind_state_to_pages(self):
         """绑定全局状态并配置日志路由"""
         # 页面数据绑定
-        self.tab_settings.bind_state(self.state)
-        self.tab_sender.bind_state(self.state)
-        self.tab_editor.bind_state(self.state)
-        self.tab_monitor.bind_state(self.state)
-        self.tab_history.bind_state(self.state)
+        self.page_settings.bind_state(self.state)
+        self.page_sender.bind_state(self.state)
+        self.page_editor.bind_state(self.state)
+        self.page_monitor.bind_state(self.state)
+        self.page_history.bind_state(self.state)
 
         # 日志分流：信号 -> Tab 接口
         if self._log_signals_connected:
-            self.state.sender_log_received.disconnect(self.tab_sender.append_log)
-            self.state.monitor_log_received.disconnect(self.tab_monitor.append_log)
+            self.state.sender_log_received.disconnect(self.page_sender.append_log)
+            self.state.monitor_log_received.disconnect(self.page_monitor.append_log)
 
-        self.state.sender_log_received.connect(self.tab_sender.append_log)
-        self.state.monitor_log_received.connect(self.tab_monitor.append_log)
+        self.state.sender_log_received.connect(self.page_sender.append_log)
+        self.state.monitor_log_received.connect(self.page_monitor.append_log)
         self._log_signals_connected = True
 
         # 信号接入：底层 Handler -> 信号发射
