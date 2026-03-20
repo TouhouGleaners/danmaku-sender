@@ -64,7 +64,7 @@ class MainWindow(QMainWindow):
         load_app_config(self.state)
 
         # 绑定 State 到各个 Tab
-        self.bind_state_to_tabs()
+        self.bind_state_to_pages()
         load_stylesheet()
 
         # 存储帮助窗口的引用，防止被垃圾回收
@@ -166,7 +166,7 @@ class MainWindow(QMainWindow):
         except Exception as e:
             self.logger.warning(f"加载凭证失败: {e}")
 
-    def bind_state_to_tabs(self):
+    def bind_state_to_pages(self):
         """绑定全局状态并配置日志路由"""
         # 页面数据绑定
         self.page_settings.bind_state(self.state)
