@@ -30,6 +30,13 @@ def get_app_icon() -> QIcon:
         return QIcon(str(icon_path))
     return QIcon()
 
+def get_svg_icon(name: str) -> QIcon:
+    """加载矢量图标"""
+    icon_path = get_assets_path() / "icons" / name
+    if icon_path.exists():
+        return QIcon(str(icon_path))
+    return QIcon()
+
 def load_stylesheet():
     """加载全局样式表"""
     qss_path = get_assets_path() / "qss" / "style.qss"

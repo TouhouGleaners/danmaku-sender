@@ -6,7 +6,7 @@ from PySide6.QtWidgets import (
     QMainWindow, QWidget, QMessageBox, QHBoxLayout,
     QListWidget, QListWidgetItem, QStackedWidget
 )
-from PySide6.QtGui import QCloseEvent, QDesktopServices, QAction
+from PySide6.QtGui import QAction, QCloseEvent, QDesktopServices
 from PySide6.QtCore import QUrl, QTimer
 
 from .sender_tab import SenderTab
@@ -22,7 +22,7 @@ from ..core.workers import UpdateCheckWorker
 from ..utils.log_utils import GuiLoggingHandler
 from ..utils.credential_manager import load_credentials, save_credentials
 from ..utils.config_manager import load_app_config, save_app_config
-from ..utils.resource_utils import load_stylesheet
+from ..utils.resource_utils import load_stylesheet, get_svg_icon
 
 
 class MainWindow(QMainWindow):
@@ -82,21 +82,20 @@ class MainWindow(QMainWindow):
 
         # 定义页面列表
         pages = [
-            ("⚙️", "全局设置", self.page_settings),
-            ("🚀", "弹幕发射器", self.page_sender),
-            ("🎨", "弹幕编辑器", self.page_editor),
-            ("🛡️", "弹幕监视器", self.page_monitor),
-            ("📜", "弹幕历史记录", self.page_history),
+            ("全局设置", self.page_settings, "settings.svg"),
+            ("弹幕发射器", self.page_sender, "send.svg"),
+            ("弹幕编辑器", self.page_editor, "edit.svg"),
+            ("弹幕监视器", self.page_monitor, "monitor.svg"),
+            ("弹幕历史记录", self.page_history, "history.svg"),
         ]
 
-        for icon, title, widget in pages:
-            item = QListWidgetItem(f"{icon}  {title}")
+        for title, widget, icon_name in pages:
+            item = QListWidgetItem(get_svg_icon(icon_name), f" {title}")
             self.sidebar.addItem(item)
             self.content_stack.addWidget(widget)
 
         self.sidebar.currentRowChanged.connect(self.content_stack.setCurrentIndex)
-        
-        self.sidebar.setCurrentRow(1)  # 默认选中发射器 (索引 1)
+        self.sidebar.setCurrentRow(1)
 
     def create_menu_bar(self):
         menu_bar = self.menuBar()
