@@ -74,19 +74,19 @@ class MainWindow(QMainWindow):
 
     def init_pages(self):
         """初始化页面并绑定导航"""
-        self.tab_settings = SettingsTab()
-        self.tab_sender = SenderTab()
-        self.tab_editor = EditorTab()
-        self.tab_monitor = MonitorTab()
-        self.tab_history = HistoryTab()
+        self.page_settings = SettingsTab()
+        self.page_sender = SenderTab()
+        self.page_editor = EditorTab()
+        self.page_monitor = MonitorTab()
+        self.page_history = HistoryTab()
 
         # 定义页面列表
         pages = [
-            ("⚙️", "全局设置", self.tab_settings),
-            ("🚀", "弹幕发射器", self.tab_sender),
-            ("🎨", "弹幕编辑器", self.tab_editor),
-            ("🛡️", "弹幕监视器", self.tab_monitor),
-            ("📜", "弹幕历史记录", self.tab_history),
+            ("⚙️", "全局设置", self.page_settings),
+            ("🚀", "弹幕发射器", self.page_sender),
+            ("🎨", "弹幕编辑器", self.page_editor),
+            ("🛡️", "弹幕监视器", self.page_monitor),
+            ("📜", "弹幕历史记录", self.page_history),
         ]
 
         for icon, title, widget in pages:
@@ -170,19 +170,19 @@ class MainWindow(QMainWindow):
     def bind_state_to_tabs(self):
         """绑定全局状态并配置日志路由"""
         # 页面数据绑定
-        self.tab_settings.bind_state(self.state)
-        self.tab_sender.bind_state(self.state)
-        self.tab_editor.bind_state(self.state)
-        self.tab_monitor.bind_state(self.state)
-        self.tab_history.bind_state(self.state)
+        self.page_settings.bind_state(self.state)
+        self.page_sender.bind_state(self.state)
+        self.page_editor.bind_state(self.state)
+        self.page_monitor.bind_state(self.state)
+        self.page_history.bind_state(self.state)
 
         # 日志分流：信号 -> Tab 接口
         if self._log_signals_connected:
-            self.state.sender_log_received.disconnect(self.tab_sender.append_log)
-            self.state.monitor_log_received.disconnect(self.tab_monitor.append_log)
+            self.state.sender_log_received.disconnect(self.page_sender.append_log)
+            self.state.monitor_log_received.disconnect(self.page_monitor.append_log)
 
-        self.state.sender_log_received.connect(self.tab_sender.append_log)
-        self.state.monitor_log_received.connect(self.tab_monitor.append_log)
+        self.state.sender_log_received.connect(self.page_sender.append_log)
+        self.state.monitor_log_received.connect(self.page_monitor.append_log)
         self._log_signals_connected = True
 
         # 信号接入：底层 Handler -> 信号发射
