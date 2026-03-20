@@ -4,6 +4,22 @@ QMainWindow {
 }
 
 
+/* 侧边栏整体 */
+QFrame#sidebarFrame {
+    background-color: #f8f9fa;
+    border-right: 1px solid #e9ecef;
+}
+
+/* 用户状态区 */
+QFrame#userWidget:hover {
+    background-color: rgba(0, 0, 0, 0.03); /* 增加点击暗示 */
+}
+
+QLabel#avatarLabel {
+    background-color: #e3e5e7;
+    border-radius: 18px; /* 圆形头像感 */
+}
+
 
 /* 侧边栏 */
 QListWidget#sidebar {

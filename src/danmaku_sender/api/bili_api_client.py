@@ -163,6 +163,14 @@ class BiliApiClient:
         params = {'bvid': bvid}
         self.logger.info(f"正在获取视频信息: {bvid}")
         return self._request('GET', url, params=params)
+    
+    def get_user_info(self) -> dict:
+        """
+        获取当前登录用户的信息 (昵称、头像、登录状态等)
+        对应接口：/x/web-interface/nav
+        """
+        url = "https://api.bilibili.com/x/web-interface/nav"
+        return self._request('GET', url)
 
     def get_danmaku_list_xml(self, cid: int) -> str:
         """获取指定CID的线上实时弹幕XML内容"""
