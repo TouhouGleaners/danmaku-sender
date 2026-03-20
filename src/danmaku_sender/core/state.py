@@ -13,6 +13,14 @@ class ApiAuthConfig:
 
 
 @dataclass
+class UserState:
+    """用户信息状态"""
+    is_login: bool = False
+    username: str = "未登录"
+    avatar_url: str = ""
+
+
+@dataclass
 class SenderConfig:
     """发送器的配置数据"""
     # 延迟设置
@@ -120,6 +128,7 @@ class AppState(QObject):
     继承自 QObject 以支持信号槽机制，实现 UI 与 逻辑 的解耦。
     """
     credentials_changed = Signal(str, str)
+    user_info_changed = Signal()
     sender_log_received = Signal(str)
     monitor_log_received = Signal(str)
 
@@ -129,6 +138,9 @@ class AppState(QObject):
         # 核心凭证
         self.sessdata: str = ""
         self.bili_jct: str = ""
+
+        # 用户信息
+        self.user_state = UserState()
 
         # 各模块配置
         self.sender_config = SenderConfig()
@@ -162,3 +174,9 @@ class AppState(QObject):
 
     def log_monitor(self, message: str):
         self.monitor_log_received.emit(message)
+
+    def set_user_info(self, is_login: bool, uname: str, face: str):
+        self.user_state.is_login = is_login
+        self.user_state.username = uname
+        self.user_state.avatar_url = face
+        self.user_info_changed.emit()

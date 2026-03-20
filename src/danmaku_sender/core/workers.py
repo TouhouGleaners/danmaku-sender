@@ -72,6 +72,24 @@ class UpdateCheckWorker(BaseWorker):
                 self.logger.warning(f"自动更新检查失败: {e}")
 
 
+class FetchUserInfoWorker(BaseWorker):
+    """异步获取 B 站登录状态与用户信息"""
+    finished_success = Signal(dict)
+
+    def __init__(self, auth_config, parent=None):
+        super().__init__(parent)
+        self.auth = auth_config
+
+    def run(self):
+        try:
+            with BiliApiClient.from_config(self.auth) as client:
+                data = client.get_user_info()
+                self.finished_success.emit(data)
+        except Exception as e:
+            self.logger.error(f"获取用户信息失败: {e}")
+            self.finished_success.emit({"isLogin": False})
+
+
 class FetchInfoWorker(BaseWorker):
     """用于后台获取视频信息的线程"""
     finished_success = Signal(VideoInfo)  # 成功信号，携带视频信息 VideoInfo

@@ -3,11 +3,11 @@ from pathlib import Path
 from platformdirs import user_data_dir
 
 from PySide6.QtWidgets import (
-    QMainWindow, QWidget, QMessageBox, QHBoxLayout,
-    QListWidget, QListWidgetItem, QStackedWidget
+    QMainWindow, QWidget, QMessageBox, QHBoxLayout, QVBoxLayout, QFrame,
+    QListWidget, QListWidgetItem, QStackedWidget, QLabel
 )
 from PySide6.QtGui import QAction, QCloseEvent, QDesktopServices
-from PySide6.QtCore import QUrl, QTimer
+from PySide6.QtCore import Qt, QUrl, QTimer, QSize
 
 from .sender_tab import SenderTab
 from .settings_tab import SettingsTab
@@ -18,7 +18,7 @@ from .history_tab import HistoryTab
 
 from ..config.app_config import AppInfo, UI
 from ..core.state import AppState
-from ..core.workers import UpdateCheckWorker
+from ..core.workers import UpdateCheckWorker, FetchUserInfoWorker
 from ..utils.log_utils import GuiLoggingHandler
 from ..utils.credential_manager import load_credentials, save_credentials
 from ..utils.config_manager import load_app_config, save_app_config
@@ -37,25 +37,7 @@ class MainWindow(QMainWindow):
         self._log_signals_connected = False
         self.logger = logging.getLogger("MainWindow")
 
-        self.central_widget = QWidget()
-        self.setCentralWidget(self.central_widget)
-        
-        # 主布局: 水平布局
-        self.main_layout = QHBoxLayout(self.central_widget)
-        self.main_layout.setContentsMargins(0, 0, 0, 0)
-        self.main_layout.setSpacing(0)
-
-        # 左侧导航栏
-        self.sidebar = QListWidget()
-        self.sidebar.setObjectName("sidebar")
-        self.sidebar.setFixedWidth(160)
-        
-        # 右侧容器
-        self.content_stack = QStackedWidget()
-        
-        self.main_layout.addWidget(self.sidebar)
-        self.main_layout.addWidget(self.content_stack)
-
+        self._create_ui()
         self.init_pages()
         self.create_menu_bar()
 
@@ -63,14 +45,74 @@ class MainWindow(QMainWindow):
         self._load_initial_credentials()
         load_app_config(self.state)
 
-        # 绑定 State 到各个 Tab
+        # 绑定逻辑信号
         self.bind_state_to_pages()
+        self._setup_user_logic()
         load_stylesheet()
 
         # 存储帮助窗口的引用，防止被垃圾回收
         self._help_dialog = None 
 
         QTimer.singleShot(1000, lambda: self.run_update_check(is_manual=False))
+
+    def _create_ui(self):
+        self.central_widget = QWidget()
+        self.setCentralWidget(self.central_widget)
+
+        # 主布局: 水平分栏
+        self.main_layout = QHBoxLayout(self.central_widget)
+        self.main_layout.setContentsMargins(0, 0, 0, 0)
+        self.main_layout.setSpacing(0)
+
+        # --- 左侧侧边栏容器 ---
+        self.sidebar_frame = QFrame()
+        self.sidebar_frame.setObjectName("sidebarFrame")
+        self.sidebar_frame.setFixedWidth(160)
+
+        sidebar_layout = QVBoxLayout(self.sidebar_frame)
+        sidebar_layout.setContentsMargins(0, 0, 0, 10)
+        sidebar_layout.setSpacing(0)
+
+        # 用户状态页眉
+        self.user_widget = QFrame()
+        self.user_widget.setObjectName("userWidget")
+        self.user_widget.setFixedHeight(65)
+        user_layout = QHBoxLayout(self.user_widget)
+        user_layout.setContentsMargins(15, 0, 10, 0)
+        user_layout.setSpacing(10)
+
+        self.avatar_label = QLabel("📺") # 头像占位
+        self.avatar_label.setObjectName("avatarLabel")
+        self.avatar_label.setFixedSize(36, 36)
+        self.avatar_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
+
+        self.username_label = QLabel("未登录")
+        self.username_label.setObjectName("usernameLabel")
+        self.username_label.setStyleSheet("font-weight: bold; font-size: 13px;")
+
+        user_layout.addWidget(self.avatar_label)
+        user_layout.addWidget(self.username_label)
+        user_layout.addStretch()
+
+        # 导航列表
+        self.sidebar = QListWidget()
+        self.sidebar.setObjectName("sidebar")
+        self.sidebar.setIconSize(QSize(20, 20))
+        self.sidebar.setFocusPolicy(Qt.FocusPolicy.NoFocus)
+
+        # 组装侧边栏
+        sidebar_layout.addWidget(self.user_widget)
+        line = QFrame()
+        line.setFrameShape(QFrame.Shape.HLine)
+        line.setStyleSheet("background-color: #f1f2f3; margin: 0 10px;")
+        sidebar_layout.addWidget(line)
+        sidebar_layout.addWidget(self.sidebar)
+
+        # --- 右侧内容容器 ---
+        self.content_stack = QStackedWidget()
+        
+        self.main_layout.addWidget(self.sidebar_frame)
+        self.main_layout.addWidget(self.content_stack)
 
     def init_pages(self):
         """初始化页面并绑定导航"""
@@ -90,12 +132,43 @@ class MainWindow(QMainWindow):
         ]
 
         for title, widget, icon_name in pages:
-            item = QListWidgetItem(get_svg_icon(icon_name), f" {title}")
+            item = QListWidgetItem(get_svg_icon(icon_name), f"{title}")
             self.sidebar.addItem(item)
             self.content_stack.addWidget(widget)
 
         self.sidebar.currentRowChanged.connect(self.content_stack.setCurrentIndex)
         self.sidebar.setCurrentRow(1)
+
+        # 用户页眉点击跳转到设置页
+        self.user_widget.setCursor(Qt.CursorShape.PointingHandCursor)
+        self.user_widget.mousePressEvent = lambda e: self.sidebar.setCurrentRow(0)
+
+    def _setup_user_logic(self):
+        """用户信息获取逻辑"""
+        # 监听凭证变更
+        self.state.credentials_changed.connect(self.request_user_info_refresh)
+        # 初始刷新
+        QTimer.singleShot(500, self.request_user_info_refresh)
+
+    def request_user_info_refresh(self):
+        """发起异步请求刷新用户信息"""
+        if not self.state.sessdata:
+            self._update_user_ui(None)
+            return
+            
+        auth = self.state.get_api_auth()
+        self.user_worker = FetchUserInfoWorker(auth)
+        self.user_worker.finished_success.connect(self._update_user_ui)
+        self.user_worker.start()
+
+    def _update_user_ui(self, data):
+        """更新左上角展示"""
+        if data and data.get('isLogin'):
+            self.username_label.setText(data.get('uname'))
+            self.avatar_label.setText("✅") # 后续升级为图片下载
+        else:
+            self.username_label.setText("未登录")
+            self.avatar_label.setText("📺")
 
     def create_menu_bar(self):
         menu_bar = self.menuBar()
