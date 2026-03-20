@@ -514,21 +514,30 @@ class SenderTab(QWidget):
         self.status_label.setText(f"发送中: {attempted}/{total}")
 
     def _calculate_eta_seconds(self, attempted: int, total: int) -> float:
-        """根据配置计算剩余时间的期望值 (秒)"""
+        """根据配置计算剩余时间的期望值 (秒) - O(1)"""
+        # 当 progress_updated(k, total) 触发时，第 k 条还没发，它之后的等待也没开始。
+        # 因此，真正需要等待的次数包含了从第 k 条到第 total-1 条发完后的所有等待。
+        # (如果 attempted 是 0，它和 1 处于同一时刻，都不包含任何已消耗的等待)
+        current_k = max(1, attempted)
+
+        # 剩余的等待次数
+        remaining_waits = total - current_k
+
+        if remaining_waits <= 0:
+            return 0.0
+
         cfg = self._state.sender_config
         avg_normal = (cfg.min_delay + cfg.max_delay) / 2
         avg_rest = (cfg.rest_min + cfg.rest_max) / 2
-        
-        eta = 0.0
 
-        for k in range(attempted, total):
-            # 判断第 k 条发完后，根据 DelayManager 逻辑是否触发爆发
-            if cfg.burst_size > 1 and k % cfg.burst_size == 0:
-                eta += avg_rest
-            else:
-                eta += avg_normal
-        
-        return eta
+        if cfg.burst_size > 1:
+            # 在 [current_k, total - 1] 这个闭区间内，计算有多少个数能被 burst_size 整除
+            rest_count = (total - 1) // cfg.burst_size - (current_k - 1) // cfg.burst_size
+            normal_count = remaining_waits - rest_count
+
+            return (normal_count * avg_normal) + (rest_count * avg_rest)
+
+        return remaining_waits * avg_normal
 
     def _on_send_finished(self, sender_instance):
         """任务结束后的清理与保存逻辑"""
