@@ -2,7 +2,10 @@ import logging
 from pathlib import Path
 from platformdirs import user_data_dir
 
-from PySide6.QtWidgets import QMainWindow, QTabWidget, QMessageBox
+from PySide6.QtWidgets import (
+    QMainWindow, QWidget, QMessageBox, QHBoxLayout,
+    QListWidget, QListWidgetItem, QStackedWidget
+)
 from PySide6.QtGui import QCloseEvent, QDesktopServices, QAction
 from PySide6.QtCore import QUrl, QTimer
 
@@ -27,19 +30,33 @@ class MainWindow(QMainWindow):
         super().__init__()
 
         self.setWindowTitle(UI.MAIN_WINDOW_TITLE)
-        self.resize(710, 650)
+        self.resize(900, 680)
 
         # 核心状态
         self.state = AppState()
         self._log_signals_connected = False
         self.logger = logging.getLogger("MainWindow")
 
-        # 中央部件
-        self.tabs = QTabWidget()
-        self.setCentralWidget(self.tabs)
+        self.central_widget = QWidget()
+        self.setCentralWidget(self.central_widget)
+        
+        # 主布局: 水平布局
+        self.main_layout = QHBoxLayout(self.central_widget)
+        self.main_layout.setContentsMargins(0, 0, 0, 0)
+        self.main_layout.setSpacing(0)
 
-        # 初始化各页面
-        self.init_tabs()
+        # 左侧导航栏
+        self.sidebar = QListWidget()
+        self.sidebar.setObjectName("sidebar")
+        self.sidebar.setFixedWidth(160)
+        
+        # 右侧容器
+        self.content_stack = QStackedWidget()
+        
+        self.main_layout.addWidget(self.sidebar)
+        self.main_layout.addWidget(self.content_stack)
+
+        self.init_pages()
         self.create_menu_bar()
 
         # 从磁盘中加载凭证
@@ -55,22 +72,31 @@ class MainWindow(QMainWindow):
 
         QTimer.singleShot(1000, lambda: self.run_update_check(is_manual=False))
 
-    def init_tabs(self):
+    def init_pages(self):
+        """初始化页面并绑定导航"""
         self.tab_settings = SettingsTab()
         self.tab_sender = SenderTab()
         self.tab_editor = EditorTab()
         self.tab_monitor = MonitorTab()
         self.tab_history = HistoryTab()
 
-        # 添加至选项卡
-        self.tabs.addTab(self.tab_settings, "全局设置")
-        self.tabs.addTab(self.tab_sender, "弹幕发射器")
-        self.tabs.addTab(self.tab_editor, "弹幕编辑器")
-        self.tabs.addTab(self.tab_monitor, "弹幕监视器")
-        self.tabs.addTab(self.tab_history, "弹幕历史记录")
+        # 定义页面列表
+        pages = [
+            ("⚙️", "全局设置", self.tab_settings),
+            ("🚀", "弹幕发射器", self.tab_sender),
+            ("🎨", "弹幕编辑器", self.tab_editor),
+            ("🛡️", "弹幕监视器", self.tab_monitor),
+            ("📜", "弹幕历史记录", self.tab_history),
+        ]
 
-        # 默认选中发射器
-        self.tabs.setCurrentWidget(self.tab_sender)
+        for icon, title, widget in pages:
+            item = QListWidgetItem(f"{icon}  {title}")
+            self.sidebar.addItem(item)
+            self.content_stack.addWidget(widget)
+
+        self.sidebar.currentRowChanged.connect(self.content_stack.setCurrentIndex)
+        
+        self.sidebar.setCurrentRow(1)  # 默认选中发射器 (索引 1)
 
     def create_menu_bar(self):
         menu_bar = self.menuBar()
