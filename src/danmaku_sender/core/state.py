@@ -1,5 +1,6 @@
-from dataclasses import dataclass, field, asdict
+from dataclasses import dataclass, field
 
+from pydantic import BaseModel, ConfigDict, Field, model_validator
 from PySide6.QtCore import QObject, Signal
 
 from .models.danmaku import Danmaku
@@ -20,21 +21,22 @@ class UserState:
     avatar_url: str = ""
 
 
-@dataclass
-class SenderConfig:
+class SenderConfig(BaseModel):
     """发送器的配置数据"""
+    model_config = ConfigDict(validate_assignment=True)  # 赋值时校验
+
     # 延迟设置
-    min_delay: float = 8.0
-    max_delay: float = 8.5
+    min_delay: float = Field(default=8.0, ge=0.1)
+    max_delay: float = Field(default=8.5, ge=0.1)
     
     # 爆发模式
-    burst_size: int = 3
-    rest_min: float = 40.0
-    rest_max: float = 45.0
+    burst_size: int = Field(default=3, ge=0)
+    rest_min: float = Field(default=40.0, ge=0.0)
+    rest_max: float = Field(default=45.0, ge=0.0)
     
     # 自动停止
-    stop_after_count: int = 0
-    stop_after_time: int = 0
+    stop_after_count: int = Field(default=0, ge=0)
+    stop_after_time: int = Field(default=0, ge=0)
 
     # 系统设置
     prevent_sleep: bool = True
@@ -43,61 +45,35 @@ class SenderConfig:
     # 断点续传
     skip_sent: bool = True
 
-    def is_valid(self) -> bool:
-        """简单的逻辑校验"""
+    @model_validator(mode='after')
+    def check_logic(self) -> 'SenderConfig':
+        """业务逻辑级校验：最小不能大于最大"""
+        # 抛出错误，外层加载时会回退默认值
         if self.min_delay > self.max_delay:
-            return False
+            raise ValueError("最小延迟不能大于最大延迟")
         if self.burst_size > 1 and self.rest_min > self.rest_max:
-            return False
-        return True
-
-    def to_dict(self):
-        return asdict(self)
-    
-    def from_dict(self, data: dict):
-        if not data:
-            return
-        for key, value in data.items():
-            if hasattr(self, key):
-                setattr(self, key, value)
+            raise ValueError("爆发休息的最小值不能大于最大值")
+        return self
 
 
-@dataclass
-class MonitorConfig:
+class MonitorConfig(BaseModel):
     """监视器的配置数据"""
-    refresh_interval: int = 60  # 刷新间隔，单位秒
+    model_config = ConfigDict(validate_assignment=True)  # 赋值时校验
+
+    refresh_interval: int = Field(default=60, ge=10)  # 刷新间隔，单位秒
     
     # 复用全局设置
     prevent_sleep: bool = True
     use_system_proxy: bool = True
 
-    def to_dict(self):
-        return asdict(self)
-    
-    def from_dict(self, data: dict):
-        if not data:
-            return
-        for key, value in data.items():
-            if hasattr(self, key):
-                setattr(self, key, value)
 
-
-@dataclass
-class ValidationConfig:
+class ValidationConfig(BaseModel):
     """校验规则"""
+    model_config = ConfigDict(validate_assignment=True)  # 赋值时校验
+
     # 用户自定义规则
     enabled: bool = True
-    blocked_keywords: list[str] = field(default_factory=list)
-
-    def to_dict(self):
-        return asdict(self)
-    
-    def from_dict(self, data: dict):
-        if not data:
-            return
-        for key, value in data.items():
-            if hasattr(self, key):
-                setattr(self, key, value)
+    blocked_keywords: list[str] = Field(default_factory=list)
 
 
 @dataclass
