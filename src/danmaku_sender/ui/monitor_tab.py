@@ -9,7 +9,7 @@ from PySide6.QtGui import QTextCursor
 from PySide6.QtCore import Qt
 
 from ..core.models.structs import VideoTarget
-from ..core.workers import MonitorTaskWorker
+from .workers import MonitorTaskWorker
 
 
 class MonitorTab(QWidget):

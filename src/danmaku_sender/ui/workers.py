@@ -1,15 +1,15 @@
 import logging
 from PySide6.QtCore import QThread, Signal
 
-from .bili_sender import BiliDanmakuSender
-from .bili_monitor import BiliDanmakuMonitor
-from .history_manager import HistoryManager
-from .state import ApiAuthConfig, SenderConfig, MonitorConfig
-from .models.danmaku import Danmaku
-from .models.result import DanmakuSendResult
-from .models.structs import VideoTarget
-from .models.video import VideoInfo
-from .services.video_fetcher import VideoFetcher
+from ..core.engines.bili_sender import BiliDanmakuSender
+from ..core.engines.bili_monitor import BiliDanmakuMonitor
+from ..core.database.history_manager import HistoryManager
+from ..core.state import ApiAuthConfig, SenderConfig, MonitorConfig
+from ..core.models.danmaku import Danmaku
+from ..core.models.result import DanmakuSendResult
+from ..core.models.structs import VideoTarget
+from ..core.models.video import VideoInfo
+from ..core.services.video_fetcher import VideoFetcher
 
 from ..api.bili_api_client import BiliApiClient
 from ..api.update_checker import UpdateChecker

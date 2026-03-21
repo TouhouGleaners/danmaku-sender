@@ -4,10 +4,10 @@ from dataclasses import dataclass
 from enum import Enum
 from typing import Any, Callable, TypedDict
 
-from .state import AppState
+from ..state import AppState
 
-from .models.danmaku import Danmaku
-from .services.danmaku_validator import validate_danmaku_list
+from ..models.danmaku import Danmaku
+from ..services.danmaku_validator import validate_danmaku_list
 
 
 class EditorField(Enum):

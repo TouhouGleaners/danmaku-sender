@@ -6,19 +6,19 @@ from typing import Callable
 from enum import Enum, auto
 
 from .delay_manager import DelayManager
-from .error_handler import normalize_exception
-from .exceptions import BiliApiException
-from .history_manager import HistoryManager
-from .models.danmaku import Danmaku
-from .models.errors import BiliDmErrorCode
-from .models.result import DanmakuSendResult
-from .models.structs import VideoTarget
-from .services.danmaku_exporter import UnsentDanmakusRecord
-from .services.danmaku_parser import DanmakuParser
-from .state import SenderConfig
+from ..error_handler import normalize_exception
+from ..exceptions import BiliApiException
+from ..database.history_manager import HistoryManager
+from ..models.danmaku import Danmaku
+from ..models.errors import BiliDmErrorCode
+from ..models.result import DanmakuSendResult
+from ..models.structs import VideoTarget
+from ..services.danmaku_exporter import UnsentDanmakusRecord
+from ..services.danmaku_parser import DanmakuParser
+from ..state import SenderConfig
 
-from ..api.bili_api_client import BiliApiClient
-from ..utils.notification_utils import send_windows_notification
+from ...api.bili_api_client import BiliApiClient
+from ...utils.notification_utils import send_windows_notification
 
 
 DanmakuFingerprint = tuple[str, int, int, int, int]

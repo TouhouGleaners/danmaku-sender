@@ -11,7 +11,7 @@ from PySide6.QtWidgets import (
 
 from .dialogs import EditDanmakuDialog, TimeOffsetDialog
 
-from ..core.editor_session import EditorSession, EditorField
+from ..core.engines.editor_session import EditorSession, EditorField
 from ..core.models.danmaku import Danmaku
 from ..core.state import AppState
 from ..utils.time_utils import format_ms_to_hhmmss

@@ -11,10 +11,10 @@ from PySide6.QtWidgets import (
 from PySide6.QtCore import Qt, QAbstractTableModel, QModelIndex, QUrl
 from PySide6.QtGui import QAction, QColor, QDesktopServices, QBrush
 
-from ..core.history_manager import HistoryManager, DanmakuStatus
+from ..core.database.history_manager import HistoryManager, DanmakuStatus
 from ..core.models.video import VideoInfo
 from ..core.state import AppState
-from ..core.workers import FetchInfoWorker
+from .workers import FetchInfoWorker
 
 
 logger = logging.getLogger("HistoryTab")
