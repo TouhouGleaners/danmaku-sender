@@ -3,7 +3,7 @@ import logging
 from pathlib import Path
 from platformdirs import user_data_dir
 
-from pydantic import ValidationError
+from pydantic import ValidationError, BaseModel
 
 from ..config.app_config import AppInfo
 from ..core.state import AppState, SenderConfig, MonitorConfig, ValidationConfig
@@ -43,29 +43,23 @@ def load_app_config(state: AppState):
         with open(path, 'r', encoding='utf-8') as f:
             data = json.load(f)
     except json.JSONDecodeError as e:
-        logger.error(f"配置文件 JSON 格式完全损坏，将使用默认设置: {e}")
+        logger.error(f"配置文件 JSON 格式损坏，将使用默认设置[{path}]: {e}")
         return
     except Exception as e:
         logger.error(f"读取配置文件失败: {e}")
         return
 
+    def _load_section[T: BaseModel](key: str, model_class: type[T], default_instance: T) -> T:
+        if key in data:
+            try:
+                return model_class.model_validate(data[key])
+            except ValidationError as e:
+                logger.warning(f"模块 [{key}] 配置存在非法值，已回退为安全默认值。详情:\n{e}")
+        return default_instance
+
     # 校验配置
-    if "sender" in data:
-        try:
-            state.sender_config = SenderConfig.model_validate(data["sender"])
-        except ValidationError as e:
-            logger.warning(f"Sender 配置存在非法值被拦截，已回退为安全默认值。详情:\n{e}")
+    state.sender_config = _load_section("sender", SenderConfig, state.sender_config)
+    state.monitor_config = _load_section("monitor", MonitorConfig, state.monitor_config)
+    state.validation_config = _load_section("validation", ValidationConfig, state.validation_config)
 
-    if "monitor" in data:
-        try:
-            state.monitor_config = MonitorConfig.model_validate(data["monitor"])
-        except ValidationError as e:
-            logger.warning(f"Monitor 配置存在非法值被拦截，已回退为安全默认值。详情:\n{e}")
-
-    if "validation" in data:
-        try:
-            state.validation_config = ValidationConfig.model_validate(data["validation"])
-        except ValidationError as e:
-            logger.warning(f"Validation 配置存在非法值被拦截，已回退为安全默认值。详情:\n{e}")
-
-    logger.info("配置文件加载与校验流程结束。")
+    logger.info(f"配置文件加载与校验流程结束[{path}]。")
