@@ -4,7 +4,7 @@ from pathlib import Path
 from platformdirs import user_data_dir
 
 from ..config.app_config import AppInfo
-from ..core.state import AppState
+from ..core.state import AppState, SenderConfig, MonitorConfig, ValidationConfig
 
 
 logger = logging.getLogger("ConfigManager")
@@ -42,13 +42,13 @@ def load_app_config(state: AppState):
             data = json.load(f)
 
         if "sender" in data:
-            state.sender_config = state.sender_config.model_validate(data["sender"])
+            state.sender_config = SenderConfig.model_validate(data["sender"])
 
         if "monitor" in data:
-            state.monitor_config = state.monitor_config.model_validate(data["monitor"])
+            state.monitor_config = MonitorConfig.model_validate(data["monitor"])
 
         if "validation" in data:
-            state.validation_config = state.validation_config.model_validate(data["validation"])
+            state.validation_config = ValidationConfig.model_validate(data["validation"])
 
         logger.info("配置加载并校验成功。")
     except Exception as e:

@@ -24,17 +24,17 @@ class UserState:
 class SenderConfig(BaseModel):
     """发送器的配置数据"""
     # 延迟设置
-    min_delay: float = Field(8.0, ge=0.1)
-    max_delay: float = Field(8.5, ge=0.1)
+    min_delay: float = Field(default=8.0, ge=0.1)
+    max_delay: float = Field(default=8.5, ge=0.1)
     
     # 爆发模式
-    burst_size: int = Field(3, ge=0)
-    rest_min: float = Field(40.0, ge=0.0)
-    rest_max: float = Field(45.0, ge=0.0)
+    burst_size: int = Field(default=3, ge=0)
+    rest_min: float = Field(default=40.0, ge=0.0)
+    rest_max: float = Field(default=45.0, ge=0.0)
     
     # 自动停止
-    stop_after_count: int = Field(0, ge=0)
-    stop_after_time: int = Field(0, ge=0)
+    stop_after_count: int = Field(default=0, ge=0)
+    stop_after_time: int = Field(default=0, ge=0)
 
     # 系统设置
     prevent_sleep: bool = True
@@ -56,7 +56,7 @@ class SenderConfig(BaseModel):
 
 class MonitorConfig(BaseModel):
     """监视器的配置数据"""
-    refresh_interval: int = Field(60, ge=10)  # 刷新间隔，单位秒
+    refresh_interval: int = Field(default=60, ge=10)  # 刷新间隔，单位秒
     
     # 复用全局设置
     prevent_sleep: bool = True
