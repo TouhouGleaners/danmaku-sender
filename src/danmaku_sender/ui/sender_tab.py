@@ -15,7 +15,7 @@ from ..core.models.video import VideoInfo
 from ..core.services.danmaku_exporter import create_xml_from_danmakus
 from ..core.services.danmaku_parser import DanmakuParser
 from ..core.state import AppState
-from ..core.workers import FetchInfoWorker, SendTaskWorker
+from .workers import FetchInfoWorker, SendTaskWorker
 from ..utils.string_utils import parse_bilibili_link
 from ..utils.time_utils import format_seconds_to_duration
 

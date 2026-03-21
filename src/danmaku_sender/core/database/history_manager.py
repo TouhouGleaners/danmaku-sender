@@ -8,11 +8,11 @@ from enum import IntEnum
 from peewee import SqliteDatabase, fn, Case
 from playhouse.migrate import SqliteMigrator, migrate
 
-from .models.danmaku import Danmaku
-from .models.database import db, SentDanmaku
-from .models.structs import VideoTarget
+from ..models.danmaku import Danmaku
+from .orm_models import db, SentDanmaku
+from ..models.structs import VideoTarget
 
-from ..config.app_config import AppInfo
+from ...config.app_config import AppInfo
 
 
 logger = logging.getLogger("HistoryManager")

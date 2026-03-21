@@ -18,7 +18,7 @@ from .history_tab import HistoryTab
 
 from ..config.app_config import AppInfo, UI
 from ..core.state import AppState
-from ..core.workers import UpdateCheckWorker, FetchUserInfoWorker
+from .workers import UpdateCheckWorker, FetchUserInfoWorker
 from ..utils.log_utils import GuiLoggingHandler
 from ..utils.credential_manager import load_credentials, save_credentials
 from ..utils.config_manager import load_app_config, save_app_config
