@@ -53,6 +53,10 @@ class EditorTableModel(QAbstractTableModel):
 
         row = index.row()
         col = index.column()
+
+        if not (0 <= row < len(self._view_items)):
+            return None
+
         item = self._view_items[row]
 
         # 提供显示文本
@@ -661,8 +665,10 @@ class EditorTab(QWidget):
             if (idx := self.model.get_source_index(row_idx.row())) is not None
         ]
 
-        for original_index in original_indices:
-            self.session.delete_item(original_index)
+        if not original_indices:
+            return
+
+        self.session.delete_items(original_indices)
 
         self._refresh_table()
 

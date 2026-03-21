@@ -218,6 +218,23 @@ class EditorSession:
                 self.staged_deletions.add(original_index)
                 self.refresh_validation()
 
+    def delete_items(self, original_indices: list[int]):
+        """批量标记删除弹幕"""
+        if not original_indices:
+            return
+
+        batch_changes = []
+        for idx in original_indices:
+            if 0 <= idx < len(self.staged_danmakus) and idx not in self.staged_deletions:
+                self.staged_deletions.add(idx)
+                # 将每一条删除记录打包进同一个原子变更列表
+                batch_changes.append(AtomicChange(idx, EditorField.IS_DELETED, False))
+
+        if batch_changes:
+            self._push_undo_record(batch_changes)
+            self.refresh_validation()
+            self.logger.info(f"已批量删除 {len(batch_changes)} 条弹幕。")
+
     def update_item_content(self, original_index: int, new_content: str):
         """更新暂存区单条弹幕内容"""
         if 0 <= original_index < len(self.staged_danmakus):
