@@ -583,7 +583,11 @@ class EditorTab(QWidget):
         original_index = self.model.get_source_index(row)
         if original_index is None:
             return None, None
-            
+
+        if not (0 <= original_index < len(self.session.staged_danmakus)):
+            self.logger.warning(f"越界访问拦截: 尝试访问索引 {original_index}，但数据池大小为 {len(self.session.staged_danmakus)}")
+            return None, None
+
         return original_index, self.session.staged_danmakus[original_index]
 
     def _on_selection_changed(self):
