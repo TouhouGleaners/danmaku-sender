@@ -1,12 +1,12 @@
 import logging
 
-from PySide6.QtCore import Qt
+from PySide6.QtCore import Qt, QAbstractTableModel, QModelIndex
 from PySide6.QtGui import QColor, QBrush
 from PySide6.QtWidgets import (
-    QWidget, QVBoxLayout, QHBoxLayout, QPushButton, QLabel, 
-    QTableWidget, QTableWidgetItem, QHeaderView, QAbstractItemView,
-    QMessageBox, QMenu, QLineEdit, QFrame, QCheckBox, QGroupBox, QSizePolicy,
-    QSplitter, QFormLayout, QDoubleSpinBox, QComboBox, QSpinBox, QTextEdit, QColorDialog
+    QWidget, QVBoxLayout, QHBoxLayout, QPushButton, QLabel, QSizePolicy,
+    QTableView, QHeaderView, QAbstractItemView, QColorDialog,
+    QMessageBox, QMenu, QLineEdit, QFrame, QCheckBox, QGroupBox, 
+    QSplitter, QFormLayout, QDoubleSpinBox, QComboBox, QTextEdit
 )
 
 from .dialogs import EditDanmakuDialog, TimeOffsetDialog
@@ -15,6 +15,84 @@ from ..core.engines.editor_session import EditorSession, EditorField
 from ..core.models.danmaku import Danmaku
 from ..core.state import AppState
 from ..utils.time_utils import format_ms_to_hhmmss
+
+
+class EditorTableModel(QAbstractTableModel):
+    HEADERS = ["序号", "时间", "问题描述", "弹幕内容"]
+
+    def __init__(self, parent=None):
+        super().__init__(parent)
+        self._view_items = []
+
+    def update_data(self, view_items):
+        """全量刷新表格数据"""
+        self.beginResetModel()
+        self._view_items = view_items
+        self.endResetModel()
+
+    def get_source_index(self, row: int) -> int | None:
+        """获取选中行对应的底层弹幕原始索引"""
+        if 0 <= row < len(self._view_items):
+            return self._view_items[row]['source_index']
+        return None
+
+    def rowCount(self, parent=QModelIndex()) -> int:
+        return len(self._view_items)
+
+    def columnCount(self, parent=QModelIndex()) -> int:
+        return len(self.HEADERS)
+    
+    def headerData(self, section: int, orientation: Qt.Orientation, role: int) -> str | None:
+        if (
+            orientation == Qt.Orientation.Horizontal
+            and role == Qt.ItemDataRole.DisplayRole
+            and 0 <= section < len(self.HEADERS)
+        ):
+            return self.HEADERS[section]
+
+        return None
+    
+    def data(self, index: QModelIndex, role=Qt.ItemDataRole.DisplayRole):
+        if not index.isValid():
+            return None
+
+        row = index.row()
+        col = index.column()
+
+        if not (0 <= row < len(self._view_items)):
+            return None
+
+        item = self._view_items[row]
+
+        # 提供显示文本
+        if role == Qt.ItemDataRole.DisplayRole:
+            if col == 0:
+                return str(item['source_index'] + 1)
+            elif col == 1:
+                return format_ms_to_hhmmss(item['time_ms'])
+            elif col == 2:
+                return item['error_msg']
+            elif col == 3:
+                return item['content']
+
+        # 提供 UserRole 用于反向查找
+        elif role == Qt.ItemDataRole.UserRole:
+            return item['source_index']
+
+        # 提供颜色样式
+        is_valid = item['is_valid']
+        
+        if role == Qt.ItemDataRole.ForegroundRole:
+            if is_valid:
+                return QBrush(QColor("#95a5a6")) # 正常行的灰字
+            elif col == 2:
+                return QBrush(QColor("#e74c3c")) # 错误行的理由红字
+                
+        elif role == Qt.ItemDataRole.BackgroundRole:
+            if not is_valid:
+                return QBrush(QColor("#fff2f2")) # 错误行的淡红背景
+
+        return None
 
 
 class EditorTab(QWidget):
@@ -118,18 +196,19 @@ class EditorTab(QWidget):
         self.splitter = QSplitter(Qt.Orientation.Horizontal)
 
         # --- 左侧：表格 ---
-        self.table = QTableWidget()
-        self.table.setColumnCount(4)
-        self.table.setHorizontalHeaderLabels(["序号", "时间", "问题描述", "弹幕内容"])
+        self.table = QTableView()
+        self.model = EditorTableModel()
+        self.table.setModel(self.model)
+
         self.table.setSelectionBehavior(QAbstractItemView.SelectionBehavior.SelectRows)
+        self.table.setSelectionMode(QAbstractItemView.SelectionMode.ExtendedSelection)
         self.table.setEditTriggers(QAbstractItemView.EditTrigger.NoEditTriggers)
         self.table.setAlternatingRowColors(True)
-        self.table.setSortingEnabled(False)
         self.table.verticalHeader().setVisible(False)
-        self.table.itemDoubleClicked.connect(self.on_table_double_click)
-        
+
         # 将表格选择变更连接到右侧属性面板
-        self.table.itemSelectionChanged.connect(self._on_selection_changed)
+        self.table.doubleClicked.connect(self.on_table_double_click)
+        self.table.selectionModel().selectionChanged.connect(self._on_selection_changed)
 
         self.table.setContextMenuPolicy(Qt.ContextMenuPolicy.CustomContextMenu)
         self.table.customContextMenuRequested.connect(self.open_context_menu)
@@ -310,41 +389,6 @@ class EditorTab(QWidget):
         self.logger.debug("Inspector has been explicitly reset.")
 
     # --- 交互核心逻辑 ---
-    def _on_selection_changed(self):
-        """当表格选中项变化时，同步更新 UI 状态并渲染属性面板"""
-        self._update_ui_state()
-
-        selected = self.table.selectedItems()
-        if not selected or not self.session:
-            self._reset_inspector()
-            return
-            
-        # 仅取选中的第一行展示在属性面板中
-        row = selected[0].row()
-        idx_item = self.table.item(row, 0)
-        if not idx_item:
-            return
-            
-        original_index = idx_item.data(Qt.ItemDataRole.UserRole)
-        self.current_editing_index = original_index
-        
-        # 取出对象并赋值
-        dm: Danmaku = self.session.staged_danmakus[original_index]
-        
-        self.prop_time.blockSignals(True)
-        self.prop_time.setValue(dm.progress / 1000.0)
-        self.prop_time.blockSignals(False)
-        
-        mode_idx = self.prop_mode.findData(dm.mode)
-        self.prop_mode.setCurrentIndex(mode_idx if mode_idx >= 0 else 0)
-            
-        self._populate_font_sizes(dm.fontsize)
-        
-        self.current_color_val = dm.color
-        self._update_color_btn_style(self.int_to_hex(dm.color))
-        
-        self.prop_text.setPlainText(dm.msg)
-        self.prop_group.setEnabled(True)
 
     def _apply_properties(self):
         """应用弹幕属性修改"""
@@ -367,9 +411,9 @@ class EditorTab(QWidget):
         changed = self.session.update_item_properties(self.current_editing_index, new_props)
         if changed:
             # 记录当前选中的行，刷新表格后恢复选中
-            row = self.table.currentRow()
+            row = self.table.currentIndex().row()
             self._refresh_table()
-            if 0 <= row < self.table.rowCount():
+            if 0 <= row < self.model.rowCount():
                 self.table.selectRow(row)
 
     # --- Qt Methods ---
@@ -454,11 +498,11 @@ class EditorTab(QWidget):
             return
 
         session_active = self.session.has_active_session
-        has_items = self.table.rowCount() > 0
+        has_items = self.model.rowCount() > 0
 
         self.offset_btn.setEnabled(session_active)
         self.batch_btn.setEnabled(session_active and has_items)
-        self.delete_btn.setEnabled(session_active and len(self.table.selectedItems()) > 0)
+        self.delete_btn.setEnabled(session_active and self.table.selectionModel().hasSelection())
 
         self.undo_btn.setEnabled(self.session.can_undo)
         self.apply_btn.setEnabled(self.session.is_dirty)
@@ -527,113 +571,129 @@ class EditorTab(QWidget):
         if not self.session:
             return
 
-        self.table.setRowCount(0)
         items = self.session.generate_view_model(show_all=self.preview_mode_cb.isChecked())
-
-        self.table.setRowCount(len(items))
-        for row, item in enumerate(items):
-            idx_item = QTableWidgetItem(str(item['source_index'] + 1))
-            idx_item.setData(Qt.ItemDataRole.UserRole, item['source_index'])
-            
-            time_item = QTableWidgetItem(format_ms_to_hhmmss(item['time_ms']))
-            reason_item = QTableWidgetItem(item['error_msg'])
-            content_item = QTableWidgetItem(item['content'])
-
-            if item['is_valid']:
-                # 正常行：文字变灰
-                gray_brush = QBrush(QColor("#95a5a6"))
-                for it in [idx_item, time_item, reason_item, content_item]:
-                    it.setForeground(gray_brush)
-            else:
-                # 异常行：理由变红，背景淡红
-                error_bg = QColor("#fff2f2")
-                reason_item.setForeground(QColor("#e74c3c"))
-                for it in [idx_item, time_item, reason_item, content_item]:
-                    it.setBackground(error_bg)
-
-            self.table.setItem(row, 0, idx_item)
-            self.table.setItem(row, 1, time_item)
-            self.table.setItem(row, 2, reason_item)
-            self.table.setItem(row, 3, content_item)
-
+        self.model.update_data(items)
         self._update_ui_state()
 
-    def open_context_menu(self, pos):
-        item = self.table.itemAt(pos)
-        if not item:
+    def _get_danmaku_for_row(self, row: int) -> tuple[int | None, Danmaku | None]:
+        """辅助方法：通过 UI 行号获取底层原始索引与弹幕对象"""
+        if not self.session:
+            return None, None
+            
+        original_index = self.model.get_source_index(row)
+        if original_index is None:
+            return None, None
+
+        if not (0 <= original_index < len(self.session.staged_danmakus)):
+            self.logger.warning(f"越界访问拦截: 尝试访问索引 {original_index}，但数据池大小为 {len(self.session.staged_danmakus)}")
+            return None, None
+
+        return original_index, self.session.staged_danmakus[original_index]
+
+    def _on_selection_changed(self):
+        """当表格选中项变化时，同步更新 UI 状态并渲染属性面板"""
+        self._update_ui_state()
+
+        selected_indexes = self.table.selectionModel().selectedRows()
+        if not selected_indexes:
+            self._reset_inspector()
             return
 
-        if not self.session:
+        original_index, dm = self._get_danmaku_for_row(selected_indexes[0].row())
+        if original_index is None or dm is None:
+            return
+
+        self.current_editing_index = original_index
+
+        self.prop_time.blockSignals(True)
+        self.prop_time.setValue(dm.progress / 1000.0)
+        self.prop_time.blockSignals(False)
+
+        mode_idx = self.prop_mode.findData(dm.mode)
+        self.prop_mode.setCurrentIndex(mode_idx if mode_idx >= 0 else 0)
+ 
+        self._populate_font_sizes(dm.fontsize)
+        self.current_color_val = dm.color
+        self._update_color_btn_style(self.int_to_hex(dm.color))
+
+        self.prop_text.setPlainText(dm.msg)
+        self.prop_group.setEnabled(True)
+
+    def open_context_menu(self, pos):
+        index = self.table.indexAt(pos)
+        if not index.isValid() or not self.session:
             return
 
         menu = QMenu(self)
         edit_action = menu.addAction("✏️ 编辑内容")
         delete_action = menu.addAction("🗑️ 删除此条")
 
-        # 在鼠标位置弹出
-        action = menu.exec(self.table.mapToGlobal(pos))
+        action = menu.exec(self.table.viewport().mapToGlobal(pos))
 
         if action == edit_action:
-            self._edit_row(item.row())
+            self._edit_row(index.row())
         elif action == delete_action:
-            # 获取原始索引并删除
-            original_index = self.table.item(item.row(), 0).data(Qt.ItemDataRole.UserRole)
-            self.session.delete_item(original_index)
-            self._refresh_table()
+            original_index = self.model.get_source_index(index.row())
+            if original_index is not None:
+                self.session.delete_item(original_index)
+                self._refresh_table()
 
-    def on_table_double_click(self, item):
+    def on_table_double_click(self, index):
         """双击编辑内容"""
-        if item.column() == 3:
-            self._edit_row(item.row())
+        if index.column() == 3:
+            self._edit_row(index.row())
 
     def _edit_row(self, row):
-        """兼容原有的双击弹窗功能（与侧边栏属性检查器双线并行）"""
-        idx_item = self.table.item(row, 0)
-        if not idx_item:
-            return
-
         if not self.session:
             return
 
-        original_index = idx_item.data(Qt.ItemDataRole.UserRole)
-        current_text = self.table.item(row, 3).text()
+        original_index, dm = self._get_danmaku_for_row(row)
+        if original_index is None or dm is None:
+            return
+
+        current_text = dm.msg
 
         dialog = EditDanmakuDialog(current_text, self)
         if dialog.exec():
             new_text = dialog.get_text()
-            if new_text:
-                if new_text != current_text:
-                    self.session.update_item_content(original_index, new_text)
-                    self._refresh_table()
-                    # 重新触发侧边栏更新
-                    if self.current_editing_index == original_index:
-                        self.table.selectRow(row)
-            else:
+            if new_text and new_text != current_text:
+                self.session.update_item_content(original_index, new_text)
+                self._refresh_table()
+                # 恢复选中状态
+                self.table.selectRow(row)
+            elif not new_text:
                 reply = QMessageBox.question(self, "确认删除", "内容为空，是否直接删除该条弹幕？", QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No)
                 if reply == QMessageBox.StandardButton.Yes:
                     self.session.delete_item(original_index)
                     self._refresh_table()
 
     def delete_selected_items(self):
-        """删除选中项"""
+        """批量删除选中项"""
         if not self.session:
             return
-        
-        rows = set()
-        for item in self.table.selectedItems():
-            rows.add(item.row())
-        
-        if not rows:
+
+        selected_indexes = self.table.selectionModel().selectedRows()
+        if not selected_indexes:
             return
 
-        for row in rows:
-            original_index = self.table.item(row, 0).data(Qt.ItemDataRole.UserRole)
-            self.session.delete_item(original_index)
+        # 收集所有的 source_index
+        original_indices = [
+            idx for row_idx in selected_indexes 
+            if (idx := self.model.get_source_index(row_idx.row())) is not None
+        ]
+
+        if not original_indices:
+            return
+
+        self.session.delete_items(original_indices)
 
         self._refresh_table()
 
     def undo(self):
         """撤销"""
+        if not self.session:
+            return
+
         if self.session.undo():
             self._refresh_table()
 
