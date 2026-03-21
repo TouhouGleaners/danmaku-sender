@@ -7,13 +7,14 @@ from datetime import datetime, timezone
 # Sender 相关日志源
 SENDER_LOG_WHITELIST = (
     "SenderTab", 
-    "DanmakuSender", 
+    "DanmakuScheduler",
+    "DanmakuExecutor",
+    "DelayManager", 
     "DanmakuParser", 
     "BiliUtils", 
     "BiliApiClient", 
     "WbiSigner",
     "CredentialManager",
-    "NotificationUtils",
     "UpdateChecker"
 )
 
