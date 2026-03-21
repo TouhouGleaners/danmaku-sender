@@ -3,10 +3,10 @@ import logging
 from PySide6.QtCore import Qt, QAbstractTableModel, QModelIndex
 from PySide6.QtGui import QColor, QBrush
 from PySide6.QtWidgets import (
-    QWidget, QVBoxLayout, QHBoxLayout, QPushButton, QLabel, 
-    QTableView, QTableWidgetItem, QHeaderView, QAbstractItemView,
-    QMessageBox, QMenu, QLineEdit, QFrame, QCheckBox, QGroupBox, QSizePolicy,
-    QSplitter, QFormLayout, QDoubleSpinBox, QComboBox, QSpinBox, QTextEdit, QColorDialog
+    QWidget, QVBoxLayout, QHBoxLayout, QPushButton, QLabel, QSizePolicy,
+    QTableView, QHeaderView, QAbstractItemView, QColorDialog,
+    QMessageBox, QMenu, QLineEdit, QFrame, QCheckBox, QGroupBox, 
+    QSplitter, QFormLayout, QDoubleSpinBox, QComboBox, QTextEdit
 )
 
 from .dialogs import EditDanmakuDialog, TimeOffsetDialog
@@ -43,8 +43,13 @@ class EditorTableModel(QAbstractTableModel):
         return len(self.HEADERS)
     
     def headerData(self, section: int, orientation: Qt.Orientation, role: int) -> str | None:
-        if orientation == Qt.Orientation.Horizontal and role == Qt.ItemDataRole.DisplayRole:
+        if (
+            orientation == Qt.Orientation.Horizontal
+            and role == Qt.ItemDataRole.DisplayRole
+            and 0 <= section < len(self.HEADERS)
+        ):
             return self.HEADERS[section]
+
         return None
     
     def data(self, index: QModelIndex, role=Qt.ItemDataRole.DisplayRole):
@@ -570,23 +575,31 @@ class EditorTab(QWidget):
         self.model.update_data(items)
         self._update_ui_state()
 
+    def _get_danmaku_for_row(self, row: int) -> tuple[int | None, Danmaku | None]:
+        """辅助方法：通过 UI 行号获取底层原始索引与弹幕对象"""
+        if not self.session:
+            return None, None
+            
+        original_index = self.model.get_source_index(row)
+        if original_index is None:
+            return None, None
+            
+        return original_index, self.session.staged_danmakus[original_index]
+
     def _on_selection_changed(self):
         """当表格选中项变化时，同步更新 UI 状态并渲染属性面板"""
         self._update_ui_state()
 
         selected_indexes = self.table.selectionModel().selectedRows()
-        if not selected_indexes or not self.session:
+        if not selected_indexes:
             self._reset_inspector()
             return
 
-        row = selected_indexes[0].row()
-        original_index = self.model.get_source_index(row)
-
-        if original_index is None:
+        original_index, dm = self._get_danmaku_for_row(selected_indexes[0].row())
+        if original_index is None or dm is None:
             return
 
         self.current_editing_index = original_index
-        dm: Danmaku = self.session.staged_danmakus[original_index]
 
         self.prop_time.blockSignals(True)
         self.prop_time.setValue(dm.progress / 1000.0)
@@ -630,11 +643,11 @@ class EditorTab(QWidget):
         if not self.session:
             return
 
-        original_index = self.model.get_source_index(row)
-        if original_index is None:
+        original_index, dm = self._get_danmaku_for_row(row)
+        if original_index is None or dm is None:
             return
 
-        current_text = self.session.staged_danmakus[original_index].msg
+        current_text = dm.msg
 
         dialog = EditDanmakuDialog(current_text, self)
         if dialog.exec():
