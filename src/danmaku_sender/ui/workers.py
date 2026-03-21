@@ -135,11 +135,12 @@ class SendTaskWorker(BaseWorker):
         self.history_manager = HistoryManager()
 
     def run(self):
+        ctx: SendingContext | None = None
         try:
             with KeepSystemAwake(self.strategy_config.prevent_sleep):
                 with BiliApiClient.from_config(self.auth_config) as client:
                     executor = DanmakuExecutor(client)
-                    self.scheduler = DanmakuScheduler(executor)
+                    self.scheduler = DanmakuScheduler(executor, self.history_manager)
 
                     def _progress_cb(attempted, total):
                         self.progress_updated.emit(attempted, total)
@@ -159,6 +160,7 @@ class SendTaskWorker(BaseWorker):
                         result_callback=_save_to_db_cb
                     )
                     ctx = self.scheduler.run_pipeline(job)
+
         except Exception as e:
             self.report_error("任务发生严重错误", e)
         finally:
