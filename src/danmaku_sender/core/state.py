@@ -1,6 +1,6 @@
-from dataclasses import dataclass, field, asdict
+from dataclasses import dataclass, field
 
-from pydantic import BaseModel, Field, model_validator
+from pydantic import BaseModel, ConfigDict, Field, model_validator
 from PySide6.QtCore import QObject, Signal
 
 from .models.danmaku import Danmaku
@@ -23,6 +23,8 @@ class UserState:
 
 class SenderConfig(BaseModel):
     """发送器的配置数据"""
+    model_config = ConfigDict(validate_assignment=True)  # 赋值时校验
+
     # 延迟设置
     min_delay: float = Field(default=8.0, ge=0.1)
     max_delay: float = Field(default=8.5, ge=0.1)
@@ -56,6 +58,8 @@ class SenderConfig(BaseModel):
 
 class MonitorConfig(BaseModel):
     """监视器的配置数据"""
+    model_config = ConfigDict(validate_assignment=True)  # 赋值时校验
+
     refresh_interval: int = Field(default=60, ge=10)  # 刷新间隔，单位秒
     
     # 复用全局设置
@@ -65,6 +69,8 @@ class MonitorConfig(BaseModel):
 
 class ValidationConfig(BaseModel):
     """校验规则"""
+    model_config = ConfigDict(validate_assignment=True)  # 赋值时校验
+
     # 用户自定义规则
     enabled: bool = True
     blocked_keywords: list[str] = Field(default_factory=list)

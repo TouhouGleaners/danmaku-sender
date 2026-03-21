@@ -3,6 +3,8 @@ import logging
 from pathlib import Path
 from platformdirs import user_data_dir
 
+from pydantic import ValidationError
+
 from ..config.app_config import AppInfo
 from ..core.state import AppState, SenderConfig, MonitorConfig, ValidationConfig
 
@@ -40,16 +42,30 @@ def load_app_config(state: AppState):
     try:
         with open(path, 'r', encoding='utf-8') as f:
             data = json.load(f)
-
-        if "sender" in data:
-            state.sender_config = SenderConfig.model_validate(data["sender"])
-
-        if "monitor" in data:
-            state.monitor_config = MonitorConfig.model_validate(data["monitor"])
-
-        if "validation" in data:
-            state.validation_config = ValidationConfig.model_validate(data["validation"])
-
-        logger.info("配置加载并校验成功。")
+    except json.JSONDecodeError as e:
+        logger.error(f"配置文件 JSON 格式完全损坏，将使用默认设置: {e}")
+        return
     except Exception as e:
-        logger.warning(f"加载配置失败（格式损坏或数据不合法），将回退使用默认值: {e}")
+        logger.error(f"读取配置文件失败: {e}")
+        return
+
+    # 校验配置
+    if "sender" in data:
+        try:
+            state.sender_config = SenderConfig.model_validate(data["sender"])
+        except ValidationError as e:
+            logger.warning(f"Sender 配置存在非法值被拦截，已回退为安全默认值。详情:\n{e}")
+
+    if "monitor" in data:
+        try:
+            state.monitor_config = MonitorConfig.model_validate(data["monitor"])
+        except ValidationError as e:
+            logger.warning(f"Monitor 配置存在非法值被拦截，已回退为安全默认值。详情:\n{e}")
+
+    if "validation" in data:
+        try:
+            state.validation_config = ValidationConfig.model_validate(data["validation"])
+        except ValidationError as e:
+            logger.warning(f"Validation 配置存在非法值被拦截，已回退为安全默认值。详情:\n{e}")
+
+    logger.info("配置文件加载与校验流程结束。")
