@@ -1,7 +1,7 @@
 import logging
 from PySide6.QtCore import QThread, Signal
 
-from ..core.engines.bili_sender import BiliDanmakuSender
+from ..core.engines.sender import DanmakuScheduler, DanmakuExecutor, SendingContext, SendJob
 from ..core.engines.bili_monitor import BiliDanmakuMonitor
 from ..core.database.history_manager import HistoryManager
 from ..core.state import ApiAuthConfig, SenderConfig, MonitorConfig
@@ -15,6 +15,7 @@ from ..api.bili_api_client import BiliApiClient
 from ..api.update_checker import UpdateChecker
 from ..config.app_config import AppInfo
 from ..utils.system_utils import KeepSystemAwake
+from ..utils.notification_utils import send_windows_notification
 
 
 def _get_silent_logger():
@@ -134,10 +135,12 @@ class SendTaskWorker(BaseWorker):
         self.history_manager = HistoryManager()
 
     def run(self):
+        ctx: SendingContext | None = None
         try:
             with KeepSystemAwake(self.strategy_config.prevent_sleep):
                 with BiliApiClient.from_config(self.auth_config) as client:
-                    self.sender_instance = BiliDanmakuSender(client)
+                    executor = DanmakuExecutor(client)
+                    self.scheduler = DanmakuScheduler(executor, self.history_manager)
 
                     def _progress_cb(attempted, total):
                         self.progress_updated.emit(attempted, total)
@@ -148,19 +151,55 @@ class SendTaskWorker(BaseWorker):
                                 dm.dmid = result.dmid
                             self.history_manager.record_danmaku(self.target, dm, result.is_visible)
 
-                    self.sender_instance.send_danmaku_from_list(
+                    job = SendJob(
                         target=self.target,
                         danmakus=self.danmakus,
                         config=self.strategy_config,
                         stop_event=self.stop_event,
                         progress_callback=_progress_cb,
-                        result_callback=_save_to_db_cb,
-                        history_manager=self.history_manager
+                        result_callback=_save_to_db_cb
                     )
+                    ctx = self.scheduler.run_pipeline(job)
+
         except Exception as e:
             self.report_error("任务发生严重错误", e)
         finally:
-            self.task_finished.emit(self.sender_instance)
+            if ctx:
+                self._log_and_notify_summary(ctx)
+            self.task_finished.emit(self.scheduler)
+
+    def _log_and_notify_summary(self, ctx: SendingContext):
+        """记录日志并弹送系统通知（纯 UI 侧交互）"""
+        self.logger.info("--- 发送任务结束 ---")
+        if ctx.auto_stop_reason:
+            self.logger.info(f"原因：{ctx.auto_stop_reason}")
+        elif self.stop_event.is_set():
+            self.logger.info("原因：任务被用户手动停止。")
+        elif ctx.fatal_error_occurred:
+            self.logger.critical("原因：任务因致命错误中断。请检查配置或网络！")
+        else:
+            self.logger.info("原因：所有弹幕已处理完毕。")
+
+        self.logger.info(f"总计: {ctx.total} | 成功: {ctx.success_count} | 跳过: {ctx.skipped_count} | 失败: {ctx.attempted_count - ctx.success_count}")
+
+        # 发送桌面通知
+        notification_title = "弹幕发送任务已结束"
+        summary_message = f"成功: {ctx.success_count} / 尝试: {ctx.attempted_count} / 总计: {ctx.total}"
+
+        if ctx.auto_stop_reason:
+            msg = f"自动停止：{ctx.auto_stop_reason}\n{summary_message}"
+        elif self.stop_event.is_set():
+            msg = f"任务已被手动停止。\n{summary_message}"
+        elif ctx.fatal_error_occurred:
+            msg = f"任务因致命错误中断！\n{summary_message}"
+        elif ctx.total == 0:
+            msg = "没有需要发送的弹幕。"
+        elif ctx.success_count == ctx.attempted_count:
+            msg = f"任务已完成！所有 {ctx.success_count} 条均发送成功。"
+        else:
+            msg = f"任务已完成。\n{summary_message}"
+
+        send_windows_notification(notification_title, msg)
 
 
 class MonitorTaskWorker(BaseWorker):
