@@ -138,7 +138,7 @@ class UIBinder:
         elif isinstance(widget, (QSpinBox, QDoubleSpinBox)):
             signal_instance = widget.valueChanged
         elif isinstance(widget, QLineEdit):
-           signal_instance = widget.textChanged if realtime else widget.editingFinished
+            signal_instance = widget.textChanged if realtime else widget.editingFinished
         elif isinstance(widget, QComboBox):
             signal_instance = widget.currentIndexChanged
         else:
