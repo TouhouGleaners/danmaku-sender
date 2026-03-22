@@ -126,7 +126,7 @@ class AppState(QObject):
         # 运行时状态
         self.video_state = VideoState()
 
-        # True 表示编辑器有未应用的修改，SenderTab 拦截发送
+        # True 表示编辑器有未应用的修改，SenderPage 拦截发送
         self.editor_is_dirty: bool = False
 
     def update_credentials(self, sessdata: str, bili_jct: str):
