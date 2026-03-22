@@ -1,5 +1,7 @@
 import logging
+import weakref
 from typing import Any, Callable
+
 from pydantic import ValidationError
 
 from PySide6.QtCore import SignalInstance
@@ -20,11 +22,12 @@ class UIBinder:
     2. 生命周期管理: 内部维护绑定注册表 (_active_bindings)，每次重绑时自动解除历史信号，防止内存泄漏与重复触发。
     3. 异常反馈: 拦截 Pydantic 的 ValidationError，并通过动态属性 (invalid) 与 QSS 联动实现非侵入式的 UI 异常反馈。
     """
-    
-    # 绑定注册表
-    # 结构: { id(widget): (Signal_Instance, Slot_Callable) }
-    # 用于记录每个 Widget 当前处于活动状态的信号连接，以便在重新绑定时进行清理。
-    _active_bindings: dict[int, tuple[SignalInstance, Callable[..., None]]] = {}
+
+    # 静态绑定注册表
+    # 使用弱引用字典，防止 Binder 持有 Widget 引用导致窗口无法关闭。
+    # 当 Widget 被销毁时，对应的连接记录会自动从字典中移除（GC 自动清理）。
+    # 结构: { Widget_Ref: [(Signal_Instance, Slot_Callable)] }
+    _active_bindings: weakref.WeakKeyDictionary[QWidget, list[tuple[SignalInstance, Callable[..., None]]]] = weakref.WeakKeyDictionary()
 
     @staticmethod
     def _set_widget_invalid_state(widget: QWidget, is_invalid: bool, error_msg: str = "") -> None:
@@ -39,6 +42,8 @@ class UIBinder:
             return
 
         widget.setProperty("invalid", is_invalid)
+
+        # 强制触发 QSS 重绘
         widget.style().unpolish(widget)
         widget.style().polish(widget)
         
@@ -72,24 +77,35 @@ class UIBinder:
             widget.blockSignals(False)
 
     @staticmethod
-    def bind(widget: QWidget, model: Any, field_name: str) -> None:
-        """执行双向绑定注册"""
+    def bind(widget: QWidget, model: Any, field_name: str, clear_old: bool = True, realtime: bool = False) -> None:
+        """
+        执行双向绑定注册
+
+        Args:
+            widget: 目标 Qt 控件
+            model: 绑定的数据模型
+            field_name: 模型上的属性名称
+            clear_old: 如果为 True，则清空该控件之前绑定的所有逻辑（默认行为）。设为 False 支持 1对N 绑定。
+            realtime: 仅针对 QLineEdit，True 为按键实时更新，False 为失焦/回车更新。
+        """
         if not hasattr(model, field_name):
             logger.error(f"绑定失败: 模型 {type(model).__name__} 不存在字段 '{field_name}'")
             return
 
-        widget_id = id(widget)
-
         # 生命周期清理
         # 确保同一控件仅存在唯一的绑定槽函数，防止幽灵触发
-        if widget_id in UIBinder._active_bindings:
-            old_signal, old_slot = UIBinder._active_bindings[widget_id]
-            try:
-                old_signal.disconnect(old_slot)
-                logger.debug(f"已清理控件的陈旧绑定关系 (Widget ID: {widget_id})")
-            except (RuntimeError, TypeError):
-                pass
-            del UIBinder._active_bindings[widget_id]
+        if clear_old:
+            if widget in UIBinder._active_bindings:
+                for old_signal, old_slot in UIBinder._active_bindings[widget]:
+                    try:
+                        old_signal.disconnect(old_slot)
+                    except (RuntimeError, TypeError):
+                        pass
+                del UIBinder._active_bindings[widget]
+
+        # 初始化控件的绑定列表
+        if widget not in UIBinder._active_bindings:
+            UIBinder._active_bindings[widget] = []
 
         # 初始数据挂载 (Model -> UI)
         current_value = getattr(model, field_name)
@@ -122,7 +138,7 @@ class UIBinder:
         elif isinstance(widget, (QSpinBox, QDoubleSpinBox)):
             signal_instance = widget.valueChanged
         elif isinstance(widget, QLineEdit):
-            signal_instance = widget.editingFinished
+           signal_instance = widget.textChanged if realtime else widget.editingFinished
         elif isinstance(widget, QComboBox):
             signal_instance = widget.currentIndexChanged
         else:
@@ -131,5 +147,5 @@ class UIBinder:
 
         if signal_instance is not None:
             signal_instance.connect(_update_model_proxy)
-            # 存入注册表，交由引擎管理生命周期
-            UIBinder._active_bindings[widget_id] = (signal_instance, _update_model_proxy)
+            # 存入弱引用注册表，确保安全回收
+            UIBinder._active_bindings[widget].append((signal_instance, _update_model_proxy))

@@ -242,7 +242,7 @@ class SenderTab(QWidget):
         video_state = state.video_state
 
         # 绑定基础参数
-        UIBinder.bind(self.bv_input, video_state, "bvid")
+        UIBinder.bind(self.bv_input, video_state, "bvid", realtime=True)
         UIBinder.bind(self.skip_sent_cb, config, "skip_sent")
 
         # 绑定发送延迟策略

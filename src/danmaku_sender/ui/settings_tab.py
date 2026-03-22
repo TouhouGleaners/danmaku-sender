@@ -84,32 +84,14 @@ class SettingsTab(QWidget):
             
         self._state = state
 
-        # 🎯 第一组：绑定普通属性 (SESSDATA, BILI_JCT)
-        # 这里 UIBinder 会自动兼容普通对象的 setattr 操作
-        UIBinder.bind(self.sessdata_input, state, "sessdata")
-        UIBinder.bind(self.bili_jct_input, state, "bili_jct")
+        # 普通属性，实时更新
+        UIBinder.bind(self.sessdata_input, state, "sessdata", realtime=True)
+        UIBinder.bind(self.bili_jct_input, state, "bili_jct", realtime=True)
 
-        # 🎯 第二组：绑定 Pydantic 配置 (会受到底层严格校验保护)
-        UIBinder.bind(self.prevent_sleep_checkbox, state.sender_config, "prevent_sleep")
-        UIBinder.bind(self.proxy_checkbox, state.sender_config, "use_system_proxy")
+        # 清空旧绑定，绑定 SenderConfig
+        UIBinder.bind(self.prevent_sleep_checkbox, state.sender_config, "prevent_sleep", clear_old=True)
+        UIBinder.bind(self.proxy_checkbox, state.sender_config, "use_system_proxy", clear_old=True)
 
-        self.prevent_sleep_checkbox.stateChanged.connect(
-            lambda _: setattr(state.monitor_config, "prevent_sleep", self.prevent_sleep_checkbox.isChecked())
-        )
-        self.proxy_checkbox.stateChanged.connect(
-            lambda _: setattr(state.monitor_config, "use_system_proxy", self.proxy_checkbox.isChecked())
-        )
-
-    def _disconnect_signals(self) -> None:
-        """安全断开所有已绑定的信号，防止内存泄漏或多次触发"""
-        widgets =[
-            self.sessdata_input, 
-            self.bili_jct_input, 
-            self.prevent_sleep_checkbox, 
-            self.proxy_checkbox
-        ]
-        for widget in widgets:
-            try:
-                widget.disconnect()
-            except (RuntimeError, TypeError):
-                pass
+        # 不清空，叠加绑定 MonitorConfig
+        UIBinder.bind(self.prevent_sleep_checkbox, state.monitor_config, "prevent_sleep", clear_old=False)
+        UIBinder.bind(self.proxy_checkbox, state.monitor_config, "use_system_proxy", clear_old=False)
