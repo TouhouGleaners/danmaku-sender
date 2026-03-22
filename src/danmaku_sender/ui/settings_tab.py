@@ -4,6 +4,8 @@ from PySide6.QtWidgets import (
 )
 from PySide6.QtCore import Qt
 
+from .framework.binder import UIBinder
+
 from ..core.state import AppState
 
 
@@ -75,57 +77,21 @@ class SettingsTab(QWidget):
 
         self.setLayout(main_layout)
 
-    def bind_state(self, state: AppState):
-        """将 UI 控件绑定到 AppState"""
-        if self._state is not None:
-            self._disconnect_signals()
-        
+    def bind_state(self, state: AppState) -> None:
+        """将 UI 控件与全局状态 (AppState) 进行双向绑定"""
+        if self._state is state:
+            return
+            
         self._state = state
 
-        # 初始化UI值
-        self.sessdata_input.setText(state.sessdata)
-        self.bili_jct_input.setText(state.bili_jct)
-        self.prevent_sleep_checkbox.setChecked(state.sender_config.prevent_sleep)
-        self.proxy_checkbox.setChecked(state.sender_config.use_system_proxy)
+        # 普通属性，实时更新
+        UIBinder.bind(self.sessdata_input, state, "sessdata", realtime=True)
+        UIBinder.bind(self.bili_jct_input, state, "bili_jct", realtime=True)
 
-        # 连接信号槽以实现双向绑定
-        self.sessdata_input.textChanged.connect(self._on_credentials_changed)
-        self.bili_jct_input.textChanged.connect(self._on_credentials_changed)
-        self.prevent_sleep_checkbox.stateChanged.connect(self._on_prevent_sleep_changed)
-        self.proxy_checkbox.stateChanged.connect(self._on_proxy_changed)
+        # 清空旧绑定，绑定 SenderConfig
+        UIBinder.bind(self.prevent_sleep_checkbox, state.sender_config, "prevent_sleep", clear_old=True)
+        UIBinder.bind(self.proxy_checkbox, state.sender_config, "use_system_proxy", clear_old=True)
 
-    def _safe_disconnect(self, signal, slot):
-        """
-        辅助函数：安全断开信号连接。
-        如果信号没有连接该槽，会抛出 RuntimeError 或 TypeError，将其捕获并忽略。
-        """
-        try:
-            signal.disconnect(slot)
-        except (RuntimeError, TypeError):
-            pass
-
-    def _disconnect_signals(self):
-        """断开所有已绑定的信号"""
-        self._safe_disconnect(self.sessdata_input.textChanged, self._on_credentials_changed)
-        self._safe_disconnect(self.bili_jct_input.textChanged, self._on_credentials_changed)
-        self._safe_disconnect(self.prevent_sleep_checkbox.stateChanged, self._on_prevent_sleep_changed)
-        self._safe_disconnect(self.proxy_checkbox.stateChanged, self._on_proxy_changed)
-
-    def _on_credentials_changed(self):
-        if self._state:
-            self._state.update_credentials(
-                self.sessdata_input.text().strip(),
-                self.bili_jct_input.text().strip()
-            )
-
-    def _on_prevent_sleep_changed(self, state_value):
-        if self._state:
-            is_checked = self.prevent_sleep_checkbox.isChecked()
-            self._state.sender_config.prevent_sleep = is_checked
-            self._state.monitor_config.prevent_sleep = is_checked
-
-    def _on_proxy_changed(self, state_value):
-        if self._state:
-            is_checked = self.proxy_checkbox.isChecked()
-            self._state.sender_config.use_system_proxy = is_checked
-            self._state.monitor_config.use_system_proxy = is_checked
+        # 不清空，叠加绑定 MonitorConfig
+        UIBinder.bind(self.prevent_sleep_checkbox, state.monitor_config, "prevent_sleep", clear_old=False)
+        UIBinder.bind(self.proxy_checkbox, state.monitor_config, "use_system_proxy", clear_old=False)

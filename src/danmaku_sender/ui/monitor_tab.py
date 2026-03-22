@@ -8,8 +8,12 @@ from PySide6.QtWidgets import (
 from PySide6.QtGui import QTextCursor
 from PySide6.QtCore import Qt
 
-from ..core.models.structs import VideoTarget
+from danmaku_sender.core.state import AppState
+
+from .framework.binder import UIBinder
 from .workers import MonitorTaskWorker
+
+from ..core.models.structs import VideoTarget
 
 
 class MonitorTab(QWidget):
@@ -140,31 +144,14 @@ class MonitorTab(QWidget):
     def _connect_signals(self):
         self.start_btn.clicked.connect(self.toggle_task)
 
-    def bind_state(self, state):
+    def bind_state(self, state: AppState):
         if self._state is state:
             return
 
-        if self._state is not None:
-            self._disconnect_signals()
-
         self._state = state
-        config = state.monitor_config
 
         # 初始化与绑定
-        self.interval_spin.blockSignals(True)
-        self.interval_spin.setValue(config.refresh_interval)
-        self.interval_spin.blockSignals(False)
-        self.interval_spin.valueChanged.connect(self._on_interval_changed)
-
-    def _disconnect_signals(self):
-        try:
-            self.interval_spin.valueChanged.disconnect(self._on_interval_changed)
-        except (RuntimeError, TypeError):
-            pass
-
-    def _on_interval_changed(self, value):
-        if self._state:
-            self._state.monitor_config.refresh_interval = value
+        UIBinder.bind(self.interval_spin, state.monitor_config, "refresh_interval")
 
     def showEvent(self, event):
         super().showEvent(event)
