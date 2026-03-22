@@ -10,6 +10,7 @@ from PySide6.QtWidgets import (
 )
 
 from .dialogs import EditDanmakuDialog, TimeOffsetDialog
+from .framework.binder import UIBinder
 
 from ..core.engines.editor_session import EditorSession, EditorField
 from ..core.models.danmaku import Danmaku
@@ -389,7 +390,6 @@ class EditorTab(QWidget):
         self.logger.debug("Inspector has been explicitly reset.")
 
     # --- 交互核心逻辑 ---
-
     def _apply_properties(self):
         """应用弹幕属性修改"""
         if self.current_editing_index is None or not self.session:
@@ -422,6 +422,7 @@ class EditorTab(QWidget):
         self._update_ui_state()
 
     def bind_state(self, state: AppState):
+        """将 UI 控件与全局状态 (AppState) 进行双向绑定"""
         if self._state is state:
             return
 
@@ -431,45 +432,30 @@ class EditorTab(QWidget):
         self._state = state
         self.session = EditorSession(state)
 
-        validation_cfg = state.validation_config
+        # 通用控件交由 UIBinder 自动管理
+        UIBinder.bind(self.enable_custom_checkbox, state.validation_config, "enabled")
 
-        # 初始化 UI 值
-        self.enable_custom_checkbox.blockSignals(True)
-        self.enable_custom_checkbox.setChecked(validation_cfg.enabled)
-        self.enable_custom_checkbox.blockSignals(False)
-
+        # 复杂类型映射保留手动处理 (str <-> list[str])
         self.keywords_input.blockSignals(True)
-        self.keywords_input.setText(", ".join(validation_cfg.blocked_keywords))
+        self.keywords_input.setText(", ".join(state.validation_config.blocked_keywords))
         self.keywords_input.blockSignals(False)
+        self.keywords_input.setEnabled(state.validation_config.enabled)
 
-        self.keywords_input.setEnabled(validation_cfg.enabled)
-
-        # 重新连接信号
-        self.enable_custom_checkbox.stateChanged.connect(self._on_toggle_custom)
+        # 绑定关键词输入的信号与开关的联动状态
         self.keywords_input.textChanged.connect(self._on_keywords_changed)
+        self.enable_custom_checkbox.stateChanged.connect(
+            lambda state_val: self.keywords_input.setEnabled(bool(state_val))
+        )
 
         self._update_ui_state()
 
     def _disconnect_signals(self):
         """安全断开所有已绑定的信号"""
         try:
+            self.keywords_input.textChanged.disconnect()
             self.enable_custom_checkbox.stateChanged.disconnect()
         except (RuntimeError, TypeError):
             pass
-
-        try:
-            self.keywords_input.textChanged.disconnect()
-        except (RuntimeError, TypeError):
-            pass
-
-    def _on_toggle_custom(self):
-        """处理总开关切换"""
-        if not self._state:
-            return
-
-        is_on = self.enable_custom_checkbox.isChecked()
-        self._state.validation_config.enabled = is_on
-        self.keywords_input.setEnabled(is_on)
 
     def _on_keywords_changed(self, text):
         """处理关键词文本变更"""

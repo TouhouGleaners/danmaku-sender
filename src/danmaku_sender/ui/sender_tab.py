@@ -11,6 +11,8 @@ from PySide6.QtWidgets import (
 from PySide6.QtGui import QTextCursor
 from PySide6.QtCore import Qt, QDateTime
 
+from .framework.binder import UIBinder
+
 from ..core.models.video import VideoInfo
 from ..core.services.danmaku_exporter import create_xml_from_danmakus
 from ..core.services.danmaku_parser import DanmakuParser
@@ -230,71 +232,35 @@ class SenderTab(QWidget):
         self.start_btn.style().unpolish(self.start_btn)
         self.start_btn.style().polish(self.start_btn)
 
-    def bind_state(self, state):
-        """将 UI 控件绑定到 AppState"""
+    def bind_state(self, state: AppState):
+        """将 UI 控件与 AppState 进行双向绑定"""
         if self._state is state:
             return
-            
-        if self._state is not None:
-            self._disconnect_signals()
-        
+
         self._state = state
         config = state.sender_config
         video_state = state.video_state
 
-        # --- 初始化 UI 内容 ---
-        self.min_delay.setValue(config.min_delay)
-        self.max_delay.setValue(config.max_delay)
-        self.burst_size.setValue(config.burst_size)
-        self.burst_rest_min.setValue(config.rest_min)
-        self.burst_rest_max.setValue(config.rest_max)
-        self.stop_count.setValue(config.stop_after_count)
-        self.stop_time.setValue(config.stop_after_time)
-        self.skip_sent_cb.setChecked(config.skip_sent)
+        # 绑定基础参数
+        UIBinder.bind(self.bv_input, video_state, "bvid")
+        UIBinder.bind(self.skip_sent_cb, config, "skip_sent")
 
-        # 视频状态初始化
-        self.bv_input.setText(video_state.bvid)
+        # 绑定发送延迟策略
+        UIBinder.bind(self.min_delay, config, "min_delay")
+        UIBinder.bind(self.max_delay, config, "max_delay")
+
+        # 绑定爆发模式
+        UIBinder.bind(self.burst_size, config, "burst_size")
+        UIBinder.bind(self.burst_rest_min, config, "rest_min")
+        UIBinder.bind(self.burst_rest_max, config, "rest_max")
+
+        # 绑定自动终止规则
+        UIBinder.bind(self.stop_count, config, "stop_after_count")
+        UIBinder.bind(self.stop_time, config, "stop_after_time")
+
+        # 特殊非输入控件的状态初始化
         if video_state.selected_part_name:
             self.part_combo.setPlaceholderText(video_state.selected_part_name)
-
-        # --- 绑定信号槽 (UI -> State) ---
-        # 延迟设置
-        self.min_delay.valueChanged.connect(lambda v: setattr(config, "min_delay", v))
-        self.max_delay.valueChanged.connect(lambda v: setattr(config, 'max_delay', v))
-
-        # 爆发模式
-        self.burst_size.valueChanged.connect(lambda v: setattr(config, 'burst_size', v))
-        self.burst_rest_min.valueChanged.connect(lambda v: setattr(config, 'rest_min', v))
-        self.burst_rest_max.valueChanged.connect(lambda v: setattr(config, 'rest_max', v))
-        
-        # 自动停止
-        self.stop_count.valueChanged.connect(lambda v: setattr(config, 'stop_after_count', v))
-        self.stop_time.valueChanged.connect(lambda v: setattr(config, 'stop_after_time', v))
-
-        # BV号同步
-        self.bv_input.textChanged.connect(lambda t: setattr(video_state, 'bvid', t.strip()))
-
-        # 断点续传
-        self.skip_sent_cb.stateChanged.connect(lambda v: setattr(config, 'skip_sent', self.skip_sent_cb.isChecked()))
-
-    def _disconnect_signals(self):
-        """安全断开所有信号连接"""
-        signals = [
-            self.min_delay.valueChanged,
-            self.max_delay.valueChanged,
-            self.burst_size.valueChanged,
-            self.burst_rest_min.valueChanged,
-            self.burst_rest_max.valueChanged,
-            self.stop_count.valueChanged,
-            self.stop_time.valueChanged,
-            self.bv_input.textChanged,
-            self.skip_sent_cb.stateChanged
-        ]
-        for sig in signals:
-            try:
-                sig.disconnect()
-            except (RuntimeError, TypeError):
-                pass
 
     def append_log(self, message: str):
         """外部调用的日志接口"""

@@ -81,3 +81,17 @@ QPushButton[action="true"][state="running"] {
 QPushButton[action="true"][state="running"]:hover {
     background-color: #c0392b;
 }
+
+
+/* ========================================= */
+/* UIBinder 动态错误状态样式 (Invalid State)  */
+/* ========================================= */
+
+*[invalid="true"] {
+    border: 1px solid #e74c3c !important;  /* 鲜艳的红框 */
+    background-color: #fff0f0 !important;  /* 淡淡的红底色警告 */
+}
+
+*[invalid="true"]:focus {
+    border: 1px solid #c0392b !important;  /* 聚焦时边框加深 */
+}
