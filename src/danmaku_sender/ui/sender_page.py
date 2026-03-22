@@ -582,7 +582,7 @@ class StrategySettingsTabs(QTabWidget):
         delay_layout.addStretch()
         self.addTab(delay_tab, "发送延迟")
 
-                # Tab 2: 自动终止
+        # Tab 2: 自动终止
         stop_tab = QWidget()
         stop_layout = QHBoxLayout(stop_tab)
         stop_layout.setContentsMargins(10, 20, 10, 20)
