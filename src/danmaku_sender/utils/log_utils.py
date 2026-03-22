@@ -6,7 +6,7 @@ from datetime import datetime, timezone
 
 # Sender 相关日志源
 SENDER_LOG_WHITELIST = (
-    "SenderTab", 
+    "SenderPage", 
     "DanmakuScheduler",
     "DanmakuExecutor",
     "DelayManager", 
