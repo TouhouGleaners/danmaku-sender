@@ -58,17 +58,15 @@ class WbiSigner:
 
     @classmethod
     def get_wbi_keys(cls) -> tuple[str, str]:
-        """获取最新的 img_key 和 sub_key"""
-        current_time = time.time()
-        
+        """获取最新的 img_key 和 sub_key"""      
         # 如果缓存存在且未过期，直接返回缓存的键值
         if (cls._cached_keys is not None
-            and current_time - cls._cached_time < cls.CACHE_DURATION):
+            and time.time() - cls._cached_time < cls.CACHE_DURATION):
             return cls._cached_keys
-        
+
         with cls._lock:
             if (cls._cached_keys is not None
-                and current_time - cls._cached_time < cls.CACHE_DURATION):
+                and time.time() - cls._cached_time < cls.CACHE_DURATION):
                 return cls._cached_keys
 
             # 获取新的键值
@@ -87,8 +85,8 @@ class WbiSigner:
 
                 # 更新缓存
                 cls._cached_keys = (img_key, sub_key)
-                cls._cached_time = current_time
-                
+                cls._cached_time = time.time()
+
                 logger.debug("WBI 密钥获取成功并已缓存。")
                 return cls._cached_keys
             except (requests.RequestException, ValueError) as e:
