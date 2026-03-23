@@ -12,7 +12,7 @@ from PySide6.QtCore import Qt, QUrl, QTimer, QSize
 from .sender_page import SenderPage
 from .settings_tab import SettingsTab
 from .monitor_tab import MonitorTab
-from .editor_tab import EditorTab
+from .editor_page import EditorPage
 from .dialogs import AboutDialog, HelpDialog, UpdateDialog
 from .history_tab import HistoryTab
 
@@ -118,7 +118,7 @@ class MainWindow(QMainWindow):
         """初始化页面并绑定导航"""
         self.page_settings = SettingsTab()
         self.page_sender = SenderPage()
-        self.page_editor = EditorTab()
+        self.page_editor = EditorPage()
         self.page_monitor = MonitorTab()
         self.page_history = HistoryTab()
 
