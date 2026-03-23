@@ -253,3 +253,22 @@ class MonitorTaskWorker(BaseWorker):
             self.report_error("监视任务异常", e)
         finally:
             self.task_finished.emit()
+
+
+class QueryHistoryWorker(BaseWorker):
+    """异步查询历史记录"""
+    finished_success = Signal(list)  # 返回查询到的 records 列表
+
+    def __init__(self, keyword: str, status_filter: int, parent=None):
+        super().__init__(parent)
+        self.keyword = keyword
+        self.status_filter = status_filter
+        self.history_manager = HistoryManager()
+
+    def run(self):
+        try:
+            records = self.history_manager.query_history(self.keyword, self.status_filter)
+            self.finished_success.emit(records)
+        except Exception as e:
+            self.report_error("查询历史失败", e)
+            self.finished_success.emit([])
