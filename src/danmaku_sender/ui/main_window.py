@@ -14,7 +14,7 @@ from .settings_tab import SettingsTab
 from .monitor_tab import MonitorTab
 from .editor_page import EditorPage
 from .dialogs import AboutDialog, HelpDialog, UpdateDialog
-from .history_tab import HistoryTab
+from .history_page import HistoryPage
 
 from ..config.app_config import AppInfo, UI
 from ..core.state import AppState
@@ -120,7 +120,7 @@ class MainWindow(QMainWindow):
         self.page_sender = SenderPage()
         self.page_editor = EditorPage()
         self.page_monitor = MonitorTab()
-        self.page_history = HistoryTab()
+        self.page_history = HistoryPage()
 
         # 定义页面列表
         pages = [

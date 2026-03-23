@@ -11,13 +11,14 @@ from PySide6.QtWidgets import (
 from PySide6.QtCore import Qt, QAbstractTableModel, QModelIndex, QUrl
 from PySide6.QtGui import QAction, QColor, QDesktopServices, QBrush
 
+from .workers import FetchInfoWorker, QueryHistoryWorker
+
 from ..core.database.history_manager import HistoryManager, DanmakuStatus
 from ..core.models.video import VideoInfo
 from ..core.state import AppState
-from .workers import FetchInfoWorker
 
 
-logger = logging.getLogger("HistoryTab")
+logger = logging.getLogger("HistoryPage")
 
 
 class Col(IntEnum):
@@ -219,20 +220,17 @@ class HistoryTableModel(QAbstractTableModel):
         return None
     
 
-class HistoryTab(QWidget):
+class HistoryPage(QWidget):
     def __init__(self):
         super().__init__()
         self._state: AppState | None = None
         self._history_manager = HistoryManager()
 
         self._active_workers: dict[str, FetchInfoWorker] = {}
+        self._query_worker: QueryHistoryWorker | None = None
         self._fetched_bvids = set()
 
         self._create_ui()
-
-    def bind_state(self, state: AppState):
-        self._state = state
-        self._refresh_table()
 
     def _create_ui(self):
         layout = QVBoxLayout(self)
@@ -284,13 +282,32 @@ class HistoryTab(QWidget):
 
         layout.addWidget(self._table_view)
 
+    def bind_state(self, state: AppState):
+        self._state = state
+        self._refresh_table()
+
     def _refresh_table(self):
+        """发起异步刷新请求"""
         keyword = self._search_input.text().strip()
         status_filter = self._status_combo.currentData()
 
-        records = self._history_manager.query_history(keyword, status_filter)
+        if self._query_worker and self._query_worker.isRunning():
+            self._query_worker.terminate()
+            self._query_worker.wait()
+
+        self._model.set_records([]) 
+
+        # 启动新任务
+        self._query_worker = QueryHistoryWorker(keyword, status_filter, self)
+        self._query_worker.finished_success.connect(self._on_query_success)
+        self._query_worker.finished.connect(self._query_worker.deleteLater)
+        self._query_worker.start()
+
+    def _on_query_success(self, records: list):
+        """查询成功后的回调（主线程执行）"""
         self._model.set_records(records)
 
+        # 只有在拿到记录后，才去补全视频元数据
         if self._state:
             self._fetch_missing_metadata(records)
 
