@@ -1,4 +1,5 @@
 import logging
+from typing import Any, Callable
 
 from PySide6.QtCore import Qt, QAbstractTableModel, QModelIndex
 from PySide6.QtGui import QColor, QBrush
@@ -64,81 +65,294 @@ class EditorTableModel(QAbstractTableModel):
             return None
 
         item = self._view_items[row]
-
-        # 提供显示文本
-        if role == Qt.ItemDataRole.DisplayRole:
-            if col == 0:
-                return str(item['source_index'] + 1)
-            elif col == 1:
-                return format_ms_to_hhmmss(item['time_ms'])
-            elif col == 2:
-                return item['error_msg']
-            elif col == 3:
-                return item['content']
-
-        # 提供 UserRole 用于反向查找
-        elif role == Qt.ItemDataRole.UserRole:
-            return item['source_index']
-
-        # 提供颜色样式
         is_valid = item['is_valid']
-        
-        if role == Qt.ItemDataRole.ForegroundRole:
-            if is_valid:
-                return QBrush(QColor("#95a5a6")) # 正常行的灰字
-            elif col == 2:
-                return QBrush(QColor("#e74c3c")) # 错误行的理由红字
+
+        match role:
+            case Qt.ItemDataRole.DisplayRole:
+                # 提供显示文本
+                match col:
+                    case 0: return str(item['source_index'] + 1)
+                    case 1: return format_ms_to_hhmmss(item['time_ms'])
+                    case 2: return item['error_msg']
+                    case 3: return item['content']
+                    case _: return None
+
+            case Qt.ItemDataRole.UserRole:
+                # 提供 UserRole 用于反向查找
+                return item['source_index']
+
+            case Qt.ItemDataRole.ForegroundRole:
+                # 提供颜色样式
+                if is_valid:
+                    return QBrush(QColor("#95a5a6"))  # 正常行的灰字
                 
-        elif role == Qt.ItemDataRole.BackgroundRole:
-            if not is_valid:
-                return QBrush(QColor("#fff2f2")) # 错误行的淡红背景
+                # 错误行：仅针对“问题描述”列标红
+                if col == 2:
+                    return QBrush(QColor("#e74c3c"))  # 错误行的理由红字
+
+            case Qt.ItemDataRole.BackgroundRole:
+                # 错误行的淡红背景
+                if not is_valid:
+                    return QBrush(QColor("#fff2f2"))
+
+            case _:
+                return None
 
         return None
 
 
-class EditorTab(QWidget):
+class ValidationRulesGroup(QGroupBox):
+    """校验与过滤规则区"""
+    def __init__(self, parent=None):
+        super().__init__("校验与过滤规则", parent)
+        self.setSizePolicy(QSizePolicy.Policy.Preferred, QSizePolicy.Policy.Maximum)
+        self._state: AppState | None = None
+        self._create_ui()
+
+    def _create_ui(self):
+        layout = QVBoxLayout(self)
+        layout.setSpacing(8)
+
+        sys_info = QLabel("系统规则: 限制长度(≤100字)、禁止换行、拦截特殊符号 (已默认开启)")
+        sys_info.setStyleSheet("color: #95a5a6; font-size: 11px;")
+        layout.addWidget(sys_info)
+
+        keyword_layout = QHBoxLayout()
+        self.enable_custom_checkbox = QCheckBox("关键词拦截:")
+        self.enable_custom_checkbox.setToolTip("开启后将拦截包含以下关键词的弹幕")
+
+        self.keywords_input = QLineEdit()
+        self.keywords_input.setPlaceholderText("用中文或英文逗号分隔，如：应用, 过滤")
+        self.keywords_input.setStyleSheet("padding: 2px 5px;")
+
+        keyword_layout.addWidget(self.enable_custom_checkbox)
+        keyword_layout.addWidget(self.keywords_input, stretch=1)
+
+        layout.addLayout(keyword_layout)
+
+    def bind_state(self, state: AppState):
+        """将 UI 控件与 AppState 进行双向绑定"""
+        if self._state is state:
+            return
+
+        if self._state is not None:
+            try:
+                self.keywords_input.textChanged.disconnect()
+                self.enable_custom_checkbox.stateChanged.disconnect()
+            except (RuntimeError, TypeError):
+                pass
+
+        self._state = state
+        config = state.validation_config
+
+        # 通用控件交由 UIBinder 自动管理
+        UIBinder.bind(self.enable_custom_checkbox, config, "enabled")
+
+        # 复杂类型映射保留手动处理 (str <-> list[str])
+        self.keywords_input.blockSignals(True)
+        self.keywords_input.setText(", ".join(config.blocked_keywords))
+        self.keywords_input.blockSignals(False)
+        self.keywords_input.setEnabled(config.enabled)
+
+        # 绑定关键词输入的信号与开关的联动状态
+        self.keywords_input.textChanged.connect(self._on_keywords_changed)
+        self.enable_custom_checkbox.stateChanged.connect(
+            lambda val: self.keywords_input.setEnabled(bool(val))
+        )
+
+    def _on_keywords_changed(self, text: str):
+        """处理关键词文本变更"""
+        if not self._state:
+            return
+
+        raw_text = text.replace('，', ',').lower()
+        parts = [k.strip() for k in raw_text.split(',') if k.strip()]
+        unique_keywords = sorted(list(set(parts)))
+
+        self._state.validation_config.blocked_keywords = unique_keywords
+
+
+class PropertyInspectorGroup(QGroupBox):
+    """属性检查器"""
+    def __init__(self, parent=None):
+        super().__init__("属性检查器", parent)
+        self.current_color_val = 16777215
+        self.on_save_callback: Callable[[dict[EditorField, Any]], None] | None = None
+
+        self._create_ui()
+        self._init_bili_palette()
+        self.reset_inspector()
+
+    def _create_ui(self):
+        prop_layout = QVBoxLayout(self)
+        form_layout = QFormLayout()
+
+        # 时间
+        self.prop_time = QDoubleSpinBox()
+        self.prop_time.setRange(0, 999999)
+        self.prop_time.setDecimals(3)
+        self.prop_time.setSuffix(" 秒")
+        form_layout.addRow("出现时间:", self.prop_time)
+
+        # 模式
+        self.prop_mode = QComboBox()
+        self.prop_mode.addItem("滚动 (1)", 1)
+        self.prop_mode.addItem("底端 (4)", 4)
+        self.prop_mode.addItem("顶端 (5)", 5)
+        form_layout.addRow("弹幕模式:", self.prop_mode)
+
+        # 字号
+        self.prop_fontsize = QComboBox()
+        self._populate_font_sizes()
+        form_layout.addRow("弹幕字号:", self.prop_fontsize)
+
+        # 颜色
+        self.prop_color_btn = QPushButton()
+        self.prop_color_btn.setCursor(Qt.CursorShape.PointingHandCursor)
+        self.prop_color_btn.setFixedHeight(24)
+        self.prop_color_btn.clicked.connect(self._choose_color)
+        self.current_color_val = 16777215
+        form_layout.addRow("弹幕颜色:", self.prop_color_btn)
+
+        prop_layout.addLayout(form_layout)
+
+        # 文本内容
+        prop_layout.addWidget(QLabel("弹幕内容:"))
+        self.prop_text = QTextEdit()
+        self.prop_text.setAcceptRichText(False)
+        prop_layout.addWidget(self.prop_text)
+
+        # 保存修改按钮
+        self.prop_save_btn = QPushButton("保存属性修改")
+        self.prop_save_btn.setStyleSheet("""
+            QPushButton {
+                background-color: #3498db; 
+                color: white; 
+                font-weight: bold; 
+                padding: 6px;
+                border-radius: 4px;
+            }
+            QPushButton:hover { background-color: #2980b9; }
+        """)
+        self.prop_save_btn.clicked.connect(self._on_save_clicked)
+        prop_layout.addWidget(self.prop_save_btn)
+
+    def _init_bili_palette(self):
+        """将 Danmaku.Standards 中定义的标准色注入 QColorDialog"""
+        for i, hex_color in enumerate(Danmaku.Standards.COLORS):
+            QColorDialog.setCustomColor(i, QColor(hex_color))
+
+    def int_to_hex(self, color_int: int) -> str:
+        return f"#{color_int & 0xFFFFFF:06x}"
+
+    def hex_to_int(self, hex_str: str) -> int:
+        return int(hex_str.lstrip('#'), 16)
+
+    def _update_color_btn_style(self, hex_str: str):
+        self.prop_color_btn.setStyleSheet(
+            f"background-color: {hex_str}; border: 1px solid #bdc3c7; border-radius: 3px;"
+        )
+
+    def _choose_color(self):
+        """弹出调色板"""
+        dialog = QColorDialog(self)
+        dialog.setWindowTitle("选择弹幕颜色")
+        dialog.setCurrentColor(QColor(self.int_to_hex(self.current_color_val)))
+
+        if dialog.exec() == QColorDialog.DialogCode.Accepted:
+            color = dialog.currentColor()
+            self.current_color_val = self.hex_to_int(color.name())
+            self._update_color_btn_style(color.name())
+
+    def _populate_font_sizes(self, current_val: int | None = None):
+        """统一填充字号选项"""
+        self.prop_fontsize.blockSignals(True)
+        self.prop_fontsize.clear()
+
+        standards = Danmaku.Standards.FONT_SIZES
+        for text, value in standards.items():
+            self.prop_fontsize.addItem(text, value)
+
+        target = current_val if current_val is not None else 25
+        idx = self.prop_fontsize.findData(target)
+
+        if idx >= 0:
+            self.prop_fontsize.setCurrentIndex(idx)
+        else:
+            self.prop_fontsize.addItem(f"自定义 ({target})", target)
+            self.prop_fontsize.setCurrentIndex(self.prop_fontsize.count() - 1)
+
+        self.prop_fontsize.blockSignals(False)
+
+    def load_danmaku(self, dm: Danmaku):
+        """将选中的弹幕数据加载到面板"""
+        self.setEnabled(True)
+        self.prop_time.blockSignals(True)
+        self.prop_time.setValue(dm.progress / 1000.0)
+        self.prop_time.blockSignals(False)
+
+        mode_idx = self.prop_mode.findData(dm.mode)
+        self.prop_mode.setCurrentIndex(mode_idx if mode_idx >= 0 else 0)
+
+        self._populate_font_sizes(dm.fontsize)
+        self.current_color_val = dm.color
+        self._update_color_btn_style(self.int_to_hex(dm.color))
+
+        self.prop_text.setPlainText(dm.msg)
+
+    def reset_inspector(self):
+        """重置面板到未激活状态"""
+        self.setEnabled(False)
+        self.prop_text.clear()
+        
+        self.prop_time.blockSignals(True)
+        self.prop_time.setValue(0.0)
+        self.prop_time.blockSignals(False)
+        
+        self.prop_mode.setCurrentIndex(0)
+        self._populate_font_sizes()
+
+        self.current_color_val = 16777215
+        self._update_color_btn_style("#ffffff")
+
+    def _on_save_clicked(self):
+        """保存弹幕属性修改"""
+        clean_text = self.prop_text.toPlainText().replace('\n', '').replace('\r', '').strip()
+        if not clean_text:
+            QMessageBox.warning(self, "错误", "弹幕内容不能为空！如需删除请点击下方的删除按钮。")
+            return
+
+        new_props = {
+            EditorField.PROGRESS: int(self.prop_time.value() * 1000),
+            EditorField.MODE: self.prop_mode.currentData(),
+            EditorField.FONT_SIZE: self.prop_fontsize.currentData(),
+            EditorField.COLOR: self.current_color_val,
+            EditorField.MSG: clean_text
+        }
+        if self.on_save_callback:
+            self.on_save_callback(new_props)
+
+
+class EditorPage(QWidget):
     def __init__(self):
         super().__init__()
         self._state: AppState | None = None
         self.session: EditorSession | None = None
-        self.logger = logging.getLogger("EditorTab")
+        self.logger = logging.getLogger("EditorPage")
 
         self.current_editing_index: int | None = None
 
         self._create_ui()
 
-        self._update_ui_state()
-        self._init_bili_palette()
-
     def _create_ui(self):
         # 主布局
-        main_layout = QVBoxLayout()
+        main_layout = QVBoxLayout(self)
         main_layout.setSpacing(10)
         main_layout.setContentsMargins(10, 10, 10, 10)
 
         # --- 规则管理区 ---
-        config_group = QGroupBox("校验与过滤规则")
-        config_group.setSizePolicy(QSizePolicy.Policy.Preferred, QSizePolicy.Policy.Maximum)
-        config_layout = QVBoxLayout()
-        config_layout.setSpacing(8)
-
-        self.sys_info = QLabel("系统规则: 限制长度(≤100字)、禁止换行、拦截特殊符号 (已默认开启)")
-        self.sys_info.setStyleSheet("color: #95a5a6; font-size: 11px;")
-        config_layout.addWidget(self.sys_info)
-
-        keyword_layout = QHBoxLayout()
-        self.enable_custom_checkbox = QCheckBox("关键词拦截:")
-        self.enable_custom_checkbox.setToolTip("开启后将拦截包含以下关键词的弹幕")
-        keyword_layout.addWidget(self.enable_custom_checkbox)
-
-        self.keywords_input = QLineEdit()
-        self.keywords_input.setPlaceholderText("用中文或英文逗号分隔，如：应用, 过滤")
-        self.keywords_input.setStyleSheet("padding: 2px 5px;")
-        keyword_layout.addWidget(self.keywords_input, stretch=1)
-
-        config_layout.addLayout(keyword_layout)
-        config_group.setLayout(config_layout)
-        main_layout.addWidget(config_group)
+        self.rules_group = ValidationRulesGroup()
+        main_layout.addWidget(self.rules_group)
 
         # --- 顶部控制栏 ---
         top_layout = QHBoxLayout()
@@ -223,63 +437,9 @@ class EditorTab(QWidget):
         self.splitter.addWidget(self.table)
 
         # --- 右侧：属性检查器面板 ---
-        self.prop_group = QGroupBox("属性检查器")
-        self.prop_group.setEnabled(False)  # 初始未选中，禁用
-        prop_layout = QVBoxLayout()
-        form_layout = QFormLayout()
-
-        # 时间
-        self.prop_time = QDoubleSpinBox()
-        self.prop_time.setRange(0, 999999)
-        self.prop_time.setDecimals(3)
-        self.prop_time.setSuffix(" 秒")
-        form_layout.addRow("出现时间:", self.prop_time)
-
-        # 模式
-        self.prop_mode = QComboBox()
-        self.prop_mode.addItem("滚动 (1)", 1)
-        self.prop_mode.addItem("底端 (4)", 4)
-        self.prop_mode.addItem("顶端 (5)", 5)
-        form_layout.addRow("弹幕模式:", self.prop_mode)
-
-        # 字号
-        self.prop_fontsize = QComboBox()
-        self._populate_font_sizes()
-        form_layout.addRow("弹幕字号:", self.prop_fontsize)
-
-        # 颜色
-        self.prop_color_btn = QPushButton()
-        self.prop_color_btn.setCursor(Qt.CursorShape.PointingHandCursor)
-        self.prop_color_btn.setFixedHeight(24)
-        self.prop_color_btn.clicked.connect(self._choose_color)
-        self.current_color_val = 16777215
-        form_layout.addRow("弹幕颜色:", self.prop_color_btn)
-
-        prop_layout.addLayout(form_layout)
-
-        # 文本内容
-        prop_layout.addWidget(QLabel("弹幕内容:"))
-        self.prop_text = QTextEdit()
-        self.prop_text.setAcceptRichText(False)
-        prop_layout.addWidget(self.prop_text)
-
-        # 保存修改按钮
-        self.prop_save_btn = QPushButton("保存属性修改")
-        self.prop_save_btn.setStyleSheet("""
-            QPushButton {
-                background-color: #3498db; 
-                color: white; 
-                font-weight: bold; 
-                padding: 6px;
-                border-radius: 4px;
-            }
-            QPushButton:hover { background-color: #2980b9; }
-        """)
-        self.prop_save_btn.clicked.connect(self._apply_properties)
-        prop_layout.addWidget(self.prop_save_btn)
-
-        self.prop_group.setLayout(prop_layout)
-        self.splitter.addWidget(self.prop_group)
+        self.inspector_group = PropertyInspectorGroup()
+        self.inspector_group.on_save_callback = self._apply_properties
+        self.splitter.addWidget(self.inspector_group)
 
         # 设置比例 7:3
         self.splitter.setStretchFactor(0, 7)
@@ -322,151 +482,36 @@ class EditorTab(QWidget):
         bottom_layout.addWidget(self.apply_btn)
 
         main_layout.addLayout(bottom_layout)
-        self.setLayout(main_layout)
-
-    def _init_bili_palette(self):
-        """将 Danmaku.Standards 中定义的标准色注入 QColorDialog"""
-        for i, hex_color in enumerate(Danmaku.Standards.COLORS):
-            QColorDialog.setCustomColor(i, QColor(hex_color))
-
-    # --- 色彩转换工具 ---
-    def int_to_hex(self, color_int: int) -> str:
-        return f"#{color_int & 0xFFFFFF:06x}"
-
-    def hex_to_int(self, hex_str: str) -> int:
-        return int(hex_str.lstrip('#'), 16)
-
-    def _update_color_btn_style(self, hex_str: str):
-        self.prop_color_btn.setStyleSheet(
-            f"background-color: {hex_str}; border: 1px solid #bdc3c7; border-radius: 3px;"
-        )
-
-    def _choose_color(self):
-        """弹出调色板"""
-        dialog = QColorDialog(self)
-        dialog.setWindowTitle("选择弹幕颜色")
-        dialog.setCurrentColor(QColor(self.int_to_hex(self.current_color_val)))
-
-        if dialog.exec() == QColorDialog.DialogCode.Accepted:
-            color = dialog.currentColor()
-            self.current_color_val = self.hex_to_int(color.name())
-            self._update_color_btn_style(color.name())
-
-    def _populate_font_sizes(self, current_val: int | None = None):
-        """统一填充字号选项"""
-        self.prop_fontsize.blockSignals(True)
-        self.prop_fontsize.clear()
-
-        standards = Danmaku.Standards.FONT_SIZES
-        for text, value in standards.items():
-            self.prop_fontsize.addItem(text, value)
         
-        target = current_val if current_val is not None else 25
-        idx = self.prop_fontsize.findData(target)
-
-        if idx >= 0:
-            self.prop_fontsize.setCurrentIndex(idx)
-        else:
-            self.prop_fontsize.addItem(f"自定义 ({target})", target)
-            self.prop_fontsize.setCurrentIndex(self.prop_fontsize.count() - 1)
-            
-        self.prop_fontsize.blockSignals(False)
-
-    def _reset_inspector(self):
-        """重置属性面板状态"""
-        self.current_editing_index = None
-        self.prop_group.setEnabled(False)
-        self.prop_text.clear()
-        
-        self.prop_time.blockSignals(True)
-        self.prop_time.setValue(0.0)
-        self.prop_time.blockSignals(False)
-        
-        self.prop_mode.setCurrentIndex(0)
-        self._populate_font_sizes()
-        
-        self.current_color_val = 16777215
-        self._update_color_btn_style("#ffffff")
-        self.logger.debug("Inspector has been explicitly reset.")
-
-    # --- 交互核心逻辑 ---
-    def _apply_properties(self):
-        """应用弹幕属性修改"""
-        if self.current_editing_index is None or not self.session:
-            return
-            
-        clean_text = self.prop_text.toPlainText().replace('\n', '').replace('\r', '').strip()
-        if not clean_text:
-            QMessageBox.warning(self, "错误", "弹幕内容不能为空！如需删除请点击下方的删除按钮。")
-            return
-
-        new_props = {
-            EditorField.PROGRESS: int(self.prop_time.value() * 1000),
-            EditorField.MODE: self.prop_mode.currentData(),
-            EditorField.FONT_SIZE: self.prop_fontsize.currentData(),
-            EditorField.COLOR: self.current_color_val,
-            EditorField.MSG: clean_text
-        }
-        
-        changed = self.session.update_item_properties(self.current_editing_index, new_props)
-        if changed:
-            # 记录当前选中的行，刷新表格后恢复选中
-            row = self.table.currentIndex().row()
-            self._refresh_table()
-            if 0 <= row < self.model.rowCount():
-                self.table.selectRow(row)
-
-    # --- Qt Methods ---
-    def showEvent(self, event):
-        super().showEvent(event)
         self._update_ui_state()
 
     def bind_state(self, state: AppState):
-        """将 UI 控件与全局状态 (AppState) 进行双向绑定"""
+        """将 UI 控件与 AppState 进行双向绑定"""
         if self._state is state:
             return
-
-        if self._state is not None:
-            self._disconnect_signals()
 
         self._state = state
         self.session = EditorSession(state)
 
-        # 通用控件交由 UIBinder 自动管理
-        UIBinder.bind(self.enable_custom_checkbox, state.validation_config, "enabled")
-
-        # 复杂类型映射保留手动处理 (str <-> list[str])
-        self.keywords_input.blockSignals(True)
-        self.keywords_input.setText(", ".join(state.validation_config.blocked_keywords))
-        self.keywords_input.blockSignals(False)
-        self.keywords_input.setEnabled(state.validation_config.enabled)
-
-        # 绑定关键词输入的信号与开关的联动状态
-        self.keywords_input.textChanged.connect(self._on_keywords_changed)
-        self.enable_custom_checkbox.stateChanged.connect(
-            lambda state_val: self.keywords_input.setEnabled(bool(state_val))
-        )
+        self.rules_group.bind_state(state)
 
         self._update_ui_state()
 
-    def _disconnect_signals(self):
-        """安全断开所有已绑定的信号"""
-        try:
-            self.keywords_input.textChanged.disconnect()
-            self.enable_custom_checkbox.stateChanged.disconnect()
-        except (RuntimeError, TypeError):
-            pass
+    # --- 辅助与状态管理 ---
+    def _get_danmaku_for_row(self, row: int) -> tuple[int | None, Danmaku | None]:
+        """辅助方法：通过 UI 行号获取底层原始索引与弹幕对象"""
+        if not self.session:
+            return None, None
 
-    def _on_keywords_changed(self, text):
-        """处理关键词文本变更"""
-        if not self._state:
-            return
+        original_index = self.model.get_source_index(row)
+        if original_index is None:
+            return None, None
 
-        raw_text = text.replace('，', ',').lower()
-        parts = [k.strip() for k in raw_text.split(',') if k.strip()]
-        unique_keywords = sorted(list(set(parts)))
+        if not (0 <= original_index < len(self.session.staged_danmakus)):
+            self.logger.warning(f"越界访问拦截: 尝试访问索引 {original_index}，但数据池大小为 {len(self.session.staged_danmakus)}")
+            return None, None
 
-        self._state.validation_config.blocked_keywords = unique_keywords
+        return original_index, self.session.staged_danmakus[original_index]
 
     def _update_ui_state(self):
         """统一状态机控制"""
@@ -510,20 +555,21 @@ class EditorTab(QWidget):
             self.status_label.setText("提示: 请先在“发射器”页面加载文件并选择分P。")
             self.status_label.setStyleSheet("color: #7f8c8d;")
 
+    # --- 核心交互逻辑 ---
     def run_validation(self):
         """运行验证逻辑"""
         if not self._state or not self.session:
             return
-        
+
         # 校验前置条件
         if not self._state.video_state.loaded_danmakus:
             QMessageBox.warning(self, "无法验证", "请先在 “发射器” 页面加载弹幕文件。")
             return
-        
+
         if not self._state.video_state.selected_cid:
             QMessageBox.warning(self, "无法验证", "请先在 “发射器” 页面选择一个分P（用于检查时间戳）。")
             return
-        
+
         duration = self._state.video_state.selected_part_duration_ms
         if duration <= 0:
             QMessageBox.warning(self, "数据缺失", "当前分P时长无效，无法进行时间戳校验。\n请尝试重新获取分P信息。")
@@ -539,12 +585,12 @@ class EditorTab(QWidget):
             )
             if reply == QMessageBox.StandardButton.No:
                 return
-            
+
         # 执行验证
         self.status_label.setText("正在验证...")
         self.status_label.setStyleSheet("color: blue;")
-        
-        self._reset_inspector()
+
+        self.inspector_group.reset_inspector()
         has_issues = self.session.checkout_from_state()
 
         if not has_issues:
@@ -561,28 +607,13 @@ class EditorTab(QWidget):
         self.model.update_data(items)
         self._update_ui_state()
 
-    def _get_danmaku_for_row(self, row: int) -> tuple[int | None, Danmaku | None]:
-        """辅助方法：通过 UI 行号获取底层原始索引与弹幕对象"""
-        if not self.session:
-            return None, None
-            
-        original_index = self.model.get_source_index(row)
-        if original_index is None:
-            return None, None
-
-        if not (0 <= original_index < len(self.session.staged_danmakus)):
-            self.logger.warning(f"越界访问拦截: 尝试访问索引 {original_index}，但数据池大小为 {len(self.session.staged_danmakus)}")
-            return None, None
-
-        return original_index, self.session.staged_danmakus[original_index]
-
     def _on_selection_changed(self):
         """当表格选中项变化时，同步更新 UI 状态并渲染属性面板"""
         self._update_ui_state()
 
         selected_indexes = self.table.selectionModel().selectedRows()
         if not selected_indexes:
-            self._reset_inspector()
+            self.inspector_group.reset_inspector()
             return
 
         original_index, dm = self._get_danmaku_for_row(selected_indexes[0].row())
@@ -591,19 +622,20 @@ class EditorTab(QWidget):
 
         self.current_editing_index = original_index
 
-        self.prop_time.blockSignals(True)
-        self.prop_time.setValue(dm.progress / 1000.0)
-        self.prop_time.blockSignals(False)
+        self.inspector_group.load_danmaku(dm)
 
-        mode_idx = self.prop_mode.findData(dm.mode)
-        self.prop_mode.setCurrentIndex(mode_idx if mode_idx >= 0 else 0)
- 
-        self._populate_font_sizes(dm.fontsize)
-        self.current_color_val = dm.color
-        self._update_color_btn_style(self.int_to_hex(dm.color))
+    def _apply_properties(self, new_props: dict):
+        """Inspector 回调：应用弹幕属性修改"""
+        if self.current_editing_index is None or not self.session:
+            return
 
-        self.prop_text.setPlainText(dm.msg)
-        self.prop_group.setEnabled(True)
+        changed = self.session.update_item_properties(self.current_editing_index, new_props)
+        if changed:
+            # 记录当前选中的行，刷新表格后恢复选中
+            row = self.table.currentIndex().row()
+            self._refresh_table()
+            if 0 <= row < self.model.rowCount():
+                self.table.selectRow(row)
 
     def open_context_menu(self, pos):
         index = self.table.indexAt(pos)
@@ -624,7 +656,7 @@ class EditorTab(QWidget):
                 self.session.delete_item(original_index)
                 self._refresh_table()
 
-    def on_table_double_click(self, index):
+    def on_table_double_click(self, index: QModelIndex):
         """双击编辑内容"""
         if index.column() == 3:
             self._edit_row(index.row())
@@ -713,7 +745,7 @@ class EditorTab(QWidget):
         if not self.session:
             return
         
-        self._reset_inspector()
+        self.inspector_group.reset_inspector()
         
         total, fixed, deleted = self.session.commit_to_state()
         
@@ -740,3 +772,8 @@ class EditorTab(QWidget):
                     self.logger.info(f"成功平移了 {count} 条弹幕的时间轴。")
                 else:
                     self.logger.info("平移操作未导致任何数据变化。")
+
+    # --- Qt Methods ---
+    def showEvent(self, event):
+        super().showEvent(event)
+        self._update_ui_state()
