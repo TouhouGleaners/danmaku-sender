@@ -590,6 +590,7 @@ class EditorPage(QWidget):
         self.status_label.setText("正在验证...")
         self.status_label.setStyleSheet("color: blue;")
 
+        self.current_editing_index = None
         self.inspector_group.reset_inspector()
         has_issues = self.session.checkout_from_state()
 
@@ -613,6 +614,7 @@ class EditorPage(QWidget):
 
         selected_indexes = self.table.selectionModel().selectedRows()
         if not selected_indexes:
+            self.current_editing_index = None
             self.inspector_group.reset_inspector()
             return
 
@@ -746,15 +748,19 @@ class EditorPage(QWidget):
         """应用修改"""
         if not self.session:
             return
-        
+
+        self.current_editing_index = None
         self.inspector_group.reset_inspector()
-        
+
         total, fixed, deleted = self.session.commit_to_state()
-        
+
         self.logger.info(f"修改已应用: 修复 {fixed}, 删除 {deleted}")
-        QMessageBox.information(self, "应用成功", 
-                                f"发送队列已更新！\n\n修复: {fixed} 条\n移除: {deleted} 条\n剩余总数: {total} 条")
-        
+        QMessageBox.information(
+            self,
+            "应用成功", 
+            f"发送队列已更新！\n\n修复: {fixed} 条\n移除: {deleted} 条\n剩余总数: {total} 条"
+        )
+
         self._refresh_table()
         self.status_label.setText("修改已应用。")
         self.status_label.setStyleSheet("color: green;")
