@@ -322,7 +322,7 @@ class PropertyInspectorGroup(QGroupBox):
             QMessageBox.warning(self, "错误", "弹幕内容不能为空！如需删除请点击下方的删除按钮。")
             return
 
-        new_props = {
+        new_props: dict[EditorField, Any] = {
             EditorField.PROGRESS: int(self.prop_time.value() * 1000),
             EditorField.MODE: self.prop_mode.currentData(),
             EditorField.FONT_SIZE: self.prop_fontsize.currentData(),
@@ -624,7 +624,7 @@ class EditorPage(QWidget):
 
         self.inspector_group.load_danmaku(dm)
 
-    def _apply_properties(self, new_props: dict):
+    def _apply_properties(self, new_props: dict[EditorField, Any]):
         """Inspector 回调：应用弹幕属性修改"""
         if self.current_editing_index is None or not self.session:
             return
@@ -648,13 +648,15 @@ class EditorPage(QWidget):
 
         action = menu.exec(self.table.viewport().mapToGlobal(pos))
 
+        original_index, _ = self._get_danmaku_for_row(index.row())
+        if original_index is None:
+            return
+
         if action == edit_action:
             self._edit_row(index.row())
         elif action == delete_action:
-            original_index = self.model.get_source_index(index.row())
-            if original_index is not None:
-                self.session.delete_item(original_index)
-                self._refresh_table()
+            self.session.delete_item(original_index)
+            self._refresh_table()
 
     def on_table_double_click(self, index: QModelIndex):
         """双击编辑内容"""
