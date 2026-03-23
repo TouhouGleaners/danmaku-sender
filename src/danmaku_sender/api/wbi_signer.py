@@ -1,9 +1,12 @@
-from functools import reduce
-from hashlib import md5
-import urllib.parse
 import time
 import logging
+import threading
+import urllib.parse
+from functools import reduce
+from hashlib import md5
+
 import requests
+
 
 logger = logging.getLogger("WbiSigner")
 
@@ -21,6 +24,8 @@ class WbiSigner:
     _cached_keys: tuple[str, str] | None = None
     _cached_time: float = 0
     CACHE_DURATION = 24 * 60 * 60  # 缓存时长为24小时(实际情况下单次运行程序不会超过这个时间)
+
+    _lock = threading.Lock()
 
     @staticmethod
     def get_mixin_key(orig: str):
@@ -53,34 +58,39 @@ class WbiSigner:
 
     @classmethod
     def get_wbi_keys(cls) -> tuple[str, str]:
-        """获取最新的 img_key 和 sub_key，带缓存机制"""
+        """获取最新的 img_key 和 sub_key"""
         current_time = time.time()
         
         # 如果缓存存在且未过期，直接返回缓存的键值
-        if (cls._cached_keys is not None and 
-            current_time - cls._cached_time < cls.CACHE_DURATION):
+        if (cls._cached_keys is not None
+            and current_time - cls._cached_time < cls.CACHE_DURATION):
             return cls._cached_keys
+        
+        with cls._lock:
+            if (cls._cached_keys is not None
+                and current_time - cls._cached_time < cls.CACHE_DURATION):
+                return cls._cached_keys
 
-        # 获取新的键值
-        headers = {
-            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/139.0.0.0 Safari/537.36 Edg/139.0.0.0',
-            'Referer': 'https://www.bilibili.com/'
-        }
-        try:
-            resp = requests.get('https://api.bilibili.com/x/web-interface/nav', headers=headers, timeout=10)
-            resp.raise_for_status()
-            json_content = resp.json()
-            img_url: str = json_content['data']['wbi_img']['img_url']
-            sub_url: str = json_content['data']['wbi_img']['sub_url']
-            img_key = img_url.rsplit('/', 1)[1].split('.')[0]
-            sub_key = sub_url.rsplit('/', 1)[1].split('.')[0]
+            # 获取新的键值
+            headers = {
+                'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/139.0.0.0 Safari/537.36 Edg/139.0.0.0',
+                'Referer': 'https://www.bilibili.com/'
+            }
+            try:
+                resp = requests.get('https://api.bilibili.com/x/web-interface/nav', headers=headers, timeout=10)
+                resp.raise_for_status()
+                json_content = resp.json()
+                img_url: str = json_content['data']['wbi_img']['img_url']
+                sub_url: str = json_content['data']['wbi_img']['sub_url']
+                img_key = img_url.rsplit('/', 1)[1].split('.')[0]
+                sub_key = sub_url.rsplit('/', 1)[1].split('.')[0]
 
-            # 更新缓存
-            cls._cached_keys = (img_key, sub_key)
-            cls._cached_time = current_time
-            
-            logger.debug("WBI 密钥获取成功并已缓存。")
-            return cls._cached_keys
-        except (requests.RequestException, ValueError) as e:
-            logger.critical(f"获取B站签名密钥失败，请检查网络连接或稍后再试。错误: {e}")
-            raise RuntimeError(f"获取B站签名密钥失败，请检查网络连接或稍后再试。错误: {e}") from e
+                # 更新缓存
+                cls._cached_keys = (img_key, sub_key)
+                cls._cached_time = current_time
+                
+                logger.debug("WBI 密钥获取成功并已缓存。")
+                return cls._cached_keys
+            except (requests.RequestException, ValueError) as e:
+                logger.critical(f"获取B站签名密钥失败，请检查网络连接或稍后再试。错误: {e}")
+                raise RuntimeError(f"获取B站签名密钥失败，请检查网络连接或稍后再试。错误: {e}") from e
