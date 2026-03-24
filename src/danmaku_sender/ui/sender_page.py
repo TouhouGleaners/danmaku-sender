@@ -12,12 +12,13 @@ from PySide6.QtGui import QTextCursor
 from PySide6.QtCore import Qt, QDateTime
 
 from .framework.binder import UIBinder
+from .controllers.video_controller import VideoController
+from .workers import SendTaskWorker
 
 from ..core.models.video import VideoInfo
 from ..core.services.danmaku_exporter import create_xml_from_danmakus
 from ..core.services.danmaku_parser import DanmakuParser
 from ..core.state import AppState
-from .workers import FetchInfoWorker, SendTaskWorker
 from ..utils.string_utils import parse_bilibili_link
 from ..utils.time_utils import format_seconds_to_duration
 
@@ -31,9 +32,9 @@ class SenderPage(QWidget):
         self.danmaku_parser = DanmakuParser()
 
         self._is_task_running = False
-        self._fetch_worker = None
         self._send_worker = None
-        self._pending_part_index: int | None = None 
+        self._pending_part_index: int | None = None
+        self.video_controller = VideoController(self)
 
         self._create_ui()
         self._connect_ui_logic()
@@ -92,6 +93,11 @@ class SenderPage(QWidget):
         # 本地信号
         self.start_btn.clicked.connect(self.toggle_task)
 
+        # 控制器
+        self.video_controller.fetch_started.connect(self._on_fetch_started)
+        self.video_controller.fetch_success.connect(self._on_fetch_success)
+        self.video_controller.fetch_error.connect(self._on_fetch_error)
+
     def bind_state(self, state: AppState):
         """将 UI 控件与 AppState 进行双向绑定"""
         if self._state is state:
@@ -131,12 +137,8 @@ class SenderPage(QWidget):
                 QMessageBox.critical(self, "解析失败", str(e))
 
     def fetch_video_info(self):
-        """获取视频信息"""
+        """UI 层: 负责获取参数，下发指令"""
         if not self._state:
-            return
-
-        if self._fetch_worker is not None and self._fetch_worker.isRunning():
-            self.logger.warning("正在获取视频信息，请稍候...")
             return
 
         raw_input = self.basic_group.bv_input.text().strip()
@@ -145,7 +147,6 @@ class SenderPage(QWidget):
             return
 
         bvid, p_index = parse_bilibili_link(raw_input)
-
         if not bvid:
             QMessageBox.warning(self, "格式错误", "未能识别有效的 BV 号。\n请检查输入内容是否正确。")
             self._pending_part_index = None
@@ -154,50 +155,39 @@ class SenderPage(QWidget):
         self.basic_group.bv_input.setText(bvid)
         self._pending_part_index = p_index
 
+        self.video_controller.fetch_info(bvid, self._state.get_api_auth())
+
+    def _on_fetch_started(self):
+        """UI 层: 响应加载中状态"""
         self.basic_group.fetch_btn.setEnabled(False)
         self.basic_group.fetch_btn.setText("获取中")
         self.basic_group.part_combo.clear()
         self.basic_group.part_combo.setEnabled(False)
 
-        auth_config = self._state.get_api_auth()
-
-        self._fetch_worker = FetchInfoWorker(bvid, auth_config, parent=self)
-        self._fetch_worker.finished_success.connect(self._on_fetch_success)
-        self._fetch_worker.finished_error.connect(self._on_fetch_error)
-        self._fetch_worker.finished.connect(self._fetch_worker.deleteLater)
-        self._fetch_worker.start()
-
     def _on_fetch_success(self, info: VideoInfo):
-        """视频信息获取成功"""
+        """UI 层: 响应成功状态"""
         if not self._state:
             return
 
         self.basic_group.fetch_btn.setEnabled(True)
         self.basic_group.fetch_btn.setText("获取分P")
         self.basic_group.part_combo.setEnabled(True)
-        self._fetch_worker = None
-        
+
         self._state.video_state.video_title = info.title
         self._state.video_state.cid_parts_map = {}
 
-        parts = info.parts
-        self.logger.info(f"获取成功: {info.title}, 共 {len(parts)} 个分P")
+        self.logger.info(f"获取成功: {info.title}, 共 {len(info.parts)} 个分P")
 
-        for p in parts:
-            cid = p.cid
-            page_num = p.page
-            part_title = p.title
-            duration = p.duration
-
-            if not cid:
+        for p in info.parts:
+            if not p.cid:
                 continue
 
-            part_name = f"P{page_num} - {part_title}"
+            part_name = f"P{p.page} - {p.title}"
 
-            self.basic_group.part_combo.addItem(part_name, userData={'cid': cid, 'duration': duration})
-            self._state.video_state.cid_parts_map[cid] = part_name
+            self.basic_group.part_combo.addItem(part_name, userData={'cid': p.cid, 'duration': p.duration})
+            self._state.video_state.cid_parts_map[p.cid] = part_name
 
-        if parts:
+        if info.parts:
             if (self._pending_part_index is not None and 
                 0 <= self._pending_part_index < self.basic_group.part_combo.count()):
 
@@ -209,10 +199,9 @@ class SenderPage(QWidget):
             self._pending_part_index = None
 
     def _on_fetch_error(self, err_msg: str):
+        """UI 层：响应失败状态"""
         self.basic_group.fetch_btn.setEnabled(True)
         self.basic_group.fetch_btn.setText("获取分P")
-        self._fetch_worker = None
-
         self._pending_part_index = None
 
         self.basic_group.part_combo.clear()
