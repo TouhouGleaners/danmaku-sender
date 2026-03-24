@@ -1,6 +1,7 @@
 import logging
 import traceback
 from typing import Callable
+
 from PySide6.QtCore import QObject, Signal, QRunnable
 
 
@@ -31,8 +32,7 @@ class GenericTask(QRunnable):
         self.kwargs = kwargs
         self.signals = WorkerSignals()
 
-        # 将对象的生命周期管理由 C++ 交于 Python GC。
-        self.setAutoDelete(False) 
+        self.setAutoDelete(False)  # 对象生命周期管理: C++ -> Python GC
 
         GenericTask._keep_alive_registry.add(self)
 

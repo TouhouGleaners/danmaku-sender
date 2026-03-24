@@ -9,6 +9,8 @@ from PySide6.QtWidgets import (
 from PySide6.QtGui import QAction, QCloseEvent, QDesktopServices
 from PySide6.QtCore import Qt, QUrl, QTimer, QSize
 
+from .controllers.auth_controller import AuthController
+from .controllers.system_controller import SystemController
 from .sender_page import SenderPage
 from .settings_tab import SettingsTab
 from .monitor_tab import MonitorTab
@@ -18,7 +20,6 @@ from .history_page import HistoryPage
 
 from ..config.app_config import AppInfo, UI
 from ..core.state import AppState
-from .workers import UpdateCheckWorker, FetchUserInfoWorker
 from ..utils.log_utils import GuiLoggingHandler
 from ..utils.credential_manager import load_credentials, save_credentials
 from ..utils.config_manager import load_app_config, save_app_config
@@ -34,11 +35,14 @@ class MainWindow(QMainWindow):
 
         # 核心状态
         self.state = AppState()
+        self.auth_ctrl = AuthController(self)
+        self.sys_ctrl = SystemController(self)
         self._log_signals_connected = False
         self.logger = logging.getLogger("MainWindow")
 
         self._create_ui()
         self.init_pages()
+        self._setup_system_signals()
         self.create_menu_bar()
 
         # 从磁盘中加载凭证
@@ -145,21 +149,13 @@ class MainWindow(QMainWindow):
 
     def _setup_user_logic(self):
         """用户信息获取逻辑"""
-        # 监听凭证变更
         self.state.credentials_changed.connect(self.request_user_info_refresh)
-        # 初始刷新
+        self.auth_ctrl.user_info_received.connect(self._update_user_ui)
         QTimer.singleShot(500, self.request_user_info_refresh)
 
     def request_user_info_refresh(self):
         """发起异步请求刷新用户信息"""
-        if not self.state.sessdata:
-            self._update_user_ui(None)
-            return
-            
-        auth = self.state.get_api_auth()
-        self.user_worker = FetchUserInfoWorker(auth)
-        self.user_worker.finished_success.connect(self._update_user_ui)
-        self.user_worker.start()
+        self.auth_ctrl.refresh_user_info(self.state.get_api_auth())
 
     def _update_user_ui(self, data):
         """更新左上角展示"""
@@ -297,17 +293,7 @@ class MainWindow(QMainWindow):
 
     def run_update_check(self, is_manual: bool = False):
         """启动更新检查"""
-        if hasattr(self, '_update_worker') and self._update_worker and self._update_worker.isRunning():
-            return
-        
-        use_proxy = self.state.sender_config.use_system_proxy
-        self._update_worker = UpdateCheckWorker(use_proxy, is_manual, parent=self)
-        self._update_worker.update_found.connect(self._on_update_found)
-
-        if is_manual:
-            self._update_worker.no_update.connect(lambda: QMessageBox.information(self, "检查更新", "当前已是最新版本。"))
-
-        self._update_worker.start()
+        self.sys_ctrl.check_for_updates(self.state.sender_config.use_system_proxy, is_manual)
 
     def _on_update_found(self, ver, notes, url):
         """发现新版本时的弹窗"""
@@ -315,3 +301,10 @@ class MainWindow(QMainWindow):
 
         if dialog.exec():
             QDesktopServices.openUrl(QUrl(url))
+
+    def _setup_system_signals(self):
+        """连接系统信号"""
+        self.sys_ctrl.update_found.connect(self._on_update_found)
+        self.sys_ctrl.no_update.connect(
+            lambda is_m: QMessageBox.information(self, "检查更新", "当前已是最新版本。") if is_m else None
+        )
