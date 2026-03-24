@@ -19,6 +19,7 @@ class SystemController(QObject):
     """系统业务控制器 (更新检查等)"""
     update_found = Signal(str, str, str)  # version, notes, url
     no_update = Signal(bool)              # 是否是手动检查触发的
+    check_failed = Signal(str, bool)      # 错误信息, 是否为手动
 
     def __init__(self, parent=None):
         super().__init__(parent)
@@ -27,11 +28,13 @@ class SystemController(QObject):
         """发起异步更新检查"""
         task = GenericTask(_check_update, use_proxy)
 
-        def _handle_res(info: UpdateInfo):
-            if info.has_update:
-                self.update_found.emit(info.remote_version, info.release_notes, info.url)
-            else:
-                self.no_update.emit(is_manual)
+        task.signals.result.connect(lambda info: self._handle_res(info, is_manual))
+        task.signals.error.connect(lambda err: self.check_failed.emit(err, is_manual))
 
-        task.signals.result.connect(_handle_res)
         QThreadPool.globalInstance().start(task)
+
+    def _handle_res(self, info: UpdateInfo, is_manual: bool):
+        if info.has_update:
+            self.update_found.emit(info.remote_version, info.release_notes, info.url)
+        else:
+            self.no_update.emit(is_manual)

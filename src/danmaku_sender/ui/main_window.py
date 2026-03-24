@@ -308,3 +308,6 @@ class MainWindow(QMainWindow):
         self.sys_ctrl.no_update.connect(
             lambda is_m: QMessageBox.information(self, "检查更新", "当前已是最新版本。") if is_m else None
         )
+        self.sys_ctrl.check_failed.connect(lambda err, is_m: 
+            QMessageBox.warning(self, "检查更新失败", f"无法连接到更新服务器:\n{err}") if is_m else None
+        )
