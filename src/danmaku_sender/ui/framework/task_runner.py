@@ -42,7 +42,6 @@ class GenericTask(QRunnable):
             # 执行传入的业务函数
             result = self.fn(*self.args, **self.kwargs)
             # 将返回值通过信号扔回主线程
-            self.signals.result.connect(lambda: None)  # 防御性空连接防报错
             self.signals.result.emit(result)
         except Exception as e:
             # 捕捉任何异常，打印完整堆栈，并把错误信息扔回主线程
