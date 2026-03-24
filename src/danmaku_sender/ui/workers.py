@@ -1,4 +1,5 @@
 import logging
+
 from PySide6.QtCore import QThread, Signal
 
 from ..core.engines.sender import DanmakuScheduler, DanmakuExecutor, SendingContext, SendJob
@@ -12,8 +13,6 @@ from ..core.models.video import VideoInfo
 from ..core.services.video_fetcher import VideoFetcher
 
 from ..api.bili_api_client import BiliApiClient
-from ..api.update_checker import UpdateChecker
-from ..config.app_config import AppInfo
 from ..utils.system_utils import KeepSystemAwake
 from ..utils.notification_utils import send_windows_notification
 
@@ -29,7 +28,7 @@ def _get_silent_logger():
 
     if not logger.handlers:
         logger.addHandler(logging.NullHandler())
-        
+
     return logger
 
 
@@ -47,48 +46,6 @@ class BaseWorker(QThread):
     def report_error(self, title: str, exception: Exception):
         self.logger.error(title, exc_info=True)
         self.log_message.emit(f"{title}: {exception}")
-
-
-class UpdateCheckWorker(BaseWorker):
-    """用于后台检查更新的线程"""
-    update_found = Signal(str, str, str)  # 版本，信息，URL
-    no_update = Signal()                  # 无更新 (手动检查时反馈)
-
-    def __init__(self, use_proxy: bool, is_manual: bool = False, parent=None):
-        super().__init__(parent)
-        self.use_proxy = use_proxy
-        self.is_manual = is_manual
-
-    def run(self):
-        try:
-            info = UpdateChecker.check(AppInfo.VERSION, self.use_proxy)
-            if info.has_update:
-                self.update_found.emit(info.remote_version, info.release_notes, info.url)
-            elif self.is_manual:
-                self.no_update.emit()
-        except Exception as e:
-            if self.is_manual:
-                self.report_error("检查更新失败", e)
-            else:
-                self.logger.warning(f"自动更新检查失败: {e}")
-
-
-class FetchUserInfoWorker(BaseWorker):
-    """异步获取 B 站登录状态与用户信息"""
-    finished_success = Signal(dict)
-
-    def __init__(self, auth_config, parent=None):
-        super().__init__(parent)
-        self.auth = auth_config
-
-    def run(self):
-        try:
-            with BiliApiClient.from_config(self.auth) as client:
-                data = client.get_user_info()
-                self.finished_success.emit(data)
-        except Exception as e:
-            self.logger.error(f"获取用户信息失败: {e}")
-            self.finished_success.emit({"isLogin": False})
 
 
 class FetchInfoWorker(BaseWorker):
