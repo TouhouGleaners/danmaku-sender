@@ -157,6 +157,13 @@ class BiliApiClient:
                 self.logger.warning(f"API请求失败: {url}, Code: {code}, Message: {message}")
                 raise BiliApiException(code=code, message=message)
 
+    def get_raw_resource(self, url: str) -> bytes:
+        """通用的二进制资源获取方法"""
+        with self._network_guards(url):
+            response = self.session.get(url, timeout=10)
+            response.raise_for_status()
+            return response.content
+
     def get_video_info(self, bvid: str) -> dict:
         """根据BVID获取视频详细信息"""
         url = "https://api.bilibili.com/x/web-interface/view"
