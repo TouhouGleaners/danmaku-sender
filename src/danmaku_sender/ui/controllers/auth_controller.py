@@ -1,22 +1,14 @@
 import logging
-from dataclasses import dataclass
 
 from PySide6.QtCore import QObject, Signal, QThreadPool
 
 from ..framework.task_runner import GenericTask
 from ...api.bili_api_client import BiliApiClient
 from ...core.state import ApiAuthConfig
+from ...core.models.user import UserProfile
 
 
 logger = logging.getLogger("AuthController")
-
-
-@dataclass
-class UserProfile:
-    """同步交付的业务模型"""
-    is_login: bool
-    username: str
-    avatar_bytes: bytes = b""
 
 
 def _fetch_user_nav(auth_config: ApiAuthConfig) -> UserProfile:
@@ -37,19 +29,19 @@ def _fetch_user_nav(auth_config: ApiAuthConfig) -> UserProfile:
                 try:
                     avatar_data = client.get_raw_resource(face_url)
                 except Exception as e:
-                    logger.error(f"头像下载过程中发生非预期异常: {e}", exc_info=True)
+                    logger.warning(f"下载头像失败 [URL: {face_url}]", exc_info=True)
 
             return UserProfile(is_login=True, username=username, avatar_bytes=avatar_data)
 
         except Exception as e:
             # 主流程失败
-            logger.error(f"同步获取用户信息失败: {e}")
+            logger.error(f"同步获取用户信息任务崩溃: {e}", exc_info=True)
             raise
 
 
 class AuthController(QObject):
     """用户授权与身份控制器"""
-    user_profile_ready = Signal(object)
+    user_profile_ready = Signal(UserProfile)
 
     def __init__(self, parent=None):
         super().__init__(parent)

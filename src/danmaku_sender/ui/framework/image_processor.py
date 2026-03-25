@@ -11,11 +11,14 @@ class QtImageProcessor:
         logical_size: UI 设计的逻辑像素 (36)
         device_pixel_ratio: 屏幕缩放比例 (1.0, 1.5, 2.0 ...)
         """
-        # 计算物理像素
-        physical_size = int(logical_size * device_pixel_ratio)
-        
+        if not raw_bytes or logical_size <= 0 or device_pixel_ratio <= 0:
+            return QPixmap()
+
         image = QImage.fromData(raw_bytes)
-        if image.isNull(): return QPixmap()
+        if image.isNull(): 
+            return QPixmap()
+
+        physical_size = max(1, int(logical_size * device_pixel_ratio))
 
         image = image.scaled(physical_size, physical_size, Qt.AspectRatioMode.KeepAspectRatioByExpanding, Qt.TransformationMode.SmoothTransformation)
 
