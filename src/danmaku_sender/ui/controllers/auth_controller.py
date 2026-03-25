@@ -21,29 +21,35 @@ class UserProfile:
 
 def _fetch_user_nav(auth_config: ApiAuthConfig) -> UserProfile:
     with BiliApiClient.from_config(auth_config) as client:
-        # JSON
-        nav_data = client.get_user_info()
+        try:
+            # 用户信息
+            nav_data = client.get_user_info()
 
-        if not nav_data.get('isLogin'):
-            return UserProfile(is_login=False, username="未登录")
+            if not nav_data.get('isLogin'):
+                return UserProfile(is_login=False, username="未登录")
 
-        # 头像图片
-        username = nav_data.get('uname', "未知用户")
-        face_url = nav_data.get('face', "")
+            username = nav_data.get('uname', "未知用户")
+            face_url = nav_data.get('face', "")
 
-        avatar_data = b""
-        if face_url:
-            try:
-                avatar_data = client.get_raw_resource(face_url)
-            except Exception:
-                pass  # 头像下载失败不应导致整个登录显示失败
-                
-        return UserProfile(is_login=True, username=username, avatar_bytes=avatar_data)
+            # 下载头像
+            avatar_data = b""
+            if face_url:
+                try:
+                    avatar_data = client.get_raw_resource(face_url)
+                except Exception as e:
+                    logger.error(f"头像下载过程中发生非预期异常: {e}", exc_info=True)
+
+            return UserProfile(is_login=True, username=username, avatar_bytes=avatar_data)
+
+        except Exception as e:
+            # 主流程失败
+            logger.error(f"同步获取用户信息失败: {e}")
+            raise
 
 
 class AuthController(QObject):
     """用户授权与身份控制器"""
-    user_profile_ready = Signal(UserProfile)
+    user_profile_ready = Signal(object)
 
     def __init__(self, parent=None):
         super().__init__(parent)
