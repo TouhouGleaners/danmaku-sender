@@ -9,8 +9,9 @@ from PySide6.QtWidgets import (
 from PySide6.QtGui import QAction, QCloseEvent, QDesktopServices
 from PySide6.QtCore import Qt, QUrl, QTimer, QSize
 
-from .controllers.auth_controller import AuthController
+from .controllers.auth_controller import AuthController, UserProfile
 from .controllers.system_controller import SystemController
+from .framework.image_processor import QtImageProcessor
 from .sender_page import SenderPage
 from .settings_tab import SettingsTab
 from .monitor_tab import MonitorTab
@@ -150,21 +151,30 @@ class MainWindow(QMainWindow):
     def _setup_user_logic(self):
         """用户信息获取逻辑"""
         self.state.credentials_changed.connect(self.request_user_info_refresh)
-        self.auth_ctrl.user_info_received.connect(self._update_user_ui)
+        self.auth_ctrl.user_profile_ready.connect(self._on_user_profile_updated)
         QTimer.singleShot(500, self.request_user_info_refresh)
 
     def request_user_info_refresh(self):
         """发起异步请求刷新用户信息"""
         self.auth_ctrl.refresh_user_info(self.state.get_api_auth())
+    
+    def _on_user_profile_updated(self, profile: UserProfile):
+        """同步更新 UI，消除时间差感"""
+        # 更新文字
+        self.username_label.setText(profile.username)
 
-    def _update_user_ui(self, data):
-        """更新左上角展示"""
-        if data and data.get('isLogin'):
-            self.username_label.setText(data.get('uname'))
-            self.avatar_label.setText("✅") # 后续升级为图片下载
-        else:
-            self.username_label.setText("未登录")
-            self.avatar_label.setText("📺")
+        # 更新头像
+        if profile.is_login and profile.avatar_bytes:
+            dpr = self.devicePixelRatioF()
+            pixmap = QtImageProcessor.make_circular_pixmap(profile.avatar_bytes, 36, dpr)
+            if not pixmap.isNull():
+                self.avatar_label.clear()
+                self.avatar_label.setPixmap(pixmap)
+                return
+
+        # 未登录或无头像
+        self.avatar_label.clear()
+        self.avatar_label.setText("📺" if not profile.is_login else "✅")
 
     def create_menu_bar(self):
         menu_bar = self.menuBar()
