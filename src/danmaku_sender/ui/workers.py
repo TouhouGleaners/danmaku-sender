@@ -189,11 +189,11 @@ class MonitorTaskWorker(BaseWorker):
                     self.logger.info(f"🛡️ 监视启动: {self.target.display_string} | CID: {self.target.cid}")
 
                     while not self.stop_event.is_set():
-                        # 获取当前设定的基线时间
-                        current_baseline = self.monitor_config.stats_baseline
+                        snap_baseline = self.monitor_config.stats_baseline
+                        snap_interval = self.monitor_config.refresh_interval
 
                         # 单次检查
-                        stats = monitor.monitor(stats_baseline=current_baseline)
+                        stats = monitor.monitor(stats_baseline=snap_baseline)
 
                         # 结果信号
                         self.stats_updated.emit(stats)
@@ -209,11 +209,9 @@ class MonitorTaskWorker(BaseWorker):
 
                         self.log_message.emit(msg)
 
-                        # 读取轮询间隔，并用 event.wait 切片阻塞
-                        current_interval = self.monitor_config.refresh_interval
-                        if self.stop_event.wait(current_interval):
+                        if self.stop_event.wait(snap_interval):
                             self.logger.info("收到停止信号，监视任务终止。")
-                            break
+                            break   
 
         except Exception as e:
             self.report_error("监视任务异常", e)

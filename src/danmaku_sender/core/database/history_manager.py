@@ -164,6 +164,10 @@ class HistoryManager:
     def get_stats(self, cid: int, stats_baseline: float = 0.0) -> tuple[int, int, int]:
         """获取统计数据 (UI使用)"""
         try:
+            conditions = [SentDanmaku.cid == cid]
+            if stats_baseline > 0:
+                conditions.append(SentDanmaku.ctime >= stats_baseline)
+
             stats = (
                 SentDanmaku
                     .select(
@@ -171,7 +175,7 @@ class HistoryManager:
                         fn.SUM(Case(None, [(SentDanmaku.status == DanmakuStatus.VERIFIED.value, 1)], 0)),
                         fn.SUM(Case(None, [(SentDanmaku.status == DanmakuStatus.LOST.value, 1)], 0))
                     )
-                    .where(SentDanmaku.cid == cid, (SentDanmaku.ctime >= stats_baseline) if stats_baseline > 0 else True)
+                    .where(*conditions)
                     .scalar(as_tuple=True)
             )
 
@@ -180,7 +184,7 @@ class HistoryManager:
                 return (total or 0, int(verified or 0), int(lost or 0))
 
         except Exception as e:
-            logger.error(f"获取统计失败: {e}")
+            logger.error(f"获取统计失败: {e}", exc_info=True)
 
         return 0, 0, 0
     
