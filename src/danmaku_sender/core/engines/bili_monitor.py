@@ -12,20 +12,13 @@ from ...api.bili_api_client import BiliApiClient
 
 class BiliDanmakuMonitor:
     """
-    一个用于监视B站视频弹幕匹配情况的类。
-    """
-    def __init__(self, api_client: BiliApiClient, target: VideoTarget, interval: int = 60):
-        """
-        初始化监视器。
+    弹幕监视核心引擎
 
-        Args:
-            api_client: API 客户端
-            target: 监视目标 (包含 cid, bvid, title)
-            interval: 轮询间隔 (秒)
-        """
+    负责执行单次的网络请求与数据库比对
+    """
+    def __init__(self, api_client: BiliApiClient, target: VideoTarget):
         self.api_client = api_client
         self.target = target
-        self.interval = interval
 
         self.danmaku_parser = DanmakuParser()
         self.history_manager = HistoryManager()
@@ -43,49 +36,25 @@ class BiliDanmakuMonitor:
             self.logger.error(f"解析在线弹幕内容时发生错误: {e}")
             return []
 
-    def run(self, stop_event: threading.Event, status_callback):
-        """
-        启动监视任务
-        
-        Args:
-            stop_event: 停止信号
-            status_callback: 状态回调函数，签名: (stats: dict) -> None
-        """
-        self.logger.info(f"🛡️ 监视启动: {self.target.display_string} | CID: {self.target.cid}")
+    def monitor(self, stats_baseline: float = 0.0) -> dict:
+        """执行单次核销与统计"""
+        # 提取与核销
+        online_danmakus = self._fetch_online_danmakus()
+        online_dmids = [dm.dmid for dm in online_danmakus if dm.dmid]
 
-        while not stop_event.is_set():
-            try:
-                online_danmakus = self._fetch_online_danmakus()
-                
-                if online_danmakus:
-                    online_ids = [dm.dmid for dm in online_danmakus if dm.dmid]
-                    
-                    if online_ids:
-                        verified_count = self.history_manager.verify_dmids(online_ids)
-                        if verified_count > 0:
-                            self.logger.info(f"✨ 核销成功: 确认了 {verified_count} 条新存活弹幕。")
+        if online_dmids:
+            verified_count = self.history_manager.verify_dmids(online_dmids)
+            if verified_count > 0:
+                self.logger.info(f"✨ 核销成功: 确认了 {verified_count} 条新存活弹幕。")
 
-                total, verified, lost = self.history_manager.get_stats(self.target.cid)
-                
-                pending = total - verified - lost
-                if pending < 0:
-                    pending = 0
+        # 传入基准时间，获取过滤后的数据
+        total, verified, lost = self.history_manager.get_stats(self.target.cid, stats_baseline)
 
-                stats = {
-                    'total': total,
-                    'verified': verified,
-                    'lost': lost,
-                    'pending': pending
-                }
+        pending = max(0, total - verified - lost)
 
-                if status_callback:
-                    status_callback(stats)
-
-            except Exception as e:
-                self.logger.error(f"监视循环发生异常: {e}", exc_info=True)
-
-            if stop_event.wait(self.interval):
-                self.logger.info("收到停止信号，监视任务终止。")
-                break
-            
-        self.logger.info("弹幕监视器已退出")
+        return {
+            'total': total,
+            'verified': verified,
+            'lost': lost,
+            'pending': pending
+        }

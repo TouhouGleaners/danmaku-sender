@@ -1,4 +1,5 @@
 import logging
+from threading import Event
 
 from PySide6.QtCore import QThread, Signal
 
@@ -170,7 +171,7 @@ class MonitorTaskWorker(BaseWorker):
         target: VideoTarget,
         auth_config: ApiAuthConfig,
         monitor_config: MonitorConfig,
-        stop_event,
+        stop_event: Event,
         parent=None
     ):
         super().__init__(parent)
@@ -183,15 +184,19 @@ class MonitorTaskWorker(BaseWorker):
         try:
             with KeepSystemAwake(self.monitor_config.prevent_sleep):
                 with BiliApiClient.from_config(self.auth_config) as client:
-                    monitor = BiliDanmakuMonitor(
-                        api_client=client,
-                        target=self.target,
-                        interval=self.monitor_config.refresh_interval
-                    )
+                    monitor = BiliDanmakuMonitor(api_client=client, target=self.target)
 
-                    def _callback(stats: dict):
+                    self.logger.info(f"🛡️ 监视启动: {self.target.display_string} | CID: {self.target.cid}")
+
+                    while not self.stop_event.is_set():
+                        snap_baseline = self.monitor_config.stats_baseline
+                        snap_interval = self.monitor_config.refresh_interval
+
+                        # 单次检查
+                        stats = monitor.monitor(stats_baseline=snap_baseline)
+
+                        # 结果信号
                         self.stats_updated.emit(stats)
-
                         self.status_updated.emit(f"监视中 (存活: {stats['verified']})")
 
                         msg = (
@@ -201,11 +206,13 @@ class MonitorTaskWorker(BaseWorker):
                         )
                         if stats.get('lost', 0) > 0:
                             msg += f" | ❌丢失:{stats['lost']}"
-                            
+
                         self.log_message.emit(msg)
 
-                    monitor.run(self.stop_event, _callback)
-        
+                        if self.stop_event.wait(snap_interval):
+                            self.logger.info("收到停止信号，监视任务终止。")
+                            break   
+
         except Exception as e:
             self.report_error("监视任务异常", e)
         finally:

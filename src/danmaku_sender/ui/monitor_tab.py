@@ -1,8 +1,10 @@
+import time
 import logging
 import threading
+from datetime import datetime
 
 from PySide6.QtWidgets import (
-    QWidget, QVBoxLayout, QHBoxLayout, QLabel, QGroupBox, QTextEdit, 
+    QWidget, QVBoxLayout, QHBoxLayout, QLabel, QGroupBox, QTextEdit, QComboBox,
     QPushButton, QSpinBox, QMessageBox, QGridLayout, QSizePolicy
 )
 from PySide6.QtGui import QTextCursor
@@ -108,6 +110,32 @@ class MonitorTab(QWidget):
         
         main_layout.addLayout(param_layout)
 
+        # 时间锚点选择区
+        param_layout.addSpacing(20)
+        param_layout.addWidget(QLabel("统计基线:"))
+
+        # 下拉框
+        self.anchor_combo = QComboBox()
+        self.anchor_combo.setFixedWidth(115) 
+        self.anchor_combo.setPlaceholderText("手动指定")
+        self.anchor_combo.addItem("本次启动后", "launch")
+        self.anchor_combo.addItem("最近 24 小时", "24h")
+        self.anchor_combo.addItem("全量历史", "all")
+        param_layout.addWidget(self.anchor_combo)
+
+        # 设为当前按钮
+        self.btn_reset_anchor = QPushButton("设为当前")
+        self.btn_reset_anchor.setToolTip("重置为当前时间，仅统计现在之后的发送记录，用于多批次任务对账。")
+        self.btn_reset_anchor.setCursor(Qt.CursorShape.PointingHandCursor)
+        param_layout.addWidget(self.btn_reset_anchor)
+
+        # 状态展示
+        self.anchor_display = QLabel("(尚未设置)")
+        self.anchor_display.setMinimumWidth(130)
+        self.anchor_display.setStyleSheet("color: #7f8c8d; font-size: 11px;")
+        param_layout.addWidget(self.anchor_display)
+        param_layout.addStretch(1) 
+
         # 日志区
         log_group = QGroupBox("监视日志")
         log_layout = QVBoxLayout()
@@ -143,6 +171,8 @@ class MonitorTab(QWidget):
 
     def _connect_signals(self):
         self.start_btn.clicked.connect(self.toggle_task)
+        self.anchor_combo.currentIndexChanged.connect(self._on_anchor_changed)
+        self.btn_reset_anchor.clicked.connect(self._on_reset_anchor_clicked)
 
     def bind_state(self, state: AppState):
         if self._state is state:
@@ -152,6 +182,52 @@ class MonitorTab(QWidget):
 
         # 初始化与绑定
         UIBinder.bind(self.interval_spin, state.monitor_config, "refresh_interval")
+
+        if self._state.monitor_config.stats_baseline == 0.0:
+            self._state.monitor_config.stats_baseline = self._state.app_launch_time
+
+            idx = self.anchor_combo.findData("launch")
+            if idx >= 0:
+                self.anchor_combo.blockSignals(True)
+                self.anchor_combo.setCurrentIndex(idx)
+                self.anchor_combo.blockSignals(False)
+
+        self._update_anchor_display(self._state.monitor_config.stats_baseline)
+
+    def _update_anchor_display(self, baseline: float):
+        if baseline <= 0:
+            self.anchor_display.setText("全量历史记录")
+        else:
+            dt_str = datetime.fromtimestamp(baseline).strftime('%m-%d %H:%M:%S')
+            self.anchor_display.setText(dt_str)
+
+    def _on_anchor_changed(self, index):
+        if not self._state or index < 0:
+            return
+
+        data = self.anchor_combo.currentData()
+        new_baseline = 0.0
+        if data == "launch":
+            new_baseline = self._state.app_launch_time
+        elif data == "24h":
+            new_baseline = time.time() - 86400
+        elif data == "all":
+            new_baseline = 0.0
+
+        self._state.monitor_config.stats_baseline = new_baseline
+        self._update_anchor_display(new_baseline)
+
+    def _on_reset_anchor_clicked(self):
+        if not self._state:
+            return
+
+        current_ts = time.time()
+        self._state.monitor_config.stats_baseline = current_ts
+        self._update_anchor_display(current_ts)
+
+        self.anchor_combo.blockSignals(True)
+        self.anchor_combo.setCurrentIndex(-1)
+        self.anchor_combo.blockSignals(False)
 
     def showEvent(self, event):
         super().showEvent(event)
