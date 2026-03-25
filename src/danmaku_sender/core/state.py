@@ -1,3 +1,4 @@
+import time
 from dataclasses import dataclass, field
 
 from pydantic import BaseModel, ConfigDict, Field, model_validator
@@ -61,10 +62,12 @@ class MonitorConfig(BaseModel):
     model_config = ConfigDict(validate_assignment=True)  # 赋值时校验
 
     refresh_interval: int = Field(default=60, ge=10)  # 刷新间隔，单位秒
-    
+
     # 复用全局设置
     prevent_sleep: bool = True
     use_system_proxy: bool = True
+
+    stats_baseline: float = Field(default=0.0, exclude=True)
 
 
 class ValidationConfig(BaseModel):
@@ -110,7 +113,8 @@ class AppState(QObject):
 
     def __init__(self):
         super().__init__()
-        
+        self.app_launch_time = time.time()
+
         # 核心凭证
         self.sessdata: str = ""
         self.bili_jct: str = ""
