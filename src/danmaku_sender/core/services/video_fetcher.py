@@ -1,6 +1,6 @@
 import logging
 
-from ..exceptions import BiliApiException
+from ..models.exceptions import BiliApiError
 from ..models.video import VideoInfo, VideoPart
 
 from ...api.bili_api_client import BiliApiClient
@@ -27,7 +27,7 @@ class VideoFetcher:
         """
         try:
             raw_data = self.client.get_video_info(bvid)
-        except BiliApiException as e:
+        except BiliApiError as e:
             error_msg = f"API 请求失败 [Code: {e.code}]: {e.message}"
             self.logger.error(f"获取 {bvid} 失败: {error_msg}")
             raise RuntimeError(error_msg) from e

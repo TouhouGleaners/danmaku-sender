@@ -1,83 +1,109 @@
-from __future__ import annotations
 from enum import Enum
 
 
 class BiliDmErrorCode(Enum):
-    """
-    Bilibili弹幕发送错误码及其默认描述
-    定义格式: (code, description, is_fatal)
-    """
-    description: str
-    is_fatal: bool
+    """B站弹幕错误码枚举"""
+    # --- 0. 成功 ---
+    SUCCESS = 0
 
-    # 成功
-    SUCCESS = (0, "弹幕发送成功。", False)
-    
-    # B站API返回的错误码
+    # --- 1. B站业务限制 ---
     # 鉴权类
-    UNAUTHORIZED = (-101, "账号未登录或登录态失效！请检查SESSDATA和bili_jct。", True)
-    ACCOUNT_BANNED = (-102, "账号被封停。", True)
-    CSRF_FAILED = (-111, "CSRF 校验失败 (bili_jct 可能失效)，请检查登录凭证或尝试重新获取。", True)
+    UNAUTHORIZED = -101
+    ACCOUNT_BANNED = -102
+    CSRF_FAILED = -111
 
     # 请求类
-    REQUEST_ERROR = (-400, "请求错误，参数不合法。", False)
-    NOT_FOUND = (-404, "请求资源不存在。", True)
+    REQUEST_ERROR = -400
+    NOT_FOUND = -404
 
     # 业务限制类
-    SYSTEM_UPGRADING = (36700, "系统升级中，暂无法发送弹幕。", True)
-    CONTENT_FORBIDDEN = (36701, "弹幕包含被禁止的内容，请修改后重试。", False)
-    DANMAKU_TOO_LONG = (36702, "弹幕长度大于100字，请精简。", False)
-    FREQ_LIMIT = (36703, "发送频率过快，请降低发送速度或稍后再试。", False)
-    VIDEO_NOT_REVIEWED = (36704, "禁止向未审核的视频发送弹幕。", True)
-    LEVEL_INSUFFICIENT_GENERAL = (36705, "您的等级不足，不能发送弹幕。", True)
-    LEVEL_INSUFFICIENT_TOP = (36706, "您的等级不足，不能发送顶端弹幕。", False)
-    LEVEL_INSUFFICIENT_BOTTOM = (36707, "您的等级不足，不能发送底端弹幕。", False)
-    LEVEL_INSUFFICIENT_COLOR = (36708, "您的等级不足，不能发送彩色弹幕。", False)
-    LEVEL_INSUFFICIENT_ADVANCED = (36709, "您的等级不足，不能发送高级弹幕。", False)
-    PERMISSION_INSUFFICIENT_STYLE = (36710, "您的权限不足，不能发送这种样式的弹幕。", False)
-    VIDEO_DANMAKU_FORBIDDEN = (36711, "该视频禁止发送弹幕，无法发送。", True)
-    LENGTH_LIMIT_LEVEL1 = (36712, "Level 1用户发送弹幕的最大长度为20字。", False)
-    VIDEO_NOT_PAID = (36713, "此稿件未付费，暂时无法发送弹幕。", True)
-    INVALID_PROGRESS = (36714, "弹幕发送时间（progress）不合法。", False)
-    DAILY_LIMIT_EXCEEDED = (36715, "当日操作数量超过上限。", False)
-    NOT_PREMIUM_MEMBER = (36718, "目前您不是大会员，无法使用会员权益。", False)
+    SYSTEM_UPGRADING = 36700
+    CONTENT_FORBIDDEN = 36701
+    DANMAKU_TOO_LONG = 36702
+    FREQ_LIMIT = 36703
+    VIDEO_NOT_REVIEWED = 36704
+    LEVEL_INSUFFICIENT_GENERAL = 36705
+    LEVEL_INSUFFICIENT_TOP = 36706
+    LEVEL_INSUFFICIENT_BOTTOM = 36707
+    LEVEL_INSUFFICIENT_COLOR = 36708
+    LEVEL_INSUFFICIENT_ADVANCED = 36709
+    PERMISSION_INSUFFICIENT_STYLE = 36710
+    VIDEO_DANMAKU_FORBIDDEN = 36711
+    LENGTH_LIMIT_LEVEL1 = 36712
+    VIDEO_NOT_PAID = 36713
+    INVALID_PROGRESS = 36714
+    DAILY_LIMIT_EXCEEDED = 36715
+    NOT_PREMIUM_MEMBER = 36718
 
-    # 自定义错误码
-    # 网络/未知类
-    NETWORK_ERROR = (-9999, "未知的网络请求异常。", True)
-    UNKNOWN_ERROR = (-9998, "发生未知程序异常。", True)
-    TIMEOUT_ERROR = (-9997, "请求超时，请检查网络。", True)
-    CONNECTION_ERROR = (-9996, "无法连接服务器(DNS/TCP异常)。", True)
-    HTTP_ERROR = (-9995, "服务器返回了非 200 状态码。", True)
-    PARSE_ERROR = (-9994, "服务器响应无法解析(JSON错误)。", True)
-    GENERIC_FAILURE = (-1, "操作失败，详见原始消息或尝试稍后再试。", False)
+    # --- 2. 外部系统/协议异常 ---
+    BILI_SERVER_ERROR = -1       # B站服务器内部 500
+    BILI_UNKNOWN_ERROR = -999    # B站返回了未知的错误
+    NETWORK_ERROR = -9001        # 物理断网、超时
+    PROTOCOL_ERROR = -9002       # HTTP 状态码非 200
+    RESPONSE_MALFORMED = -9003   # 响应不是合法的 JSON 或格式不符
 
-    def __new__(cls, code, description, is_fatal):
-        obj = object.__new__(cls)
-        obj._value_ = code
-        obj.description = description
-        obj.is_fatal = is_fatal
-        return obj
-    
+    # --- 3. 客户端自身异常 (代码 Bug 或未处理的 Exception) ---
+    CLIENT_RUNTIME_ERROR = -9999
+
+
     @property
-    def code(self):
-        """返回错误码的数值"""
+    def code(self) -> int:
+        """返回错误码的数字值"""
         return self.value
 
     @property
-    def description_str(self):
-        """返回错误码的描述"""
-        return self.description
-    
+    def description(self) -> str:
+        """获取该错误码对应的中文描述"""
+        return ERROR_METADATA.get(self, ("未知错误", True))[0]
+
     @property
-    def is_fatal_error(self):
-        """该错误是否是致命的（应中断任务）"""
-        return self.is_fatal
-    
+    def is_fatal(self) -> bool:
+        """判断该错误是否为致命错误（需中断任务）"""
+        return ERROR_METADATA.get(self, ("未知错误", True))[1]
+
     @classmethod
-    def from_code(cls, code: int) -> BiliDmErrorCode | None:
-        """通过数字错误码反向查找对应的枚举成员"""
+    def from_code(cls, code: int) -> 'BiliDmErrorCode':
         try:
             return cls(code)
         except ValueError:
-            return None
+            return cls.BILI_UNKNOWN_ERROR
+
+
+# 映射表
+ERROR_METADATA = {
+    BiliDmErrorCode.SUCCESS:                        ("弹幕发送成功。", False),
+
+    BiliDmErrorCode.UNAUTHORIZED:                   ("账号未登录或登录态失效！请检查SESSDATA和bili_jct。", True),
+    BiliDmErrorCode.ACCOUNT_BANNED:                 ("账号被封停。", True),
+    BiliDmErrorCode.CSRF_FAILED:                    ("CSRF 校验失败 (bili_jct 可能失效)，请检查登录凭证或尝试重新获取。", True),
+
+    BiliDmErrorCode.REQUEST_ERROR:                  ("请求错误，参数不合法。", False),
+    BiliDmErrorCode.NOT_FOUND:                      ("请求资源不存在。", True),
+
+    # 业务限制类
+    BiliDmErrorCode.SYSTEM_UPGRADING:               ("系统升级中，暂无法发送弹幕。", True),
+    BiliDmErrorCode.CONTENT_FORBIDDEN:              ("弹幕包含被禁止的内容，请修改后重试。", False),
+    BiliDmErrorCode.DANMAKU_TOO_LONG:               ("弹幕长度大于100字，请精简。", False),
+    BiliDmErrorCode.FREQ_LIMIT:                     ("发送频率过快，请稍后再试。", False),
+    BiliDmErrorCode.VIDEO_NOT_REVIEWED:             ("禁止向未审核的视频发送弹幕。", True),
+    BiliDmErrorCode.LEVEL_INSUFFICIENT_GENERAL:     ("您的等级不足，不能发送弹幕。", True),
+    BiliDmErrorCode.LEVEL_INSUFFICIENT_TOP:         ("您的等级不足，不能发送顶端弹幕。", False),
+    BiliDmErrorCode.LEVEL_INSUFFICIENT_BOTTOM:      ("您的等级不足，不能发送底端弹幕。", False),
+    BiliDmErrorCode.LEVEL_INSUFFICIENT_COLOR:       ("您的等级不足，不能发送彩色弹幕。", False),
+    BiliDmErrorCode.LEVEL_INSUFFICIENT_ADVANCED:    ("您的等级不足，不能发送高级弹幕。", False),
+    BiliDmErrorCode.PERMISSION_INSUFFICIENT_STYLE:  ("您的权限不足，不能发送这种样式的弹幕。", False),
+    BiliDmErrorCode.VIDEO_DANMAKU_FORBIDDEN:        ("该视频禁止发送弹幕，无法发送。", True),
+    BiliDmErrorCode.LENGTH_LIMIT_LEVEL1:            ("Level 1用户发送弹幕的最大长度为20字。", False),
+    BiliDmErrorCode.VIDEO_NOT_PAID:                 ("此稿件未付费，暂时无法发送弹幕。", True),
+    BiliDmErrorCode.INVALID_PROGRESS:               ("弹幕发送时间（progress）不合法。", False),
+    BiliDmErrorCode.DAILY_LIMIT_EXCEEDED:           ("当日操作数量超过上限。", False),
+    BiliDmErrorCode.NOT_PREMIUM_MEMBER:             ("目前您不是大会员，无法使用会员权益。", False),
+
+    # 内部自定义错误
+    BiliDmErrorCode.BILI_SERVER_ERROR:              ("B站服务器繁忙或发生故障(Code -1)。", True),
+    BiliDmErrorCode.BILI_UNKNOWN_ERROR:             ("B站返回了未定义的业务错误", True),
+    BiliDmErrorCode.NETWORK_ERROR:                  ("网络连接失败，请检查网线或代理。", True),
+    BiliDmErrorCode.PROTOCOL_ERROR:                 ("与B站通讯协议发生冲突。", True),
+    BiliDmErrorCode.RESPONSE_MALFORMED:             ("收到非法的服务器响应数据。", True),
+    BiliDmErrorCode.CLIENT_RUNTIME_ERROR:           ("程序内部发生未知错误。", True),
+}

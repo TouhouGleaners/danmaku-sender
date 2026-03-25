@@ -120,11 +120,10 @@ class DanmakuScheduler:
 
             # --- 结果 ---
             if not result.is_success:
-                error_enum = BiliDmErrorCode.from_code(result.code)
                 ctx.add_unsent(dm, result.display_message)
 
                 # A: 遭遇致命封禁，直接摧毁流水线
-                if error_enum and error_enum.is_fatal_error:
+                if result.is_fatal:
                     ctx.fatal_error_occurred = True
                     ctx.add_unsent(job.danmakus[i+1:], f"致命错误: {result.display_message}")
                     break

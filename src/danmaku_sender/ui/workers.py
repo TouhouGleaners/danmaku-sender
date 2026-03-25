@@ -12,6 +12,7 @@ from ..core.models.result import DanmakuSendResult
 from ..core.models.structs import VideoTarget
 from ..core.models.video import VideoInfo
 from ..core.services.video_fetcher import VideoFetcher
+from ..core.models.exceptions import BiliApiError, BiliNetworkError
 
 from ..api.bili_api_client import BiliApiClient
 from ..utils.system_utils import KeepSystemAwake
@@ -68,9 +69,13 @@ class FetchInfoWorker(BaseWorker):
                 video_info = service.fetch_info(self.bvid)
                 self.finished_success.emit(video_info)
 
-        except Exception as e:
+        except (BiliApiError, BiliNetworkError) as e:
             self.report_error("获取视频信息失败", e)
             self.finished_error.emit(str(e))
+
+        except Exception as e:
+            self.logger.critical("非预期的系统崩溃", exc_info=True)
+            self.finished_error.emit("程序内部发生未知错误，请检查日志。")
 
 
 class SendTaskWorker(BaseWorker):

@@ -4,8 +4,7 @@ from ....api.bili_api_client import BiliApiClient
 from ...models.danmaku import Danmaku
 from ...models.structs import VideoTarget
 from ...models.result import DanmakuSendResult
-from ...exceptions import BiliApiException
-from ...error_handler import normalize_exception
+from ...models.exceptions import BiliNetworkError
 
 
 class DanmakuExecutor:
@@ -22,7 +21,7 @@ class DanmakuExecutor:
     def execute(self, target: VideoTarget, danmaku: Danmaku) -> DanmakuSendResult:
         """
         执行单次发送，并内聚处理所有底层的 HTTP / 业务异常
-        
+
         Args:
             target(VideoTarget): 包含 cid 和 bvid 的视频目标
             danmaku(Danmaku): 待发送的实体数据
@@ -44,14 +43,7 @@ class DanmakuExecutor:
                 self.logger.warning(f"❌ 发送失败: {result.display_message}")
 
             return result
-        
-        except BiliApiException as e:
-            # 捕获网络断开、超时等物理错误，转化为统一的失败 Result 返回
-            error_code_enum = normalize_exception(e)
-            self.logger.error(f"❌ 发送异常! 内容: '{danmaku.msg}', 错误: {e.message}")
-            return DanmakuSendResult(
-                code=error_code_enum.code,
-                is_success=False,
-                raw_message=str(e),
-                display_message=error_code_enum.description_str
-            )
+
+        except BiliNetworkError as e:
+            self.logger.error(f"❌ 网络传输异常! 内容: '{danmaku.msg}', 错误: {e.message}")
+            return DanmakuSendResult.from_network_error(e)
