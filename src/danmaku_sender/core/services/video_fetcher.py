@@ -25,12 +25,7 @@ class VideoFetcher:
         Raises:
             RuntimeError 当 API 失败或数据解析错误时
         """
-        try:
-            raw_data = self.client.get_video_info(bvid)
-        except BiliApiError as e:
-            error_msg = f"API 请求失败 [Code: {e.code}]: {e.message}"
-            self.logger.error(f"获取 {bvid} 失败: {error_msg}")
-            raise RuntimeError(error_msg) from e
+        raw_data = self.client.get_video_info(bvid)
 
         parts = []
         raw_pages: list[dict] = raw_data.get('pages', [])

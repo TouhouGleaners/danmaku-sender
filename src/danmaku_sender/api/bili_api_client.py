@@ -94,6 +94,7 @@ class BiliApiClient:
         """
         try:
             yield
+
         except Timeout as e:
             self.logger.error(f"请求超时: {url}, Error: {e}")
             raise BiliNetworkError(f"请求超时: {e}") from e
@@ -103,9 +104,17 @@ class BiliApiClient:
             raise BiliNetworkError(f"网络连接断开: {e}") from e
 
         except HTTPError as e:
-            status_code = e.response.status_code if e.response is not None else "Unknown"
+            status_code = e.response.status_code if e.response is not None else 0
             self.logger.error(f"HTTP错误: {url}, Status: {status_code}")
-            raise BiliNetworkError(f"HTTP协议错误(Status {status_code})") from e
+
+            if 500 <= status_code < 600:
+                raise BiliNetworkError(f"B站服务器暂时不可用 (HTTP {status_code})") from e
+            elif status_code == 403:
+                # 403 明确是权限/爬虫封禁
+                raise BiliNetworkError(f"请求被拒绝 (HTTP 403)，请检查代理或稍后再试") from e
+            else:
+                # 其他 4xx 映射到协议冲突
+                raise BiliNetworkError(f"通讯协议错误 (HTTP {status_code})") from e
 
         except RequestException as e:
             self.logger.error(f"请求发生非预期异常: {url}, Error: {e}")
