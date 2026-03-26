@@ -1,80 +1,111 @@
+import sys
 import logging
 import logging.handlers
 from pathlib import Path
 from datetime import datetime, timezone
+from typing import Callable
+
+from ..config.app_config import AppInfo
 
 
-# Sender 相关日志源
-SENDER_LOG_WHITELIST = (
-    "SenderPage",
-    "DanmakuScheduler",
-    "DanmakuExecutor",
-    "DelayManager",
-    "DanmakuParser",
-    "BiliUtils",
-    "BiliApiClient",
-    "WbiSigner",
-    "CredentialManager",
-    "UpdateChecker"
-)
-
-# Monitor 相关日志源
-MONITOR_LOG_WHITELIST = (
-    "MonitorPage",
-    "DanmakuMonitor"
-)
+class LogNamespace:
+    """日志命名空间契约"""
+    SENDER = "App.Sender"
+    MONITOR = "App.Monitor"
+    SYSTEM = "App.System"
 
 
 class GuiLoggingHandler(logging.Handler):
-    """
-    一个自定义的日志处理程序，将日志消息根据其来源路由到不同的GUI文本框。
-    它通过检查日志记录的名称(record.name)来决定目标。
-    """
+    """基于命名空间前缀路由日志到 UI 窗口"""
     def __init__(self):
         super().__init__()
-        # 存储不同日志目标的回调函数
-        self.sender_callback = None
-        self.monitor_callback = None
+        self.sender_callback: Callable[[str], None] | None = None
+        self.monitor_callback: Callable[[str], None] | None = None
 
     def emit(self, record):
-        """根据白名单分发日志到对应的回调"""
-        msg = self.format(record)
+        """
+        发出一条日志记录。
 
-        if record.name in SENDER_LOG_WHITELIST and self.sender_callback:
-            self.sender_callback(msg)
-        elif record.name in MONITOR_LOG_WHITELIST and self.monitor_callback:
-            self.monitor_callback(msg)
+        该方法会处理日志记录，并根据日志器名称前缀，将其路由至对应的回调函数。
+        它针对不同组件的日志做分流处理:
+        来自 "App.Sender" 的日志，分发至 sender_callback
+        来自 "App.Monitor" 的日志，分发至 monitor_callback
+        来自 "App.System" 及其他来源的日志，将被忽略
 
-        # 备注：不在任何白名单中的日志（如 ValidatorTab）在此处会被忽略，
-        # 不会显示在任何 GUI 窗口中，但会被其他 Handler（如 DailyLogFileHandler）写入文件。
+        Args:
+            record (logging.LogRecord)：待输出的日志记录对象。
+        """
+        try:
+            if record.name.startswith(LogNamespace.SENDER) and self.sender_callback:
+                self.sender_callback(self.format(record))
+            elif record.name.startswith(LogNamespace.MONITOR) and self.monitor_callback:
+                self.monitor_callback(self.format(record))
+            # App.System 或其他开头的日志直接忽略
+        except Exception:
+            self.handleError(record)
 
 
 class DailyLogFileHandler(logging.handlers.TimedRotatingFileHandler):
-    """
-    自定义的 TimedRotatingFileHandler:
-    - 当前活动日志文件名为 'latest.log'。
-    - 轮转后的历史日志文件名为 'YYYY-MM-DD.log'。
-    通过重写 `rotation_filename` 方法来实现定制化的文件名。
-    父类的 `_doRollover` 会自动调用 `rotation_filename`。
-    """
-    def __init__(self, filename, when='midnight', interval=1, backupCount=0, encoding=None, delay=False, utc=False):
-        super().__init__(filename, when, interval, backupCount, encoding, delay, utc)
-
+    """自定义日志轮转：YYYY-MM-DD.log"""
     def rotation_filename(self, filename: str) -> str:
-        """
-        重写父类的 rotation_filename 方法，以自定义归档文件的命名格式。
-        这个方法会由父类的 `_doRollover` 调用。
-        """
-        previous_rollover_time = self.rolloverAt - self.interval  # 当前文件完成写入，即将被归档的时间点
-        # 根据 UTC 设置获取日期
+        """重写父类的 rotation_filename 方法，以自定义归档文件的命名格式。"""
+        # 计算归档日期，保持文件名如：2026-03-27.log
+        previous_rollover_time = self.rolloverAt - self.interval
         if self.utc:
             archive_datetime = datetime.fromtimestamp(previous_rollover_time, tz=timezone.utc)
         else:
             archive_datetime = datetime.fromtimestamp(previous_rollover_time)
-
-        # 构造形如'YYYY-MM-DD.log'的文件名
         base_path = Path(self.baseFilename)
-        archive_name = f"{archive_datetime.strftime('%Y-%m-%d')}.log"
-        desired_archive_file_path = base_path.parent / archive_name
+        return str(base_path.parent / f"{archive_datetime.strftime('%Y-%m-%d')}.log")
 
-        return str(desired_archive_file_path)
+
+def init_app_logging(log_dir: Path):
+    """全局日志系统"""
+    log_dir.mkdir(parents=True, exist_ok=True)
+    log_file_path = log_dir / AppInfo.LOG_FILE_NAME
+
+    # --- 定义格式 ---
+    # 文件和控制台: 详细格式
+    detailed_formatter = logging.Formatter(
+        '%(asctime)s [%(name)s] %(levelname)s - %(message)s',
+        datefmt='%H:%M:%S'
+    )
+    # GUI: 精简格式
+    gui_formatter = logging.Formatter('%(asctime)s %(message)s', datefmt='%H:%M:%S')
+
+    # --- 获取根 Logger 并重置环境 ---
+    root_logger = logging.getLogger()
+    root_logger.setLevel(logging.DEBUG)
+    if root_logger.hasHandlers():
+        root_logger.handlers.clear()
+
+    # Handler A: 文件输出 (DEBUG级别，记录所有)
+    file_handler = DailyLogFileHandler(
+        filename=str(log_file_path),
+        when='midnight',
+        interval=1,
+        backupCount=7,
+        encoding='utf-8'
+    )
+    file_handler.setFormatter(detailed_formatter)
+    file_handler.setLevel(logging.DEBUG)
+    root_logger.addHandler(file_handler)
+
+    # Handler B: 控制台输出 (DEBUG级别)
+    console_handler = logging.StreamHandler(sys.stdout)
+    console_handler.setFormatter(detailed_formatter)
+    console_handler.setLevel(logging.DEBUG)
+    root_logger.addHandler(console_handler)
+
+    # Handler C: GUI 路由 (INFO级别)
+    gui_handler = GuiLoggingHandler()
+    gui_handler.setFormatter(gui_formatter)
+    gui_handler.setLevel(logging.INFO)
+    root_logger.addHandler(gui_handler)
+
+    # --- 屏蔽第三方库的噪音 ---
+    logging.getLogger("requests").setLevel(logging.WARNING)
+    logging.getLogger("urllib3").setLevel(logging.WARNING)
+    logging.getLogger("peewee").setLevel(logging.WARNING)
+
+    logging.info(f"日志系统初始化完成。日志路径: {log_file_path}")

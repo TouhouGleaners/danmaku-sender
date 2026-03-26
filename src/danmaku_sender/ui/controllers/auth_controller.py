@@ -8,7 +8,7 @@ from ...core.state import ApiAuthConfig
 from ...core.models.user import UserProfile
 
 
-logger = logging.getLogger("AuthController")
+logger = logging.getLogger("App.System.Auth")
 
 
 def _fetch_user_nav(auth_config: ApiAuthConfig) -> UserProfile:

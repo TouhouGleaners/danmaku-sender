@@ -52,19 +52,19 @@ class EditorSession:
     """
     def __init__(self, state: AppState):
         self.state = state
-        self.logger = logging.getLogger("EditorSession")
-        
+        self.logger = logging.getLogger("App.System.Editor")
+
         self.staged_danmakus: list[Danmaku] = []         # Workspace / Staging Area (暂存区真值)
         self.staged_deletions: set[int] = set()          # Staged for deletion (待删除索引集)
         self.head_errors: set[int] = set()               # Snapshot of errors at checkout (HEAD)
-        
+
         self.validation_map: dict[int, str] = {}        # 实时校验映射表
         self.undo_stack: list[list[AtomicChange]] = []  # 操作记录
 
     @property
     def is_dirty(self) -> bool:
         return self.state.editor_is_dirty
-    
+
     @property
     def has_active_session(self) -> bool:
         """暂存区是否有已检出的数据"""
@@ -123,7 +123,7 @@ class EditorSession:
 
         # 准备提交名单 (过滤掉标记删除的)
         final_list = [
-            dm for i, dm in enumerate(self.staged_danmakus) 
+            dm for i, dm in enumerate(self.staged_danmakus)
             if i not in self.staged_deletions
         ]
 
@@ -151,24 +151,24 @@ class EditorSession:
         """运行校验算法并更新 validation_map 查找表"""
         duration_ms = self.state.video_state.selected_part_duration_ms
         raw_issues = validate_danmaku_list(self.staged_danmakus, duration_ms, self.state.validation_config)
-        
+
         # 转换为 O(1) 查找字典：{ 原始索引: 理由 }
         self.validation_map = {issue['original_index']: issue['reason'] for issue in raw_issues}
 
     def generate_view_model(self, show_all: bool = False) -> list[ViewItem]:
         """生成渲染视图"""
         view_data: list[ViewItem] = []
-        
+
         for i, dm in enumerate(self.staged_danmakus):
             if i in self.staged_deletions:
                 continue
-                
+
             error_msg = self.validation_map.get(i, "")
-            
+
             # 过滤：如果不是预览模式且没有错误，跳过
             if not show_all and not error_msg:
                 continue
-                
+
             view_data.append({
                 "source_index": i,
                 "time_ms": dm.progress,
@@ -192,7 +192,7 @@ class EditorSession:
         """
         if not self.undo_stack:
             return False
-        
+
         last_changes = self.undo_stack.pop()
 
         for change in last_changes:
@@ -338,7 +338,7 @@ class EditorSession:
             original = dm.msg
             dm.msg = dm.msg[:limit]
             return dm.msg != original
-            
+
         mod_count, _ = self._execute_batch_transform("长度截断", _rule)
         return mod_count
 

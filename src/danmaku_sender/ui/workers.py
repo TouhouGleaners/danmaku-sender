@@ -19,21 +19,6 @@ from ..utils.system_utils import KeepSystemAwake
 from ..utils.notification_utils import send_windows_notification
 
 
-def _get_silent_logger():
-    """
-    模块级辅助函数：获取一个配置好的静音 Logger。
-    利用 logging 的单例特性，并检查是否已配置，避免重复操作。
-    """
-    logger = logging.getLogger("SilentWorker")
-
-    logger.propagate = False
-
-    if not logger.handlers:
-        logger.addHandler(logging.NullHandler())
-
-    return logger
-
-
 class BaseWorker(QThread):
     """
     所有 Worker 线程的基类。
@@ -43,10 +28,10 @@ class BaseWorker(QThread):
 
     def __init__(self, parent=None):
         super().__init__(parent)
-        self.logger = logging.getLogger(self.__class__.__name__)
+        self.logger = logging.getLogger("App.System.Worker.Base")
 
     def report_error(self, title: str, exception: Exception):
-        self.logger.error(title, exc_info=True)
+        self.logger.error(f"{title}: {exception}", exc_info=True)
         self.log_message.emit(f"{title}: {exception}")
 
 
@@ -57,15 +42,14 @@ class FetchInfoWorker(BaseWorker):
 
     def __init__(self, bvid, auth_config: ApiAuthConfig, parent=None):
         super().__init__(parent)
+        self.logger = logging.getLogger("App.System.Worker.Fetch")
         self.bvid = bvid
         self.auth_config = auth_config
 
     def run(self):
         try:
-            silent_logger = _get_silent_logger()
-
-            with BiliApiClient.from_config(self.auth_config, silent_logger) as client:
-                service = VideoFetcher(client, logger=silent_logger)
+            with BiliApiClient.from_config(self.auth_config) as client:
+                service = VideoFetcher(client)
                 video_info = service.fetch_info(self.bvid)
                 self.finished_success.emit(video_info)
 
@@ -83,12 +67,19 @@ class SendTaskWorker(BaseWorker):
     progress_updated = Signal(int, int)  # 已尝试, 总数
     task_finished = Signal(object)       # 携带 sender 实例以便后续处理(如保存失败弹幕)
 
-    def __init__(self, bvid, cid, danmakus,
-                 auth_config: ApiAuthConfig,
-                 strategy_config: SenderConfig,
-                 stop_event, video_title: str = "",
-                 parent=None):
+    def __init__(
+        self,
+        bvid,
+        cid,
+        danmakus,
+        auth_config: ApiAuthConfig,
+        strategy_config: SenderConfig,
+        stop_event: threading.Event,
+        video_title: str = "",
+        parent=None
+    ):
         super().__init__(parent)
+        self.logger = logging.getLogger("App.Sender.Worker")
         self.target = VideoTarget(bvid=bvid, cid=cid, title=video_title)
         self.danmakus = danmakus
         self.auth_config = auth_config
@@ -180,6 +171,7 @@ class MonitorTaskWorker(BaseWorker):
         parent=None
     ):
         super().__init__(parent)
+        self.logger = logging.getLogger("App.Monitor.Worker")
         self.target = target
         self.auth_config = auth_config
         self.monitor_config = monitor_config
@@ -216,7 +208,7 @@ class MonitorTaskWorker(BaseWorker):
 
                         if self.stop_event.wait(snap_interval):
                             self.logger.info("收到停止信号，监视任务终止。")
-                            break   
+                            break
 
         except Exception as e:
             self.report_error("监视任务异常", e)

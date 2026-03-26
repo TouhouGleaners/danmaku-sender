@@ -13,10 +13,10 @@ from PIL import Image
 
 from .workers import QRLoginWorker
 from ..config.app_config import AppInfo, Links
-from ..utils.resource_utils import get_assets_path 
+from ..utils.resource_utils import get_assets_path
 
 
-logger = logging.getLogger("HelpDialog")
+logger = logging.getLogger("App.System.UI.Dialog")
 
 
 class MarkdownBrowser(QTextBrowser):
@@ -25,8 +25,8 @@ class MarkdownBrowser(QTextBrowser):
         super().__init__()
         self.setOpenExternalLinks(True)
         self.setFrameShape(QTextBrowser.Shape.NoFrame)
-        self.setStyleSheet("padding: 1px;") 
-        
+        self.setStyleSheet("padding: 1px;")
+
         md_path = get_assets_path() / "docs" / f"{doc_name}.md"
         if md_path.exists():
             try:
@@ -75,7 +75,7 @@ class HelpDialog(QDialog):
         btn_layout.addWidget(close_btn)
 
         layout.addLayout(btn_layout)
-        
+
 
 class AboutDialog(QDialog):
     def __init__(self, parent=None):
@@ -88,7 +88,7 @@ class AboutDialog(QDialog):
         layout = QVBoxLayout(self)
         layout.setAlignment(Qt.AlignmentFlag.AlignCenter)
         layout.setSpacing(8)
-        
+
         # 标题
         title = QLabel(AppInfo.NAME)
         title.setStyleSheet("font-size: 18px; font-weight: bold; color: #fb7299;")
@@ -126,7 +126,7 @@ class AboutDialog(QDialog):
         layout.addWidget(issue_btn)
 
         layout.addStretch()
-        
+
         # 关闭按钮
         close_btn = QPushButton("关闭")
         close_btn.setFixedWidth(100)
@@ -208,8 +208,8 @@ class UpdateDialog(QDialog):
 
         # 修复 GitHub Compare 链接 (包含 ... 的链接)
         text = re.sub(
-            r'\*\*Full Changelog\*\*: (https://github\.com/\S+/compare/(\S+))', 
-            r'**Full Changelog**: [👉 查看 \2 变更对比](\1)', 
+            r'\*\*Full Changelog\*\*: (https://github\.com/\S+/compare/(\S+))',
+            r'**Full Changelog**: [👉 查看 \2 变更对比](\1)',
             text
         )
 
@@ -230,7 +230,7 @@ class EditDanmakuDialog(QDialog):
         self.editor = QTextEdit()
         self.editor.setPlainText(content)
         self.editor.setAcceptRichText(False)
-        self.editor.setLineWrapMode(QTextEdit.LineWrapMode.WidgetWidth) 
+        self.editor.setLineWrapMode(QTextEdit.LineWrapMode.WidgetWidth)
         layout.addWidget(self.editor)
 
         # --- 计数器与按钮行 ---
@@ -327,7 +327,7 @@ class TimeOffsetDialog(QDialog):
     def get_offset_ms(self) -> int:
         """获取转换后的毫秒值"""
         return int(self.offset_spin.value() * 1000)
-    
+
 
 class QRLoginDialog(QDialog):
     """扫码登录弹窗"""

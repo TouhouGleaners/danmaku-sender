@@ -39,7 +39,7 @@ class MainWindow(QMainWindow):
         self.auth_ctrl = AuthController(self)
         self.sys_ctrl = SystemController(self)
         self._log_signals_connected = False
-        self.logger = logging.getLogger("MainWindow")
+        self.logger = logging.getLogger("App.System.UI.Main")
 
         self._create_ui()
         self.init_pages()
@@ -281,16 +281,23 @@ class MainWindow(QMainWindow):
         self._setup_log_routing()
 
     def _setup_log_routing(self):
-        """将 GuiLoggingHandler 的回调挂载到信号发射方法上"""
-        # 筛选出所有 GUI 处理器并注入回调
-        gui_handlers = [h for h in logging.getLogger().handlers if isinstance(h, GuiLoggingHandler)]
+        """从根 Logger 查找 GuiLoggingHandler 并绑定信号。"""
+        root_logger = logging.getLogger()
+        gui_handler = None
 
-        for h in gui_handlers:
-            h.sender_callback = self.state.sender_log_received.emit
-            h.monitor_callback = self.state.monitor_log_received.emit
+        # 遍历所有挂载的处理器，找到 GUI 路由
+        for h in root_logger.handlers:
+            if isinstance(h, GuiLoggingHandler):
+                gui_handler = h
+                break
 
-        if not gui_handlers:
-            self.logger.warning("日志路由失败：未找到 GuiLoggingHandler。")
+        if gui_handler:
+            # 将 Handler 的回调指向 AppState 的信号
+            gui_handler.sender_callback = self.state.sender_log_received.emit
+            gui_handler.monitor_callback = self.state.monitor_log_received.emit
+            self.logger.info("日志路由链路已接通。")
+        else:
+            self.logger.error("日志路由系统初始化失败：未找到 GuiLoggingHandler。")
 
     def closeEvent(self, event: QCloseEvent):
         """

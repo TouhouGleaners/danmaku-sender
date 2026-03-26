@@ -7,7 +7,7 @@ from pathlib import Path
 from ..config.app_config import AppInfo
 
 
-logger = logging.getLogger("NotificationUtils")
+logger = logging.getLogger("App.System.Notify")
 
 def get_app_root_path() -> Path:
     """

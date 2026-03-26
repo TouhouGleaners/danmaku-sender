@@ -21,7 +21,7 @@ class BiliDanmakuMonitor:
 
         self.danmaku_parser = DanmakuParser()
         self.history_manager = HistoryManager()
-        self.logger = logging.getLogger("DanmakuMonitor")
+        self.logger = logging.getLogger("App.Monitor.Engine")
 
     def _fetch_online_danmakus(self) -> list[Danmaku]:
         """获取在线弹幕列表"""

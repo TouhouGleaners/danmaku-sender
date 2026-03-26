@@ -13,7 +13,7 @@ class VideoFetcher:
     """
     def __init__(self, api_client: BiliApiClient, logger: logging.Logger | None = None):
         self.client = api_client
-        self.logger = logger if logger else logging.getLogger("VideoFetcher")
+        self.logger = logger if logger else logging.getLogger("App.System.Fetcher")
 
     def fetch_info(self, bvid: str) -> VideoInfo:
         """
@@ -46,7 +46,7 @@ class VideoFetcher:
                 title=p.get('part', f"分P {i+1}"),
                 duration=p.get('duration', 0)
             ))
-            
+
         return VideoInfo(
             bvid=bvid,
             title=raw_data.get('title', '未知标题'),

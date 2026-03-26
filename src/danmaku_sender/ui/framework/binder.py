@@ -6,17 +6,17 @@ from pydantic import ValidationError
 
 from PySide6.QtCore import SignalInstance
 from PySide6.QtWidgets import (
-    QWidget, QCheckBox, QSpinBox, QDoubleSpinBox, 
+    QWidget, QCheckBox, QSpinBox, QDoubleSpinBox,
     QLineEdit, QComboBox
 )
 
-logger = logging.getLogger("UIBinder")
+logger = logging.getLogger("App.System.Framework.Binder")
 
 
 class UIBinder:
     """
     轻量级 MVVM 双向绑定引擎
-    
+
     职责:
     1. 状态同步: 自动实现 Model (Pydantic/Object) 与 View (PySide6 Widget) 的数据双向同步。
     2. 生命周期管理: 内部维护绑定注册表 (_active_bindings)，每次重绑时自动解除历史信号，防止内存泄漏与重复触发。
@@ -46,7 +46,7 @@ class UIBinder:
         # 强制触发 QSS 重绘
         widget.style().unpolish(widget)
         widget.style().polish(widget)
-        
+
         if is_invalid:
             widget.setToolTip(f"⚠️ 输入无效:\n{error_msg}")
         else:

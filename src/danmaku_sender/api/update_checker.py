@@ -5,7 +5,7 @@ from packaging import version
 from ..config.app_config import Links
 
 
-logger = logging.getLogger("UpdateChecker")
+logger = logging.getLogger("App.System.Updater")
 
 
 class UpdateInfo:
@@ -42,7 +42,7 @@ class UpdateChecker:
             logger.warning("未找到任何发布信息")
             return UpdateInfo(False)
 
-        data = data_list[0]
+        data: dict = data_list[0]
         remote_tag = data.get("tag_name", "").lstrip("v")
         release_notes = data.get("body") or "暂无更新日志"
         release_url = data.get("html_url", Links.GITHUB_REPO)

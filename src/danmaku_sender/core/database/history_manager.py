@@ -15,7 +15,7 @@ from ..models.structs import VideoTarget
 from ...config.app_config import AppInfo
 
 
-logger = logging.getLogger("HistoryManager")
+logger = logging.getLogger("App.System.DB")
 
 
 class DanmakuStatus(IntEnum):
@@ -35,7 +35,7 @@ class HistoryManager:
     _instance = None
     _lock = threading.Lock()
     _initialized = False
-    
+
     def __new__(cls, *args, **kwargs):
         if not cls._instance:
             with cls._lock:
@@ -58,13 +58,13 @@ class HistoryManager:
 
             HistoryManager._initialized = True
             logger.debug("HistoryManager 单例初始化完成")
-    
+
     def _init_db(self):
         """初始化数据库，自动迁移"""
         try:
             # 开启 WAL 模式提升并发性能
             sqlite_db = SqliteDatabase(
-                self.db_path, 
+                self.db_path,
                 pragmas={'journal_mode': 'wal'},
                 check_same_thread=False
             )
@@ -88,7 +88,7 @@ class HistoryManager:
         if not dm.dmid:
             logger.warning("尝试记录无 ID 的弹幕，操作跳过。")
             return
-        
+
         try:
             SentDanmaku.insert(
                 dmid=str(dm.dmid),
@@ -152,7 +152,7 @@ class HistoryManager:
                 SentDanmaku.select(
                     SentDanmaku.dmid, SentDanmaku.msg, SentDanmaku.progress, SentDanmaku.ctime
                 ).where(
-                    (SentDanmaku.cid == cid) & 
+                    (SentDanmaku.cid == cid) &
                     (SentDanmaku.status == DanmakuStatus.PENDING.value)
                 ).dicts()
             )
@@ -187,7 +187,7 @@ class HistoryManager:
             logger.error(f"获取统计失败: {e}", exc_info=True)
 
         return 0, 0, 0
-    
+
     def count_records(self, target: VideoTarget, dm: Danmaku) -> int:
         """
         统计数据库中与传入弹幕完全匹配的记录数量，
@@ -207,7 +207,7 @@ class HistoryManager:
         except Exception as e:
             logger.error(f"查重失败: {e}", exc_info=True)
             return 0
-        
+
     def query_history(self, keyword: str = "", status: int = -1, limit: int = 500) -> list[dict]:
         """
         查询接口
@@ -220,7 +220,7 @@ class HistoryManager:
 
             if keyword:
                 query = query.where(
-                    (SentDanmaku.msg.contains(keyword)) | 
+                    (SentDanmaku.msg.contains(keyword)) |
                     (SentDanmaku.bvid.contains(keyword))
                 )
 

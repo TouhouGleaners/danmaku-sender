@@ -30,14 +30,14 @@ class BiliApiClient:
         self.sessdata = sessdata
         self.bili_jct = bili_jct
         self.use_system_proxy = use_system_proxy
-        self.logger = logger if logger else logging.getLogger("BiliApiClient")
+        self.logger = logger if logger else logging.getLogger("App.System.API")
         self.session = self._create_session()
 
         try:
             self.wbi_keys = WbiSigner.get_wbi_keys()
         except RuntimeError as e:
             raise BiliApiError(
-                code=BiliDmErrorCode.BILI_SERVER_ERROR.code, 
+                code=BiliDmErrorCode.BILI_SERVER_ERROR.code,
                 message=f"获取WBI签名密钥失败: {e}"
             ) from e
 
@@ -70,7 +70,7 @@ class BiliApiClient:
             session.trust_env = False
             session.proxies = {}
         return session
-    
+
     def close(self):
         """关闭会话"""
         if self.session:
@@ -80,7 +80,7 @@ class BiliApiClient:
     def __enter__(self):
         self.logger.debug("BiliApiClient session entered.")
         return self
-    
+
     def __exit__(self, exc_type, exc_value, traceback):
         self.logger.debug("Exiting BiliApiClient session context.")
         self.close()
@@ -123,7 +123,7 @@ class BiliApiClient:
             elif status_code == 403:
                 # 403 明确是权限/爬虫封禁
                 raise BiliNetworkError(f"请求被拒绝 (HTTP 403)，{diag_info}") from e
-            else:   
+            else:
                 # 其他 4xx 映射到协议冲突
                 raise BiliNetworkError(f"通讯协议错误 ({diag_info})") from e
 
@@ -172,7 +172,7 @@ class BiliApiClient:
         params = {'bvid': bvid}
         self.logger.info(f"正在获取视频信息: {bvid}")
         return self._request('GET', url, params=params)
-    
+
     def get_user_info(self) -> dict:
         """
         获取当前登录用户的信息 (昵称、头像、登录状态等)

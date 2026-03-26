@@ -28,7 +28,7 @@ class SenderPage(QWidget):
     def __init__(self):
         super().__init__()
         self._state: AppState | None = None
-        self.logger = logging.getLogger("SenderPage")
+        self.logger = logging.getLogger("App.Sender.UI")
         self.stop_event = threading.Event()
         self.danmaku_parser = DanmakuParser()
 

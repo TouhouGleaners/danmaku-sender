@@ -8,7 +8,7 @@ from hashlib import md5
 import requests
 
 
-logger = logging.getLogger("WbiSigner")
+logger = logging.getLogger("App.System.Signer")
 
 
 class WbiSigner:
@@ -44,7 +44,7 @@ class WbiSigner:
         # 过滤 value 中的 "!'()*" 字符
         params_for_sign_filtered = {
             k : ''.join(filter(lambda chr: chr not in "!'()*", str(v)))
-            for k, v 
+            for k, v
             in params_for_sign.items()
         }
 

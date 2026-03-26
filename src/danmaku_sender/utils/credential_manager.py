@@ -13,7 +13,7 @@ KEYRING_SERVICE_NAME = f"{AppInfo.NAME_EN}-CredentialsKey"
 KEYRING_USERNAME = "default_user"
 CREDENTIALS_FILE_NAME = "credentials.json"
 
-logger = logging.getLogger("CredentialManager")
+logger = logging.getLogger("App.System.Auth")
 
 
 def get_credentials_filepath() -> Path:
@@ -35,7 +35,7 @@ def _get_encryption_key() -> bytes:
         keyring.set_password(KEYRING_SERVICE_NAME, KEYRING_USERNAME, new_key.decode('utf-8'))
         logger.info("已生成新的加密密钥并存储在系统密钥环中。")
         return new_key
-    
+
 def load_credentials() -> dict:
     """
     从加密的 credentials.json 加载凭证。
@@ -43,10 +43,10 @@ def load_credentials() -> dict:
     """
     credentials_file = get_credentials_filepath()
     default_credentials = {'SESSDATA': '', 'BILI_JCT': ''}
-    
+
     if not credentials_file.exists():
         return default_credentials
-    
+
     try:
         key = _get_encryption_key()
         fernet = Fernet(key)
@@ -67,12 +67,12 @@ def load_credentials() -> dict:
             except OSError as del_e:
                 logger.error(f"无法删除损坏的凭证文件: {del_e}")
         return default_credentials
-    
+
     # 捕获所有其他未知错误，记录后立即失败
     except Exception as unexpected_e:
         logger.critical(f"加载凭证时发生意外错误: {unexpected_e}", exc_info=True)
         raise
-    
+
 def save_credentials(data: dict):
     """将 SESSDATA 和 BILI_JCT 加密后写入 credentials.json 中。"""
     credentials_file = get_credentials_filepath()
@@ -95,10 +95,10 @@ def save_credentials(data: dict):
     try:
         key = _get_encryption_key()
         f = Fernet(key)
-        
+
         json_bytes = json.dumps(credentials_to_save, ensure_ascii=False).encode('utf-8')
         encrypted_bytes = f.encrypt(json_bytes)
-        
+
         credentials_file.write_bytes(encrypted_bytes)
         logger.info(f"凭证已安全保存到 {credentials_file}")
     except Exception as e:

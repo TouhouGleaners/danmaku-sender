@@ -18,7 +18,7 @@ class DanmakuScheduler:
     职责：遍历队列、断点续传（去重）、容错处理、时间控制与任务阻断。
     """
     def __init__(self, executor: DanmakuExecutor, history_manager: HistoryManager | None = None):
-        self.logger = logging.getLogger("DanmakuScheduler")
+        self.logger = logging.getLogger("App.Sender.Scheduler")
         self.executor = executor
         self.history_manager = history_manager
         self.unsent_danmakus = []
@@ -72,12 +72,12 @@ class DanmakuScheduler:
     def run_pipeline(self, job: SendJob) -> SendingContext:
         """
         流水线主入口
-        
+
         执行逻辑：
         检查取消信号 -> 回调进度 -> 查重拦截 -> 委派发送 -> 错误/风控判定 -> 回调数据 -> 延时控制
         """
         self.logger.info(f"🚀 启动调度流水线... 目标: {job.target.display_string} (CID: {job.target.cid})")
-        
+
         # 初始化统计容器
         ctx = SendingContext(total=len(job.danmakus), config=job.config, target=job.target)
         self.unsent_danmakus = []

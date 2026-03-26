@@ -4,8 +4,8 @@ from datetime import datetime
 from functools import partial
 
 from PySide6.QtWidgets import (
-    QWidget, QVBoxLayout, QHBoxLayout, QLabel, QLineEdit, QComboBox, 
-    QPushButton, QTableView, QHeaderView, QAbstractItemView, QMenu, 
+    QWidget, QVBoxLayout, QHBoxLayout, QLabel, QLineEdit, QComboBox,
+    QPushButton, QTableView, QHeaderView, QAbstractItemView, QMenu,
     QApplication, QDialog, QFormLayout, QFrame
 )
 from PySide6.QtCore import Qt, QAbstractTableModel, QModelIndex, QUrl
@@ -18,7 +18,7 @@ from ..core.models.video import VideoInfo
 from ..core.state import AppState
 
 
-logger = logging.getLogger("HistoryPage")
+logger = logging.getLogger("App.System.UI.History")
 
 
 class Col(IntEnum):
@@ -126,28 +126,28 @@ class HistoryTableModel(QAbstractTableModel):
 
     def get_video_info(self, bvid: str) -> VideoInfo | None:
         return self._video_cache.get(bvid)
-    
+
     def get_record_at(self, row):
         if 0 <= row < len(self._records):
             return self._records[row]
         return None
-    
+
     # --- Qt Methods ---
     def rowCount(self, parent = QModelIndex()):
         return len(self._records)
-    
+
     def columnCount(self, parent = QModelIndex()):
         return len(self.HEADERS)
-    
+
     def headerData(self, section, orientation, role):
         if orientation == Qt.Orientation.Horizontal and role == Qt.ItemDataRole.DisplayRole:
             return self.HEADERS[section]
         return None
-    
+
     def data(self, index: QModelIndex, role = Qt.ItemDataRole.DisplayRole):
         if not index.isValid():
             return None
-        
+
         record = self._records[index.row()]
         col = index.column()
 
@@ -157,13 +157,13 @@ class HistoryTableModel(QAbstractTableModel):
             return self._get_text_color(record, col)
         elif role == Qt.ItemDataRole.ToolTipRole:
             return self._get_tooltip(record, col)
-        
+
         return None
-    
+
     def _get_display_text(self, record, col):
         if col == Col.BVID:
             return record['bvid']
-        
+
         if col == Col.PART:
             bvid = record['bvid']
             video_info = self._video_cache.get(bvid)
@@ -172,15 +172,15 @@ class HistoryTableModel(QAbstractTableModel):
                 part = video_info.get_part_by_cid(record['cid'])
                 if part:
                     return f"P{part.page}"
-                
+
             if bvid in self._loading_bvids:
                 return "..."
-            
+
             return f"CID: {record['cid']}"
-        
+
         if col == Col.MSG:
             return record['msg']
-        
+
         if col == Col.STATUS:
             status = record['status']
             if status == DanmakuStatus.VERIFIED:
@@ -188,12 +188,12 @@ class HistoryTableModel(QAbstractTableModel):
             if status == DanmakuStatus.LOST:
                 return "已丢失"
             return "待验证"
-        
+
         if col == Col.TIME:
             return datetime.fromtimestamp(record['ctime']).strftime('%Y-%m-%d %H:%M:%S')
-        
+
         return ""
-    
+
     def _get_text_color(self, record, col):
         if col == Col.STATUS:
             status = record['status']
@@ -209,16 +209,16 @@ class HistoryTableModel(QAbstractTableModel):
 
         if col == Col.BVID:
             return video_info.title if video_info else "正在获取..."
-        
+
         if col == Col.PART:
             if video_info:
                 part = video_info.get_part_by_cid(record['cid'])
                 if part:
                     return f"P{part.page} - {part.title}"
             return f"CID: {record['cid']}"
-        
+
         return None
-    
+
 
 class HistoryPage(QWidget):
     def __init__(self):
@@ -295,7 +295,7 @@ class HistoryPage(QWidget):
             self._query_worker.terminate()
             self._query_worker.wait()
 
-        self._model.set_records([]) 
+        self._model.set_records([])
 
         # 启动新任务
         self._query_worker = QueryHistoryWorker(keyword, status_filter, self)
@@ -322,7 +322,7 @@ class HistoryPage(QWidget):
     def _start_worker(self, bvid):
         if not self._state:
             return
-        
+
         self._fetched_bvids.add(bvid)
         self._model.mark_as_loading(bvid)
 
@@ -345,7 +345,7 @@ class HistoryPage(QWidget):
         """Worker 失败回调"""
         if bvid in self._fetched_bvids:
             self._fetched_bvids.remove(bvid)
-        
+
         self._model.update_video_cache(bvid, None)
 
     def _cleanup_worker(self, bvid, worker: FetchInfoWorker):
@@ -369,11 +369,11 @@ class HistoryPage(QWidget):
         index = self._table_view.indexAt(pos)
         if not index.isValid():
             return
-        
+
         record = self._model.get_record_at(index.row())
         if not record:
             return
-        
+
         menu = QMenu(self)
 
         url = f"https://www.bilibili.com/video/{record['bvid']}"
