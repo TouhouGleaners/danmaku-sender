@@ -1,13 +1,17 @@
 import re
 import logging
+from typing import Any, cast
 
+import qrcode
 from PySide6.QtCore import Qt, QUrl
-from PySide6.QtGui import QDesktopServices
+from PySide6.QtGui import QDesktopServices, QImage, QPixmap
 from PySide6.QtWidgets import (
     QDialog, QVBoxLayout, QHBoxLayout, QTabWidget, QGroupBox, QDoubleSpinBox,
     QTextBrowser, QPushButton, QLabel, QTextEdit
 )
+from PIL import Image
 
+from .workers import QRLoginWorker
 from ..config.app_config import AppInfo, Links
 from ..utils.resource_utils import get_assets_path 
 
@@ -323,3 +327,112 @@ class TimeOffsetDialog(QDialog):
     def get_offset_ms(self) -> int:
         """获取转换后的毫秒值"""
         return int(self.offset_spin.value() * 1000)
+    
+
+class QRLoginDialog(QDialog):
+    """扫码登录弹窗"""
+    # 用于存放还在后台跑的 Worker，防止 Python GC 误杀导致 C++ 崩溃
+    _active_workers = set()
+
+    def __init__(self, use_system_proxy: bool, parent=None):
+        super().__init__(parent)
+        self.use_system_proxy = use_system_proxy
+        self.cookies = {}  # 存放获取到的 Cookie
+        self.worker = None
+
+        self.setWindowTitle("扫码登录")
+        self.setFixedSize(300, 350)
+
+        self._create_ui()
+        self._start_worker()
+
+    def _create_ui(self):
+        layout = QVBoxLayout(self)
+        layout.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        layout.setSpacing(15)
+
+        # 状态文案
+        self.status_label = QLabel("正在向 B站 申请二维码...")
+        self.status_label.setStyleSheet("font-size: 14px; font-weight: bold; color: #2c3e50;")
+        self.status_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        layout.addWidget(self.status_label)
+
+        # 二维码图片框
+        self.qr_label = QLabel()
+        self.qr_label.setFixedSize(200, 200)
+        self.qr_label.setStyleSheet("background-color: #f8f9fa; border-radius: 8px;")
+        self.qr_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        layout.addWidget(self.qr_label)
+
+        layout.addStretch()
+
+        # 取消按钮
+        self.cancel_btn = QPushButton("取消")
+        self.cancel_btn.setFixedWidth(120)
+        self.cancel_btn.setCursor(Qt.CursorShape.PointingHandCursor)
+        self.cancel_btn.clicked.connect(self.reject)
+        layout.addWidget(self.cancel_btn, alignment=Qt.AlignmentFlag.AlignCenter)
+
+    def _start_worker(self):
+        self.worker = QRLoginWorker(self.use_system_proxy)
+
+        QRLoginDialog._active_workers.add(self.worker)
+
+        self.worker.qr_ready.connect(self._render_qr_code)
+        self.worker.status_updated.connect(self.status_label.setText)
+        self.worker.login_success.connect(self._on_login_success)
+        self.worker.login_failed.connect(self._on_login_failed)
+
+        self.worker.finished.connect(lambda: QRLoginDialog._active_workers.discard(self.worker))
+        self.worker.finished.connect(self.worker.deleteLater)
+
+        self.worker.start()
+
+    def _render_qr_code(self, url: str):
+        """将 URL 转换为 Qt 图像"""
+        try:
+            # 生成 PIL 图像
+            qr = qrcode.QRCode(box_size=6, border=2)
+            qr.add_data(url)
+            qr.make(fit=True)
+            pil_img = cast(Image.Image, qr.make_image(fill_color="black", back_color="white")).convert("RGB")
+
+            # 将 PIL 图像的二进制流转换为 QImage
+            data = pil_img.tobytes("raw", "RGB")
+            qimage = QImage(data, pil_img.width, pil_img.height, pil_img.width * 3, QImage.Format.Format_RGB888)
+
+            # 设置到 UI
+            pixmap = QPixmap.fromImage(qimage)
+            pixmap = pixmap.scaled(
+                self.qr_label.width(),
+                self.qr_label.height(),
+                Qt.AspectRatioMode.KeepAspectRatio,
+                Qt.TransformationMode.SmoothTransformation
+            )
+            self.qr_label.setPixmap(pixmap)
+        except Exception as e:
+            self.status_label.setText("二维码渲染失败")
+            self.status_label.setStyleSheet("color: #e74c3c;")
+
+    def _on_login_success(self, cookies: dict):
+        """登录成功，保存数据并关闭窗口"""
+        self.cookies = cookies
+        self.accept()  # 触发 Accepted 信号，关闭弹窗
+
+    def _on_login_failed(self, error_msg: str):
+        self.status_label.setText(error_msg)
+        self.status_label.setStyleSheet("color: #e74c3c;")  # 变成红色警告
+
+    def closeEvent(self, event):
+        """窗口关闭时，确保停止后台轮询线程"""
+        if self.worker and self.worker.isRunning():
+            self.worker.stop_event.set()
+            try:
+                self.worker.qr_ready.disconnect()
+                self.worker.status_updated.disconnect()
+                self.worker.login_success.disconnect()
+                self.worker.login_failed.disconnect()
+            except RuntimeError:
+                pass
+
+        super().closeEvent(event)

@@ -1,10 +1,11 @@
 from PySide6.QtWidgets import (
-    QWidget, QVBoxLayout, QFormLayout, QLabel, QLineEdit,
-    QCheckBox, QGroupBox
+    QWidget, QVBoxLayout, QHBoxLayout, QFormLayout, QLabel, QLineEdit,
+    QCheckBox, QGroupBox, QPushButton, QDialog
 )
 from PySide6.QtCore import Qt
 
 from .framework.binder import UIBinder
+from .dialogs import QRLoginDialog
 
 from ..core.state import AppState
 
@@ -27,6 +28,24 @@ class SettingsTab(QWidget):
         auth_layout = QFormLayout()
         auth_layout.setLabelAlignment(Qt.AlignmentFlag.AlignRight)
 
+        btn_layout = QHBoxLayout()
+        self.btn_qr_login = QPushButton("📱 手机扫码自动获取")
+        self.btn_qr_login.setCursor(Qt.CursorShape.PointingHandCursor)
+        self.btn_qr_login.setStyleSheet("""
+            QPushButton {
+                background-color: #00a1d6; color: white; font-weight: bold; 
+                border-radius: 4px; padding: 6px 15px;
+            }
+            QPushButton:hover { background-color: #00b5e5; }
+        """)
+        self.btn_qr_login.clicked.connect(self._open_qr_login)
+        
+        btn_layout.addWidget(self.btn_qr_login)
+        btn_layout.addStretch()
+
+        auth_layout.addRow("", btn_layout)
+
+        # SESSDATA / bili_jct
         self.sessdata_input = QLineEdit()
         self.sessdata_input.setPlaceholderText("请输入您的 SESSDATA")
         self.sessdata_input.setEchoMode(QLineEdit.EchoMode.Password)
@@ -95,3 +114,20 @@ class SettingsTab(QWidget):
         # 不清空，叠加绑定 MonitorConfig
         UIBinder.bind(self.prevent_sleep_checkbox, state.monitor_config, "prevent_sleep", clear_old=False)
         UIBinder.bind(self.proxy_checkbox, state.monitor_config, "use_system_proxy", clear_old=False)
+
+    def _open_qr_login(self):
+        if not self._state:
+            return
+
+        proxy = self._state.sender_config.use_system_proxy
+        dialog = QRLoginDialog(proxy, self)
+
+        # 阻塞等待弹窗返回。如果返回 Accepted，说明扫码成功
+        if dialog.exec() == QDialog.DialogCode.Accepted:
+            cookies = dialog.cookies
+            sessdata = cookies.get('SESSDATA', '')
+            bili_jct = cookies.get('bili_jct', '')
+
+            if sessdata and bili_jct:
+                self.sessdata_input.setText(sessdata)
+                self.bili_jct_input.setText(bili_jct)
