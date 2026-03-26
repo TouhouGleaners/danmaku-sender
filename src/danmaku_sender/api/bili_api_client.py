@@ -104,7 +104,12 @@ class BiliApiClient:
             raise BiliNetworkError(f"网络连接断开: {e}") from e
 
         except HTTPError as e:
-            status_code = e.response.status_code if e.response is not None else 0
+            if e.response is None:
+                # 未收到任何 HTTP 响应，可能是连接在 HTTP 层之前就被中断
+                self.logger.error(f"HTTP异常: {url}, 未收到服务器响应数据")
+                raise BiliNetworkError("服务器未响应，请检查代理或网络环境") from e
+
+            status_code = e.response.status_code
             self.logger.error(f"HTTP错误: {url}, Status: {status_code}")
 
             if 500 <= status_code < 600:
@@ -112,7 +117,7 @@ class BiliApiClient:
             elif status_code == 403:
                 # 403 明确是权限/爬虫封禁
                 raise BiliNetworkError(f"请求被拒绝 (HTTP 403)，请检查代理或稍后再试") from e
-            else:
+            else:   
                 # 其他 4xx 映射到协议冲突
                 raise BiliNetworkError(f"通讯协议错误 (HTTP {status_code})") from e
 
