@@ -36,11 +36,10 @@ class GuiLoggingHandler(logging.Handler):
             record (logging.LogRecord)：待输出的日志记录对象。
         """
         try:
-            msg = self.format(record)
             if record.name.startswith(LogNamespace.SENDER) and self.sender_callback:
-                self.sender_callback(msg)
+                self.sender_callback(self.format(record))
             elif record.name.startswith(LogNamespace.MONITOR) and self.monitor_callback:
-                self.monitor_callback(msg)
+                self.monitor_callback(self.format(record))
             # App.System 或其他开头的日志直接忽略
         except Exception:
             self.handleError(record)
