@@ -192,7 +192,7 @@ class BiliApiClient:
 
     def post_danmaku(self, cid: int, bvid: str, danmaku_params: dict) -> dict:
         """发送单条弹幕"""
-        if not self.sessdata and self.bili_jct:
+        if not (self.sessdata and self.bili_jct):
             raise BiliApiError(code=-101, message="发送弹幕需要登录凭证")
 
         url = "https://api.bilibili.com/x/v2/dm/post"
