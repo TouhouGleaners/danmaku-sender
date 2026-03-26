@@ -4,7 +4,8 @@ from ....api.bili_api_client import BiliApiClient
 from ...models.danmaku import Danmaku
 from ...models.structs import VideoTarget
 from ...models.result import DanmakuSendResult
-from ...models.exceptions import BiliNetworkError
+from ...models.exceptions import BiliApiError, BiliNetworkError
+from ...models.errors import BiliDmErrorCode
 
 
 class DanmakuExecutor:
@@ -47,3 +48,13 @@ class DanmakuExecutor:
         except BiliNetworkError as e:
             self.logger.error(f"❌ 网络传输异常! 内容: '{danmaku.msg}', 错误: {e.message}")
             return DanmakuSendResult.from_network_error(e)
+        
+        except BiliApiError as e:
+            # 这是为了处理万一 WBI 签名接口炸了导致请求发不出去的情况
+            self.logger.error(f"❌ 请求构造被拒: {e.message}")
+            return DanmakuSendResult(
+                code=e.code,
+                is_success=False,
+                raw_message=e.message,
+                display_message=BiliDmErrorCode.from_code(e.code).description
+            )
