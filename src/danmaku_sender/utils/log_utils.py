@@ -2,10 +2,17 @@ import sys
 import logging
 import logging.handlers
 from pathlib import Path
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import Callable
 
 from ..config.app_config import AppInfo
+
+
+class LogNamespace:
+    """日志命名空间契约"""
+    SENDER = "App.Sender"
+    MONITOR = "App.Monitor"
+    SYSTEM = "App.System"
 
 
 class GuiLoggingHandler(logging.Handler):
@@ -27,15 +34,12 @@ class GuiLoggingHandler(logging.Handler):
 
         Args:
             record (logging.LogRecord)：待输出的日志记录对象。
-        Raise:
-            处理过程中会捕获所有异常，并交由 handleError () 方法统一处理错误，避免日志自身的异常向上冒泡传递。
         """
-
         try:
             msg = self.format(record)
-            if record.name.startswith("App.Sender") and self.sender_callback:
+            if record.name.startswith(LogNamespace.SENDER) and self.sender_callback:
                 self.sender_callback(msg)
-            elif record.name.startswith("App.Monitor") and self.monitor_callback:
+            elif record.name.startswith(LogNamespace.MONITOR) and self.monitor_callback:
                 self.monitor_callback(msg)
             # App.System 或其他开头的日志直接忽略
         except Exception:
@@ -48,7 +52,10 @@ class DailyLogFileHandler(logging.handlers.TimedRotatingFileHandler):
         """重写父类的 rotation_filename 方法，以自定义归档文件的命名格式。"""
         # 计算归档日期，保持文件名如：2026-03-27.log
         previous_rollover_time = self.rolloverAt - self.interval
-        archive_datetime = datetime.fromtimestamp(previous_rollover_time)
+        if self.utc:
+            archive_datetime = datetime.fromtimestamp(previous_rollover_time, tz=timezone.utc)
+        else:
+            archive_datetime = datetime.fromtimestamp(previous_rollover_time)
         base_path = Path(self.baseFilename)
         return str(base_path.parent / f"{archive_datetime.strftime('%Y-%m-%d')}.log")
 
@@ -100,5 +107,6 @@ def init_app_logging(log_dir: Path):
     # --- 屏蔽第三方库的噪音 ---
     logging.getLogger("requests").setLevel(logging.WARNING)
     logging.getLogger("urllib3").setLevel(logging.WARNING)
+    logging.getLogger("peewee").setLevel(logging.WARNING)
 
     logging.info(f"日志系统初始化完成。日志路径: {log_file_path}")
