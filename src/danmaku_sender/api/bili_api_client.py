@@ -110,16 +110,23 @@ class BiliApiClient:
                 raise BiliNetworkError("服务器未响应，请检查代理或网络环境") from e
 
             status_code = e.response.status_code
-            self.logger.error(f"HTTP错误: {url}, Status: {status_code}")
+            # 捕获 Body 前 200 字符用于排查
+            try:
+                body_sample = e.response.text[:200].replace("\n", "\\n")
+            except Exception:
+                body_sample = "无法读取Body"
+
+            diag_info = f"Status: {status_code}, Body: {body_sample}"
+            self.logger.error(f"HTTP协议错误: {url}, {diag_info}")
 
             if 500 <= status_code < 600:
-                raise BiliNetworkError(f"B站服务器暂时不可用 (HTTP {status_code})") from e
+                raise BiliNetworkError(f"B站服务器暂时不可用 ({diag_info})") from e
             elif status_code == 403:
                 # 403 明确是权限/爬虫封禁
-                raise BiliNetworkError(f"请求被拒绝 (HTTP 403)，请检查代理或稍后再试") from e
+                raise BiliNetworkError(f"请求被拒绝 (HTTP 403)，{diag_info}") from e
             else:   
                 # 其他 4xx 映射到协议冲突
-                raise BiliNetworkError(f"通讯协议错误 (HTTP {status_code})") from e
+                raise BiliNetworkError(f"通讯协议错误 ({diag_info})") from e
 
         except RequestException as e:
             self.logger.error(f"请求发生非预期异常: {url}, Error: {e}")

@@ -41,20 +41,24 @@ class DanmakuExecutor:
                     danmaku.dmid = result.dmid
                 self.logger.info(f"✅ 发送成功 [ID:{result.dmid}]: {danmaku.msg}")
             else:
-                self.logger.warning(f"❌ 发送失败: {result.display_message}")
+                self.logger.warning(f"❌ 发送失败: {result.hint}")
 
             return result
 
         except BiliNetworkError as e:
             self.logger.error(f"❌ 网络传输异常! 内容: '{danmaku.msg}', 错误: {e.message}")
-            return DanmakuSendResult.from_network_error(e)
-        
+            return DanmakuSendResult(
+                code=BiliDmErrorCode.NETWORK_ERROR.code,
+                is_success=False,
+                msg=str(e),
+                hint=BiliDmErrorCode.NETWORK_ERROR.description
+            )
+
         except BiliApiError as e:
-            # 这是为了处理万一 WBI 签名接口炸了导致请求发不出去的情况
             self.logger.error(f"❌ 请求构造被拒: {e.message}")
             return DanmakuSendResult(
                 code=e.code,
                 is_success=False,
-                raw_message=e.message,
-                display_message=BiliDmErrorCode.from_code(e.code).description
+                msg=e.message,
+                hint=BiliDmErrorCode.from_code(e.code).description
             )
