@@ -32,7 +32,7 @@ class DanmakuSendResult:
     def from_api_response(cls, response_json: dict) -> 'DanmakuSendResult':
         """从 API JSON 响应构建结果对象"""
         # 提取原始 code 和 message
-        code = response_json.get('code', BiliDmErrorCode.BILI_UNKNOWN_ERROR.code)
+        code = response_json.get('code', BiliDmErrorCode.RESPONSE_MALFORMED.code)
         raw_msg = str(response_json.get('message', ''))
 
         # 转换枚举

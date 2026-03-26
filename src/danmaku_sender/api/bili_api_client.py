@@ -107,13 +107,13 @@ class BiliApiClient:
             self.logger.error(f"HTTP错误: {url}, Status: {status_code}")
             raise BiliNetworkError(f"HTTP协议错误(Status {status_code})") from e
 
-        except (ValueError, UnicodeDecodeError) as e:
-            self.logger.error(f"响应格式错误: {url}")
-            raise BiliNetworkError(f"响应数据格式异常: {e}") from e
-
         except RequestException as e:
             self.logger.error(f"请求发生非预期异常: {url}, Error: {e}")
             raise BiliNetworkError(f"请求异常: {e}") from e
+
+        except (ValueError, UnicodeDecodeError) as e:
+            self.logger.error(f"响应内容解析失败: {url}, Error: {e}")
+            raise BiliApiError(code=BiliDmErrorCode.RESPONSE_MALFORMED.code,message=f"服务器响应格式无法解析: {e}") from e
 
     def _request(self, method: str, url: str, return_raw: bool = False, **kwargs) -> Any:
         """

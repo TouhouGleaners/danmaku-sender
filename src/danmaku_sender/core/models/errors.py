@@ -104,6 +104,6 @@ ERROR_METADATA = {
     BiliDmErrorCode.BILI_UNKNOWN_ERROR:             ("B站返回了未定义的业务错误", True),
     BiliDmErrorCode.NETWORK_ERROR:                  ("网络连接失败，请检查网线或代理。", True),
     BiliDmErrorCode.PROTOCOL_ERROR:                 ("与B站通讯协议发生冲突。", True),
-    BiliDmErrorCode.RESPONSE_MALFORMED:             ("收到非法的服务器响应数据。", True),
+    BiliDmErrorCode.RESPONSE_MALFORMED:             ("服务器响应格式异常。", True),
     BiliDmErrorCode.CLIENT_RUNTIME_ERROR:           ("程序内部发生未知错误。", True),
 }
