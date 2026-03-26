@@ -27,9 +27,6 @@ class BiliApiClient:
         'Referer': 'https://www.bilibili.com/'
     }
     def __init__(self, sessdata: str, bili_jct: str, use_system_proxy: bool, logger: logging.Logger | None = None):
-        if not all([sessdata, bili_jct]):
-            raise ValueError("SESSDATA 和 BILI_JCT 不能为空")
-
         self.sessdata = sessdata
         self.bili_jct = bili_jct
         self.use_system_proxy = use_system_proxy
@@ -61,10 +58,12 @@ class BiliApiClient:
         """创建一个配置好 Headers 和 Cookies 的 requests.Session 对象"""
         session = requests.Session()
         session.headers.update(self.BASE_HEADER)
-        session.cookies.update({
-            'SESSDATA': self.sessdata,
-            'bili_jct': self.bili_jct
-        })
+
+        if self.sessdata and self.bili_jct:
+            session.cookies.update({
+                'SESSDATA': self.sessdata,
+                'bili_jct': self.bili_jct
+            })
 
         if not self.use_system_proxy:
             self.logger.info("用户已关闭系统代理选项，将强制直连。")
@@ -193,6 +192,9 @@ class BiliApiClient:
 
     def post_danmaku(self, cid: int, bvid: str, danmaku_params: dict) -> dict:
         """发送单条弹幕"""
+        if not (self.sessdata and self.bili_jct):
+            raise BiliApiError(code=-101, message="发送弹幕需要登录凭证")
+
         url = "https://api.bilibili.com/x/v2/dm/post"
         img_key, sub_key = self.wbi_keys
         final_params = danmaku_params.copy()
@@ -206,3 +208,37 @@ class BiliApiClient:
         signed_params = WbiSigner.enc_wbi(params=final_params, img_key=img_key, sub_key=sub_key)
 
         return self._request('POST', url, data=signed_params, return_raw=True)
+
+    def generate_qr_code(self) -> dict:
+        """
+        获取 Web 端扫码登录的二维码 URL 和秘钥
+
+        Returns:
+            dict: 包含 'url' (二维码内容) 和 'qrcode_key' (轮询凭证)
+        """
+        url = "https://passport.bilibili.com/x/passport-login/web/qrcode/generate"
+        self.logger.info("正在请求B站扫码登录凭证...")
+        return self._request('GET', url)
+
+    def poll_qr_code(self, qrcode_key: str) -> tuple[int, dict]:
+        """
+        轮询二维码状态
+        Args:
+            qrcode_key: generate_qr_code 返回的秘钥
+        Returns:
+            tuple[int, dict]: (状态码, cookies字典)
+            状态码: 0-成功, 86038-失效, 86090-已扫码未确认, 86101-未扫码
+        """
+        url = "https://passport.bilibili.com/x/passport-login/web/qrcode/poll"
+        params = {'qrcode_key': qrcode_key}
+
+        data: dict = self._request('GET', url, params=params)
+
+        poll_status = data.get('code', -1)
+        cookies = {}
+
+        if poll_status == 0:
+            cookies = self.session.cookies.get_dict()
+            self.logger.info("✅ 扫码登录成功！已获取 Cookie。")
+
+        return poll_status, cookies
