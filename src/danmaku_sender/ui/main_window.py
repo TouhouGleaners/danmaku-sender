@@ -162,8 +162,17 @@ class MainWindow(QMainWindow):
         """发起异步请求刷新用户信息"""
         self.auth_ctrl.refresh_user_info(self.state.get_api_auth())
 
+    def _refresh_default_avatar(self):
+        """通用方法：渲染高清的默认头像"""
+        dpr = self.devicePixelRatioF()
+        icon = get_svg_icon("default_avatar.svg")
+        physical_size = QSize(int(36 * dpr), int(36 * dpr))
+        pixmap = icon.pixmap(physical_size)
+        pixmap.setDevicePixelRatio(dpr)
+        self.avatar_label.setPixmap(pixmap)
+
     def _on_user_profile_updated(self, profile: UserProfile):
-        """同步更新 UI，消除时间差感"""
+        """同步更新 UI"""
         # 更新文字
         self.username_label.setText(profile.username)
 
@@ -171,19 +180,15 @@ class MainWindow(QMainWindow):
 
         # 更新头像
         if profile.is_login and profile.avatar_bytes:
+            dpr = self.devicePixelRatioF()
+            # 这里的 image_processor 内部也需要确保 physical_size = int(size * dpr)
             pixmap = QtImageProcessor.make_circular_pixmap(profile.avatar_bytes, 36, dpr)
             if not pixmap.isNull():
-                self.avatar_label.clear()
                 self.avatar_label.setPixmap(pixmap)
                 return
 
         # 未登录或无头像
-        self.avatar_label.clear()
-        icon = get_svg_icon("default_avatar.svg")
-        pixmap = icon.pixmap(QSize(36, 36) * dpr)
-        pixmap.setDevicePixelRatio(dpr)
-
-        self.avatar_label.setPixmap(pixmap)
+        self._refresh_default_avatar()
 
     def create_menu_bar(self):
         menu_bar = self.menuBar()

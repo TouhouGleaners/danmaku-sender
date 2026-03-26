@@ -31,6 +31,9 @@ class MonitorPage(QWidget):
         self._create_ui()
         self._connect_signals()
 
+        self._icon_start = get_svg_icon("start.svg")
+        self._icon_stop = get_svg_icon("stop.svg")
+
     def _create_ui(self):
         # 主布局 - 垂直布局
         main_layout = QVBoxLayout()
@@ -171,11 +174,7 @@ class MonitorPage(QWidget):
         self.start_btn.setProperty("state", state)
         self.start_btn.style().unpolish(self.start_btn)
         self.start_btn.style().polish(self.start_btn)
-
-        if running:
-            self.start_btn.setIcon(get_svg_icon("stop.svg"))
-        else:
-            self.start_btn.setIcon(get_svg_icon("start.svg"))
+        self.start_btn.setIcon(self._icon_stop if running else self._icon_start)
 
     def _connect_signals(self):
         self.start_btn.clicked.connect(self.toggle_task)
