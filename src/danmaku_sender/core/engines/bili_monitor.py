@@ -1,7 +1,6 @@
 import logging
-import threading
 
-from ..exceptions import BiliApiException
+from ..models.exceptions import BiliApiError, BiliNetworkError
 from ..database.history_manager import HistoryManager
 from ..models.danmaku import Danmaku
 from ..models.structs import VideoTarget
@@ -29,9 +28,11 @@ class BiliDanmakuMonitor:
         try:
             xml_content = self.api_client.get_danmaku_list_xml(self.target.cid)
             return self.danmaku_parser.parse_xml_content(xml_content, is_online_data=True)
-        except BiliApiException as e:
+
+        except (BiliApiError, BiliNetworkError) as e:
             self.logger.warning(f"获取在线弹幕失败: {e.message}")
             return []
+
         except Exception as e:
             self.logger.error(f"解析在线弹幕内容时发生错误: {e}")
             return []

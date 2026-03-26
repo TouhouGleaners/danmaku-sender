@@ -7,7 +7,7 @@ from requests.exceptions import ConnectionError, HTTPError, RequestException, Ti
 
 from .wbi_signer import WbiSigner
 
-from ..core.exceptions import BiliApiException
+from ..core.models.exceptions import BiliNetworkError, BiliApiError
 from ..core.models.errors import BiliDmErrorCode
 
 
@@ -29,7 +29,7 @@ class BiliApiClient:
     def __init__(self, sessdata: str, bili_jct: str, use_system_proxy: bool, logger: logging.Logger | None = None):
         if not all([sessdata, bili_jct]):
             raise ValueError("SESSDATA 和 BILI_JCT 不能为空")
-        
+
         self.sessdata = sessdata
         self.bili_jct = bili_jct
         self.use_system_proxy = use_system_proxy
@@ -39,8 +39,10 @@ class BiliApiClient:
         try:
             self.wbi_keys = WbiSigner.get_wbi_keys()
         except RuntimeError as e:
-            self.logger.critical(f"WBI密钥获取失败: {e}")
-            raise BiliApiException(code=-1, message=f"获取WBI签名密钥失败: {e}") from e
+            raise BiliApiError(
+                code=BiliDmErrorCode.BILI_SERVER_ERROR.code, 
+                message=f"获取WBI签名密钥失败: {e}"
+            ) from e
 
     @classmethod
     def from_config(cls, config: BiliConfigProto, logger: logging.Logger | None = None):
@@ -88,51 +90,52 @@ class BiliApiClient:
     def _network_guards(self, url: str) -> Generator[None, None, None]:
         """
         统一的网络异常捕获上下文。
-        负责将 requests 的各种异常精准映射为 BiliApiException。
+        负责将 requests 的各种异常精准映射为 BiliApiError | BiliNetworkError。
         """
         try:
             yield
+
         except Timeout as e:
             self.logger.error(f"请求超时: {url}, Error: {e}")
-            raise BiliApiException(
-                code=BiliDmErrorCode.TIMEOUT_ERROR.code,
-                message=f"请求超时: {e}",
-                is_network_error=True
-            ) from e
+            raise BiliNetworkError(f"请求超时: {e}") from e
 
         except ConnectionError as e:
             self.logger.error(f"连接失败: {url}, Error: {e}")
-            raise BiliApiException(
-                code=BiliDmErrorCode.CONNECTION_ERROR.code,
-                message=f"网络连接断开: {e}",
-                is_network_error=True
-            ) from e
+            raise BiliNetworkError(f"网络连接断开: {e}") from e
 
         except HTTPError as e:
-            status_code = e.response.status_code if e.response is not None else "Unknown"
-            self.logger.error(f"HTTP错误: {url}, Status: {status_code}")
-            raise BiliApiException(
-                code=BiliDmErrorCode.HTTP_ERROR.code,
-                message=f"HTTP协议错误: {e}",
-                is_network_error=True
-            ) from e
+            if e.response is None:
+                # 未收到任何 HTTP 响应，可能是连接在 HTTP 层之前就被中断
+                self.logger.error(f"HTTP异常: {url}, 未收到服务器响应数据")
+                raise BiliNetworkError("服务器未响应，请检查代理或网络环境") from e
 
-        except (ValueError, UnicodeDecodeError) as e:
-            self.logger.error(f"响应解码失败: {url}")
-            raise BiliApiException(
-                code=BiliDmErrorCode.PARSE_ERROR.code,
-                message=f"响应数据格式错误: {e}",
-                is_network_error=False
-            ) from e
+            status_code = e.response.status_code
+            # 捕获 Body 前 200 字符用于排查
+            try:
+                body_sample = e.response.text[:200].replace("\n", "\\n")
+            except Exception:
+                body_sample = "无法读取Body"
+
+            diag_info = f"Status: {status_code}, Body: {body_sample}"
+            self.logger.error(f"HTTP协议错误: {url}, {diag_info}")
+
+            if 500 <= status_code < 600:
+                raise BiliNetworkError(f"B站服务器暂时不可用 ({diag_info})") from e
+            elif status_code == 403:
+                # 403 明确是权限/爬虫封禁
+                raise BiliNetworkError(f"请求被拒绝 (HTTP 403)，{diag_info}") from e
+            else:   
+                # 其他 4xx 映射到协议冲突
+                raise BiliNetworkError(f"通讯协议错误 ({diag_info})") from e
 
         except RequestException as e:
-            self.logger.error(f"请求异常: {url}, Error: {e}")
-            raise BiliApiException(
-                code=BiliDmErrorCode.NETWORK_ERROR.code,
-                message=f"请求发生异常: {e}",
-                is_network_error=True
-            ) from e
-        
+            self.logger.error(f"请求发生非预期异常: {url}, Error: {e}")
+            raise BiliNetworkError(f"请求异常: {e}") from e
+
+        except (ValueError, UnicodeDecodeError) as e:
+            self.logger.error(f"响应内容解析失败: {url}, Error: {e}")
+            raise BiliApiError(code=BiliDmErrorCode.RESPONSE_MALFORMED.code,message=f"服务器响应格式无法解析: {e}") from e
+
     def _request(self, method: str, url: str, return_raw: bool = False, **kwargs) -> Any:
         """
         通用的JSON API请求方法。
@@ -143,19 +146,19 @@ class BiliApiClient:
         with self._network_guards(url):
             response = self.session.request(method, url, **kwargs)
             response.raise_for_status()
-            data = response.json()
+            data: dict = response.json()
 
             if return_raw:
                 return data
 
             # 标准模式：自动拆包，有错误码直接抛异常
-            code = data.get('code', BiliDmErrorCode.GENERIC_FAILURE.code)
+            code = data.get('code', BiliDmErrorCode.RESPONSE_MALFORMED.code)
             if code == BiliDmErrorCode.SUCCESS.code:
                 return data.get('data', {})
             else:
                 message = data.get('message', '未知错误')
                 self.logger.warning(f"API请求失败: {url}, Code: {code}, Message: {message}")
-                raise BiliApiException(code=code, message=message)
+                raise BiliApiError(code=code, message=message)
 
     def get_raw_resource(self, url: str) -> bytes:
         """通用的二进制资源获取方法"""

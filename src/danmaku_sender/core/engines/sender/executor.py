@@ -4,8 +4,8 @@ from ....api.bili_api_client import BiliApiClient
 from ...models.danmaku import Danmaku
 from ...models.structs import VideoTarget
 from ...models.result import DanmakuSendResult
-from ...exceptions import BiliApiException
-from ...error_handler import normalize_exception
+from ...models.exceptions import BiliApiError, BiliNetworkError
+from ...models.errors import BiliDmErrorCode
 
 
 class DanmakuExecutor:
@@ -22,7 +22,7 @@ class DanmakuExecutor:
     def execute(self, target: VideoTarget, danmaku: Danmaku) -> DanmakuSendResult:
         """
         执行单次发送，并内聚处理所有底层的 HTTP / 业务异常
-        
+
         Args:
             target(VideoTarget): 包含 cid 和 bvid 的视频目标
             danmaku(Danmaku): 待发送的实体数据
@@ -41,17 +41,24 @@ class DanmakuExecutor:
                     danmaku.dmid = result.dmid
                 self.logger.info(f"✅ 发送成功 [ID:{result.dmid}]: {danmaku.msg}")
             else:
-                self.logger.warning(f"❌ 发送失败: {result.display_message}")
+                self.logger.warning(f"❌ 发送失败: {result.hint}")
 
             return result
-        
-        except BiliApiException as e:
-            # 捕获网络断开、超时等物理错误，转化为统一的失败 Result 返回
-            error_code_enum = normalize_exception(e)
-            self.logger.error(f"❌ 发送异常! 内容: '{danmaku.msg}', 错误: {e.message}")
+
+        except BiliNetworkError as e:
+            self.logger.error(f"❌ 网络传输异常! 内容: '{danmaku.msg}', 错误: {e.message}")
             return DanmakuSendResult(
-                code=error_code_enum.code,
+                code=BiliDmErrorCode.NETWORK_ERROR.code,
                 is_success=False,
-                raw_message=str(e),
-                display_message=error_code_enum.description_str
+                msg=str(e),
+                hint=BiliDmErrorCode.NETWORK_ERROR.description
+            )
+
+        except BiliApiError as e:
+            self.logger.error(f"❌ 请求构造被拒: {e.message}")
+            return DanmakuSendResult(
+                code=e.code,
+                is_success=False,
+                msg=e.message,
+                hint=BiliDmErrorCode.from_code(e.code).description
             )
