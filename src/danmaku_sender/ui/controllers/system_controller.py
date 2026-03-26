@@ -7,7 +7,7 @@ from ...api.update_checker import UpdateChecker, UpdateInfo
 from ...config.app_config import AppInfo
 
 
-logger = logging.getLogger("SystemController")
+logger = logging.getLogger("App.System.System")
 
 
 def _check_update(use_proxy: bool):

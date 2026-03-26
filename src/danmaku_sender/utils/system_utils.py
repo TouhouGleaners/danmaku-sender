@@ -4,7 +4,8 @@ import platform
 import threading
 
 
-logger = logging.getLogger("SystemUtils")
+logger = logging.getLogger("App.System.Utils")
+
 
 IS_WINDOWS = platform.system() == "Windows"
 
@@ -27,7 +28,7 @@ class PowerManagement:
         """
         if not IS_WINDOWS:
             return
-        
+
         with PowerManagement._sleep_lock:
             PowerManagement._prevent_sleep_count += 1
             current_count = PowerManagement._prevent_sleep_count
@@ -35,7 +36,7 @@ class PowerManagement:
             if current_count > 1:
                 logger.debug(f"已增加阻止系统休眠引用计数，当前: {current_count}")
                 return
-        
+
         # 仅在计数为 1 时真正调用 API
         try:
             ctypes.windll.kernel32.SetThreadExecutionState(
@@ -53,21 +54,21 @@ class PowerManagement:
         """
         if not IS_WINDOWS:
             return
-        
+
         should_reset = False
 
         with PowerManagement._sleep_lock:
             if PowerManagement._prevent_sleep_count == 0:
                 logger.warning("尝试释放休眠阻止，但计数已为 0。")
                 return
-            
+
             PowerManagement._prevent_sleep_count -= 1
             current_count = PowerManagement._prevent_sleep_count
 
             if current_count > 0:
                 logger.debug(f"已减少阻止系统休眠引用计数，剩余: {current_count}")
                 return
-            
+
             should_reset = True
 
         if should_reset:
@@ -92,7 +93,7 @@ class KeepSystemAwake:
         if self.enabled:
             PowerManagement.prevent_sleep()
         return self
-    
+
     def __exit__(self, exc_type, exc_value, traceback):
         if self.enabled:
             PowerManagement.allow_sleep()

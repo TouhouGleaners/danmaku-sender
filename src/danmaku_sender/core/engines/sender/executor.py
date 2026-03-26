@@ -11,13 +11,13 @@ from ...models.errors import BiliDmErrorCode
 class DanmakuExecutor:
     """
     弹幕发送执行器 (Executor)
-    
+
     网络发包层。剥离了所有与“业务流转”、“耗时计算”相关的逻辑。
     职责：接收一条弹幕 -> 请求 B 站 API -> 标准化返回结果。
     """
     def __init__(self, api_client: BiliApiClient):
         self.api_client = api_client
-        self.logger = logging.getLogger("DanmakuExecutor")
+        self.logger = logging.getLogger("App.Sender.Executor")
 
     def execute(self, target: VideoTarget, danmaku: Danmaku) -> DanmakuSendResult:
         """
@@ -26,7 +26,7 @@ class DanmakuExecutor:
         Args:
             target(VideoTarget): 包含 cid 和 bvid 的视频目标
             danmaku(Danmaku): 待发送的实体数据
-            
+
         Returns:
             DanmakuSendResult: 标准化的结果实体。
         """

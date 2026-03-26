@@ -9,7 +9,8 @@ from ..config.app_config import AppInfo
 from ..core.state import AppState, SenderConfig, MonitorConfig, ValidationConfig
 
 
-logger = logging.getLogger("ConfigManager")
+logger = logging.getLogger("App.System.Config")
+
 
 def get_config_path() -> Path:
     config_dir = Path(user_data_dir(AppInfo.NAME_EN, AppInfo.AUTHOR))

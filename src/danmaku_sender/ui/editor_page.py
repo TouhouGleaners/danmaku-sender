@@ -6,7 +6,7 @@ from PySide6.QtGui import QColor, QBrush
 from PySide6.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout, QPushButton, QLabel, QSizePolicy,
     QTableView, QHeaderView, QAbstractItemView, QColorDialog,
-    QMessageBox, QMenu, QLineEdit, QFrame, QCheckBox, QGroupBox, 
+    QMessageBox, QMenu, QLineEdit, QFrame, QCheckBox, QGroupBox,
     QSplitter, QFormLayout, QDoubleSpinBox, QComboBox, QTextEdit
 )
 
@@ -43,7 +43,7 @@ class EditorTableModel(QAbstractTableModel):
 
     def columnCount(self, parent=QModelIndex()) -> int:
         return len(self.HEADERS)
-    
+
     def headerData(self, section: int, orientation: Qt.Orientation, role: int) -> str | None:
         if (
             orientation == Qt.Orientation.Horizontal
@@ -53,7 +53,7 @@ class EditorTableModel(QAbstractTableModel):
             return self.HEADERS[section]
 
         return None
-    
+
     def data(self, index: QModelIndex, role=Qt.ItemDataRole.DisplayRole):
         if not index.isValid():
             return None
@@ -85,7 +85,7 @@ class EditorTableModel(QAbstractTableModel):
                 # 提供颜色样式
                 if is_valid:
                     return QBrush(QColor("#95a5a6"))  # 正常行的灰字
-                
+
                 # 错误行：仅针对“问题描述”列标红
                 if col == 2:
                     return QBrush(QColor("#e74c3c"))  # 错误行的理由红字
@@ -226,9 +226,9 @@ class PropertyInspectorGroup(QGroupBox):
         self.prop_save_btn = QPushButton("保存属性修改")
         self.prop_save_btn.setStyleSheet("""
             QPushButton {
-                background-color: #3498db; 
-                color: white; 
-                font-weight: bold; 
+                background-color: #3498db;
+                color: white;
+                font-weight: bold;
                 padding: 6px;
                 border-radius: 4px;
             }
@@ -304,11 +304,11 @@ class PropertyInspectorGroup(QGroupBox):
         """重置面板到未激活状态"""
         self.setEnabled(False)
         self.prop_text.clear()
-        
+
         self.prop_time.blockSignals(True)
         self.prop_time.setValue(0.0)
         self.prop_time.blockSignals(False)
-        
+
         self.prop_mode.setCurrentIndex(0)
         self._populate_font_sizes()
 
@@ -338,7 +338,7 @@ class EditorPage(QWidget):
         super().__init__()
         self._state: AppState | None = None
         self.session: EditorSession | None = None
-        self.logger = logging.getLogger("EditorPage")
+        self.logger = logging.getLogger("App.System.UI.Editor")
 
         self.current_editing_index: int | None = None
 
@@ -402,8 +402,8 @@ class EditorPage(QWidget):
         top_layout.addWidget(v_line)
         top_layout.addSpacing(10)
         top_layout.addWidget(self.preview_mode_cb)
-        
-        top_layout.addStretch() 
+
+        top_layout.addStretch()
 
         main_layout.addLayout(top_layout)
 
@@ -462,9 +462,9 @@ class EditorPage(QWidget):
         self.apply_btn = QPushButton("应用所有修改")
         self.apply_btn.setStyleSheet("""
             QPushButton {
-                background-color: #2ecc71; 
-                color: white; 
-                font-weight: bold; 
+                background-color: #2ecc71;
+                color: white;
+                font-weight: bold;
                 padding: 6px 20px;
                 border-radius: 4px;
             }
@@ -482,7 +482,7 @@ class EditorPage(QWidget):
         bottom_layout.addWidget(self.apply_btn)
 
         main_layout.addLayout(bottom_layout)
-        
+
         self._update_ui_state()
 
     def bind_state(self, state: AppState):
@@ -516,7 +516,7 @@ class EditorPage(QWidget):
     def _update_ui_state(self):
         """统一状态机控制"""
         if not self._state:
-            for btn in [self.run_btn, self.batch_btn, self.undo_btn, 
+            for btn in [self.run_btn, self.batch_btn, self.undo_btn,
                         self.delete_btn, self.apply_btn, self.offset_btn]:
                 btn.setEnabled(False)
             return
@@ -700,7 +700,7 @@ class EditorPage(QWidget):
 
         # 收集所有的 source_index
         original_indices = [
-            idx for row_idx in selected_indexes 
+            idx for row_idx in selected_indexes
             if (idx := self.model.get_source_index(row_idx.row())) is not None
         ]
 
@@ -722,14 +722,14 @@ class EditorPage(QWidget):
     def batch_remove_newlines(self):
         if not self.session:
             return
-        
+
         mod, dele = self.session.batch_remove_newlines()
         self._show_batch_result(mod, dele)
 
     def batch_truncate_length(self):
         if not self.session:
             return
-        
+
         count = self.session.batch_truncate_length()
         if count > 0:
             self._refresh_table()
@@ -757,7 +757,7 @@ class EditorPage(QWidget):
         self.logger.info(f"修改已应用: 修复 {fixed}, 删除 {deleted}")
         QMessageBox.information(
             self,
-            "应用成功", 
+            "应用成功",
             f"发送队列已更新！\n\n修复: {fixed} 条\n移除: {deleted} 条\n剩余总数: {total} 条"
         )
 
@@ -769,7 +769,7 @@ class EditorPage(QWidget):
     def open_offset_dialog(self):
         if not self.session or not self.session.has_active_session:
             return
-            
+
         dlg = TimeOffsetDialog(self)
         if dlg.exec():
             offset_ms = dlg.get_offset_ms()

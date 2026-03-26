@@ -5,7 +5,7 @@ from threading import Event
 class DelayManager:
     """
     发送节奏管理器 (Pacing / Delay Manager)
-    
+
     设计意图：将“算时间”和“等时间”剥离成独立的控制模块。
     支持基础的随机波动延时，以及模拟真实人类批量操作习惯的“爆发-休息”模式。
     """
@@ -25,7 +25,7 @@ class DelayManager:
             rest_min (float): 休息时间的随机下界（秒）
             rest_max (float): 休息时间的随机上界（秒）
         """
-        self.logger = logging.getLogger("DelayManager")
+        self.logger = logging.getLogger("App.Sender.Delay")
 
         # 基础随机延迟配置
         self.normal_min = normal_min
@@ -74,5 +74,5 @@ class DelayManager:
         if stop_event.wait(timeout=delay):
             self.logger.info("在等待期间接收到停止信号，立即终止延时策略。")
             return True
-        
+
         return False

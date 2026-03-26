@@ -6,7 +6,7 @@ from typing import TypedDict
 from ..models.danmaku import Danmaku
 
 
-logger = logging.getLogger("DanmakuExporter")
+logger = logging.getLogger("App.System.Exporter")
 
 
 class UnsentDanmakusRecord(TypedDict):
@@ -33,10 +33,10 @@ def create_xml_from_danmakus(danmakus: list[UnsentDanmakusRecord], filepath: str
     for reason, dms in grouped_data.items():
         safe_reason = reason.replace('--', ' - ').strip('-')
         root.append(ET.Comment(f' === 失败原因: {safe_reason} (共 {len(dms)} 条) === '))
-        
+
         # 组内按视频时间排序，方便用户后续查看/修改
         dms.sort(key=lambda x: x.progress)
-        
+
         for dm in dms:
             p_attr = f"{dm.progress/1000},{dm.mode},{dm.fontsize},{dm.color},0,0,0,0,0"
             d_tag = ET.SubElement(root, 'd', {'p': p_attr})

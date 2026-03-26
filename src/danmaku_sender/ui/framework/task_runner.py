@@ -5,7 +5,7 @@ from typing import Callable
 from PySide6.QtCore import QObject, Signal, QRunnable
 
 
-logger = logging.getLogger("TaskRunner")
+logger = logging.getLogger("App.System.Framework.Runner")
 
 
 class WorkerSignals(QObject):

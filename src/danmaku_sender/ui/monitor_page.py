@@ -24,7 +24,7 @@ class MonitorPage(QWidget):
         super().__init__()
         self._state = None
         self._monitor_worker = None
-        self.logger = logging.getLogger("MonitorPage")
+        self.logger = logging.getLogger("App.Monitor.UI")
         self.stop_event = threading.Event()
         self._is_running = False
 

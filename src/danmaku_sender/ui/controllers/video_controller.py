@@ -9,7 +9,7 @@ from ...core.services.video_fetcher import VideoFetcher
 from ...api.bili_api_client import BiliApiClient
 
 
-logger = logging.getLogger("VideoController")
+logger = logging.getLogger("App.System.Video")
 
 
 def _fetch_video_info(bvid: str, auth_config: ApiAuthConfig) -> VideoInfo:

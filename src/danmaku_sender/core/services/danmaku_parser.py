@@ -10,16 +10,16 @@ class DanmakuParser:
     返回 Danmaku 实体对象列表的类。
     """
     def __init__(self):
-        self.logger = logging.getLogger("DanmakuParser")
+        self.logger = logging.getLogger("App.System.Parser")
 
     def parse_xml_content(self, xml_content: str, is_online_data: bool = False) -> list[Danmaku]:
         """
         解析Bilibili的XML弹幕内容字符串，返回一个 Danmaku 对象列表。
-        
+
         Args:
             xml_content (str): XML弹幕内容的字符串。
             is_online_data (bool): 如果为True，表示解析的是在线实时弹幕数据，此时会尝试提取弹幕ID (p_attr[7])。
-        
+
         Returns:
             list[Danmaku]: 一个包含 Danmaku 对象的列表。
         """
@@ -55,13 +55,13 @@ class DanmakuParser:
         except Exception as e:
             self.logger.critical(f"❌ 错误: 解析XML内容时发生意外异常: {e}", exc_info=True)
             return []
-        
+
     def parse_xml_file(self, xml_path: str) -> list[Danmaku]:
         """从XML文件读取内容并解析，返回一个 Danmaku 对象列表。"""
         try:
             with open(xml_path, 'r', encoding='utf-8') as f:
                 content = f.read()
-            self.logger.info(f'📦 成功从 {xml_path} 读取内容。') 
+            self.logger.info(f'📦 成功从 {xml_path} 读取内容。')
             return self.parse_xml_content(content, is_online_data=False)
         except FileNotFoundError:
             self.logger.error(f"❌ 错误: 弹幕文件 '{xml_path}' 不存在。")
