@@ -1,12 +1,12 @@
 import logging
 
-from ..models.exceptions import BiliApiError
+from ..models.exceptions import BiliApiError, BiliNetworkError
 from ..database.history_manager import HistoryManager
 from ..models.danmaku import Danmaku
 from ..models.structs import VideoTarget
 from ..services.danmaku_parser import DanmakuParser
 
-from ...api.bili_api_client import BiliApiClient, BiliNetworkError
+from ...api.bili_api_client import BiliApiClient
 
 
 class BiliDanmakuMonitor:
