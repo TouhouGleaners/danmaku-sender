@@ -6,13 +6,13 @@ from datetime import datetime, timezone
 
 # Sender 相关日志源
 SENDER_LOG_WHITELIST = (
-    "SenderPage", 
+    "SenderPage",
     "DanmakuScheduler",
     "DanmakuExecutor",
-    "DelayManager", 
-    "DanmakuParser", 
-    "BiliUtils", 
-    "BiliApiClient", 
+    "DelayManager",
+    "DanmakuParser",
+    "BiliUtils",
+    "BiliApiClient",
     "WbiSigner",
     "CredentialManager",
     "UpdateChecker"
@@ -20,7 +20,7 @@ SENDER_LOG_WHITELIST = (
 
 # Monitor 相关日志源
 MONITOR_LOG_WHITELIST = (
-    "MonitorTab",
+    "MonitorPage",
     "DanmakuMonitor"
 )
 
@@ -71,10 +71,10 @@ class DailyLogFileHandler(logging.handlers.TimedRotatingFileHandler):
             archive_datetime = datetime.fromtimestamp(previous_rollover_time, tz=timezone.utc)
         else:
             archive_datetime = datetime.fromtimestamp(previous_rollover_time)
-        
+
         # 构造形如'YYYY-MM-DD.log'的文件名
         base_path = Path(self.baseFilename)
         archive_name = f"{archive_datetime.strftime('%Y-%m-%d')}.log"
         desired_archive_file_path = base_path.parent / archive_name
-        
+
         return str(desired_archive_file_path)
