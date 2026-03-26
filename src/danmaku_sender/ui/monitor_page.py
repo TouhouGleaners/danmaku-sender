@@ -16,19 +16,23 @@ from .framework.binder import UIBinder
 from .workers import MonitorTaskWorker
 
 from ..core.models.structs import VideoTarget
+from ..utils.resource_utils import get_svg_icon
 
 
-class MonitorTab(QWidget):
+class MonitorPage(QWidget):
     def __init__(self):
         super().__init__()
         self._state = None
         self._monitor_worker = None
-        self.logger = logging.getLogger("MonitorTab")
+        self.logger = logging.getLogger("MonitorPage")
         self.stop_event = threading.Event()
         self._is_running = False
 
         self._create_ui()
         self._connect_signals()
+
+        self._icon_start = get_svg_icon("start.svg")
+        self._icon_stop = get_svg_icon("stop.svg")
 
     def _create_ui(self):
         # 主布局 - 垂直布局
@@ -42,8 +46,8 @@ class MonitorTab(QWidget):
 
         self.target_label = QLabel("尚未选择视频")
         self.target_label.setStyleSheet("""
-            font-size: 14px; 
-            font-weight: bold; 
+            font-size: 14px;
+            font-weight: bold;
             color: #34495e;
             padding: 2px 0px;
         """)
@@ -57,7 +61,7 @@ class MonitorTab(QWidget):
 
         info_layout.addWidget(QLabel("当前目标:"))
         info_layout.addWidget(self.target_label, stretch=1)
-        
+
         info_group.setLayout(info_layout)
         main_layout.addWidget(info_group)
 
@@ -71,7 +75,7 @@ class MonitorTab(QWidget):
             lbl_num = QLabel("0")
             lbl_num.setAlignment(Qt.AlignmentFlag.AlignCenter)
             lbl_num.setStyleSheet(f"font-size: 32px; font-weight: bold; color: {color}; font-family: 'Segoe UI', sans-serif;")
-            
+
             lbl_title = QLabel(title)
             lbl_title.setAlignment(Qt.AlignmentFlag.AlignCenter)
             lbl_title.setStyleSheet("color: #7f8c8d; font-size: 12px;")
@@ -105,9 +109,9 @@ class MonitorTab(QWidget):
         self.interval_spin.setRange(10, 3600)
         self.interval_spin.setValue(60)
         param_layout.addWidget(self.interval_spin)
-        
+
         param_layout.addStretch()
-        
+
         main_layout.addLayout(param_layout)
 
         # 时间锚点选择区
@@ -116,7 +120,7 @@ class MonitorTab(QWidget):
 
         # 下拉框
         self.anchor_combo = QComboBox()
-        self.anchor_combo.setFixedWidth(115) 
+        self.anchor_combo.setFixedWidth(115)
         self.anchor_combo.setPlaceholderText("手动指定")
         self.anchor_combo.addItem("本次启动后", "launch")
         self.anchor_combo.addItem("最近 24 小时", "24h")
@@ -134,7 +138,7 @@ class MonitorTab(QWidget):
         self.anchor_display.setMinimumWidth(130)
         self.anchor_display.setStyleSheet("color: #7f8c8d; font-size: 11px;")
         param_layout.addWidget(self.anchor_display)
-        param_layout.addStretch(1) 
+        param_layout.addStretch(1)
 
         # 日志区
         log_group = QGroupBox("监视日志")
@@ -149,25 +153,28 @@ class MonitorTab(QWidget):
         # --- 底部控制 ---
         action_layout = QHBoxLayout()
         self.status_label = QLabel("监视器：待命")
-        
+
         self.start_btn = QPushButton("开始监视")
+        self.start_btn.setIcon(get_svg_icon("start.svg"))
         self.start_btn.setFixedWidth(100)
         self.start_btn.setCursor(Qt.CursorShape.PointingHandCursor)
         self.start_btn.setProperty("action", "true")
         self.start_btn.setProperty("state", "ready")
-        
+
         action_layout.addWidget(self.status_label, stretch=1)
         action_layout.addWidget(self.start_btn)
-        
+
         main_layout.addLayout(action_layout)
 
         self.setLayout(main_layout)
 
     def _update_btn_style(self, running: bool):
+        """统一刷新按钮状态与图标的私有方法"""
         state = "running" if running else "ready"
         self.start_btn.setProperty("state", state)
         self.start_btn.style().unpolish(self.start_btn)
         self.start_btn.style().polish(self.start_btn)
+        self.start_btn.setIcon(self._icon_stop if running else self._icon_start)
 
     def _connect_signals(self):
         self.start_btn.clicked.connect(self.toggle_task)
@@ -236,14 +243,14 @@ class MonitorTab(QWidget):
     def _refresh_info_labels(self):
         if not self._state:
             return
-        
+
         video_state = self._state.video_state
-        
+
         if video_state.selected_cid:
             info_parts = []
             if title := video_state.video_title:
                 info_parts.append(title)
-            
+
             if part := video_state.selected_part_name:
                 info_parts.append(part)
 
@@ -259,17 +266,17 @@ class MonitorTab(QWidget):
     def toggle_task(self):
         if not self._state:
             return
-        
+
         if self._is_running:
             self.stop_event.set()
             self.start_btn.setText("正在停止...")
             self.start_btn.setEnabled(False)
             return
-        
+
         if self._monitor_worker is not None and self._monitor_worker.isRunning():
             self.logger.warning("上一轮任务尚未彻底结束，请稍候...")
             return
-        
+
         cid = self._state.video_state.selected_cid
         bvid = self._state.video_state.bvid
         title = self._state.video_state.video_title
@@ -277,11 +284,11 @@ class MonitorTab(QWidget):
         if not cid:
             QMessageBox.warning(self, "无法启动", "请先在“发射器”页面获取视频信息并选择分P。\n(监视器需要 CID 来查询数据库)")
             return
-        
+
         if not self._state.sessdata:
             QMessageBox.warning(self, "凭证缺失", "请先配置 Cookie。")
             return
-        
+
         self._set_ui_running(True)
 
         auth = self._state.get_api_auth()
@@ -306,10 +313,10 @@ class MonitorTab(QWidget):
     def _set_ui_running(self, running):
         self._is_running = running
         self.stop_event.clear()
-        
+
         self.interval_spin.setEnabled(not running)
         self.start_btn.setEnabled(True)
-        
+
         if running:
             self.start_btn.setText("停止监视")
             self._update_btn_style(True)

@@ -8,9 +8,10 @@ from .framework.binder import UIBinder
 from .dialogs import QRLoginDialog
 
 from ..core.state import AppState
+from ..utils.resource_utils import get_svg_icon
 
 
-class SettingsTab(QWidget):
+class SettingsPage(QWidget):
     def __init__(self):
         super().__init__()
 
@@ -29,17 +30,11 @@ class SettingsTab(QWidget):
         auth_layout.setLabelAlignment(Qt.AlignmentFlag.AlignRight)
 
         btn_layout = QHBoxLayout()
-        self.btn_qr_login = QPushButton("📱 手机扫码自动获取")
+        self.btn_qr_login = QPushButton("扫码登录")
+        self.btn_qr_login.setIcon(get_svg_icon("qr_scan.svg"))
         self.btn_qr_login.setCursor(Qt.CursorShape.PointingHandCursor)
-        self.btn_qr_login.setStyleSheet("""
-            QPushButton {
-                background-color: #00a1d6; color: white; font-weight: bold; 
-                border-radius: 4px; padding: 6px 15px;
-            }
-            QPushButton:hover { background-color: #00b5e5; }
-        """)
         self.btn_qr_login.clicked.connect(self._open_qr_login)
-        
+
         btn_layout.addWidget(self.btn_qr_login)
         btn_layout.addStretch()
 
@@ -100,7 +95,7 @@ class SettingsTab(QWidget):
         """将 UI 控件与全局状态 (AppState) 进行双向绑定"""
         if self._state is state:
             return
-            
+
         self._state = state
 
         # 普通属性，实时更新

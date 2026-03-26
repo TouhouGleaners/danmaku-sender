@@ -21,6 +21,7 @@ from ..core.services.danmaku_parser import DanmakuParser
 from ..core.state import AppState
 from ..utils.string_utils import parse_bilibili_link
 from ..utils.time_utils import format_seconds_to_duration
+from ..utils.resource_utils import get_svg_icon
 
 
 class SenderPage(QWidget):
@@ -38,6 +39,9 @@ class SenderPage(QWidget):
 
         self._create_ui()
         self._connect_ui_logic()
+
+        self._icon_start = get_svg_icon("start.svg")
+        self._icon_stop = get_svg_icon("stop.svg")
 
     def _create_ui(self):
         # 主布局 - 垂直布局
@@ -73,6 +77,7 @@ class SenderPage(QWidget):
 
         # 按钮
         self.start_btn = QPushButton("开始发送")
+        self.start_btn.setIcon(get_svg_icon("start.svg"))
         self.start_btn.setFixedWidth(100)
         self.start_btn.setCursor(Qt.CursorShape.PointingHandCursor)
         self.start_btn.setProperty("action", "true")
@@ -188,7 +193,7 @@ class SenderPage(QWidget):
             self._state.video_state.cid_parts_map[p.cid] = part_name
 
         if info.parts:
-            if (self._pending_part_index is not None and 
+            if (self._pending_part_index is not None and
                 0 <= self._pending_part_index < self.basic_group.part_combo.count()):
 
                 self.basic_group.part_combo.setCurrentIndex(self._pending_part_index)
@@ -206,7 +211,7 @@ class SenderPage(QWidget):
 
         self.basic_group.part_combo.clear()
         self.basic_group.part_combo.addItem(f"获取失败，请重试")
-        self.basic_group.part_combo.setEnabled(False) 
+        self.basic_group.part_combo.setEnabled(False)
 
         self.logger.error(f"获取视频信息失败: {err_msg}")
         QMessageBox.warning(self, "获取失败", f"无法获取视频信息:\n{err_msg}")
@@ -257,8 +262,8 @@ class SenderPage(QWidget):
 
         if state.editor_is_dirty:
             QMessageBox.warning(
-                self, 
-                "存在未保存的修改", 
+                self,
+                "存在未保存的修改",
                 "检测到【弹幕校验器】中有未应用的修改！\n\n请先返回校验器点击“应用所有修改”，\n否则发送的将是旧的、未修复的弹幕。"
             )
             return
@@ -324,10 +329,10 @@ class SenderPage(QWidget):
         avg_rest = (cfg.rest_min + cfg.rest_max) / 2
 
         return self._math_calc_eta(
-            attempted=attempted, 
-            total=total, 
-            burst_size=cfg.burst_size, 
-            avg_normal=avg_normal, 
+            attempted=attempted,
+            total=total,
+            burst_size=cfg.burst_size,
+            avg_normal=avg_normal,
             avg_rest=avg_rest
         )
 
@@ -343,7 +348,7 @@ class SenderPage(QWidget):
         """
         # 防御性校验：避免除零及负数异常
         if burst_size <= 0:
-            burst_size = 1 
+            burst_size = 1
 
         # 统一处理 0 和 1 进度：
         # 准备开始(0)和准备发第1条(1)时，前面都没有发生过延时，
@@ -379,7 +384,7 @@ class SenderPage(QWidget):
         if sender_instance and sender_instance.unsent_danmakus:
             count = len(sender_instance.unsent_danmakus)
             reply = QMessageBox.question(
-                self, "保存失败弹幕", 
+                self, "保存失败弹幕",
                 f"有 {count} 条弹幕发送失败。\n是否保存为新的 XML 文件以便重新发送？",
                 QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No
             )
@@ -397,11 +402,12 @@ class SenderPage(QWidget):
         self._send_worker = None
 
     def _update_btn_style(self, running: bool):
-        """统一刷新按钮样式的私有方法"""
+        """统一刷新按钮状态与图标的私有方法"""
         state = "running" if running else "ready"
         self.start_btn.setProperty("state", state)
         self.start_btn.style().unpolish(self.start_btn)
         self.start_btn.style().polish(self.start_btn)
+        self.start_btn.setIcon(self._icon_stop if running else self._icon_start)
 
     def _set_inputs_locked(self, locked: bool):
         """
@@ -618,7 +624,7 @@ class StrategySettingsTabs(QTabWidget):
         # 自动终止规则
         UIBinder.bind(self.stop_count, config, "stop_after_count")
         UIBinder.bind(self.stop_time, config, "stop_after_time")
-    
+
     def set_inputs_locked(self, locked: bool):
         """供主控调用的防误触锁"""
         enabled = not locked

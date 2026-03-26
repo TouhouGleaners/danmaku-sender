@@ -13,8 +13,8 @@ from .controllers.auth_controller import AuthController, UserProfile
 from .controllers.system_controller import SystemController
 from .framework.image_processor import QtImageProcessor
 from .sender_page import SenderPage
-from .settings_tab import SettingsTab
-from .monitor_tab import MonitorTab
+from .settings_page import SettingsPage
+from .monitor_page import MonitorPage
 from .editor_page import EditorPage
 from .dialogs import AboutDialog, HelpDialog, UpdateDialog
 from .history_page import HistoryPage
@@ -56,7 +56,7 @@ class MainWindow(QMainWindow):
         load_stylesheet()
 
         # 存储帮助窗口的引用，防止被垃圾回收
-        self._help_dialog = None 
+        self._help_dialog = None
 
         QTimer.singleShot(1000, lambda: self.run_update_check(is_manual=False))
 
@@ -86,10 +86,14 @@ class MainWindow(QMainWindow):
         user_layout.setContentsMargins(15, 0, 10, 0)
         user_layout.setSpacing(10)
 
-        self.avatar_label = QLabel("📺") # 头像占位
+        self.avatar_label = QLabel()
         self.avatar_label.setObjectName("avatarLabel")
         self.avatar_label.setFixedSize(36, 36)
         self.avatar_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
+
+        default_icon = get_svg_icon("default_avatar.svg")
+        pixmap = default_icon.pixmap(36, 36)
+        self.avatar_label.setPixmap(pixmap)
 
         self.username_label = QLabel("未登录")
         self.username_label.setObjectName("usernameLabel")
@@ -115,16 +119,16 @@ class MainWindow(QMainWindow):
 
         # --- 右侧内容容器 ---
         self.content_stack = QStackedWidget()
-        
+
         self.main_layout.addWidget(self.sidebar_frame)
         self.main_layout.addWidget(self.content_stack)
 
     def init_pages(self):
         """初始化页面并绑定导航"""
-        self.page_settings = SettingsTab()
+        self.page_settings = SettingsPage()
         self.page_sender = SenderPage()
         self.page_editor = EditorPage()
-        self.page_monitor = MonitorTab()
+        self.page_monitor = MonitorPage()
         self.page_history = HistoryPage()
 
         # 定义页面列表
@@ -157,56 +161,66 @@ class MainWindow(QMainWindow):
     def request_user_info_refresh(self):
         """发起异步请求刷新用户信息"""
         self.auth_ctrl.refresh_user_info(self.state.get_api_auth())
-    
+
+    def _refresh_default_avatar(self):
+        """通用方法：渲染高清的默认头像"""
+        dpr = self.devicePixelRatioF()
+        icon = get_svg_icon("default_avatar.svg")
+        physical_size = QSize(int(36 * dpr), int(36 * dpr))
+        pixmap = icon.pixmap(physical_size)
+        pixmap.setDevicePixelRatio(dpr)
+        self.avatar_label.setPixmap(pixmap)
+
     def _on_user_profile_updated(self, profile: UserProfile):
-        """同步更新 UI，消除时间差感"""
+        """同步更新 UI"""
         # 更新文字
         self.username_label.setText(profile.username)
+
+        dpr = self.devicePixelRatioF()
 
         # 更新头像
         if profile.is_login and profile.avatar_bytes:
             dpr = self.devicePixelRatioF()
+            # 这里的 image_processor 内部也需要确保 physical_size = int(size * dpr)
             pixmap = QtImageProcessor.make_circular_pixmap(profile.avatar_bytes, 36, dpr)
             if not pixmap.isNull():
-                self.avatar_label.clear()
                 self.avatar_label.setPixmap(pixmap)
                 return
 
         # 未登录或无头像
-        self.avatar_label.clear()
-        self.avatar_label.setText("📺" if not profile.is_login else "✅")
+        self._refresh_default_avatar()
 
     def create_menu_bar(self):
         menu_bar = self.menuBar()
 
         # --- 文件菜单 ---
         file_menu = menu_bar.addMenu("文件")
-        
+
         open_log_action = QAction("打开日志文件夹", self)
         open_log_action.triggered.connect(self.open_log_folder)
         file_menu.addAction(open_log_action)
-        
+
         file_menu.addSeparator()
-        
+
         exit_action = QAction("退出", self)
         exit_action.triggered.connect(self.close)
         file_menu.addAction(exit_action)
 
         # --- 帮助菜单 ---
         help_menu = menu_bar.addMenu("帮助")
-        
+
         usage_action = QAction("使用说明", self)
         usage_action.triggered.connect(self.show_help)
         help_menu.addAction(usage_action)
-        
+
         help_menu.addSeparator()
-        
+
         update_action = QAction("检查新版本", self)
         update_action.triggered.connect(lambda: self.run_update_check(is_manual=True))
         help_menu.addAction(update_action)
-        
+
         help_menu.addSeparator()
-        
+
         about_action = QAction("关于", self)
         about_action.triggered.connect(self.show_about)
         help_menu.addAction(about_action)
@@ -270,11 +284,11 @@ class MainWindow(QMainWindow):
         """将 GuiLoggingHandler 的回调挂载到信号发射方法上"""
         # 筛选出所有 GUI 处理器并注入回调
         gui_handlers = [h for h in logging.getLogger().handlers if isinstance(h, GuiLoggingHandler)]
-        
+
         for h in gui_handlers:
             h.sender_callback = self.state.sender_log_received.emit
             h.monitor_callback = self.state.monitor_log_received.emit
-            
+
         if not gui_handlers:
             self.logger.warning("日志路由失败：未找到 GuiLoggingHandler。")
 
@@ -315,9 +329,9 @@ class MainWindow(QMainWindow):
     def _setup_system_signals(self):
         """连接系统信号"""
         self.sys_ctrl.update_found.connect(self._on_update_found)
-        self.sys_ctrl.no_update.connect(lambda is_m: 
+        self.sys_ctrl.no_update.connect(lambda is_m:
             QMessageBox.information(self, "检查更新", "当前已是最新版本。") if is_m else None
         )
-        self.sys_ctrl.check_failed.connect(lambda err, is_m: 
+        self.sys_ctrl.check_failed.connect(lambda err, is_m:
             QMessageBox.warning(self, "检查更新失败", f"无法连接到更新服务器:\n{err}") if is_m else None
         )
