@@ -421,14 +421,12 @@ class SenderPage(QWidget):
 
     def _set_ui_for_task_start(self):
         """任务开始时的 UI 状态设置"""
-        if self._state is None:
-            return
-
         self._is_task_running = True
         self.stop_event.clear()
 
         # 通知全局状态
-        self._state.sender_is_active = True
+        if self._state:
+            self._state.sender_is_active = True
 
         # 按钮变红
         self.start_btn.setText("紧急停止")
@@ -443,13 +441,11 @@ class SenderPage(QWidget):
 
     def _reset_ui_after_task(self):
         """任务结束后的 UI 状态复位"""
-        if self._state is None:
-            return
-
         self._is_task_running = False
 
         # 通知全局状态
-        self._state.sender_is_active = False
+        if self._state:
+            self._state.sender_is_active = False
 
         # 恢复按钮状态
         self.start_btn.setText("开始发送")

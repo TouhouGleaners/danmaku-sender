@@ -43,16 +43,17 @@ class MainWindow(QMainWindow):
 
         self._create_ui()
         self.init_pages()
-        self._setup_system_signals()
         self.create_menu_bar()
 
-        # 从磁盘中加载凭证
-        self._load_initial_credentials()
+        self._load_initial_credentials()  # 从磁盘中加载凭证
         load_app_config(self.state)
 
         # 绑定逻辑信号
         self.bind_state_to_pages()
-        self._setup_user_logic()
+
+        # 连接信号
+        self._connect_global_signals()
+
         load_stylesheet()
 
         # 存储帮助窗口的引用，防止被垃圾回收
@@ -152,14 +153,27 @@ class MainWindow(QMainWindow):
         self.user_widget.setCursor(Qt.CursorShape.PointingHandCursor)
         self.user_widget.mousePressEvent = lambda e: self.sidebar.setCurrentRow(0)
 
-    def _setup_user_logic(self):
-        """用户信息获取逻辑"""
+    def _connect_global_signals(self):
+        """全局信号绑定"""
+        # 用户认证与基础信息
         self.state.credentials_changed.connect(self.request_user_info_refresh)
         self.auth_ctrl.user_profile_ready.connect(self._on_user_profile_updated)
-        QTimer.singleShot(500, self.request_user_info_refresh)
 
+        # 系统组件联动
         self.state.editor_dirty_changed.connect(self._refresh_sidebar_badges)
         self.state.sender_active_changed.connect(self._refresh_sidebar_badges)
+
+        # 自动更新检查流
+        self.sys_ctrl.update_found.connect(self._on_update_found)
+        self.sys_ctrl.no_update.connect(lambda is_m:
+            QMessageBox.information(self, "检查更新", "当前已是最新版本。") if is_m else None
+        )
+        self.sys_ctrl.check_failed.connect(lambda err, is_m:
+            QMessageBox.warning(self, "检查更新失败", f"无法连接到更新服务器:\n{err}") if is_m else None
+        )
+
+        # 触发首次用户信息请求
+        QTimer.singleShot(500, self.request_user_info_refresh)
 
     def _refresh_sidebar_badges(self, _=None):
         """核心视觉逻辑：动态刷新侧边栏项目的文字后缀"""
@@ -353,13 +367,3 @@ class MainWindow(QMainWindow):
 
         if dialog.exec():
             QDesktopServices.openUrl(QUrl(url))
-
-    def _setup_system_signals(self):
-        """连接系统信号"""
-        self.sys_ctrl.update_found.connect(self._on_update_found)
-        self.sys_ctrl.no_update.connect(lambda is_m:
-            QMessageBox.information(self, "检查更新", "当前已是最新版本。") if is_m else None
-        )
-        self.sys_ctrl.check_failed.connect(lambda err, is_m:
-            QMessageBox.warning(self, "检查更新失败", f"无法连接到更新服务器:\n{err}") if is_m else None
-        )
