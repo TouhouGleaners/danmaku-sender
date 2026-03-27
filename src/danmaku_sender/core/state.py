@@ -29,12 +29,12 @@ class SenderConfig(BaseModel):
     # 延迟设置
     min_delay: float = Field(default=8.0, ge=0.1)
     max_delay: float = Field(default=8.5, ge=0.1)
-    
+
     # 爆发模式
     burst_size: int = Field(default=3, ge=0)
     rest_min: float = Field(default=40.0, ge=0.0)
     rest_max: float = Field(default=45.0, ge=0.0)
-    
+
     # 自动停止
     stop_after_count: int = Field(default=0, ge=0)
     stop_after_time: int = Field(default=0, ge=0)
@@ -110,6 +110,8 @@ class AppState(QObject):
     user_info_changed = Signal()
     sender_log_received = Signal(str)
     monitor_log_received = Signal(str)
+    editor_dirty_changed = Signal(bool)
+    sender_active_changed = Signal(bool)
 
     def __init__(self):
         super().__init__()
@@ -125,13 +127,33 @@ class AppState(QObject):
         # 各模块配置
         self.sender_config = SenderConfig()
         self.monitor_config = MonitorConfig()
-        self.validation_config = ValidationConfig() 
+        self.validation_config = ValidationConfig()
 
         # 运行时状态
         self.video_state = VideoState()
 
-        # True 表示编辑器有未应用的修改，SenderPage 拦截发送
-        self.editor_is_dirty: bool = False
+        self._editor_is_dirty: bool = False
+        self._sender_is_active: bool = False
+
+    @property
+    def editor_is_dirty(self) -> bool:
+        return self._editor_is_dirty
+
+    @editor_is_dirty.setter
+    def editor_is_dirty(self, value: bool):
+        if self._editor_is_dirty != value:
+            self._editor_is_dirty = value
+            self.editor_dirty_changed.emit(value)
+
+    @property
+    def sender_is_active(self) -> bool:
+        return self._sender_is_active
+
+    @sender_is_active.setter
+    def sender_is_active(self, value: bool):
+        if self._sender_is_active != value:
+            self._sender_is_active = value
+            self.sender_active_changed.emit(value)
 
     def update_credentials(self, sessdata: str, bili_jct: str):
         """更新凭证并通知监听者"""

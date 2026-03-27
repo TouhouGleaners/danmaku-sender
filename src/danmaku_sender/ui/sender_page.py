@@ -424,6 +424,10 @@ class SenderPage(QWidget):
         self._is_task_running = True
         self.stop_event.clear()
 
+        # 通知全局状态
+        if self._state:
+            self._state.sender_is_active = True
+
         # 按钮变红
         self.start_btn.setText("紧急停止")
         self._update_btn_style(True)
@@ -438,6 +442,10 @@ class SenderPage(QWidget):
     def _reset_ui_after_task(self):
         """任务结束后的 UI 状态复位"""
         self._is_task_running = False
+
+        # 通知全局状态
+        if self._state:
+            self._state.sender_is_active = False
 
         # 恢复按钮状态
         self.start_btn.setText("开始发送")
