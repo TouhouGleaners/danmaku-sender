@@ -158,6 +158,27 @@ class MainWindow(QMainWindow):
         self.auth_ctrl.user_profile_ready.connect(self._on_user_profile_updated)
         QTimer.singleShot(500, self.request_user_info_refresh)
 
+        self.state.editor_dirty_changed.connect(self._refresh_sidebar_badges)
+        self.state.sender_active_changed.connect(self._refresh_sidebar_badges)
+
+    def _refresh_sidebar_badges(self, _=None):
+        """核心视觉逻辑：动态刷新侧边栏项目的文字后缀"""
+        # 弹幕发射器
+        sender_item = self.sidebar.item(1)
+        if sender_item:
+            if self.state.sender_is_active:
+                sender_item.setText("弹幕发射器 ▶")
+            else:
+                sender_item.setText("弹幕发射器")
+
+        # 弹幕编辑器
+        editor_item = self.sidebar.item(2)
+        if editor_item:
+            if self.state.editor_is_dirty:
+                editor_item.setText("弹幕编辑器 •")
+            else:
+                editor_item.setText("弹幕编辑器")
+
     def request_user_info_refresh(self):
         """发起异步请求刷新用户信息"""
         self.auth_ctrl.refresh_user_info(self.state.get_api_auth())
