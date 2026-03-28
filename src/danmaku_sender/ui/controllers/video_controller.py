@@ -2,7 +2,7 @@ import logging
 
 from PySide6.QtCore import QObject, Signal, QThreadPool
 
-from ..framework.task_runner import GenericTask
+from ..framework.concurrency import GenericTask
 from ...core.models.video import VideoInfo
 from ...core.state import ApiAuthConfig
 from ...core.services.video_fetcher import VideoFetcher

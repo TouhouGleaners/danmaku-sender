@@ -1,7 +1,9 @@
 import logging
 import threading
 
-from PySide6.QtCore import QThread, Signal
+from PySide6.QtCore import Signal
+
+from .framework.concurrency import BaseWorker
 
 from ..core.engines.sender import DanmakuScheduler, DanmakuExecutor, SendingContext, SendJob
 from ..core.engines.bili_monitor import BiliDanmakuMonitor
@@ -13,26 +15,9 @@ from ..core.models.structs import VideoTarget
 from ..core.models.video import VideoInfo
 from ..core.services.video_fetcher import VideoFetcher
 from ..core.models.exceptions import BiliApiError, BiliNetworkError
-
 from ..api.bili_api_client import BiliApiClient
 from ..utils.system_utils import KeepSystemAwake
 from ..utils.notification_utils import send_windows_notification
-
-
-class BaseWorker(QThread):
-    """
-    所有 Worker 线程的基类。
-    提供了线程管理、信号定义和日志记录等通用功能。
-    """
-    log_message = Signal(str)
-
-    def __init__(self, parent=None):
-        super().__init__(parent)
-        self.logger = logging.getLogger("App.System.Worker.Base")
-
-    def report_error(self, title: str, exception: Exception):
-        self.logger.error(f"{title}: {exception}", exc_info=True)
-        self.log_message.emit(f"{title}: {exception}")
 
 
 class FetchInfoWorker(BaseWorker):

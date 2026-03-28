@@ -2,10 +2,26 @@ import logging
 import traceback
 from typing import Callable
 
-from PySide6.QtCore import QObject, Signal, QRunnable
+from PySide6.QtCore import QThread, QObject, Signal, QRunnable
 
 
 logger = logging.getLogger("App.System.Framework.Runner")
+
+
+class BaseWorker(QThread):
+    """
+    所有 Worker 线程的基类。
+    提供了线程管理、信号定义和日志记录等通用功能。
+    """
+    log_message = Signal(str)
+
+    def __init__(self, parent=None):
+        super().__init__(parent)
+        self.logger = logging.getLogger("App.System.Worker.Base")
+
+    def report_error(self, title: str, exception: Exception):
+        self.logger.error(f"{title}: {exception}", exc_info=True)
+        self.log_message.emit(f"{title}: {exception}")
 
 
 class WorkerSignals(QObject):

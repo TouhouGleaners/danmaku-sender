@@ -2,7 +2,7 @@ import logging
 
 from PySide6.QtCore import QObject, Signal, QThreadPool
 
-from ..framework.task_runner import GenericTask
+from ..framework.concurrency import GenericTask
 from ...api.update_checker import UpdateChecker, UpdateInfo
 from ...config.app_config import AppInfo
 
