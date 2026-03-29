@@ -296,7 +296,7 @@ class SenderPage(QWidget):
         )
         self._send_worker.progress_updated.connect(self._on_send_progress)
         self._send_worker.task_finished.connect(self._on_send_finished)
-        self._send_worker.log_message.connect(self.append_log)
+        self._send_worker.messageLogged.connect(self.append_log)
         self._send_worker.finished.connect(self._send_worker.deleteLater)
         self._send_worker.start()
 

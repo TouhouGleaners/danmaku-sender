@@ -1,11 +1,12 @@
 import logging
 import traceback
 from typing import Callable
+from abc import abstractmethod
 
 from PySide6.QtCore import QThread, QObject, Signal, QRunnable
 
 
-logger = logging.getLogger("App.System.Framework.Runner")
+logger = logging.getLogger("App.System.Concurrency")
 
 
 class BaseWorker(QThread):
@@ -18,10 +19,11 @@ class BaseWorker(QThread):
 
     def __init__(self, parent=None):
         super().__init__(parent)
-        self.logger = logging.getLogger(f"App.System.Worker.{self.__class__.__name__}")
+        self.logger = logging.getLogger("App.System.Worker.Base")
 
+    @abstractmethod
     def run(self):
-        """抽象方法: 子类必须重写此方法"""
+        """抽象方法: 子类必须重写此方法以实现具体的业务逻辑"""
         raise NotImplementedError(f"继承 BaseWorker 的子类 {self.__class__.__name__} 必须实现 run() 方法")
 
     def report_error(self, title: str, exception: Exception):

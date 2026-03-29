@@ -189,7 +189,7 @@ class MonitorTaskWorker(BaseWorker):
                         if stats.get('lost', 0) > 0:
                             msg += f" | ❌丢失:{stats['lost']}"
 
-                        self.log_message.emit(msg)
+                        self.messageLogged.emit(msg)
 
                         if self.stop_event.wait(snap_interval):
                             self.logger.info("收到停止信号，监视任务终止。")
