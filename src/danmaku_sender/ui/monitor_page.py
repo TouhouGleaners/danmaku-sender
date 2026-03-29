@@ -305,7 +305,7 @@ class MonitorPage(QWidget):
         )
         self._monitor_worker.stats_updated.connect(self._on_stats_updated)
         self._monitor_worker.status_updated.connect(self.status_label.setText)
-        self._monitor_worker.log_message.connect(self.append_log)
+        self._monitor_worker.messageLogged.connect(self.append_log)
         self._monitor_worker.task_finished.connect(self._on_finished)
         self._monitor_worker.finished.connect(self._monitor_worker.deleteLater)
         self._monitor_worker.start()

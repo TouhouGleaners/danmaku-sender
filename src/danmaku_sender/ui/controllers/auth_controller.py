@@ -2,7 +2,7 @@ import logging
 
 from PySide6.QtCore import QObject, Signal, QThreadPool
 
-from ..framework.task_runner import GenericTask
+from ..framework.concurrency import GenericTask
 from ...api.bili_api_client import BiliApiClient
 from ...core.state import ApiAuthConfig
 from ...core.models.user import UserProfile

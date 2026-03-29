@@ -1,11 +1,35 @@
 import logging
 import traceback
 from typing import Callable
+from abc import abstractmethod
 
-from PySide6.QtCore import QObject, Signal, QRunnable
+from PySide6.QtCore import QThread, QObject, Signal, QRunnable
 
 
-logger = logging.getLogger("App.System.Framework.Runner")
+logger = logging.getLogger("App.System.Concurrency")
+
+
+class BaseWorker(QThread):
+    """
+    所有长驻/重型 Worker 线程的抽象基类。
+
+    提供了线程管理、信号定义和日志记录等通用功能。
+    """
+    messageLogged = Signal(str)
+
+    def __init__(self, parent=None):
+        super().__init__(parent)
+        self.logger = logging.getLogger("App.System.Worker.Base")
+
+    @abstractmethod
+    def run(self):
+        """抽象方法: 子类必须重写此方法以实现具体的业务逻辑"""
+        raise NotImplementedError(f"继承 BaseWorker 的子类 {self.__class__.__name__} 必须实现 run() 方法")
+
+    def report_error(self, title: str, exception: Exception):
+        """统一的异常捕获与上报接口"""
+        self.logger.error(f"{title}: {exception}", exc_info=True)
+        self.messageLogged.emit(f"{title}: {exception}")
 
 
 class WorkerSignals(QObject):
