@@ -10,18 +10,24 @@ logger = logging.getLogger("App.System.Framework.Runner")
 
 class BaseWorker(QThread):
     """
-    所有 Worker 线程的基类。
+    所有长驻/重型 Worker 线程的抽象基类。
+
     提供了线程管理、信号定义和日志记录等通用功能。
     """
-    log_message = Signal(str)
+    messageLogged = Signal(str)
 
     def __init__(self, parent=None):
         super().__init__(parent)
-        self.logger = logging.getLogger("App.System.Worker.Base")
+        self.logger = logging.getLogger(f"App.System.Worker.{self.__class__.__name__}")
+
+    def run(self):
+        """抽象方法: 子类必须重写此方法"""
+        raise NotImplementedError(f"继承 BaseWorker 的子类 {self.__class__.__name__} 必须实现 run() 方法")
 
     def report_error(self, title: str, exception: Exception):
+        """统一的异常捕获与上报接口"""
         self.logger.error(f"{title}: {exception}", exc_info=True)
-        self.log_message.emit(f"{title}: {exception}")
+        self.messageLogged.emit(f"{title}: {exception}")
 
 
 class WorkerSignals(QObject):
