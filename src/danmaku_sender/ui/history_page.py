@@ -287,9 +287,9 @@ class HistoryPage(QWidget):
         """信号连接"""
         # --- 控制器业务信号 ---
         self.history_ctrl.historyFetched.connect(self._on_history_fetched)
-        self.history_ctrl.errorOccurred.connect(self._on_handle_error)
+        self.history_ctrl.errorOccurred.connect(self._on_error_occurred)
 
-    def _on_handle_error(self, err_msg: str):
+    def _on_error_occurred(self, err_msg: str):
         """统一处理该页面的业务错误"""
         logger.error(f"历史记录模块错误: {err_msg}")
 
@@ -311,14 +311,6 @@ class HistoryPage(QWidget):
         self._model.set_records([])
 
         self.history_ctrl.query(keyword, status_filter)
-
-    def _on_query_success(self, records: list):
-        """查询成功后的回调（主线程执行）"""
-        self._model.set_records(records)
-
-        # 只有在拿到记录后，才去补全视频元数据
-        if self._state:
-            self._fetch_missing_metadata(records)
 
     def _fetch_missing_metadata(self, records):
         """扫描缺失元数据的 BVID 并启动 Worker"""
