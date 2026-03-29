@@ -11,9 +11,10 @@ from PySide6.QtWidgets import (
 from PySide6.QtCore import Qt, QAbstractTableModel, QModelIndex, QUrl
 from PySide6.QtGui import QAction, QColor, QDesktopServices, QBrush
 
-from .workers import FetchInfoWorker, QueryHistoryWorker
+from .workers import FetchInfoWorker
+from .controllers.history_controller import HistoryController
 
-from ..core.database.history_manager import HistoryManager, DanmakuStatus
+from ..core.database.history_manager import DanmakuStatus
 from ..core.models.video import VideoInfo
 from ..core.state import AppState
 
@@ -224,13 +225,13 @@ class HistoryPage(QWidget):
     def __init__(self):
         super().__init__()
         self._state: AppState | None = None
-        self._history_manager = HistoryManager()
+        self.history_ctrl = HistoryController(self)
 
         self._active_workers: dict[str, FetchInfoWorker] = {}
-        self._query_worker: QueryHistoryWorker | None = None
         self._fetched_bvids = set()
 
         self._create_ui()
+        self._connect_signals()
 
     def _create_ui(self):
         layout = QVBoxLayout(self)
@@ -282,6 +283,22 @@ class HistoryPage(QWidget):
 
         layout.addWidget(self._table_view)
 
+    def _connect_signals(self):
+        """信号连接"""
+        # --- 控制器业务信号 ---
+        self.history_ctrl.historyFetched.connect(self._on_history_fetched)
+        self.history_ctrl.errorOccurred.connect(self._on_handle_error)
+
+    def _on_handle_error(self, err_msg: str):
+        """统一处理该页面的业务错误"""
+        logger.error(f"历史记录模块错误: {err_msg}")
+
+    def _on_history_fetched(self, records: list):
+        """查询成功后的回调"""
+        self._model.set_records(records)
+        if self._state:
+            self._fetch_missing_metadata(records)
+
     def bind_state(self, state: AppState):
         self._state = state
         self._refresh_table()
@@ -291,17 +308,9 @@ class HistoryPage(QWidget):
         keyword = self._search_input.text().strip()
         status_filter = self._status_combo.currentData()
 
-        if self._query_worker and self._query_worker.isRunning():
-            self._query_worker.terminate()
-            self._query_worker.wait()
-
         self._model.set_records([])
 
-        # 启动新任务
-        self._query_worker = QueryHistoryWorker(keyword, status_filter, self)
-        self._query_worker.finished_success.connect(self._on_query_success)
-        self._query_worker.finished.connect(self._query_worker.deleteLater)
-        self._query_worker.start()
+        self.history_ctrl.query(keyword, status_filter)
 
     def _on_query_success(self, records: list):
         """查询成功后的回调（主线程执行）"""
