@@ -16,6 +16,7 @@ from .controllers.video_controller import VideoController
 from .workers import SendTaskWorker
 
 from ..core.models.video import VideoInfo
+from ..core.models.structs import VideoTarget
 from ..core.services.danmaku_exporter import create_xml_from_danmakus
 from ..core.services.danmaku_parser import DanmakuParser
 from ..core.state import AppState
@@ -283,19 +284,23 @@ class SenderPage(QWidget):
         auth_config = state.get_api_auth()
         strategy_config = state.sender_config
 
-        # 启动线程
-        self._send_worker = SendTaskWorker(
+        target = VideoTarget(
             bvid=state.video_state.bvid,
             cid=state.video_state.selected_cid,
+            title=state.video_state.video_title
+        )
+
+        # 启动线程
+        self._send_worker = SendTaskWorker(
+            target=target,
             danmakus=state.video_state.loaded_danmakus,
             auth_config=auth_config,
             strategy_config=strategy_config,
             stop_event=self.stop_event,
-            video_title=state.video_state.video_title,
             parent=self
         )
-        self._send_worker.progress_updated.connect(self._on_send_progress)
-        self._send_worker.task_finished.connect(self._on_send_finished)
+        self._send_worker.progressUpdated.connect(self._on_send_progress)
+        self._send_worker.taskFinished.connect(self._on_send_finished)
         self._send_worker.messageLogged.connect(self.append_log)
         self._send_worker.finished.connect(self._send_worker.deleteLater)
         self._send_worker.start()

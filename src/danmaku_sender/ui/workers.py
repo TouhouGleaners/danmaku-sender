@@ -49,23 +49,21 @@ class FetchInfoWorker(BaseWorker):
 
 class SendTaskWorker(BaseWorker):
     """用于后台发送弹幕的线程"""
-    progress_updated = Signal(int, int)  # 已尝试, 总数
-    task_finished = Signal(object)       # 携带 sender 实例以便后续处理(如保存失败弹幕)
+    progressUpdated = Signal(int, int)  # 已尝试, 总数
+    taskFinished = Signal(object)       # 携带 sender 实例以便后续处理(如保存失败弹幕)
 
     def __init__(
         self,
-        bvid,
-        cid,
-        danmakus,
+        target: VideoTarget,
+        danmakus: list[Danmaku],
         auth_config: ApiAuthConfig,
         strategy_config: SenderConfig,
         stop_event: threading.Event,
-        video_title: str = "",
         parent=None
     ):
         super().__init__(parent)
         self.logger = logging.getLogger("App.Sender.Worker")
-        self.target = VideoTarget(bvid=bvid, cid=cid, title=video_title)
+        self.target = target
         self.danmakus = danmakus
         self.auth_config = auth_config
         self.strategy_config = strategy_config
@@ -82,7 +80,7 @@ class SendTaskWorker(BaseWorker):
                     self.scheduler = DanmakuScheduler(executor, self.history_manager)
 
                     def _progress_cb(attempted, total):
-                        self.progress_updated.emit(attempted, total)
+                        self.progressUpdated.emit(attempted, total)
 
                     def _save_to_db_cb(dm: Danmaku, result: DanmakuSendResult):
                         if result.is_success and result.dmid:
@@ -105,7 +103,7 @@ class SendTaskWorker(BaseWorker):
         finally:
             if ctx:
                 self._log_and_notify_summary(ctx)
-            self.task_finished.emit(self.scheduler)
+            self.taskFinished.emit(self.scheduler)
 
     def _log_and_notify_summary(self, ctx: SendingContext):
         """记录日志并弹送系统通知（纯 UI 侧交互）"""
