@@ -142,9 +142,9 @@ class SendTaskWorker(BaseWorker):
 
 class MonitorTaskWorker(BaseWorker):
     """监视任务后台线程"""
-    stats_updated = Signal(dict)
-    status_updated = Signal(str)
-    task_finished = Signal()
+    statsUpdated = Signal(dict)
+    statusUpdated = Signal(str)
+    taskFinished = Signal()
 
     def __init__(
         self,
@@ -177,8 +177,8 @@ class MonitorTaskWorker(BaseWorker):
                         stats = monitor.monitor(stats_baseline=snap_baseline)
 
                         # 结果信号
-                        self.stats_updated.emit(stats)
-                        self.status_updated.emit(f"监视中 (存活: {stats['verified']})")
+                        self.statsUpdated.emit(stats)
+                        self.statusUpdated.emit(f"监视中 (存活: {stats['verified']})")
 
                         msg = (
                             f"监视中... 总计:{stats['total']} | "
@@ -197,7 +197,7 @@ class MonitorTaskWorker(BaseWorker):
         except Exception as e:
             self.report_error("监视任务异常", e)
         finally:
-            self.task_finished.emit()
+            self.taskFinished.emit()
 
 
 class QueryHistoryWorker(BaseWorker):

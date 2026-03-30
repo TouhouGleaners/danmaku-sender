@@ -303,10 +303,10 @@ class MonitorPage(QWidget):
             stop_event=self.stop_event,
             parent=self
         )
-        self._monitor_worker.stats_updated.connect(self._on_stats_updated)
-        self._monitor_worker.status_updated.connect(self.status_label.setText)
+        self._monitor_worker.statsUpdated.connect(self._on_stats_updated)
+        self._monitor_worker.statusUpdated.connect(self.status_label.setText)
         self._monitor_worker.messageLogged.connect(self.append_log)
-        self._monitor_worker.task_finished.connect(self._on_finished)
+        self._monitor_worker.taskFinished.connect(self._on_finished)
         self._monitor_worker.finished.connect(self._monitor_worker.deleteLater)
         self._monitor_worker.start()
 
