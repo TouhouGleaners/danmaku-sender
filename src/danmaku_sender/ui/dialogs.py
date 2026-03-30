@@ -1,9 +1,9 @@
 import re
 import logging
-from typing import Any, cast
+from typing import cast
 
 import qrcode
-from PySide6.QtCore import Qt, QUrl
+from PySide6.QtCore import Qt, QUrl, Slot
 from PySide6.QtGui import QDesktopServices, QImage, QPixmap
 from PySide6.QtWidgets import (
     QDialog, QVBoxLayout, QHBoxLayout, QTabWidget, QGroupBox, QDoubleSpinBox,
@@ -11,7 +11,7 @@ from PySide6.QtWidgets import (
 )
 from PIL import Image
 
-from .workers import QRLoginWorker
+from .controllers.auth_controller import AuthController
 from ..config.app_config import AppInfo, Links
 from ..utils.resource_utils import get_assets_path
 
@@ -331,28 +331,34 @@ class TimeOffsetDialog(QDialog):
 
 class QRLoginDialog(QDialog):
     """扫码登录弹窗"""
-    # 用于存放还在后台跑的 Worker，防止 Python GC 误杀导致 C++ 崩溃
-    _active_workers = set()
-
     def __init__(self, use_system_proxy: bool, parent=None):
         super().__init__(parent)
         self.use_system_proxy = use_system_proxy
         self.cookies = {}  # 存放获取到的 Cookie
-        self.worker = None
 
-        self.setWindowTitle("扫码登录")
-        self.setFixedSize(300, 350)
+        self.auth_controller = AuthController(self)
 
         self._create_ui()
-        self._start_worker()
+        self._connect_signals()
+
+        self.auth_controller.start_qr_login(self.use_system_proxy)  # 对话框开启时直接启动业务逻辑
 
     def _create_ui(self):
+        self.setWindowTitle("扫码登录")
+        self.setFixedSize(300, 350)
+        self.setWindowFlags(
+            Qt.WindowType.Dialog |
+            Qt.WindowType.WindowTitleHint |
+            Qt.WindowType.WindowCloseButtonHint |
+            Qt.WindowType.CustomizeWindowHint
+        )
+
         layout = QVBoxLayout(self)
         layout.setAlignment(Qt.AlignmentFlag.AlignCenter)
         layout.setSpacing(15)
 
         # 状态文案
-        self.status_label = QLabel("正在向 B站 申请二维码...")
+        self.status_label = QLabel("正在向B站申请二维码...")
         self.status_label.setStyleSheet("font-size: 14px; font-weight: bold; color: #2c3e50;")
         self.status_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
         layout.addWidget(self.status_label)
@@ -373,20 +379,12 @@ class QRLoginDialog(QDialog):
         self.cancel_btn.clicked.connect(self.reject)
         layout.addWidget(self.cancel_btn, alignment=Qt.AlignmentFlag.AlignCenter)
 
-    def _start_worker(self):
-        self.worker = QRLoginWorker(self.use_system_proxy)
-
-        QRLoginDialog._active_workers.add(self.worker)
-
-        self.worker.qr_ready.connect(self._render_qr_code)
-        self.worker.status_updated.connect(self.status_label.setText)
-        self.worker.login_success.connect(self._on_login_success)
-        self.worker.login_failed.connect(self._on_login_failed)
-
-        self.worker.finished.connect(lambda: QRLoginDialog._active_workers.discard(self.worker))
-        self.worker.finished.connect(self.worker.deleteLater)
-
-        self.worker.start()
+    def _connect_signals(self):
+        # AuthController
+        self.auth_controller.qrReady.connect(self._render_qr_code)
+        self.auth_controller.qrStatusUpdated.connect(self.status_label.setText)
+        self.auth_controller.qrLoginSucceeded.connect(self._on_login_succeeded)
+        self.auth_controller.qrLoginFailed.connect(self._on_login_failed)
 
     def _render_qr_code(self, url: str):
         """将 URL 转换为 Qt 图像"""
@@ -414,25 +412,25 @@ class QRLoginDialog(QDialog):
             self.status_label.setText("二维码渲染失败")
             self.status_label.setStyleSheet("color: #e74c3c;")
 
-    def _on_login_success(self, cookies: dict):
+
+    # region Slots
+
+    @Slot(dict)
+    def _on_login_succeeded(self, cookies: dict):
         """登录成功，保存数据并关闭窗口"""
         self.cookies = cookies
         self.accept()  # 触发 Accepted 信号，关闭弹窗
 
+    @Slot(str)
     def _on_login_failed(self, error_msg: str):
         self.status_label.setText(error_msg)
-        self.status_label.setStyleSheet("color: #e74c3c;")  # 变成红色警告
+        self.status_label.setStyleSheet("color: #e74c3c;")
 
-    def closeEvent(self, event):
-        """窗口关闭时，确保停止后台轮询线程"""
-        if self.worker and self.worker.isRunning():
-            self.worker.stop_event.set()
-            try:
-                self.worker.qr_ready.disconnect()
-                self.worker.status_updated.disconnect()
-                self.worker.login_success.disconnect()
-                self.worker.login_failed.disconnect()
-            except RuntimeError:
-                pass
+    # endregion
 
-        super().closeEvent(event)
+
+    def done(self, r):
+        """对话框清理"""
+        if hasattr(self, 'auth_controller'):
+            self.auth_controller.stop_qr_login()
+        super().done(r)

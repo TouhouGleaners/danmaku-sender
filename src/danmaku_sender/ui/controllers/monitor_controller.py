@@ -35,8 +35,7 @@ class MonitorController(QObject):
             target=target,
             auth_config=auth_config,
             monitor_config=monitor_config,
-            stop_event=self._stop_event,
-            parent=self
+            stop_event=self._stop_event
         )
 
         self._worker.statsUpdated.connect(self.statsUpdated.emit)

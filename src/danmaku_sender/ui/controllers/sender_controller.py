@@ -42,8 +42,7 @@ class SenderController(QObject):
             danmakus=danmakus,
             auth_config=auth_config,
             strategy_config=strategy_config,
-            stop_event=self._stop_event,
-            parent=self
+            stop_event=self._stop_event
         )
 
         self._worker.progressUpdated.connect(self.progressUpdated.emit)

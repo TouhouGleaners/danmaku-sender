@@ -157,7 +157,7 @@ class MainWindow(QMainWindow):
         """全局信号绑定"""
         # 用户认证与基础信息
         self.state.credentials_changed.connect(self.request_user_info_refresh)
-        self.auth_ctrl.user_profile_ready.connect(self._on_user_profile_updated)
+        self.auth_ctrl.userProfileReady.connect(self._on_user_profile_updated)
 
         # 系统组件联动
         self.state.editor_dirty_changed.connect(self._refresh_sidebar_badges)
