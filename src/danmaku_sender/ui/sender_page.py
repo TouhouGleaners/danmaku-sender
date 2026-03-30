@@ -16,7 +16,7 @@ from .controllers.sender_controller import SenderController
 
 from ..core.models.video import VideoInfo
 from ..core.models.structs import VideoTarget
-from ..core.services.danmaku_exporter import create_xml_from_danmakus
+from ..core.services.danmaku_exporter import UnsentDanmakusRecord, create_xml_from_danmakus
 from ..core.services.danmaku_parser import DanmakuParser
 from ..core.state import AppState
 from ..utils.string_utils import parse_bilibili_link
@@ -89,12 +89,12 @@ class SenderPage(QWidget):
 
     def _connect_signals(self):
         # 子组件信号
-        self.basic_group.file_btn.clicked.connect(self.select_file)
-        self.basic_group.fetch_btn.clicked.connect(self.fetch_video_info)
+        self.basic_group.file_btn.clicked.connect(self._select_file)
+        self.basic_group.fetch_btn.clicked.connect(self._fetch_video_info)
         self.basic_group.part_combo.currentIndexChanged.connect(self._on_part_selected)
 
         # 本地信号
-        self.start_btn.clicked.connect(self.toggle_task)
+        self.start_btn.clicked.connect(self._toggle_task)
 
         # VideoController
         self.video_controller.fetchStarted.connect(self._on_fetch_started)
@@ -104,7 +104,6 @@ class SenderPage(QWidget):
         # SenderController
         self.sender_controller.progressUpdated.connect(self._on_send_progress)
         self.sender_controller.taskFinished.connect(self._on_send_finished)
-        self.sender_controller.messageLogged.connect(self.append_log)
 
     def bind_state(self, state: AppState):
         """将 UI 控件与 AppState 进行双向绑定"""
@@ -121,7 +120,10 @@ class SenderPage(QWidget):
         self.log_output.append(message)
         self.log_output.moveCursor(QTextCursor.MoveOperation.End)
 
-    def select_file(self):
+    # region Slots
+    # region Slots Internal
+    @Slot()
+    def _select_file(self):
         """文件选择逻辑"""
         if not self._state:
             return
@@ -144,7 +146,8 @@ class SenderPage(QWidget):
                 self.logger.error(f"❌ 解析失败: {e}")
                 QMessageBox.critical(self, "解析失败", str(e))
 
-    def fetch_video_info(self):
+    @Slot()
+    def _fetch_video_info(self):
         """UI 层: 负责获取参数，下发指令"""
         if not self._state:
             return
@@ -165,8 +168,80 @@ class SenderPage(QWidget):
 
         self.video_controller.fetch_info(bvid, self._state.get_api_auth())
 
+    @Slot(int)
+    def _on_part_selected(self, index: int):
+        """处理分P选择变化"""
+        if not self._state:
+            return
 
-    # region Slots
+        if index < 0:
+            return
+
+        data = self.basic_group.part_combo.itemData(index)
+        if not data or not isinstance(data, dict):
+            return
+
+        cid = data['cid']
+        duration = data['duration']
+        part_name = self.basic_group.part_combo.currentText()
+
+        self._state.video_state.selected_cid = cid
+        self._state.video_state.selected_part_duration_ms = duration * 1000
+        self._state.video_state.selected_part_name = part_name
+        self.logger.info(f"已选择分P: {part_name} (CID: {cid})")
+
+    @Slot()
+    def _toggle_task(self):
+        """开始/停止 任务"""
+        if not self._state:
+            return
+
+        # 如果正在运行 -> 停止
+        if self.sender_controller.is_running():
+            self.sender_controller.stop_task()
+            self.start_btn.setEnabled(False)
+            self.start_btn.setText("停止中...")
+            self.logger.info("发送器：正在请求中止...")
+            self.progress_bar.setFormat("%p% (正在停止...)")
+            return
+
+        # 如果未运行 -> 开始
+        # 校验
+        state = self._state
+
+        if state.editor_is_dirty:
+            QMessageBox.warning(
+                self,
+                "存在未保存的修改",
+                "检测到【弹幕校验器】中有未应用的修改！\n\n请先返回校验器点击“应用所有修改”，\n否则发送的将是旧的、未修复的弹幕。"
+            )
+            return
+
+        if not state.video_state.is_ready_to_send:
+            QMessageBox.warning(self, "条件不足", "请确保 BV号、分P、弹幕文件 均已就绪。")
+            return
+
+        if not state.sessdata or not state.bili_jct:
+            QMessageBox.warning(self, "凭证缺失", "请先在【全局设置】页填入 SESSDATA 和 BILI_JCT。")
+            return
+
+        # UI 锁定
+        self._set_ui_for_task_start()
+
+        # 构造配置
+        target = VideoTarget(
+            bvid=state.video_state.bvid,
+            cid=state.video_state.selected_cid,
+            title=state.video_state.video_title
+        )
+        auth_config = state.get_api_auth()
+        strategy_config = state.sender_config
+
+        # 启动线程
+        self.sender_controller.start_task(target, state.video_state.loaded_danmakus, auth_config, strategy_config)
+
+    # endregion
+    # region Slots VideoController
 
     @Slot()
     def _on_fetch_started(self):
@@ -226,77 +301,7 @@ class SenderPage(QWidget):
         QMessageBox.warning(self, "获取失败", f"无法获取视频信息:\n{err_msg}")
 
     # endregion
-
-    @Slot(int)
-    def _on_part_selected(self, index: int):
-        """处理分P选择变化"""
-        if not self._state:
-            return
-
-        if index < 0:
-            return
-
-        data = self.basic_group.part_combo.itemData(index)
-        if not data or not isinstance(data, dict):
-            return
-
-        cid = data['cid']
-        duration = data['duration']
-        part_name = self.basic_group.part_combo.currentText()
-
-        self._state.video_state.selected_cid = cid
-        self._state.video_state.selected_part_duration_ms = duration * 1000
-        self._state.video_state.selected_part_name = part_name
-        self.logger.info(f"已选择分P: {part_name} (CID: {cid})")
-
-    def toggle_task(self):
-        """开始/停止 任务"""
-        if not self._state:
-            return
-
-        # 如果正在运行 -> 停止
-        if self.sender_controller.is_running():
-            self.sender_controller.stop_task()
-            self.start_btn.setEnabled(False)
-            self.start_btn.setText("停止中...")
-            self.logger.info("发送器：正在请求中止...")
-            self.progress_bar.setFormat("%p% (正在停止...)")
-            return
-
-        # 如果未运行 -> 开始
-        # 校验
-        state = self._state
-
-        if state.editor_is_dirty:
-            QMessageBox.warning(
-                self,
-                "存在未保存的修改",
-                "检测到【弹幕校验器】中有未应用的修改！\n\n请先返回校验器点击“应用所有修改”，\n否则发送的将是旧的、未修复的弹幕。"
-            )
-            return
-
-        if not state.video_state.is_ready_to_send:
-            QMessageBox.warning(self, "条件不足", "请确保 BV号、分P、弹幕文件 均已就绪。")
-            return
-
-        if not state.sessdata or not state.bili_jct:
-            QMessageBox.warning(self, "凭证缺失", "请先在【全局设置】页填入 SESSDATA 和 BILI_JCT。")
-            return
-
-        # UI 锁定
-        self._set_ui_for_task_start()
-
-        # 构造配置
-        target = VideoTarget(
-            bvid=state.video_state.bvid,
-            cid=state.video_state.selected_cid,
-            title=state.video_state.video_title
-        )
-        auth_config = state.get_api_auth()
-        strategy_config = state.sender_config
-
-        # 启动线程
-        self.sender_controller.start_task(target, state.video_state.loaded_danmakus, auth_config, strategy_config)
+    # region Slots SenderController
 
     @Slot(int, int)
     def _on_send_progress(self, attempted: int, total: int):
@@ -317,6 +322,26 @@ class SenderPage(QWidget):
                 self.progress_bar.setFormat("%p%")
 
         self.status_label.setText(f"发送中: {attempted}/{total}")
+
+    @Slot(list)
+    def _on_send_finished(self, unsent_danmakus: list[UnsentDanmakusRecord]):
+        """任务结束后的清理与保存逻辑"""
+        # 恢复 UI
+        self._reset_ui_after_task()
+
+        if self.sender_controller.is_stopped_manually():
+            self.status_label.setText("发送器：任务中止")
+            self.progress_bar.setFormat("%p% (已停止)")
+        else:
+            self.status_label.setText("发送器：任务结束")
+            self.progress_bar.setFormat("%p% (已完成)")
+
+        # 检查是否有失败弹幕
+        if unsent_danmakus:
+            self._prompt_save_unsent_xml(unsent_danmakus)
+
+    # endregion
+    # endregion
 
     def _calculate_eta_seconds(self, attempted: int, total: int) -> float:
         """从状态中提取配置，并调用纯数学方法计算 ETA"""
@@ -367,54 +392,24 @@ class SenderPage(QWidget):
 
         return (normal_count * avg_normal) + (rest_count * avg_rest)
 
-    def _on_send_finished(self, sender_instance):
-        """任务结束后的清理与保存逻辑"""
-        # 恢复 UI
-        self._reset_ui_after_task()
-
-        if self.sender_controller.is_stopped_manually():
-            self.status_label.setText("发送器：任务中止")
-            self.progress_bar.setFormat("%p% (已停止)")
-        else:
-            self.status_label.setText("发送器：任务结束")
-            self.progress_bar.setFormat("%p% (已完成)")
-
-        # 检查是否有失败弹幕
-        if sender_instance and sender_instance.unsent_danmakus:
-            count = len(sender_instance.unsent_danmakus)
-            reply = QMessageBox.question(
-                self, "保存失败弹幕",
-                f"有 {count} 条弹幕发送失败。\n是否保存为新的 XML 文件以便重新发送？",
-                QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No
-            )
-            if reply == QMessageBox.StandardButton.Yes:
-                file_path, _ = QFileDialog.getSaveFileName(self, "保存XML", "unsent.xml", "XML Files (*.xml)")
-                if file_path:
-                    try:
-                        create_xml_from_danmakus(sender_instance.unsent_danmakus, file_path)
-                        self.logger.info(f"未发送弹幕已保存至: {file_path}")
-                        QMessageBox.information(self, "保存成功", f"文件已保存至：\n{file_path}")
-                    except Exception as e:
-                        self.logger.error(f"保存XML文件失败: {e}")
-                        QMessageBox.critical(self, "保存失败", f"无法写入文件，请检查权限或路径。\n错误信息: {e}")
-
-    def _update_btn_style(self, running: bool):
-        """统一刷新按钮状态与图标的私有方法"""
-        state = "running" if running else "ready"
-        self.start_btn.setProperty("state", state)
-        self.start_btn.style().unpolish(self.start_btn)
-        self.start_btn.style().polish(self.start_btn)
-        self.start_btn.setIcon(self._icon_stop if running else self._icon_start)
-
-    def _set_inputs_locked(self, locked: bool):
-        """
-        设置输入控件的锁定状态
-
-        Args:
-            locked (bool): True 表示锁定(不可编辑)，False 表示解锁(可编辑)。
-        """
-        self.basic_group.set_inputs_locked(locked)
-        self.strategy_tabs.set_inputs_locked(locked)
+    def _prompt_save_unsent_xml(self, unsent_danmakus: list[UnsentDanmakusRecord]):
+        """询问并保存失败的弹幕到 XML"""
+        count = len(unsent_danmakus)
+        reply = QMessageBox.question(
+            self, "保存失败弹幕",
+            f"有 {count} 条弹幕发送失败。\n是否保存为新的 XML 文件以便重新发送？",
+            QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No
+        )
+        if reply == QMessageBox.StandardButton.Yes:
+            file_path, _ = QFileDialog.getSaveFileName(self, "保存XML", "unsent.xml", "XML Files (*.xml)")
+            if file_path:
+                try:
+                    create_xml_from_danmakus(unsent_danmakus, file_path)
+                    self.logger.info(f"未发送弹幕已保存至: {file_path}")
+                    QMessageBox.information(self, "保存成功", f"文件已保存至：\n{file_path}")
+                except Exception as e:
+                    self.logger.error(f"保存XML文件失败: {e}")
+                    QMessageBox.critical(self, "保存失败", f"无法写入文件，请检查权限或路径。\n错误信息: {e}")
 
 
     # region UI State Management
@@ -454,6 +449,24 @@ class SenderPage(QWidget):
         self.progress_bar.setFormat("%p%")
 
     # endregion
+
+    def _update_btn_style(self, running: bool):
+        """统一刷新按钮状态与图标的私有方法"""
+        state = "running" if running else "ready"
+        self.start_btn.setProperty("state", state)
+        self.start_btn.style().unpolish(self.start_btn)
+        self.start_btn.style().polish(self.start_btn)
+        self.start_btn.setIcon(self._icon_stop if running else self._icon_start)
+
+    def _set_inputs_locked(self, locked: bool):
+        """
+        设置输入控件的锁定状态
+
+        Args:
+            locked (bool): True 表示锁定(不可编辑)，False 表示解锁(可编辑)。
+        """
+        self.basic_group.set_inputs_locked(locked)
+        self.strategy_tabs.set_inputs_locked(locked)
 
 
 class BasicParamsGroup(QGroupBox):

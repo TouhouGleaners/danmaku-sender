@@ -19,8 +19,6 @@ class BaseWorker(QThread):
     _keep_alive_registry = set()       # 静态注册表: 存放所有正在运行的任务，以防止被 GC
     _registry_lock = threading.Lock()  # 注册表线程锁
 
-    messageLogged = Signal(str)
-
     def __init__(self, parent=None):
         super().__init__(parent)
         self.logger = logging.getLogger("App.System.Worker.Base")
@@ -47,7 +45,6 @@ class BaseWorker(QThread):
     def report_error(self, title: str, exception: Exception):
         """统一的异常捕获与上报接口"""
         self.logger.error(f"{title}: {exception}", exc_info=True)
-        self.messageLogged.emit(f"{title}: {exception}")
 
 
 class WorkerSignals(QObject):

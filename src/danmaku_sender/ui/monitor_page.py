@@ -184,7 +184,6 @@ class MonitorPage(QWidget):
         self.monitor_controller.statsUpdated.connect(self._on_stats_updated)
         self.monitor_controller.statusUpdated.connect(self.status_label.setText)
         self.monitor_controller.taskFinished.connect(self._on_finished)
-        self.monitor_controller.messageLogged.connect(self.append_log)
 
     def bind_state(self, state: AppState):
         if self._state is state:
