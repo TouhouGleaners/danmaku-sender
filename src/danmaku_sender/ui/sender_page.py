@@ -91,15 +91,15 @@ class SenderPage(QWidget):
         # 子组件信号
         self.basic_group.file_btn.clicked.connect(self.select_file)
         self.basic_group.fetch_btn.clicked.connect(self.fetch_video_info)
-        self.basic_group.part_combo.currentIndexChanged.connect(self.on_part_selected)
+        self.basic_group.part_combo.currentIndexChanged.connect(self._on_part_selected)
 
         # 本地信号
         self.start_btn.clicked.connect(self.toggle_task)
 
         # VideoController
         self.video_controller.fetchStarted.connect(self._on_fetch_started)
-        self.video_controller.fetchSucceeded.connect(self._on_fetch_success)
-        self.video_controller.fetchFailed.connect(self._on_fetch_error)
+        self.video_controller.fetchSucceeded.connect(self._on_fetch_succeeded)
+        self.video_controller.fetchFailed.connect(self._on_fetch_failed)
 
         # SenderController
         self.sender_controller.progressUpdated.connect(self._on_send_progress)
@@ -165,6 +165,10 @@ class SenderPage(QWidget):
 
         self.video_controller.fetch_info(bvid, self._state.get_api_auth())
 
+
+    # region Slots
+
+    @Slot()
     def _on_fetch_started(self):
         """UI 层: 响应加载中状态"""
         self.basic_group.fetch_btn.setEnabled(False)
@@ -172,8 +176,9 @@ class SenderPage(QWidget):
         self.basic_group.part_combo.clear()
         self.basic_group.part_combo.setEnabled(False)
 
-    def _on_fetch_success(self, info: VideoInfo):
-        """UI 层: 响应成功状态"""
+    @Slot(str, VideoInfo)
+    def _on_fetch_succeeded(self, bvid: str, info: VideoInfo):
+        """获取成功: 解析分P并允许用户选择"""
         if not self._state:
             return
 
@@ -206,8 +211,9 @@ class SenderPage(QWidget):
 
             self._pending_part_index = None
 
-    def _on_fetch_error(self, err_msg: str):
-        """UI 层：响应失败状态"""
+    @Slot(str, str)
+    def _on_fetch_failed(self, bvid: str, err_msg: str):
+        """获取失败: 恢复 UI 状态并弹窗提示"""
         self.basic_group.fetch_btn.setEnabled(True)
         self.basic_group.fetch_btn.setText("获取分P")
         self._pending_part_index = None
@@ -219,7 +225,10 @@ class SenderPage(QWidget):
         self.logger.error(f"获取视频信息失败: {err_msg}")
         QMessageBox.warning(self, "获取失败", f"无法获取视频信息:\n{err_msg}")
 
-    def on_part_selected(self, index):
+    # endregion
+
+    @Slot(int)
+    def _on_part_selected(self, index: int):
         """处理分P选择变化"""
         if not self._state:
             return
@@ -289,7 +298,8 @@ class SenderPage(QWidget):
         # 启动线程
         self.sender_controller.start_task(target, state.video_state.loaded_danmakus, auth_config, strategy_config)
 
-    def _on_send_progress(self, attempted, total):
+    @Slot(int, int)
+    def _on_send_progress(self, attempted: int, total: int):
         if total > 0:
             val = int((attempted / total) * 100)
             self.progress_bar.setValue(val)
@@ -406,6 +416,9 @@ class SenderPage(QWidget):
         self.basic_group.set_inputs_locked(locked)
         self.strategy_tabs.set_inputs_locked(locked)
 
+
+    # region UI State Management
+
     def _set_ui_for_task_start(self):
         """任务开始时的 UI 状态设置"""
         # 通知全局状态
@@ -439,6 +452,8 @@ class SenderPage(QWidget):
 
         # 重置进度条格式
         self.progress_bar.setFormat("%p%")
+
+    # endregion
 
 
 class BasicParamsGroup(QGroupBox):

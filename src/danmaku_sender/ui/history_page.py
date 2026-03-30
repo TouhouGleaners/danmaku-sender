@@ -285,12 +285,12 @@ class HistoryPage(QWidget):
     def _connect_signals(self):
         """信号连接"""
         # VideoController
-        self.video_controller.bgFetchSucceeded.connect(self._on_bg_fetch_succeeded)
-        self.video_controller.bgFetchFailed.connect(self._on_bg_fetch_failed)
+        self.video_controller.fetchSucceeded.connect(self._on_video_fetch_succeeded)
+        self.video_controller.fetchFailed.connect(self._on_video_fetch_failed)
 
         # HistoryController
-        self.history_controller.historyFetched.connect(self._on_history_fetched)
-        self.history_controller.errorOccurred.connect(self._on_error_occurred)
+        self.history_controller.historyFetched.connect(self._on_history_query_succeeded)
+        self.history_controller.errorOccurred.connect(self._on_history_query_failed)
 
     def bind_state(self, state: AppState):
         self._state = state
@@ -317,7 +317,7 @@ class HistoryPage(QWidget):
                 self._fetched_bvids.add(bvid)
                 self._model.mark_as_loading(bvid)
                 # 下发给 Controller 排队
-                self.video_controller.fetch_info_background(bvid, auth_config)
+                self.video_controller.fetch_info(bvid, auth_config, is_background=True)
 
     def _show_detail_dialog(self, record):
         video_info = self._model.get_video_info(record['bvid'])
@@ -326,30 +326,51 @@ class HistoryPage(QWidget):
 
 
     # region Slots
-
+    # region Slots VideoController
     @Slot(str, VideoInfo)
-    def _on_bg_fetch_succeeded(self, bvid: str, video_info: VideoInfo):
-        """Worker 回调: 成功"""
+    def _on_video_fetch_succeeded(self, bvid: str, video_info: VideoInfo):
+        """
+        B 站 API 视频详情获取成功
+
+        将结果写入表格模型缓存，并触发当前行的高亮/重绘。
+        """
         self._model.update_video_cache(bvid, video_info)
 
     @Slot(str, str)
-    def _on_bg_fetch_failed(self, bvid: str, error_msg: str):
-        """Worker 回调: 失败"""
+    def _on_video_fetch_failed(self, bvid: str, error_msg: str):
+        """
+        B 站 API 视频详情获取失败 (超时或 404)
+
+        将缓存置空，从拉取池中释放，并恢复表格默认显示。
+        """
         if bvid in self._fetched_bvids:
             self._fetched_bvids.remove(bvid)
         self._model.update_video_cache(bvid, None)
 
-    @Slot(str)
-    def _on_error_occurred(self, err_msg: str):
-        """统一处理该页面的业务错误"""
-        logger.error(f"历史记录模块错误: {err_msg}")
+    # endregion
 
+    # region Slots HistoryController
     @Slot(list)
-    def _on_history_fetched(self, records: list):
-        """查询成功后的回调"""
+    def _on_history_query_succeeded(self, records: list):
+        """
+        本地 SQLite 查询完成回调
+
+        将结果刷入表格，并触发缺失元数据的后台补全。
+        """
         self._model.set_records(records)
         if self._state:
             self._fetch_missing_metadata(records)
+
+    @Slot(str)
+    def _on_history_query_failed(self, err_msg: str):
+        """
+        本地 SQLite 查询失败兜底
+
+        通常因数据库锁定或文件损坏导致。
+        """
+        logger.error(f"历史记录数据库查询失败: {err_msg}")
+
+    # endregion
 
     @Slot(QModelIndex)
     def _on_row_double_clicked(self, index: QModelIndex):
