@@ -1,4 +1,5 @@
 import logging
+import threading
 import traceback
 from typing import Callable
 from abc import abstractmethod
@@ -15,8 +16,8 @@ class BaseWorker(QThread):
 
     提供了线程管理、信号定义和日志记录等通用功能。
     """
-    # 静态注册表: 存放所有正在运行的任务，以防止被 GC
-    _keep_alive_registry = set()
+    _keep_alive_registry = set()       # 静态注册表: 存放所有正在运行的任务，以防止被 GC
+    _registry_lock = threading.Lock()  # 注册表线程锁
 
     messageLogged = Signal(str)
 
@@ -27,13 +28,15 @@ class BaseWorker(QThread):
 
     def start(self, *args, **kwargs):
         """重写 start 方法，在启动时将自身加入保活注册表"""
-        BaseWorker._keep_alive_registry.add(self)
+        with BaseWorker._registry_lock:
+            BaseWorker._keep_alive_registry.add(self)
         super().start(*args, **kwargs)
 
     @Slot()
     def _unregister(self):
         """线程安全退出后释放 Python 引用"""
-        BaseWorker._keep_alive_registry.discard(self)
+        with BaseWorker._registry_lock:
+            BaseWorker._keep_alive_registry.discard(self)
         self.logger.debug(f"{self.__class__.__name__} 已从全局存活注册表中移除。")
 
     @abstractmethod
