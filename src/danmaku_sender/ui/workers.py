@@ -221,15 +221,15 @@ class QueryHistoryWorker(BaseWorker):
 
 class QRLoginWorker(BaseWorker):
     """扫码登录后台轮询线程"""
-    qr_ready = Signal(str)           # 携带生成的二维码文本 (URL)
-    status_updated = Signal(str)     # 携带当前扫码状态文案
-    login_success = Signal(dict)     # 携带成功后的 cookies 字典
-    login_failed = Signal(str)       # 携带失败原因
+    qrReady = Signal(str)           # 携带生成的二维码文本 (URL)
+    statusUpdated = Signal(str)     # 携带当前扫码状态文案
+    loginSucceeded = Signal(dict)   # 携带成功后的 cookies 字典
+    loginFailed = Signal(str)       # 携带失败原因
 
-    def __init__(self, use_system_proxy: bool, parent=None):
+    def __init__(self, use_system_proxy: bool, stop_event: threading.Event, parent=None):
         super().__init__(parent)
         self.use_system_proxy = use_system_proxy
-        self.stop_event = threading.Event()
+        self.stop_event = stop_event  # Controller 传入
 
     def run(self):
         try:
@@ -242,12 +242,12 @@ class QRLoginWorker(BaseWorker):
                 qrcode_key = data.get('qrcode_key')
 
                 if not url or not qrcode_key:
-                    self.login_failed.emit("获取二维码失败：B站接口返回异常")
+                    self.loginFailed.emit("获取二维码失败：B站接口返回异常")
                     return
 
                 # 通知 UI 渲染二维码
-                self.qr_ready.emit(url)
-                self.status_updated.emit("请使用哔哩哔哩客户端扫码")
+                self.qrReady.emit(url)
+                self.statusUpdated.emit("请使用哔哩哔哩客户端扫码")
 
                 # 开始轮询
                 while not self.stop_event.is_set():
@@ -261,21 +261,21 @@ class QRLoginWorker(BaseWorker):
 
                     if status == 0:
                         # 扫码且确认成功
-                        self.login_success.emit(cookies)
+                        self.loginSucceeded.emit(cookies)
                         break
                     elif status == 86090:
-                        self.status_updated.emit("已扫码，请在手机端确认登录")
+                        self.statusUpdated.emit("已扫码，请在手机端确认登录")
                     elif status == 86101:
                         pass  # 未扫码，继续等
                     elif status == 86038:
-                        self.login_failed.emit("二维码已失效，请关闭重试")
+                        self.loginFailed.emit("二维码已失效，请关闭重试")
                         break
                     else:
-                        self.login_failed.emit(f"未知的状态码: {status}")
+                        self.loginFailed.emit(f"未知的状态码: {status}")
                         break
 
         except Exception as e:
             self.report_error("扫码登录环境异常", e)
-            self.login_failed.emit(f"网络异常: {e}")
+            self.loginFailed.emit(f"网络异常: {e}")
         finally:
             self.logger.info("扫码轮询线程已退出。")
