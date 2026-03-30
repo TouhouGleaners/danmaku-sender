@@ -8,12 +8,12 @@ from PySide6.QtWidgets import (
     QPushButton, QSpinBox, QMessageBox, QGridLayout, QSizePolicy
 )
 from PySide6.QtGui import QTextCursor
-from PySide6.QtCore import Qt
+from PySide6.QtCore import Qt, Slot
 
 from danmaku_sender.core.state import AppState
 
 from .framework.binder import UIBinder
-from .workers import MonitorTaskWorker
+from .controllers.monitor_controller import MonitorController
 
 from ..core.models.structs import VideoTarget
 from ..utils.resource_utils import get_svg_icon
@@ -23,10 +23,9 @@ class MonitorPage(QWidget):
     def __init__(self):
         super().__init__()
         self._state = None
-        self._monitor_worker = None
         self.logger = logging.getLogger("App.Monitor.UI")
-        self.stop_event = threading.Event()
-        self._is_running = False
+
+        self.monitor_controller = MonitorController(self)
 
         self._create_ui()
         self._connect_signals()
@@ -181,6 +180,12 @@ class MonitorPage(QWidget):
         self.anchor_combo.currentIndexChanged.connect(self._on_anchor_changed)
         self.btn_reset_anchor.clicked.connect(self._on_reset_anchor_clicked)
 
+        # MonitorController
+        self.monitor_controller.statsUpdated.connect(self._on_stats_updated)
+        self.monitor_controller.statusUpdated.connect(self.status_label.setText)
+        self.monitor_controller.taskFinished.connect(self._on_finished)
+        self.monitor_controller.messageLogged.connect(self.append_log)
+
     def bind_state(self, state: AppState):
         if self._state is state:
             return
@@ -207,34 +212,6 @@ class MonitorPage(QWidget):
         else:
             dt_str = datetime.fromtimestamp(baseline).strftime('%m-%d %H:%M:%S')
             self.anchor_display.setText(dt_str)
-
-    def _on_anchor_changed(self, index):
-        if not self._state or index < 0:
-            return
-
-        data = self.anchor_combo.currentData()
-        new_baseline = 0.0
-        if data == "launch":
-            new_baseline = self._state.app_launch_time
-        elif data == "24h":
-            new_baseline = time.time() - 86400
-        elif data == "all":
-            new_baseline = 0.0
-
-        self._state.monitor_config.stats_baseline = new_baseline
-        self._update_anchor_display(new_baseline)
-
-    def _on_reset_anchor_clicked(self):
-        if not self._state:
-            return
-
-        current_ts = time.time()
-        self._state.monitor_config.stats_baseline = current_ts
-        self._update_anchor_display(current_ts)
-
-        self.anchor_combo.blockSignals(True)
-        self.anchor_combo.setCurrentIndex(-1)
-        self.anchor_combo.blockSignals(False)
 
     def showEvent(self, event):
         super().showEvent(event)
@@ -267,14 +244,10 @@ class MonitorPage(QWidget):
         if not self._state:
             return
 
-        if self._is_running:
-            self.stop_event.set()
+        if self.monitor_controller.is_running():
+            self.monitor_controller.stop_task()
             self.start_btn.setText("正在停止...")
             self.start_btn.setEnabled(False)
-            return
-
-        if self._monitor_worker is not None and self._monitor_worker.isRunning():
-            self.logger.warning("上一轮任务尚未彻底结束，请稍候...")
             return
 
         cid = self._state.video_state.selected_cid
@@ -291,29 +264,14 @@ class MonitorPage(QWidget):
 
         self._set_ui_running(True)
 
-        auth = self._state.get_api_auth()
-        monitor_config = self._state.monitor_config
-
         target = VideoTarget(bvid=bvid, cid=cid, title=title)
-
-        self._monitor_worker = MonitorTaskWorker(
+        self.monitor_controller.start_task(
             target=target,
-            auth_config=auth,
-            monitor_config=monitor_config,
-            stop_event=self.stop_event,
-            parent=self
+            auth_config=self._state.get_api_auth(),
+            monitor_config=self._state.monitor_config
         )
-        self._monitor_worker.statsUpdated.connect(self._on_stats_updated)
-        self._monitor_worker.statusUpdated.connect(self.status_label.setText)
-        self._monitor_worker.messageLogged.connect(self.append_log)
-        self._monitor_worker.taskFinished.connect(self._on_finished)
-        self._monitor_worker.finished.connect(self._monitor_worker.deleteLater)
-        self._monitor_worker.start()
 
     def _set_ui_running(self, running):
-        self._is_running = running
-        self.stop_event.clear()
-
         self.interval_spin.setEnabled(not running)
         self.start_btn.setEnabled(True)
 
@@ -327,9 +285,44 @@ class MonitorPage(QWidget):
             self._update_btn_style(False)
             self.status_label.setText("监视器：已停止")
 
+
+    # region Slots
+
+    @Slot(int)
+    def _on_anchor_changed(self, index: int):
+        if not self._state or index < 0:
+            return
+
+        data = self.anchor_combo.currentData()
+        new_baseline = 0.0
+        if data == "launch":
+            new_baseline = self._state.app_launch_time
+        elif data == "24h":
+            new_baseline = time.time() - 86400
+        elif data == "all":
+            new_baseline = 0.0
+
+        self._state.monitor_config.stats_baseline = new_baseline
+        self._update_anchor_display(new_baseline)
+
+    @Slot()
+    def _on_reset_anchor_clicked(self):
+        if not self._state:
+            return
+
+        current_ts = time.time()
+        self._state.monitor_config.stats_baseline = current_ts
+        self._update_anchor_display(current_ts)
+
+        self.anchor_combo.blockSignals(True)
+        self.anchor_combo.setCurrentIndex(-1)
+        self.anchor_combo.blockSignals(False)
+
+    @Slot(dict)
     def _on_stats_updated(self, stats: dict):
         """
         处理后端传回的统计数据
+
         stats: {'total': int, 'verified': int, 'pending': int, 'lost': int}
         """
         self.lbl_total.setText(str(stats.get('total', 0)))
@@ -337,9 +330,12 @@ class MonitorPage(QWidget):
         self.lbl_pending.setText(str(stats.get('pending', 0)))
         self.lbl_lost.setText(str(stats.get('lost', 0)))
 
+    @Slot()
     def _on_finished(self):
         self._set_ui_running(False)
-        self._monitor_worker = None
+
+    # endregion
+
 
     def append_log(self, message: str):
         self.log_output.append(message)
