@@ -12,39 +12,9 @@ from ..core.state import ApiAuthConfig, SenderConfig, MonitorConfig
 from ..core.models.danmaku import Danmaku
 from ..core.models.result import DanmakuSendResult
 from ..core.models.structs import VideoTarget
-from ..core.models.video import VideoInfo
-from ..core.services.video_fetcher import VideoFetcher
-from ..core.models.exceptions import BiliApiError, BiliNetworkError
 from ..api.bili_api_client import BiliApiClient
 from ..utils.system_utils import KeepSystemAwake
 from ..utils.notification_utils import send_windows_notification
-
-
-class FetchInfoWorker(BaseWorker):
-    """用于后台获取视频信息的线程"""
-    finished_success = Signal(VideoInfo)  # 成功信号，携带视频信息 VideoInfo
-    finished_error = Signal(str)          # 失败信号，携带错误信息
-
-    def __init__(self, bvid, auth_config: ApiAuthConfig, parent=None):
-        super().__init__(parent)
-        self.logger = logging.getLogger("App.System.Worker.Fetch")
-        self.bvid = bvid
-        self.auth_config = auth_config
-
-    def run(self):
-        try:
-            with BiliApiClient.from_config(self.auth_config) as client:
-                service = VideoFetcher(client)
-                video_info = service.fetch_info(self.bvid)
-                self.finished_success.emit(video_info)
-
-        except (BiliApiError, BiliNetworkError) as e:
-            self.report_error("获取视频信息失败", e)
-            self.finished_error.emit(str(e))
-
-        except Exception as e:
-            self.logger.critical("非预期的系统崩溃", exc_info=True)
-            self.finished_error.emit("程序内部发生未知错误，请检查日志。")
 
 
 class SendTaskWorker(BaseWorker):

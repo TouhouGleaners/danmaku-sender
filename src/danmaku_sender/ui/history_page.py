@@ -1,17 +1,16 @@
 import logging
 from enum import IntEnum
 from datetime import datetime
-from functools import partial
 
 from PySide6.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout, QLabel, QLineEdit, QComboBox,
     QPushButton, QTableView, QHeaderView, QAbstractItemView, QMenu,
     QApplication, QDialog, QFormLayout, QFrame
 )
-from PySide6.QtCore import Qt, QAbstractTableModel, QModelIndex, QUrl
+from PySide6.QtCore import Qt, QAbstractTableModel, QModelIndex, QUrl, Slot, QPoint
 from PySide6.QtGui import QAction, QColor, QDesktopServices, QBrush
 
-from .workers import FetchInfoWorker
+from .controllers.video_controller import VideoController
 from .controllers.history_controller import HistoryController
 
 from ..core.database.history_manager import DanmakuStatus
@@ -225,10 +224,10 @@ class HistoryPage(QWidget):
     def __init__(self):
         super().__init__()
         self._state: AppState | None = None
-        self.history_ctrl = HistoryController(self)
-
-        self._active_workers: dict[str, FetchInfoWorker] = {}
         self._fetched_bvids = set()
+
+        self.video_controller = VideoController(self)
+        self.history_controller = HistoryController(self)
 
         self._create_ui()
         self._connect_signals()
@@ -285,19 +284,13 @@ class HistoryPage(QWidget):
 
     def _connect_signals(self):
         """信号连接"""
-        # --- 控制器业务信号 ---
-        self.history_ctrl.historyFetched.connect(self._on_history_fetched)
-        self.history_ctrl.errorOccurred.connect(self._on_error_occurred)
+        # VideoController
+        self.video_controller.fetchSucceeded.connect(self._on_video_fetch_succeeded)
+        self.video_controller.fetchFailed.connect(self._on_video_fetch_failed)
 
-    def _on_error_occurred(self, err_msg: str):
-        """统一处理该页面的业务错误"""
-        logger.error(f"历史记录模块错误: {err_msg}")
-
-    def _on_history_fetched(self, records: list):
-        """查询成功后的回调"""
-        self._model.set_records(records)
-        if self._state:
-            self._fetch_missing_metadata(records)
+        # HistoryController
+        self.history_controller.historyFetched.connect(self._on_history_query_succeeded)
+        self.history_controller.errorOccurred.connect(self._on_history_query_failed)
 
     def bind_state(self, state: AppState):
         self._state = state
@@ -310,63 +303,84 @@ class HistoryPage(QWidget):
 
         self._model.set_records([])
 
-        self.history_ctrl.query(keyword, status_filter)
+        self.history_controller.query(keyword, status_filter)
 
     def _fetch_missing_metadata(self, records):
-        """扫描缺失元数据的 BVID 并启动 Worker"""
-        for row in records:
-            bvid = row['bvid']
-            if (self._model.get_video_info(bvid) is None
-                and bvid not in self._fetched_bvids):
-                self._start_worker(bvid)
-
-    def _start_worker(self, bvid):
+        """扫描缺失元数据的 BVID 并推入后台队列"""
         if not self._state:
             return
 
-        self._fetched_bvids.add(bvid)
-        self._model.mark_as_loading(bvid)
-
         auth_config = self._state.get_api_auth()
-        worker = FetchInfoWorker(bvid, auth_config)
-
-        worker.finished_success.connect(partial(self._on_worker_success, bvid))
-        worker.finished_error.connect(partial(self._on_worker_error, bvid))
-
-        worker.finished.connect(partial(self._cleanup_worker, bvid, worker))
-
-        self._active_workers[bvid] = worker
-        worker.start()
-
-    def _on_worker_success(self, bvid, video_info: VideoInfo):
-        """Worker 回调：接收 VideoInfo 对象"""
-        self._model.update_video_cache(bvid, video_info)
-
-    def _on_worker_error(self, bvid, error_msg):
-        """Worker 失败回调"""
-        if bvid in self._fetched_bvids:
-            self._fetched_bvids.remove(bvid)
-
-        self._model.update_video_cache(bvid, None)
-
-    def _cleanup_worker(self, bvid, worker: FetchInfoWorker):
-        if bvid in self._active_workers:
-            del self._active_workers[bvid]
-
-        worker.deleteLater()
-
-    def _on_row_double_clicked(self, index: QModelIndex):
-        if index.isValid():
-            record = self._model.get_record_at(index.row())
-            if record:
-                self._show_detail_dialog(record)
+        for row in records:
+            bvid = row['bvid']
+            if self._model.get_video_info(bvid) is None and bvid not in self._fetched_bvids:
+                self._fetched_bvids.add(bvid)
+                self._model.mark_as_loading(bvid)
+                # 下发给 Controller 排队
+                self.video_controller.fetch_info(bvid, auth_config, is_background=True)
 
     def _show_detail_dialog(self, record):
         video_info = self._model.get_video_info(record['bvid'])
         dlg = DanmakuDetailDialog(record, video_info, self)
         dlg.exec()
 
-    def _on_context_menu(self, pos):
+
+    # region Slots
+    # region Slots VideoController
+    @Slot(str, VideoInfo)
+    def _on_video_fetch_succeeded(self, bvid: str, video_info: VideoInfo):
+        """
+        B 站 API 视频详情获取成功
+
+        将结果写入表格模型缓存，并触发当前行的高亮/重绘。
+        """
+        self._model.update_video_cache(bvid, video_info)
+
+    @Slot(str, str)
+    def _on_video_fetch_failed(self, bvid: str, error_msg: str):
+        """
+        B 站 API 视频详情获取失败 (超时或 404)
+
+        将缓存置空，从拉取池中释放，并恢复表格默认显示。
+        """
+        if bvid in self._fetched_bvids:
+            self._fetched_bvids.remove(bvid)
+        self._model.update_video_cache(bvid, None)
+
+    # endregion
+
+    # region Slots HistoryController
+    @Slot(list)
+    def _on_history_query_succeeded(self, records: list):
+        """
+        本地 SQLite 查询完成回调
+
+        将结果刷入表格，并触发缺失元数据的后台补全。
+        """
+        self._model.set_records(records)
+        if self._state:
+            self._fetch_missing_metadata(records)
+
+    @Slot(str)
+    def _on_history_query_failed(self, err_msg: str):
+        """
+        本地 SQLite 查询失败兜底
+
+        通常因数据库锁定或文件损坏导致。
+        """
+        logger.error(f"历史记录数据库查询失败: {err_msg}")
+
+    # endregion
+
+    @Slot(QModelIndex)
+    def _on_row_double_clicked(self, index: QModelIndex):
+        if index.isValid():
+            record = self._model.get_record_at(index.row())
+            if record:
+                self._show_detail_dialog(record)
+
+    @Slot(QPoint)
+    def _on_context_menu(self, pos: QPoint):
         index = self._table_view.indexAt(pos)
         if not index.isValid():
             return
@@ -398,3 +412,5 @@ class HistoryPage(QWidget):
         menu.addAction("复制 内容", lambda: QApplication.clipboard().setText(record['msg']))
 
         menu.exec(self._table_view.mapToGlobal(pos))
+
+    # endregion
