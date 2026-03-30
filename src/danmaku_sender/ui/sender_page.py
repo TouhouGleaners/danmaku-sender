@@ -97,9 +97,9 @@ class SenderPage(QWidget):
         self.start_btn.clicked.connect(self.toggle_task)
 
         # VideoController
-        self.video_controller.fetch_started.connect(self._on_fetch_started)
-        self.video_controller.fetch_success.connect(self._on_fetch_success)
-        self.video_controller.fetch_error.connect(self._on_fetch_error)
+        self.video_controller.fetchStarted.connect(self._on_fetch_started)
+        self.video_controller.fetchSucceeded.connect(self._on_fetch_success)
+        self.video_controller.fetchFailed.connect(self._on_fetch_error)
 
         # SenderController
         self.sender_controller.progressUpdated.connect(self._on_send_progress)
