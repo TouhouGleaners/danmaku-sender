@@ -12,8 +12,8 @@ from ...api.bili_api_client import BiliApiClient
 logger = logging.getLogger("App.System.Video")
 
 
-# 用于后台批量获取的单例线程池
-# 限制并发数为 1
+# 使用独立单线程后台线程池处理批量获取任务，避免过度并发。
+# 同时确保前台操作不被后台进程阻塞，以获得即时的资源分配。
 _bg_fetch_pool = QThreadPool()
 _bg_fetch_pool.setMaxThreadCount(1)
 _bg_fetch_pool.setObjectName("BackgroundVideoFetchPool")
