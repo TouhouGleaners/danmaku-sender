@@ -338,15 +338,21 @@ class QRLoginDialog(QDialog):
 
         self.auth_controller = AuthController(self)
 
-        self.setWindowTitle("扫码登录")
-        self.setFixedSize(300, 350)
-
         self._create_ui()
         self._connect_signals()
 
         self.auth_controller.start_qr_login(self.use_system_proxy)  # 对话框开启时直接启动业务逻辑
 
     def _create_ui(self):
+        self.setWindowTitle("扫码登录")
+        self.setFixedSize(300, 350)
+        self.setWindowFlags(
+            Qt.WindowType.Dialog |
+            Qt.WindowType.WindowTitleHint |
+            Qt.WindowType.WindowCloseButtonHint |
+            Qt.WindowType.CustomizeWindowHint
+        )
+
         layout = QVBoxLayout(self)
         layout.setAlignment(Qt.AlignmentFlag.AlignCenter)
         layout.setSpacing(15)
@@ -423,8 +429,8 @@ class QRLoginDialog(QDialog):
     # endregion
 
 
-    def closeEvent(self, event):
-        """窗口关闭时，确保停止后台轮询线程"""
+    def done(self, r):
+        """对话框清理"""
         if hasattr(self, 'auth_controller'):
             self.auth_controller.stop_qr_login()
-        super().closeEvent(event)
+        super().done(r)
