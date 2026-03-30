@@ -70,6 +70,7 @@ class SendTaskWorker(BaseWorker):
         self.stop_event = stop_event
         self.sender_instance = None
         self.history_manager = HistoryManager()
+        self.scheduler = None
 
     def run(self):
         ctx: SendingContext | None = None

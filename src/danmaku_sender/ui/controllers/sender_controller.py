@@ -50,6 +50,7 @@ class SenderController(QObject):
         self._worker.taskFinished.connect(self._on_worker_finished)
         self._worker.messageLogged.connect(self.messageLogged.emit)
 
+        self._worker.finished.connect(self._on_worker_cleanup)
         self._worker.finished.connect(self._worker.deleteLater)
         self._worker.start()
 
@@ -73,6 +74,12 @@ class SenderController(QObject):
     def _on_worker_finished(self, scheduler_instance):
         """内部槽函数：处理任务结束清理并向上传递"""
         self.taskFinished.emit(scheduler_instance)
-        self._worker = None
+
+    @Slot()
+    def _on_worker_cleanup(self):
+        """垃圾回收机制"""
+        if self._worker is not None:
+            logger.debug("SendTaskWorker 线程生命周期结束，正在清理控制器引用。")
+            self._worker = None
 
     # endregion
