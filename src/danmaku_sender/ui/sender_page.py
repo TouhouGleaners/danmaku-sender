@@ -1,5 +1,4 @@
 import logging
-import threading
 from pathlib import Path
 
 from PySide6.QtWidgets import (
@@ -9,11 +8,11 @@ from PySide6.QtWidgets import (
     QFileDialog, QMessageBox
 )
 from PySide6.QtGui import QTextCursor
-from PySide6.QtCore import Qt, QDateTime
+from PySide6.QtCore import Qt, QDateTime, Slot
 
 from .framework.binder import UIBinder
 from .controllers.video_controller import VideoController
-from .workers import SendTaskWorker
+from .controllers.sender_controller import SenderController
 
 from ..core.models.video import VideoInfo
 from ..core.models.structs import VideoTarget
@@ -30,16 +29,14 @@ class SenderPage(QWidget):
         super().__init__()
         self._state: AppState | None = None
         self.logger = logging.getLogger("App.Sender.UI")
-        self.stop_event = threading.Event()
         self.danmaku_parser = DanmakuParser()
 
-        self._is_task_running = False
-        self._send_worker = None
         self._pending_part_index: int | None = None
         self.video_controller = VideoController(self)
+        self.sender_controller = SenderController(self)
 
         self._create_ui()
-        self._connect_ui_logic()
+        self._connect_signals()
 
         self._icon_start = get_svg_icon("start.svg")
         self._icon_stop = get_svg_icon("stop.svg")
@@ -90,7 +87,7 @@ class SenderPage(QWidget):
 
         main_layout.addLayout(action_layout)
 
-    def _connect_ui_logic(self):
+    def _connect_signals(self):
         # 子组件信号
         self.basic_group.file_btn.clicked.connect(self.select_file)
         self.basic_group.fetch_btn.clicked.connect(self.fetch_video_info)
@@ -99,10 +96,15 @@ class SenderPage(QWidget):
         # 本地信号
         self.start_btn.clicked.connect(self.toggle_task)
 
-        # 控制器
+        # VideoController
         self.video_controller.fetch_started.connect(self._on_fetch_started)
         self.video_controller.fetch_success.connect(self._on_fetch_success)
         self.video_controller.fetch_error.connect(self._on_fetch_error)
+
+        # SenderController
+        self.sender_controller.progressUpdated.connect(self._on_send_progress)
+        self.sender_controller.taskFinished.connect(self._on_send_finished)
+        self.sender_controller.messageLogged.connect(self.append_log)
 
     def bind_state(self, state: AppState):
         """将 UI 控件与 AppState 进行双向绑定"""
@@ -244,17 +246,12 @@ class SenderPage(QWidget):
             return
 
         # 如果正在运行 -> 停止
-        if self._is_task_running:
-            self.stop_event.set()
+        if self.sender_controller.is_running():
+            self.sender_controller.stop_task()
             self.start_btn.setEnabled(False)
             self.start_btn.setText("停止中...")
             self.logger.info("发送器：正在请求中止...")
             self.progress_bar.setFormat("%p% (正在停止...)")
-            return
-
-        # 防并发
-        if self._send_worker is not None and self._send_worker.isRunning():
-            self.logger.warning("上一轮任务尚未彻底结束，请稍候...")
             return
 
         # 如果未运行 -> 开始
@@ -281,29 +278,16 @@ class SenderPage(QWidget):
         self._set_ui_for_task_start()
 
         # 构造配置
-        auth_config = state.get_api_auth()
-        strategy_config = state.sender_config
-
         target = VideoTarget(
             bvid=state.video_state.bvid,
             cid=state.video_state.selected_cid,
             title=state.video_state.video_title
         )
+        auth_config = state.get_api_auth()
+        strategy_config = state.sender_config
 
         # 启动线程
-        self._send_worker = SendTaskWorker(
-            target=target,
-            danmakus=state.video_state.loaded_danmakus,
-            auth_config=auth_config,
-            strategy_config=strategy_config,
-            stop_event=self.stop_event,
-            parent=self
-        )
-        self._send_worker.progressUpdated.connect(self._on_send_progress)
-        self._send_worker.taskFinished.connect(self._on_send_finished)
-        self._send_worker.messageLogged.connect(self.append_log)
-        self._send_worker.finished.connect(self._send_worker.deleteLater)
-        self._send_worker.start()
+        self.sender_controller.start_task(target, state.video_state.loaded_danmakus, auth_config, strategy_config)
 
     def _on_send_progress(self, attempted, total):
         if total > 0:
@@ -378,7 +362,7 @@ class SenderPage(QWidget):
         # 恢复 UI
         self._reset_ui_after_task()
 
-        if self.stop_event.is_set():
+        if self.sender_controller.is_stopped_manually():
             self.status_label.setText("发送器：任务中止")
             self.progress_bar.setFormat("%p% (已停止)")
         else:
@@ -404,8 +388,6 @@ class SenderPage(QWidget):
                         self.logger.error(f"保存XML文件失败: {e}")
                         QMessageBox.critical(self, "保存失败", f"无法写入文件，请检查权限或路径。\n错误信息: {e}")
 
-        self._send_worker = None
-
     def _update_btn_style(self, running: bool):
         """统一刷新按钮状态与图标的私有方法"""
         state = "running" if running else "ready"
@@ -426,9 +408,6 @@ class SenderPage(QWidget):
 
     def _set_ui_for_task_start(self):
         """任务开始时的 UI 状态设置"""
-        self._is_task_running = True
-        self.stop_event.clear()
-
         # 通知全局状态
         if self._state:
             self._state.sender_is_active = True
@@ -446,8 +425,6 @@ class SenderPage(QWidget):
 
     def _reset_ui_after_task(self):
         """任务结束后的 UI 状态复位"""
-        self._is_task_running = False
-
         # 通知全局状态
         if self._state:
             self._state.sender_is_active = False
