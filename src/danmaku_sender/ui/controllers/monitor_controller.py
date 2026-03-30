@@ -16,7 +16,6 @@ class MonitorController(QObject):
     statsUpdated = Signal(dict)
     statusUpdated = Signal(str)
     taskFinished = Signal()
-    messageLogged = Signal(str)
 
     def __init__(self, parent=None):
         super().__init__(parent)
@@ -41,7 +40,6 @@ class MonitorController(QObject):
         self._worker.statsUpdated.connect(self.statsUpdated.emit)
         self._worker.statusUpdated.connect(self.statusUpdated.emit)
         self._worker.taskFinished.connect(self._on_worker_finished)
-        self._worker.messageLogged.connect(self.messageLogged.emit)
 
         self._worker.finished.connect(self._on_worker_cleanup)
         self._worker.finished.connect(self._worker.deleteLater)

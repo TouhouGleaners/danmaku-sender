@@ -15,8 +15,7 @@ logger = logging.getLogger("App.System.SenderController")
 class SenderController(QObject):
     """发送任务业务控制器"""
     progressUpdated = Signal(int, int)
-    taskFinished = Signal(object)
-    messageLogged = Signal(str)
+    taskFinished = Signal(list)
 
     def __init__(self, parent=None):
         super().__init__(parent)
@@ -47,7 +46,6 @@ class SenderController(QObject):
 
         self._worker.progressUpdated.connect(self.progressUpdated.emit)
         self._worker.taskFinished.connect(self._on_worker_finished)
-        self._worker.messageLogged.connect(self.messageLogged.emit)
 
         self._worker.finished.connect(self._on_worker_cleanup)
         self._worker.finished.connect(self._worker.deleteLater)
@@ -69,10 +67,10 @@ class SenderController(QObject):
 
     # region Slots
 
-    @Slot(object)
-    def _on_worker_finished(self, scheduler_instance):
+    @Slot(list)
+    def _on_worker_finished(self, unsent_danmakus: list):
         """内部槽函数：处理任务结束清理并向上传递"""
-        self.taskFinished.emit(scheduler_instance)
+        self.taskFinished.emit(unsent_danmakus)
 
     @Slot()
     def _on_worker_cleanup(self):

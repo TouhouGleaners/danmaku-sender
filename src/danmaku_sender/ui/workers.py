@@ -20,7 +20,7 @@ from ..utils.notification_utils import send_windows_notification
 class SendTaskWorker(BaseWorker):
     """用于后台发送弹幕的线程"""
     progressUpdated = Signal(int, int)  # 已尝试, 总数
-    taskFinished = Signal(object)       # 携带 sender 实例以便后续处理(如保存失败弹幕)
+    taskFinished = Signal(list)         # 失败弹幕
 
     def __init__(
         self,
@@ -74,7 +74,8 @@ class SendTaskWorker(BaseWorker):
         finally:
             if ctx:
                 self._log_and_notify_summary(ctx)
-            self.taskFinished.emit(self.scheduler)
+            unsent = self.scheduler.unsent_danmakus if self.scheduler else []
+            self.taskFinished.emit(unsent)
 
     def _log_and_notify_summary(self, ctx: SendingContext):
         """记录日志并弹送系统通知（纯 UI 侧交互）"""
@@ -158,7 +159,7 @@ class MonitorTaskWorker(BaseWorker):
                         if stats.get('lost', 0) > 0:
                             msg += f" | ❌丢失:{stats['lost']}"
 
-                        self.messageLogged.emit(msg)
+                        self.logger.info(msg)
 
                         if self.stop_event.wait(snap_interval):
                             self.logger.info("收到停止信号，监视任务终止。")
