@@ -7,7 +7,7 @@ from PySide6.QtWidgets import (
     QListWidget, QListWidgetItem, QStackedWidget, QLabel
 )
 from PySide6.QtGui import QAction, QCloseEvent, QDesktopServices
-from PySide6.QtCore import Qt, QUrl, QTimer, QSize
+from PySide6.QtCore import Qt, QUrl, QTimer, QSize, Slot
 
 from .controllers.auth_controller import AuthController, UserProfile
 from .controllers.system_controller import SystemController
@@ -92,9 +92,7 @@ class MainWindow(QMainWindow):
         self.avatar_label.setFixedSize(36, 36)
         self.avatar_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
 
-        default_icon = get_svg_icon("default_avatar.svg")
-        pixmap = default_icon.pixmap(36, 36)
-        self.avatar_label.setPixmap(pixmap)
+        self._refresh_default_avatar()
 
         self.username_label = QLabel("未登录")
         self.username_label.setObjectName("usernameLabel")
@@ -156,7 +154,7 @@ class MainWindow(QMainWindow):
     def _connect_global_signals(self):
         """全局信号绑定"""
         # 用户认证与基础信息
-        self.state.credentials_changed.connect(self.request_user_info_refresh)
+        self.state.credentials_changed.connect(self._request_user_info_refresh)
         self.auth_ctrl.userProfileReady.connect(self._on_user_profile_updated)
 
         # 系统组件联动
@@ -173,10 +171,10 @@ class MainWindow(QMainWindow):
         )
 
         # 触发首次用户信息请求
-        QTimer.singleShot(500, self.request_user_info_refresh)
+        QTimer.singleShot(500, self._request_user_info_refresh)
 
     def _refresh_sidebar_badges(self, _=None):
-        """核心视觉逻辑：动态刷新侧边栏项目的文字后缀"""
+        """动态刷新侧边栏项目的文字后缀"""
         # 弹幕发射器
         sender_item = self.sidebar.item(1)
         if sender_item:
@@ -193,19 +191,17 @@ class MainWindow(QMainWindow):
             else:
                 editor_item.setText("弹幕编辑器")
 
-    def request_user_info_refresh(self):
+    def _request_user_info_refresh(self):
         """发起异步请求刷新用户信息"""
         self.auth_ctrl.refresh_user_info(self.state.get_api_auth())
 
     def _refresh_default_avatar(self):
         """通用方法：渲染高清的默认头像"""
-        dpr = self.devicePixelRatioF()
         icon = get_svg_icon("default_avatar.svg")
-        physical_size = QSize(int(36 * dpr), int(36 * dpr))
-        pixmap = icon.pixmap(physical_size)
-        pixmap.setDevicePixelRatio(dpr)
+        pixmap = icon.pixmap(36, 36)
         self.avatar_label.setPixmap(pixmap)
 
+    @Slot(UserProfile)
     def _on_user_profile_updated(self, profile: UserProfile):
         """同步更新 UI"""
         # 更新文字
