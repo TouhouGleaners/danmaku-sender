@@ -10,6 +10,8 @@ from PySide6.QtWidgets import (
 from PySide6.QtGui import QTextCursor
 from PySide6.QtCore import Qt, QDateTime, Slot
 
+from danmaku_sender.core.engines.sender.context import SendingContext
+
 from .framework.binder import UIBinder
 from .controllers.video_controller import VideoController
 from .controllers.sender_controller import SenderController
@@ -22,6 +24,7 @@ from ..core.state import AppState
 from ..utils.string_utils import parse_bilibili_link
 from ..utils.time_utils import format_seconds_to_duration
 from ..utils.resource_utils import get_svg_icon
+from ..utils.notification_utils import send_windows_notification
 
 
 class SenderPage(QWidget):
@@ -323,22 +326,26 @@ class SenderPage(QWidget):
 
         self.status_label.setText(f"发送中: {attempted}/{total}")
 
-    @Slot(list)
-    def _on_send_finished(self, unsent_danmakus: list[UnsentDanmakusRecord]):
+    @Slot(object)
+    def _on_send_finished(self, ctx: SendingContext):
         """任务结束后的清理与保存逻辑"""
         # 恢复 UI
         self._reset_ui_after_task()
 
-        if self.sender_controller.is_stopped_manually():
+        is_stopped = self.sender_controller.is_stopped_manually()
+        if is_stopped:
             self.status_label.setText("发送器：任务中止")
             self.progress_bar.setFormat("%p% (已停止)")
         else:
             self.status_label.setText("发送器：任务结束")
             self.progress_bar.setFormat("%p% (已完成)")
 
-        # 检查是否有失败弹幕
-        if unsent_danmakus:
-            self._prompt_save_unsent_xml(unsent_danmakus)
+        if ctx:
+            self._send_desktop_notification(ctx, is_stopped)
+
+            # 如果有未发出的弹幕，引导保存
+            if ctx.unsent_records:
+                self._prompt_save_unsent_xml(ctx.unsent_records)
 
     # endregion
     # endregion
@@ -391,6 +398,26 @@ class SenderPage(QWidget):
         normal_count = remaining_waits - rest_count
 
         return (normal_count * avg_normal) + (rest_count * avg_rest)
+
+    def _send_desktop_notification(self, ctx: SendingContext, is_stopped: bool):
+        """发送系统桌面通知"""
+        title = "弹幕发送任务已结束"
+        summary = f"成功: {ctx.success_count} / 尝试: {ctx.attempted_count} / 总计: {ctx.total}"
+
+        if ctx.auto_stop_reason:
+            msg = f"自动停止：{ctx.auto_stop_reason}\n{summary}"
+        elif is_stopped:
+            msg = f"任务已被手动停止。\n{summary}"
+        elif ctx.fatal_error_occurred:
+            msg = f"任务因致命错误中断！\n{summary}"
+        elif ctx.total == 0:
+            msg = "没有需要发送的弹幕。"
+        elif ctx.success_count == ctx.attempted_count:
+            msg = f"任务已完成！所有 {ctx.success_count} 条均发送成功。"
+        else:
+            msg = f"任务已完成。\n{summary}"
+
+        send_windows_notification(title, msg)
 
     def _prompt_save_unsent_xml(self, unsent_danmakus: list[UnsentDanmakusRecord]):
         """询问并保存失败的弹幕到 XML"""

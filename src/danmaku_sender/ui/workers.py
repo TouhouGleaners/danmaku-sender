@@ -14,13 +14,12 @@ from ..core.models.result import DanmakuSendResult
 from ..core.models.structs import VideoTarget
 from ..api.bili_api_client import BiliApiClient
 from ..utils.system_utils import KeepSystemAwake
-from ..utils.notification_utils import send_windows_notification
 
 
 class SendTaskWorker(BaseWorker):
     """用于后台发送弹幕的线程"""
     progressUpdated = Signal(int, int)  # 已尝试, 总数
-    taskFinished = Signal(list)         # 失败弹幕
+    taskFinished = Signal(object)       # SendingContext
 
     def __init__(
         self,
@@ -43,42 +42,45 @@ class SendTaskWorker(BaseWorker):
         self.scheduler = None
 
     def run(self):
-        ctx: SendingContext | None = None
+        ctx = None
         try:
-            with KeepSystemAwake(self.strategy_config.prevent_sleep):
-                with BiliApiClient.from_config(self.auth_config) as client:
-                    executor = DanmakuExecutor(client)
-                    self.scheduler = DanmakuScheduler(executor, self.history_manager)
-
-                    def _progress_cb(attempted, total):
-                        self.progressUpdated.emit(attempted, total)
-
-                    def _save_to_db_cb(dm: Danmaku, result: DanmakuSendResult):
-                        if result.is_success and result.dmid:
-                            if not dm.dmid:
-                                dm.dmid = result.dmid
-                            self.history_manager.record_danmaku(self.target, dm, result.is_visible)
-
-                    job = SendJob(
-                        target=self.target,
-                        danmakus=self.danmakus,
-                        config=self.strategy_config,
-                        stop_event=self.stop_event,
-                        progress_callback=_progress_cb,
-                        result_callback=_save_to_db_cb
-                    )
-                    ctx = self.scheduler.run_pipeline(job)
-
+            ctx = self._execute_pipeline()
         except Exception as e:
             self.report_error("任务发生严重错误", e)
         finally:
             if ctx:
-                self._log_and_notify_summary(ctx)
-            unsent = self.scheduler.unsent_danmakus if self.scheduler else []
-            self.taskFinished.emit(unsent)
+                self._log_summary(ctx)
+            self.taskFinished.emit(ctx)
 
-    def _log_and_notify_summary(self, ctx: SendingContext):
-        """记录日志并弹送系统通知（纯 UI 侧交互）"""
+    def _execute_pipeline(self):
+        with (
+            KeepSystemAwake(self.strategy_config.prevent_sleep),
+            BiliApiClient.from_config(self.auth_config) as client
+        ):
+            executor = DanmakuExecutor(client)
+            self.scheduler = DanmakuScheduler(executor, self.history_manager)
+
+            job = SendJob(
+                target=self.target,
+                danmakus=self.danmakus,
+                config=self.strategy_config,
+                stop_event=self.stop_event,
+                progress_callback=self._handle_job_progress,
+                result_callback=self._handle_job_result
+            )
+            return self.scheduler.run_pipeline(job)
+
+    def _handle_job_progress(self, attempted: int, total: int):
+        self.progressUpdated.emit(attempted, total)
+
+    def _handle_job_result(self, dm: Danmaku, result: DanmakuSendResult):
+        if result.is_success and result.dmid:
+            if not dm.dmid:
+                dm.dmid = result.dmid
+            self.history_manager.record_danmaku(self.target, dm, result.is_visible)
+
+    def _log_summary(self, ctx: SendingContext):
+        """日志输出"""
         self.logger.info("--- 发送任务结束 ---")
         if ctx.auto_stop_reason:
             self.logger.info(f"原因：{ctx.auto_stop_reason}")
@@ -90,25 +92,6 @@ class SendTaskWorker(BaseWorker):
             self.logger.info("原因：所有弹幕已处理完毕。")
 
         self.logger.info(f"总计: {ctx.total} | 成功: {ctx.success_count} | 跳过: {ctx.skipped_count} | 失败: {ctx.attempted_count - ctx.success_count}")
-
-        # 发送桌面通知
-        notification_title = "弹幕发送任务已结束"
-        summary_message = f"成功: {ctx.success_count} / 尝试: {ctx.attempted_count} / 总计: {ctx.total}"
-
-        if ctx.auto_stop_reason:
-            msg = f"自动停止：{ctx.auto_stop_reason}\n{summary_message}"
-        elif self.stop_event.is_set():
-            msg = f"任务已被手动停止。\n{summary_message}"
-        elif ctx.fatal_error_occurred:
-            msg = f"任务因致命错误中断！\n{summary_message}"
-        elif ctx.total == 0:
-            msg = "没有需要发送的弹幕。"
-        elif ctx.success_count == ctx.attempted_count:
-            msg = f"任务已完成！所有 {ctx.success_count} 条均发送成功。"
-        else:
-            msg = f"任务已完成。\n{summary_message}"
-
-        send_windows_notification(notification_title, msg)
 
 
 class MonitorTaskWorker(BaseWorker):
@@ -134,41 +117,42 @@ class MonitorTaskWorker(BaseWorker):
 
     def run(self):
         try:
-            with KeepSystemAwake(self.monitor_config.prevent_sleep):
-                with BiliApiClient.from_config(self.auth_config) as client:
-                    monitor = BiliDanmakuMonitor(api_client=client, target=self.target)
-
-                    self.logger.info(f"🛡️ 监视启动: {self.target.display_string} | CID: {self.target.cid}")
-
-                    while not self.stop_event.is_set():
-                        snap_baseline = self.monitor_config.stats_baseline
-                        snap_interval = self.monitor_config.refresh_interval
-
-                        # 单次检查
-                        stats = monitor.monitor(stats_baseline=snap_baseline)
-
-                        # 结果信号
-                        self.statsUpdated.emit(stats)
-                        self.statusUpdated.emit(f"监视中 (存活: {stats['verified']})")
-
-                        msg = (
-                            f"监视中... 总计:{stats['total']} | "
-                            f"✅存活:{stats['verified']} | "
-                            f"⏳待验:{stats['pending']}"
-                        )
-                        if stats.get('lost', 0) > 0:
-                            msg += f" | ❌丢失:{stats['lost']}"
-
-                        self.logger.info(msg)
-
-                        if self.stop_event.wait(snap_interval):
-                            self.logger.info("收到停止信号，监视任务终止。")
-                            break
-
+            self._run_monitor_loop()
         except Exception as e:
             self.report_error("监视任务异常", e)
         finally:
             self.taskFinished.emit()
+
+    def _run_monitor_loop(self):
+        with (
+            KeepSystemAwake(self.monitor_config.prevent_sleep),
+            BiliApiClient.from_config(self.auth_config) as client
+        ):
+            monitor = BiliDanmakuMonitor(api_client=client, target=self.target)
+            self.logger.info(f"🛡️ 监视启动: {self.target.display_string} | CID: {self.target.cid}")
+
+            while not self.stop_event.is_set():
+                self._execute_single_check(monitor)
+                if self.stop_event.wait(self.monitor_config.refresh_interval):
+                    self.logger.info("收到停止信号，监视任务终止。")
+                    break
+
+    def _execute_single_check(self, monitor: BiliDanmakuMonitor):
+        snap_baseline = self.monitor_config.stats_baseline
+        stats = monitor.monitor(stats_baseline=snap_baseline)
+
+        self.statsUpdated.emit(stats)
+        self.statusUpdated.emit(f"监视中 (存活: {stats['verified']})")
+
+        msg = (
+            f"监视中... 总计:{stats['total']} | "
+            f"✅存活:{stats['verified']} | "
+            f"⏳待验:{stats['pending']}"
+        )
+        if stats.get('lost', 0) > 0:
+            msg += f" | ❌丢失:{stats['lost']}"
+
+        self.logger.info(msg)
 
 
 class QueryHistoryWorker(BaseWorker):
