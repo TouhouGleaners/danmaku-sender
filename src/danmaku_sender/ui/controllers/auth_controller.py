@@ -119,6 +119,7 @@ class QRLoginWorker(BaseWorker):
         super().__init__(parent)
         self.use_system_proxy = use_system_proxy
         self.stop_event = stop_event  # Controller 传入
+        self.logger = logging.getLogger("App.Auth.QRWorker")
 
     def run(self):
         try:
