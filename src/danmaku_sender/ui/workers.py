@@ -44,7 +44,7 @@ class SendTaskWorker(BaseWorker):
     def run(self):
         ctx = None
         try:
-            ctx = self._execute_pipline()
+            ctx = self._execute_pipeline()
         except Exception as e:
             self.report_error("任务发生严重错误", e)
         finally:
@@ -52,7 +52,7 @@ class SendTaskWorker(BaseWorker):
                 self._log_summary(ctx)
             self.taskFinished.emit(ctx)
 
-    def _execute_pipline(self):
+    def _execute_pipeline(self):
         with (
             KeepSystemAwake(self.strategy_config.prevent_sleep),
             BiliApiClient.from_config(self.auth_config) as client
@@ -66,14 +66,14 @@ class SendTaskWorker(BaseWorker):
                 config=self.strategy_config,
                 stop_event=self.stop_event,
                 progress_callback=self._handle_job_progress,
-                result_callback=self._handle_jon_result
+                result_callback=self._handle_job_result
             )
             return self.scheduler.run_pipeline(job)
 
     def _handle_job_progress(self, attempted: int, total: int):
         self.progressUpdated.emit(attempted, total)
 
-    def _handle_jon_result(self, dm: Danmaku, result: DanmakuSendResult):
+    def _handle_job_result(self, dm: Danmaku, result: DanmakuSendResult):
         if result.is_success and result.dmid:
             if not dm.dmid:
                 dm.dmid = result.dmid
@@ -137,7 +137,7 @@ class MonitorTaskWorker(BaseWorker):
                     self.logger.info("收到停止信号，监视任务终止。")
                     break
 
-    def _execute_single_check(self, monitor):
+    def _execute_single_check(self, monitor: BiliDanmakuMonitor):
         snap_baseline = self.monitor_config.stats_baseline
         stats = monitor.monitor(stats_baseline=snap_baseline)
 
