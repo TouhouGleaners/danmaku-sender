@@ -7,7 +7,7 @@ from PySide6.QtWidgets import (
     QProgressBar, QTabWidget, QSpinBox, QDoubleSpinBox, QFrame,
     QFileDialog, QMessageBox
 )
-from PySide6.QtGui import QTextCursor
+from PySide6.QtGui import QTextCursor, QDragEnterEvent, QDropEvent
 from PySide6.QtCore import Qt, QDateTime, Slot
 
 from danmaku_sender.core.engines.sender.context import SendingContext
@@ -43,6 +43,8 @@ class SenderPage(QWidget):
 
         self._icon_start = get_svg_icon("start.svg")
         self._icon_stop = get_svg_icon("stop.svg")
+
+        self.setAcceptDrops(True)  # 全局拖拽接收
 
     def _create_ui(self):
         # 主布局 - 垂直布局
@@ -123,6 +125,26 @@ class SenderPage(QWidget):
         self.log_output.append(message)
         self.log_output.moveCursor(QTextCursor.MoveOperation.End)
 
+    def _load_xml_file(self, file_path: str):
+        if not self._state:
+            return
+
+        self._state.video_state.loaded_danmakus = []
+        try:
+            parsed = self.danmaku_parser.parse_xml_file(file_path)
+            if parsed:
+                self.basic_group.file_input.setText(Path(file_path).name)
+                self._state.video_state.loaded_danmakus = parsed
+                self.logger.info(f"✅ 文件解析成功，共 {len(parsed)} 条弹幕。")
+            else:
+                self.basic_group.file_input.clear()
+                self.logger.warning("⚠️ 文件解析完成但无有效弹幕。")
+        except Exception as e:
+            self.basic_group.file_input.clear()
+            self.logger.error(f"❌ 解析失败: {e}")
+            QMessageBox.critical(self, "解析失败", str(e))
+
+
     # region Slots
     # region Slots Internal
     @Slot()
@@ -133,21 +155,7 @@ class SenderPage(QWidget):
 
         file_path, _ = QFileDialog.getOpenFileName(self, "选择弹幕XML文件", "", "XML Files (*.xml);;All Files (*.*)")
         if file_path:
-            self._state.video_state.loaded_danmakus = []
-
-            try:
-                parsed = self.danmaku_parser.parse_xml_file(file_path)
-                if parsed:
-                    self.basic_group.file_input.setText(Path(file_path).name)
-                    self._state.video_state.loaded_danmakus = parsed
-                    self.logger.info(f"✅ 文件解析成功，共 {len(parsed)} 条弹幕。")
-                else:
-                    self.basic_group.file_input.clear()
-                    self.logger.warning("⚠️ 文件解析完成但无有效弹幕。")
-            except Exception as e:
-                self.basic_group.file_input.clear()
-                self.logger.error(f"❌ 解析失败: {e}")
-                QMessageBox.critical(self, "解析失败", str(e))
+            self._load_xml_file(file_path)
 
     @Slot()
     def _fetch_video_info(self):
@@ -494,6 +502,29 @@ class SenderPage(QWidget):
         """
         self.basic_group.set_inputs_locked(locked)
         self.strategy_tabs.set_inputs_locked(locked)
+
+    def dragEnterEvent(self, event: QDragEnterEvent) -> None:
+        """鼠标拖拽文件进入页面区域"""
+        # 如果当前正在发送弹幕则拒绝拖入
+        if self._state and self._state.sender_is_active:
+            event.ignore()
+            return
+
+        if urls := event.mimeData().urls():
+            # 检查是否为本地文件且后缀为XML
+            if urls[0].isLocalFile() and urls[0].toLocalFile().lower().endswith('.xml'):
+                event.acceptProposedAction()
+                return
+
+        # 拒绝其他类型文件输入
+        event.ignore()
+
+    def dropEvent(self, event: QDropEvent) -> None:
+        """鼠标落下"""
+        if urls := event.mimeData().urls():
+            file_path = urls[0].toLocalFile()
+            self.logger.info(f"📥 接收到拖拽文件: {file_path}")
+            self._load_xml_file(file_path)
 
 
 class BasicParamsGroup(QGroupBox):
