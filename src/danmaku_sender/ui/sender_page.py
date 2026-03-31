@@ -534,6 +534,7 @@ class SenderPage(QWidget):
             file_path = urls[0].toLocalFile()
             self.logger.info(f"📥 接收到拖拽文件: {file_path}")
             self._load_xml_file(file_path)
+            event.acceptProposedAction()
 
 
 class BasicParamsGroup(QGroupBox):
