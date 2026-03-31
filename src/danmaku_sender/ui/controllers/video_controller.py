@@ -1,4 +1,5 @@
 import logging
+from typing import Callable
 
 from PySide6.QtCore import QObject, Signal, QThreadPool, Slot
 
@@ -19,11 +20,30 @@ _bg_fetch_pool.setMaxThreadCount(1)
 _bg_fetch_pool.setObjectName("BackgroundVideoFetchPool")
 
 
-def _fetch_video_info(bvid: str, auth_config: ApiAuthConfig) -> VideoInfo:
-    """业务函数: 获取视频信息"""
+def _fetch_single_video_info(bvid: str, auth_config: ApiAuthConfig) -> VideoInfo:
+    """获取单个视频的详细信息"""
     with BiliApiClient.from_config(auth_config) as client:
         service = VideoFetcher(client)
         return service.fetch_info(bvid)
+
+def _fetch_multiple_video_infos(
+    bvids: list[str],
+    auth_config: ApiAuthConfig,
+    on_succeeded: Callable[[str, VideoInfo], None],
+    on_failed: Callable[[str, str], None]
+):
+    """
+    复用底层连接 (Keep-Alive) 获取多个视频信息。
+    通过回调函数实现结果的流式输出
+    """
+    with BiliApiClient.from_config(auth_config) as client:
+        service = VideoFetcher(client)
+        for bvid in bvids:
+            try:
+                info = service.fetch_info(bvid)
+                on_succeeded(bvid, info)
+            except Exception as e:
+                on_failed(bvid, str(e))
 
 
 class VideoController(QObject):
@@ -39,9 +59,9 @@ class VideoController(QObject):
     def __init__(self, parent=None):
         super().__init__(parent)
 
-    def fetch_info(self, bvid: str, auth_config: ApiAuthConfig, is_background: bool = False):
+    def fetch_single_info(self, bvid: str, auth_config: ApiAuthConfig, is_background: bool = False):
         """
-        获取视频信息
+        获取单条视频信息
 
         Args:
             bvid (str): 视频的 BV 号标识符。
@@ -57,7 +77,7 @@ class VideoController(QObject):
         if not is_background:
             self.fetchStarted.emit()
 
-        task = GenericTask(_fetch_video_info, bvid, auth_config)
+        task = GenericTask(_fetch_single_video_info, bvid, auth_config)
 
         @Slot(object)
         def _on_fetch_succeeded(info: VideoInfo):
@@ -74,3 +94,22 @@ class VideoController(QObject):
             _bg_fetch_pool.start(task)
         else:
             QThreadPool.globalInstance().start(task)
+
+    def fetch_multiple_infos(self, bvids: list[str], auth_config: ApiAuthConfig):
+        """
+        静默获取多条视频信息 (流式返回)
+
+        调用此方法会自动进入后台专有队列，且享有 HTTP Keep-Alive 性能加成。
+        """
+        if not bvids:
+            return
+
+        task = GenericTask(
+            _fetch_multiple_video_infos,
+            bvids,
+            auth_config,
+            self.fetchSucceeded.emit,
+            self.fetchFailed.emit
+        )
+
+        _bg_fetch_pool.start(task)

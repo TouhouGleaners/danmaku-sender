@@ -169,7 +169,7 @@ class SenderPage(QWidget):
         self.basic_group.bv_input.setText(bvid)
         self._pending_part_index = p_index
 
-        self.video_controller.fetch_info(bvid, self._state.get_api_auth())
+        self.video_controller.fetch_single_info(bvid, self._state.get_api_auth())
 
     @Slot(int)
     def _on_part_selected(self, index: int):

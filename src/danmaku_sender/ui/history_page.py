@@ -311,13 +311,16 @@ class HistoryPage(QWidget):
             return
 
         auth_config = self._state.get_api_auth()
+        missing_bvids = []
         for row in records:
             bvid = row['bvid']
             if self._model.get_video_info(bvid) is None and bvid not in self._fetched_bvids:
                 self._fetched_bvids.add(bvid)
                 self._model.mark_as_loading(bvid)
-                # 下发给 Controller 排队
-                self.video_controller.fetch_info(bvid, auth_config, is_background=True)
+                missing_bvids.append(bvid)
+
+        if missing_bvids:
+            self.video_controller.fetch_multiple_infos(missing_bvids, auth_config)
 
     def _show_detail_dialog(self, record):
         video_info = self._model.get_video_info(record['bvid'])
