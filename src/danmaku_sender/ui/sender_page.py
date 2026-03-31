@@ -131,6 +131,7 @@ class SenderPage(QWidget):
 
         self._state.video_state.loaded_danmakus = []
         try:
+            self.logger.info(f"📥 正在解析文件: {Path(file_path).name}")
             parsed = self.danmaku_parser.parse_xml_file(file_path)
             if parsed:
                 self.basic_group.file_input.setText(Path(file_path).name)
