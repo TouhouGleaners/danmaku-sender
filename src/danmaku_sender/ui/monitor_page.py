@@ -1,6 +1,5 @@
 import time
 import logging
-import threading
 from datetime import datetime
 
 from PySide6.QtWidgets import (
@@ -167,16 +166,9 @@ class MonitorPage(QWidget):
 
         self.setLayout(main_layout)
 
-    def _update_btn_style(self, running: bool):
-        """统一刷新按钮状态与图标的私有方法"""
-        state = "running" if running else "ready"
-        self.start_btn.setProperty("state", state)
-        self.start_btn.style().unpolish(self.start_btn)
-        self.start_btn.style().polish(self.start_btn)
-        self.start_btn.setIcon(self._icon_stop if running else self._icon_start)
-
     def _connect_signals(self):
-        self.start_btn.clicked.connect(self.toggle_task)
+        # Internal
+        self.start_btn.clicked.connect(self._toggle_task)
         self.anchor_combo.currentIndexChanged.connect(self._on_anchor_changed)
         self.btn_reset_anchor.clicked.connect(self._on_reset_anchor_clicked)
 
@@ -205,16 +197,24 @@ class MonitorPage(QWidget):
 
         self._update_anchor_display(self._state.monitor_config.stats_baseline)
 
+    def showEvent(self, event):
+        super().showEvent(event)
+        self._refresh_info_labels()
+
+    def _update_btn_style(self, running: bool):
+        """统一刷新按钮状态与图标的私有方法"""
+        state = "running" if running else "ready"
+        self.start_btn.setProperty("state", state)
+        self.start_btn.style().unpolish(self.start_btn)
+        self.start_btn.style().polish(self.start_btn)
+        self.start_btn.setIcon(self._icon_stop if running else self._icon_start)
+
     def _update_anchor_display(self, baseline: float):
         if baseline <= 0:
             self.anchor_display.setText("全量历史记录")
         else:
             dt_str = datetime.fromtimestamp(baseline).strftime('%m-%d %H:%M:%S')
             self.anchor_display.setText(dt_str)
-
-    def showEvent(self, event):
-        super().showEvent(event)
-        self._refresh_info_labels()
 
     def _refresh_info_labels(self):
         if not self._state:
@@ -239,7 +239,24 @@ class MonitorPage(QWidget):
             self.target_label.setText("尚未选择视频 (请在发射器页面加载)")
             self.target_label.setToolTip("")
 
-    def toggle_task(self):
+    def _set_ui_running(self, running):
+        self.interval_spin.setEnabled(not running)
+        self.start_btn.setEnabled(True)
+
+        if running:
+            self.start_btn.setText("停止监视")
+            self._update_btn_style(True)
+            self.log_output.clear()
+            self.status_label.setText("监视器：启动中...")
+        else:
+            self.start_btn.setText("开始监视")
+            self._update_btn_style(False)
+            self.status_label.setText("监视器：已停止")
+
+    # region Slots
+    # region Slots Internal
+    @Slot()
+    def _toggle_task(self):
         if not self._state:
             return
 
@@ -269,23 +286,6 @@ class MonitorPage(QWidget):
             auth_config=self._state.get_api_auth(),
             monitor_config=self._state.monitor_config
         )
-
-    def _set_ui_running(self, running):
-        self.interval_spin.setEnabled(not running)
-        self.start_btn.setEnabled(True)
-
-        if running:
-            self.start_btn.setText("停止监视")
-            self._update_btn_style(True)
-            self.log_output.clear()
-            self.status_label.setText("监视器：启动中...")
-        else:
-            self.start_btn.setText("开始监视")
-            self._update_btn_style(False)
-            self.status_label.setText("监视器：已停止")
-
-
-    # region Slots
 
     @Slot(int)
     def _on_anchor_changed(self, index: int):
@@ -317,6 +317,8 @@ class MonitorPage(QWidget):
         self.anchor_combo.setCurrentIndex(-1)
         self.anchor_combo.blockSignals(False)
 
+    # endregion
+    # region Slots MonitorController
     @Slot(dict)
     def _on_stats_updated(self, stats: dict):
         """
@@ -334,7 +336,7 @@ class MonitorPage(QWidget):
         self._set_ui_running(False)
 
     # endregion
-
+    # endregion
 
     def append_log(self, message: str):
         self.log_output.append(message)
