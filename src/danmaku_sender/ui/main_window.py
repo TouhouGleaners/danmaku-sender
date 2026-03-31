@@ -299,7 +299,6 @@ class MainWindow(QMainWindow):
         """同步更新 UI"""
         # 更新文字
         self.username_label.setText(profile.username)
-        dpr = self.devicePixelRatioF()
 
         # 更新头像
         if profile.is_login and profile.avatar_bytes:
