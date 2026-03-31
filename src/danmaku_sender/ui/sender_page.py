@@ -522,7 +522,15 @@ class SenderPage(QWidget):
 
     def dropEvent(self, event: QDropEvent) -> None:
         """鼠标落下"""
+        # 如果当前正在发送弹幕则拒绝拖入
+        if self._state and self._state.sender_is_active:
+            event.ignore()
+            return
+
         if urls := event.mimeData().urls():
+            if len(urls) > 1:
+                self.logger.info(f"检测到拖入 {len(urls)} 个文件，仅处理第一个。")
+
             file_path = urls[0].toLocalFile()
             self.logger.info(f"📥 接收到拖拽文件: {file_path}")
             self._load_xml_file(file_path)

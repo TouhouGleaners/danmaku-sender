@@ -29,13 +29,13 @@ class DanmakuParser:
             self.logger.debug(f"已成功加载 XML 文件: {xml_path}")
             return self.parse_xml_content(content, is_online=False)
 
-        except FileNotFoundError:
+        except FileNotFoundError as e:
             self.logger.error(f"弹幕文件不存在: {xml_path}")
-            return []
+            raise e
 
         except Exception as e:
             self.logger.error(f"文件读取失败: {xml_path}, error: {e}", exc_info=True)
-            return []
+            raise e
 
     def parse_xml_content(self, xml_content: str, is_online: bool = False) -> list[Danmaku]:
         """
@@ -56,7 +56,7 @@ class DanmakuParser:
             root = ET.fromstring(xml_content)
         except ET.ParseError as e:
             self.logger.error(f"XML 结构解析失败: {e}")
-            return []
+            raise ValueError(f"XML 结构解析失败: {e}") from e
 
         results = []
         for node in root.findall('d'):
@@ -82,5 +82,8 @@ class DanmakuParser:
         try:
             return Danmaku.from_xml(p_attr, text.strip(), is_online)
         except Exception as e:
-            self.logger.warning(f"单条弹幕解析失败: {e}")
+            self.logger.warning(
+                "单条弹幕解析失败: %s | text=%r, p_attr=%r",
+                e, text.strip(), node.get('p', ',')
+            )
             return
