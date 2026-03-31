@@ -7,7 +7,7 @@ from PySide6.QtWidgets import (
     QListWidget, QListWidgetItem, QStackedWidget, QLabel
 )
 from PySide6.QtGui import QAction, QCloseEvent, QDesktopServices
-from PySide6.QtCore import Qt, QUrl, QTimer, QSize
+from PySide6.QtCore import Qt, QUrl, QTimer, QSize, Slot
 
 from .controllers.auth_controller import AuthController, UserProfile
 from .controllers.system_controller import SystemController
@@ -28,6 +28,7 @@ from ..utils.resource_utils import load_stylesheet, get_svg_icon
 
 
 class MainWindow(QMainWindow):
+    # region Lifecycle & Initialization
     def __init__(self):
         super().__init__()
 
@@ -36,30 +37,50 @@ class MainWindow(QMainWindow):
 
         # 核心状态
         self.state = AppState()
-        self.auth_ctrl = AuthController(self)
-        self.sys_ctrl = SystemController(self)
-        self._log_signals_connected = False
+        self.auth_controller = AuthController(self)
+        self.system_controller = SystemController(self)
         self.logger = logging.getLogger("App.System.UI.Main")
+        self._log_signals_connected = False
+        self._help_dialog = None  # 存储帮助窗口的引用，防止被垃圾回收
 
+        # UI 初始化
         self._create_ui()
-        self.init_pages()
-        self.create_menu_bar()
+        self._init_pages()
+        self._create_menu_bar()
 
-        self._load_initial_credentials()  # 从磁盘中加载凭证
+        # 数据与配置加载
+        self._load_initial_credentials()
         load_app_config(self.state)
 
-        # 绑定逻辑信号
-        self.bind_state_to_pages()
-
-        # 连接信号
+        # 信号与状态绑定
+        self._bind_state_to_pages()
         self._connect_global_signals()
 
+        # 加载样式与后续任务
         load_stylesheet()
+        QTimer.singleShot(1000, lambda: self._run_update_check(is_manual=False))
 
-        # 存储帮助窗口的引用，防止被垃圾回收
-        self._help_dialog = None
+    def closeEvent(self, event: QCloseEvent):
+        """窗口关闭事件: 保存配置与凭证"""
+        try:
+            credentials_to_save = {
+                'SESSDATA': self.state.sessdata,
+                'BILI_JCT': self.state.bili_jct
+            }
+            save_credentials(credentials_to_save)
+            self.logger.info("凭证已加密保存。")
+        except Exception as e:
+            self.logger.error(f"保存凭证失败: {e}")
 
-        QTimer.singleShot(1000, lambda: self.run_update_check(is_manual=False))
+        save_app_config(self.state)
+
+        if self._help_dialog:
+            self._help_dialog.close()
+
+        super().closeEvent(event)
+
+    # endregion
+    # region UI Setup
 
     def _create_ui(self):
         self.central_widget = QWidget()
@@ -91,10 +112,7 @@ class MainWindow(QMainWindow):
         self.avatar_label.setObjectName("avatarLabel")
         self.avatar_label.setFixedSize(36, 36)
         self.avatar_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
-
-        default_icon = get_svg_icon("default_avatar.svg")
-        pixmap = default_icon.pixmap(36, 36)
-        self.avatar_label.setPixmap(pixmap)
+        self._refresh_default_avatar()
 
         self.username_label = QLabel("未登录")
         self.username_label.setObjectName("usernameLabel")
@@ -124,7 +142,7 @@ class MainWindow(QMainWindow):
         self.main_layout.addWidget(self.sidebar_frame)
         self.main_layout.addWidget(self.content_stack)
 
-    def init_pages(self):
+    def _init_pages(self):
         """初始化页面并绑定导航"""
         self.page_settings = SettingsPage()
         self.page_sender = SenderPage()
@@ -153,86 +171,14 @@ class MainWindow(QMainWindow):
         self.user_widget.setCursor(Qt.CursorShape.PointingHandCursor)
         self.user_widget.mousePressEvent = lambda e: self.sidebar.setCurrentRow(0)
 
-    def _connect_global_signals(self):
-        """全局信号绑定"""
-        # 用户认证与基础信息
-        self.state.credentials_changed.connect(self.request_user_info_refresh)
-        self.auth_ctrl.userProfileReady.connect(self._on_user_profile_updated)
-
-        # 系统组件联动
-        self.state.editor_dirty_changed.connect(self._refresh_sidebar_badges)
-        self.state.sender_active_changed.connect(self._refresh_sidebar_badges)
-
-        # 自动更新检查流
-        self.sys_ctrl.update_found.connect(self._on_update_found)
-        self.sys_ctrl.no_update.connect(lambda is_m:
-            QMessageBox.information(self, "检查更新", "当前已是最新版本。") if is_m else None
-        )
-        self.sys_ctrl.check_failed.connect(lambda err, is_m:
-            QMessageBox.warning(self, "检查更新失败", f"无法连接到更新服务器:\n{err}") if is_m else None
-        )
-
-        # 触发首次用户信息请求
-        QTimer.singleShot(500, self.request_user_info_refresh)
-
-    def _refresh_sidebar_badges(self, _=None):
-        """核心视觉逻辑：动态刷新侧边栏项目的文字后缀"""
-        # 弹幕发射器
-        sender_item = self.sidebar.item(1)
-        if sender_item:
-            if self.state.sender_is_active:
-                sender_item.setText("弹幕发射器 ▶")
-            else:
-                sender_item.setText("弹幕发射器")
-
-        # 弹幕编辑器
-        editor_item = self.sidebar.item(2)
-        if editor_item:
-            if self.state.editor_is_dirty:
-                editor_item.setText("弹幕编辑器 •")
-            else:
-                editor_item.setText("弹幕编辑器")
-
-    def request_user_info_refresh(self):
-        """发起异步请求刷新用户信息"""
-        self.auth_ctrl.refresh_user_info(self.state.get_api_auth())
-
-    def _refresh_default_avatar(self):
-        """通用方法：渲染高清的默认头像"""
-        dpr = self.devicePixelRatioF()
-        icon = get_svg_icon("default_avatar.svg")
-        physical_size = QSize(int(36 * dpr), int(36 * dpr))
-        pixmap = icon.pixmap(physical_size)
-        pixmap.setDevicePixelRatio(dpr)
-        self.avatar_label.setPixmap(pixmap)
-
-    def _on_user_profile_updated(self, profile: UserProfile):
-        """同步更新 UI"""
-        # 更新文字
-        self.username_label.setText(profile.username)
-
-        dpr = self.devicePixelRatioF()
-
-        # 更新头像
-        if profile.is_login and profile.avatar_bytes:
-            dpr = self.devicePixelRatioF()
-            # 这里的 image_processor 内部也需要确保 physical_size = int(size * dpr)
-            pixmap = QtImageProcessor.make_circular_pixmap(profile.avatar_bytes, 36, dpr)
-            if not pixmap.isNull():
-                self.avatar_label.setPixmap(pixmap)
-                return
-
-        # 未登录或无头像
-        self._refresh_default_avatar()
-
-    def create_menu_bar(self):
+    def _create_menu_bar(self):
         menu_bar = self.menuBar()
 
         # --- 文件菜单 ---
         file_menu = menu_bar.addMenu("文件")
 
         open_log_action = QAction("打开日志文件夹", self)
-        open_log_action.triggered.connect(self.open_log_folder)
+        open_log_action.triggered.connect(self._open_log_folder)
         file_menu.addAction(open_log_action)
 
         file_menu.addSeparator()
@@ -245,47 +191,26 @@ class MainWindow(QMainWindow):
         help_menu = menu_bar.addMenu("帮助")
 
         usage_action = QAction("使用说明", self)
-        usage_action.triggered.connect(self.show_help)
+        usage_action.triggered.connect(self._show_help)
         help_menu.addAction(usage_action)
 
         help_menu.addSeparator()
 
         update_action = QAction("检查新版本", self)
-        update_action.triggered.connect(lambda: self.run_update_check(is_manual=True))
+        update_action.triggered.connect(lambda: self._run_update_check(is_manual=True))
         help_menu.addAction(update_action)
 
         help_menu.addSeparator()
 
         about_action = QAction("关于", self)
-        about_action.triggered.connect(self.show_about)
+        about_action.triggered.connect(self._show_about)
         help_menu.addAction(about_action)
 
-    def show_help(self):
-        """显示非模态的帮助窗口"""
-        if not self._help_dialog:
-            self._help_dialog = HelpDialog()
-            self._help_dialog.finished.connect(lambda *args: setattr(self, '_help_dialog', None))
-
-        self._help_dialog.show()
-        self._help_dialog.raise_()
-        self._help_dialog.activateWindow()
-
-    def show_about(self):
-        AboutDialog(self).exec()
-
-    def open_log_folder(self):
-        log_dir = Path(user_data_dir(AppInfo.NAME_EN, AppInfo.AUTHOR)) / AppInfo.LOG_DIR_NAME
-        if not log_dir.exists():
-            try:
-                log_dir.mkdir(parents=True, exist_ok=True)
-            except Exception as e:
-                QMessageBox.warning(self, "错误", f"无法创建日志目录：\n{e}")
-                return
-
-        QDesktopServices.openUrl(QUrl.fromLocalFile(str(log_dir)))
+    # endregion
+    # region Data Binding & Signal
 
     def _load_initial_credentials(self):
-        """程序启动时，从 Keyring 读取加密的凭证并填充到设置页面。"""
+        """加载本地加密凭证"""
         try:
             credentials = load_credentials()
             self.state.sessdata = credentials.get("SESSDATA", "")
@@ -294,7 +219,7 @@ class MainWindow(QMainWindow):
         except Exception as e:
             self.logger.warning(f"加载凭证失败: {e}")
 
-    def bind_state_to_pages(self):
+    def _bind_state_to_pages(self):
         """绑定全局状态并配置日志路由"""
         # 页面数据绑定
         self.page_settings.bind_state(self.state)
@@ -316,7 +241,7 @@ class MainWindow(QMainWindow):
         self._setup_log_routing()
 
     def _setup_log_routing(self):
-        """从根 Logger 查找 GuiLoggingHandler 并绑定信号。"""
+        """配置 GuiLoggingHandler 路由"""
         root_logger = logging.getLogger()
         gui_handler = None
 
@@ -334,36 +259,104 @@ class MainWindow(QMainWindow):
         else:
             self.logger.error("日志路由系统初始化失败：未找到 GuiLoggingHandler。")
 
-    def closeEvent(self, event: QCloseEvent):
-        """
-        窗口关闭事件：
-        PySide6 退出时会自动触发此方法。
-        """
-        try:
-            credentials_to_save = {
-                'SESSDATA': self.state.sessdata,
-                'BILI_JCT': self.state.bili_jct
-            }
-            save_credentials(credentials_to_save)
-            self.logger.info("凭证已加密保存。")
-        except Exception as e:
-            self.logger.error(f"保存凭证失败: {e}")
+    def _connect_global_signals(self):
+        """全局信号绑定"""
+        # 用户认证与基础信息
+        self.state.credentials_changed.connect(self._request_user_info_refresh)
+        self.auth_controller.userProfileReady.connect(self._on_user_profile_updated)
 
-        save_app_config(self.state)
+        # 系统组件联动
+        self.state.editor_dirty_changed.connect(self._refresh_sidebar_badges)
+        self.state.sender_active_changed.connect(self._refresh_sidebar_badges)
 
-        if self._help_dialog:
-            self._help_dialog.close()
+        # 自动更新检查流
+        self.system_controller.update_found.connect(self._on_update_found)
+        self.system_controller.no_update.connect(lambda is_m:
+            QMessageBox.information(self, "检查更新", "当前已是最新版本。") if is_m else None
+        )
+        self.system_controller.check_failed.connect(lambda err, is_m:
+            QMessageBox.warning(self, "检查更新失败", f"无法连接到更新服务器:\n{err}") if is_m else None
+        )
 
-        # 接受关闭事件，允许窗口关闭
-        super().closeEvent(event)
+        # 触发首次用户信息请求
+        QTimer.singleShot(500, self._request_user_info_refresh)
 
-    def run_update_check(self, is_manual: bool = False):
+    # endregion
+    # region UI Updates & Slots
+
+    def _refresh_default_avatar(self):
+        """通用方法：渲染高清的默认头像"""
+        icon = get_svg_icon("default_avatar.svg")
+        pixmap = icon.pixmap(36, 36)
+        self.avatar_label.setPixmap(pixmap)
+
+    def _request_user_info_refresh(self):
+        """发起异步请求刷新用户信息"""
+        self.auth_controller.refresh_user_info(self.state.get_api_auth())
+
+    @Slot(UserProfile)
+    def _on_user_profile_updated(self, profile: UserProfile):
+        """同步更新 UI"""
+        # 更新文字
+        self.username_label.setText(profile.username)
+
+        # 更新头像
+        if profile.is_login and profile.avatar_bytes:
+            dpr = self.devicePixelRatioF()
+            pixmap = QtImageProcessor.make_circular_pixmap(profile.avatar_bytes, 36, dpr)
+            if not pixmap.isNull():
+                self.avatar_label.setPixmap(pixmap)
+                return
+
+        # 未登录或无头像
+        self._refresh_default_avatar()
+
+    @Slot(bool)
+    def _refresh_sidebar_badges(self, state_val: bool = False):
+        """动态刷新侧边栏项目的文字后缀"""
+        if sender_item := self.sidebar.item(1):
+            sender_item.setText("弹幕发射器 ▶" if self.state.sender_is_active else "弹幕发射器")
+
+        if editor_item := self.sidebar.item(2):
+            editor_item.setText("弹幕编辑器 •" if self.state.editor_is_dirty else "弹幕编辑器")
+
+    @Slot()
+    def _open_log_folder(self):
+        log_dir = Path(user_data_dir(AppInfo.NAME_EN, AppInfo.AUTHOR)) / AppInfo.LOG_DIR_NAME
+        if not log_dir.exists():
+            try:
+                log_dir.mkdir(parents=True, exist_ok=True)
+            except Exception as e:
+                QMessageBox.warning(self, "错误", f"无法创建日志目录：\n{e}")
+                return
+
+        QDesktopServices.openUrl(QUrl.fromLocalFile(str(log_dir)))
+
+    @Slot()
+    def _show_help(self):
+        """显示非模态的帮助窗口"""
+        if not self._help_dialog:
+            self._help_dialog = HelpDialog()
+            self._help_dialog.finished.connect(lambda *args: setattr(self, '_help_dialog', None))
+
+        self._help_dialog.show()
+        self._help_dialog.raise_()
+        self._help_dialog.activateWindow()
+
+    @Slot()
+    def _show_about(self):
+        AboutDialog(self).exec()
+
+    def _run_update_check(self, is_manual: bool = False):
         """启动更新检查"""
-        self.sys_ctrl.check_for_updates(self.state.sender_config.use_system_proxy, is_manual)
+        self.system_controller.check_for_updates(self.state.sender_config.use_system_proxy, is_manual)
 
-    def _on_update_found(self, ver, notes, url):
+    @Slot(str, str, str)
+    def _on_update_found(self, ver: str, notes: str, url: str):
         """发现新版本时的弹窗"""
         dialog = UpdateDialog(ver, notes, self)
 
         if dialog.exec():
             QDesktopServices.openUrl(QUrl(url))
+
+    # endregion
