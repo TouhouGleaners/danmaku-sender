@@ -6,66 +6,84 @@ from ..models.danmaku import Danmaku
 
 class DanmakuParser:
     """
-    解析 Bilibili 弹幕 XML 内容
-    返回 Danmaku 实体对象列表的类。
+    Bilibili 弹幕解析器
+
+    用于解析Bilibili XML格式的弹幕数据，支持本地文件和在线内容的解析。
     """
     def __init__(self):
         self.logger = logging.getLogger("App.System.Parser")
 
-    def parse_xml_content(self, xml_content: str, is_online_data: bool = False) -> list[Danmaku]:
+    def parse_xml_file(self, xml_path: str) -> list[Danmaku]:
+        """
+        从本地 XML 文件读取并解析弹幕。
+
+        Args:
+            xml_path: XML 文件路径
+
+        Returns:
+            解析成功的 Danmaku 对象列表。若文件不存在或解析失败则返回空列表。
+        """
+        try:
+            with open(xml_path, 'r', encoding='utf-8') as f:
+                content = f.read()
+            self.logger.debug(f"已成功加载 XML 文件: {xml_path}")
+            return self.parse_xml_content(content, is_online=False)
+
+        except FileNotFoundError as e:
+            self.logger.error(f"弹幕文件不存在: {xml_path}")
+            raise e
+
+        except Exception as e:
+            self.logger.error(f"文件读取失败: {xml_path}, error: {e}", exc_info=True)
+            raise e
+
+    def parse_xml_content(self, xml_content: str, is_online: bool = False) -> list[Danmaku]:
         """
         解析Bilibili的XML弹幕内容字符串，返回一个 Danmaku 对象列表。
 
         Args:
             xml_content (str): XML弹幕内容的字符串。
-            is_online_data (bool): 如果为True，表示解析的是在线实时弹幕数据，此时会尝试提取弹幕ID (p_attr[7])。
+            is_online (bool): 是否为在线实时数据 (为 True 时将尝试提取 dmid)。
 
         Returns:
-            list[Danmaku]: 一个包含 Danmaku 对象的列表。
+            list[Danmaku]: Danmaku 对象列表
         """
-        danmakus = []
+        if not xml_content or not xml_content.strip():
+            self.logger.warning("接收到的 XML 内容为空")
+            return []
+
         try:
             root = ET.fromstring(xml_content)
-            for d_tag in root.findall('d'):
-                try:
-                    p_attr_str = d_tag.get('p', '')
-                    p_attr = p_attr_str.split(',')
-                    text = d_tag.text
-
-                    if not text or not text.strip():
-                        self.logger.debug(f"ℹ️ 警告: 检测到空弹幕或纯空白弹幕，跳过此条. XML内容片段: '{ET.tostring(d_tag, encoding='unicode').strip()}'")
-                        continue
-
-                    if len(p_attr) < 1:
-                        self.logger.warning(f"⚠️ 警告: 弹幕属性'p'不完整，跳过此条. 内容: '{text}', 属性: '{p_attr_str}'")
-                        continue
-
-                    msg = text.strip()
-                    dm = Danmaku.from_xml(p_attr, msg, is_online_data)
-
-                    danmakus.append(dm)
-                except (ValueError, IndexError) as e:
-                    self.logger.warning(f"⚠️ 警告: 解析单个弹幕失败, 跳过此条. 内容: '{d_tag.text}', 属性: '{p_attr_str}', 错误: {e}")
-                except Exception as e:
-                    self.logger.critical(f"❌ 错误: 解析单个弹幕时发生意外异常, 跳过此条. 内容: '{d_tag.text}', 属性: '{p_attr_str}', 错误: {e}", exc_info=True)
-            return danmakus
         except ET.ParseError as e:
-            self.logger.error(f"❌ 错误: 解析XML内容时发生错误: {e}", exc_info=True)
-            return []
-        except Exception as e:
-            self.logger.critical(f"❌ 错误: 解析XML内容时发生意外异常: {e}", exc_info=True)
-            return []
+            self.logger.error(f"XML 结构解析失败: {e}")
+            raise ValueError(f"XML 结构解析失败: {e}") from e
 
-    def parse_xml_file(self, xml_path: str) -> list[Danmaku]:
-        """从XML文件读取内容并解析，返回一个 Danmaku 对象列表。"""
+        results = []
+        for node in root.findall('d'):
+            if dm := self._parse_node(node, is_online):
+                results.append(dm)
+
+        return results
+
+    def _parse_node(self, node: ET.Element, is_online: bool) -> Danmaku | None:
+        """解析单个节点"""
+        text = node.text
+        p_attr = node.get('p', '').split(',')
+
+        # 过滤空弹幕
+        if not text or not text.strip():
+            return
+
+        # 检查属性完整性
+        if len(p_attr) < 1:
+            self.logger.warning(f"弹幕属性丢失，跳过此条: {p_attr}")
+            return
+
         try:
-            with open(xml_path, 'r', encoding='utf-8') as f:
-                content = f.read()
-            self.logger.info(f'📦 成功从 {xml_path} 读取内容。')
-            return self.parse_xml_content(content, is_online_data=False)
-        except FileNotFoundError:
-            self.logger.error(f"❌ 错误: 弹幕文件 '{xml_path}' 不存在。")
-            return []
+            return Danmaku.from_xml(p_attr, text.strip(), is_online)
         except Exception as e:
-            self.logger.critical(f"❌ 错误: 读取或解析本地弹幕文件 '{xml_path}' 时发生意外异常: {e}", exc_info=True)
-            return []
+            self.logger.warning(
+                "单条弹幕解析失败: %s | text=%r, p_attr=%r",
+                e, text.strip(), node.get('p', ',')
+            )
+            return
