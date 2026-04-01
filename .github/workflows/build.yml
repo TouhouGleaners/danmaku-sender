@@ -56,9 +56,21 @@ jobs:
     - name: Prepare Assets (Rename & Zip)
       run: |
         $tag = "${{ steps.version.outputs.tag_name }}"
-        Move-Item -Path "dist/BiliDanmakuSender.exe" -Destination "dist/BiliDanmakuSender-$tag-onefile-x64.exe"
-        Get-ChildItem -Path dist/*.dist -Directory | Rename-Item -NewName "AppDist"
-        Compress-Archive -Path dist/AppDist/* -DestinationPath "dist/BiliDanmakuSender-$tag-portable-x64.zip"
+        # 单文件版 (Onefile)
+        if (Test-Path "dist/BiliDanmakuSender.exe") {
+            Move-Item -Path "dist/BiliDanmakuSender.exe" -Destination "dist/BiliDanmakuSender-$tag-onefile-x64.exe"
+        }
+
+        # 文件夹版 (Standalone)
+        $distFolder = Get-ChildItem -Path dist/*.dist -Directory | Select-Object -First 1
+        if ($distFolder) {
+            Rename-Item -Path $distFolder.FullName -NewName "AppDist"
+
+            if (-not (Test-Path "dist/AppDist/BiliDanmakuSender.exe")) {
+                 Write-Host "Warning: EXE not found in dist, checking logic..."
+            }
+            7z a -tzip -mx=9 "dist/BiliDanmakuSender-$tag-portable-x64.zip" "./dist/AppDist/*"
+        }
 
     - name: Download Chinese Language File
       shell: pwsh

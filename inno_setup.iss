@@ -43,6 +43,7 @@ Name: "desktopicon"; Description: "{cm:CreateDesktopIcon}"; GroupDescription: "{
 
 [Files]
 ; 指向 GitHub Actions 重命名后的 AppDist 目录
+Source: "dist\AppDist\BiliDanmakuSender.exe"; DestDir: "{app}"; Flags: ignoreversion
 Source: "dist\AppDist\*"; DestDir: "{app}"; Flags: ignoreversion recursesubdirs createallsubdirs
 
 [Icons]
