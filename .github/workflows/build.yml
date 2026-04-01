@@ -1,4 +1,4 @@
-name: Build Application EXE (Nuitka)
+name: Build Application Releases
 
 on:
   release:
@@ -23,6 +23,22 @@ jobs:
         python -m pip install --upgrade pip
         pip install .[build]
 
+    - name: Process Version String
+      id: version
+      shell: pwsh
+      run: |
+        $tagName = "${{ github.ref_name }}"
+        $cleanVersion = $tagName.TrimStart('v')
+
+        # 处理成 Windows 强制要求的 4 位数字: 2.4.0.0
+        $parts = $cleanVersion.Split('.')
+        while ($parts.Count -lt 4) { $parts += "0" }
+        $fourDigitVersion = $parts -join "."
+
+        echo "tag_name=$tagName" >> $env:GITHUB_OUTPUT
+        echo "clean_version=$cleanVersion" >> $env:GITHUB_OUTPUT
+        echo "four_digit=$fourDigitVersion" >> $env:GITHUB_OUTPUT
+
     - name: Build EXE with Nuitka
       run: |
         python -m nuitka --standalone --onefile `
@@ -30,29 +46,31 @@ jobs:
                --assume-yes-for-downloads `
                --windows-console-mode=disable `
                --windows-icon-from-ico=assets/icon.ico `
+               --windows-file-version=${{ steps.version.outputs.four_digit }} `
+               --windows-product-version=${{ steps.version.outputs.clean_version }} `
                --include-data-dir=assets=assets `
                --output-dir=dist `
                --output-filename=BiliDanmakuSender `
                run.py
 
-    - name: Prepare Artifact Names
-      id: set_names
+    - name: Prepare Assets (Rename & Zip)
       run: |
-        $version = "${{ github.ref_name }}"
-        $file_name = "BiliDanmakuSender-${version}-windows-x64.exe"
-        echo "file_name=$file_name" >> $env:GITHUB_OUTPUT
+        $tag = "${{ steps.version.outputs.tag_name }}"
+        Move-Item -Path "dist/BiliDanmakuSender.exe" -Destination "dist/BiliDanmakuSender-$tag-onefile-x64.exe"
+        Get-ChildItem -Path dist/*.dist -Directory | Rename-Item -NewName "AppDist"
+        Compress-Archive -Path dist/AppDist/* -DestinationPath "dist/BiliDanmakuSender-$tag-portable-x64.zip"
 
-    - name: Rename Artifact
+    - name: Build Inno Setup Installer
       run: |
-        $file_name = "${{ steps.set_names.outputs.file_name }}"
-        Move-Item -Path "./dist/BiliDanmakuSender.exe" -Destination "./dist/$file_name"
+        $tag = "${{ steps.version.outputs.tag_name }}"
+        iscc /DAppVersion="$tag" inno_setup.iss
 
-    - name: Upload Release Asset
-      uses: actions/upload-release-asset@v1
+    - name: Upload Release Assets
+      uses: softprops/action-gh-release@v2
+      with:
+        files: |
+          dist/BiliDanmakuSender-*-onefile-x64.exe
+          dist/BiliDanmakuSender-*-portable-x64.zip
+          dist/BiliDanmakuSender-*-setup-x64.exe
       env:
         GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-      with:
-        upload_url: ${{ github.event.release.upload_url }} 
-        asset_name: ${{ steps.set_names.outputs.file_name }}
-        asset_path: ./dist/${{ steps.set_names.outputs.file_name }}
-        asset_content_type: application/vnd.microsoft.portable-executable
