@@ -60,6 +60,11 @@ jobs:
         Get-ChildItem -Path dist/*.dist -Directory | Rename-Item -NewName "AppDist"
         Compress-Archive -Path dist/AppDist/* -DestinationPath "dist/BiliDanmakuSender-$tag-portable-x64.zip"
 
+    - name: Download Chinese Language File
+      shell: pwsh
+      run: |
+        Invoke-WebRequest -Uri "https://raw.githubusercontent.com/jrsoftware/issrc/main/Files/Languages/Unofficial/ChineseSimplified.isl" -OutFile "ChineseSimplified.isl"
+
     - name: Build Inno Setup Installer
       run: |
         $tag = "${{ steps.version.outputs.tag_name }}"
