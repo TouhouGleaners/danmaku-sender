@@ -149,7 +149,7 @@ class EditorSession:
                 if item.head_had_error and not item.error_msg:
                     fixed_count += 1
 
-        total = len(self.items)
+        total = len(final_list)
         self.state.video_state.loaded_danmakus = final_list
         self._reset_session()  # 提交后重置编辑器状态
 
@@ -220,10 +220,9 @@ class EditorSession:
             return False
 
         last_changes = self.undo_stack.pop()
-        for uid in self.item_order:
-            item = self.items[uid]
-            if item.is_deleted:
-                continue
+        for change in last_changes:
+            if item := self.items.get(change.item_id):
+                change.field.set_value(item, change.previous_value)
 
         # 撤销后重新校验
         self.refresh_validation()
