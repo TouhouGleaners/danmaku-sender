@@ -169,8 +169,11 @@ class EditorSession:
         duration_ms = self.state.video_state.selected_part_duration_ms
         config = self.state.validation_config
 
-        # 提取当前正在编辑的弹幕实例传入校验器
-        working_list = [self.items[uid].working for uid in self.item_order]
+        # 未删除的 UUID 列表
+        active_uids = [uid for uid in self.item_order if not self.items[uid].is_deleted]
+
+        # 提取存活的弹幕实例传入校验器
+        working_list = [self.items[uid].working for uid in active_uids]
         raw_issues = validate_danmaku_list(working_list, duration_ms, config)
 
         # 重置所有节点的错误状态
@@ -179,7 +182,7 @@ class EditorSession:
 
         # 回填新的错误信息
         for issue in raw_issues:
-            uid = self.item_order[issue['original_index']]
+            uid = active_uids[issue['original_index']]
             self.items[uid].error_msg = issue['reason']
 
     def generate_view_model(self, show_all: bool = False) -> list[ViewItem]:
