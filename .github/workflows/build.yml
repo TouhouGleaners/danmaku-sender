@@ -1,4 +1,4 @@
-name: Build Application EXE (Nuitka)
+name: Build Application Releases
 
 on:
   release:
@@ -23,36 +23,89 @@ jobs:
         python -m pip install --upgrade pip
         pip install .[build]
 
-    - name: Build EXE with Nuitka
+    - name: Parse Version Strings
+      id: version
+      shell: pwsh
       run: |
-        python -m nuitka --standalone --onefile `
+        # 从 Tag 获取版本号
+        $tagName = "${{ github.ref_name }}"
+        $cleanVersion = $tagName -replace '^v', ''
+
+        # 补齐四位数字给 Windows 资源属性用
+        $parts = $cleanVersion.Split('.')
+        while ($parts.Count -lt 4) { $parts += "0" }
+        $fourDigitVersion = $parts[0..3] -join "."
+
+        echo "tag_name=$tagName" >> $env:GITHUB_OUTPUT
+        echo "clean_version=$cleanVersion" >> $env:GITHUB_OUTPUT
+        echo "four_digit=$fourDigitVersion" >> $env:GITHUB_OUTPUT
+
+    - name: Build Standalone (For ZIP & Installer)
+      run: |
+        python -m nuitka --standalone `
                --enable-plugin=pyside6 `
                --assume-yes-for-downloads `
                --windows-console-mode=disable `
                --windows-icon-from-ico=assets/icon.ico `
+               --windows-file-version=${{ steps.version.outputs.four_digit }} `
+               --windows-product-version=${{ steps.version.outputs.clean_version }} `
                --include-data-dir=assets=assets `
-               --output-dir=dist `
+               --output-dir=dist-standalone `
                --output-filename=BiliDanmakuSender `
                run.py
 
-    - name: Prepare Artifact Names
-      id: set_names
+    - name: Build Onefile (Single EXE)
       run: |
-        $version = "${{ github.ref_name }}"
-        $file_name = "BiliDanmakuSender-${version}-windows-x64.exe"
-        echo "file_name=$file_name" >> $env:GITHUB_OUTPUT
+        python -m nuitka --onefile `
+               --enable-plugin=pyside6 `
+               --assume-yes-for-downloads `
+               --windows-console-mode=disable `
+               --windows-icon-from-ico=assets/icon.ico `
+               --windows-file-version=${{ steps.version.outputs.four_digit }} `
+               --windows-product-version=${{ steps.version.outputs.clean_version }} `
+               --include-data-dir=assets=assets `
+               --output-dir=dist-onefile `
+               --output-filename=BiliDanmakuSender `
+               run.py
 
-    - name: Rename Artifact
+    - name: Repackage and Rename Assets
+      shell: pwsh
       run: |
-        $file_name = "${{ steps.set_names.outputs.file_name }}"
-        Move-Item -Path "./dist/BiliDanmakuSender.exe" -Destination "./dist/$file_name"
+        $tag = "${{ steps.version.outputs.tag_name }}"
 
-    - name: Upload Release Asset
-      uses: actions/upload-release-asset@v1
+        if (Test-Path "dist-onefile/BiliDanmakuSender.exe") {
+            Move-Item -Path "dist-onefile/BiliDanmakuSender.exe" -Destination "BiliDanmakuSender-$tag-onefile-x64.exe"
+        }
+
+        if (Test-Path "dist-standalone/run.dist") {
+            Move-Item -Path "dist-standalone/run.dist" -Destination "AppDist"
+        }
+
+        $targetExe = Get-ChildItem -Path "AppDist/*.exe" | Select-Object -First 1
+        if ($targetExe) {
+            if ($targetExe.Name -ne "BiliDanmakuSender.exe") {
+                Rename-Item -Path $targetExe.FullName -NewName "BiliDanmakuSender.exe"
+            }
+        }
+
+        7z a -tzip -mx=9 "BiliDanmakuSender-$tag-portable-x64.zip" "./AppDist/*"
+
+    - name: Build Inno Setup Installer
+      shell: pwsh
+      run: |
+        Invoke-WebRequest -Uri "https://raw.githubusercontent.com/jrsoftware/issrc/main/Files/Languages/Unofficial/ChineseSimplified.isl" -OutFile "ChineseSimplified.isl"
+
+        if (!(Test-Path "Output")) { New-Item -ItemType Directory -Path "Output" }
+
+        $version = "${{ steps.version.outputs.clean_version }}"
+        iscc /DAppVersion="$version" inno_setup.iss
+
+    - name: Publish to GitHub Releases
+      uses: softprops/action-gh-release@v2
+      with:
+        files: |
+          Output/BiliDanmakuSender-*-setup-x64.exe
+          BiliDanmakuSender-*-portable-x64.zip
+          BiliDanmakuSender-*-onefile-x64.exe
       env:
         GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-      with:
-        upload_url: ${{ github.event.release.upload_url }} 
-        asset_name: ${{ steps.set_names.outputs.file_name }}
-        asset_path: ./dist/${{ steps.set_names.outputs.file_name }}
-        asset_content_type: application/vnd.microsoft.portable-executable
