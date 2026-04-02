@@ -164,6 +164,8 @@ class EditorSession:
 
     def refresh_validation(self):
         """重新验证工作区数据并回填错误信息"""
+        self._reorder_items()
+
         duration_ms = self.state.video_state.selected_part_duration_ms
         config = self.state.validation_config
 
@@ -371,3 +373,11 @@ class EditorSession:
 
         mod_count, _ = self._execute_batch_transform("时间平移", _shift_rule)
         return mod_count
+
+    def _reorder_items(self):
+        """
+        根据工作区弹幕的最新时间重新排序。
+
+        确保 items 字典的实际时间与 item_order 的索引顺序严格一致。
+        """
+        self.item_order.sort(key=lambda uid: self.items[uid].working.progress)

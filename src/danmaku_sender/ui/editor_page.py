@@ -340,7 +340,7 @@ class EditorPage(QWidget):
         self.session: EditorSession | None = None
         self.logger = logging.getLogger("App.System.UI.Editor")
 
-        self.current_editing_index: str | None = None
+        self.current_item_id: str | None = None
 
         self._create_ui()
 
@@ -509,6 +509,7 @@ class EditorPage(QWidget):
 
         item = self.session.items.get(item_id)
         if not item:
+            self.logger.warning(f"UI 状态不同步: 在 Session 中找不到 UUID 为 {item_id} 的弹幕。")
             return None, None
 
         return item_id, item.working
@@ -590,7 +591,7 @@ class EditorPage(QWidget):
         self.status_label.setText("正在验证...")
         self.status_label.setStyleSheet("color: blue;")
 
-        self.current_editing_index = None
+        self.current_item_id = None
         self.inspector_group.reset_inspector()
         has_issues = self.session.checkout_from_state()
 
@@ -614,7 +615,7 @@ class EditorPage(QWidget):
 
         selected_indexes = self.table.selectionModel().selectedRows()
         if not selected_indexes:
-            self.current_editing_index = None
+            self.current_item_id = None
             self.inspector_group.reset_inspector()
             return
 
@@ -622,15 +623,15 @@ class EditorPage(QWidget):
         if item_id is None or dm is None:
             return
 
-        self.current_editing_index = item_id
+        self.current_item_id = item_id
         self.inspector_group.load_danmaku(dm)
 
     def _apply_properties(self, new_props: dict[EditorField, Any]):
         """Inspector 回调：应用弹幕属性修改"""
-        if self.current_editing_index is None or not self.session:
+        if self.current_item_id is None or not self.session:
             return
 
-        changed = self.session.update_item_properties(self.current_editing_index, new_props)
+        changed = self.session.update_item_properties(self.current_item_id, new_props)
         if changed:
             # 记录当前选中的行，刷新表格后恢复选中
             row = self.table.currentIndex().row()
@@ -743,7 +744,7 @@ class EditorPage(QWidget):
         if not self.session:
             return
 
-        self.current_editing_index = None
+        self.current_item_id = None
         self.inspector_group.reset_inspector()
 
         total, fixed, deleted = self.session.commit_to_state()
