@@ -32,10 +32,10 @@ class EditorTableModel(QAbstractTableModel):
         self._view_items = view_items
         self.endResetModel()
 
-    def get_source_index(self, row: int) -> int | None:
-        """获取选中行对应的底层弹幕原始索引"""
+    def get_item_id(self, row: int) -> str | None:
+        """获取选中行对应的底层 UUID"""
         if 0 <= row < len(self._view_items):
-            return self._view_items[row]['source_index']
+            return self._view_items[row]['id']
         return None
 
     def rowCount(self, parent=QModelIndex()) -> int:
@@ -71,7 +71,7 @@ class EditorTableModel(QAbstractTableModel):
             case Qt.ItemDataRole.DisplayRole:
                 # 提供显示文本
                 match col:
-                    case 0: return str(item['source_index'] + 1)
+                    case 0: return str(index.row() + 1)
                     case 1: return format_ms_to_hhmmss(item['time_ms'])
                     case 2: return item['error_msg']
                     case 3: return item['content']
@@ -79,7 +79,7 @@ class EditorTableModel(QAbstractTableModel):
 
             case Qt.ItemDataRole.UserRole:
                 # 提供 UserRole 用于反向查找
-                return item['source_index']
+                return item['id']
 
             case Qt.ItemDataRole.ForegroundRole:
                 # 提供颜色样式
@@ -340,7 +340,7 @@ class EditorPage(QWidget):
         self.session: EditorSession | None = None
         self.logger = logging.getLogger("App.System.UI.Editor")
 
-        self.current_editing_index: int | None = None
+        self.current_editing_index: str | None = None
 
         self._create_ui()
 
@@ -498,20 +498,20 @@ class EditorPage(QWidget):
         self._update_ui_state()
 
     # --- 辅助与状态管理 ---
-    def _get_danmaku_for_row(self, row: int) -> tuple[int | None, Danmaku | None]:
-        """辅助方法：通过 UI 行号获取底层原始索引与弹幕对象"""
+    def _get_danmaku_for_row(self, row: int) -> tuple[str | None, Danmaku | None]:
+        """辅助方法：通过 UI 行号获取底层 UUID 与弹幕对象"""
         if not self.session:
             return None, None
 
-        original_index = self.model.get_source_index(row)
-        if original_index is None:
+        item_id = self.model.get_item_id(row)
+        if not item_id:
             return None, None
 
-        if not (0 <= original_index < len(self.session.staged_danmakus)):
-            self.logger.warning(f"越界访问拦截: 尝试访问索引 {original_index}，但数据池大小为 {len(self.session.staged_danmakus)}")
+        item = self.session.items.get(item_id)
+        if not item:
             return None, None
 
-        return original_index, self.session.staged_danmakus[original_index]
+        return item_id, item.working
 
     def _update_ui_state(self):
         """统一状态机控制"""
@@ -618,12 +618,11 @@ class EditorPage(QWidget):
             self.inspector_group.reset_inspector()
             return
 
-        original_index, dm = self._get_danmaku_for_row(selected_indexes[0].row())
-        if original_index is None or dm is None:
+        item_id, dm = self._get_danmaku_for_row(selected_indexes[0].row())
+        if item_id is None or dm is None:
             return
 
-        self.current_editing_index = original_index
-
+        self.current_editing_index = item_id
         self.inspector_group.load_danmaku(dm)
 
     def _apply_properties(self, new_props: dict[EditorField, Any]):
@@ -650,14 +649,14 @@ class EditorPage(QWidget):
 
         action = menu.exec(self.table.viewport().mapToGlobal(pos))
 
-        original_index, _ = self._get_danmaku_for_row(index.row())
-        if original_index is None:
+        item_id, _ = self._get_danmaku_for_row(index.row())
+        if item_id is None:
             return
 
         if action == edit_action:
             self._edit_row(index.row())
         elif action == delete_action:
-            self.session.delete_item(original_index)
+            self.session.delete_items([item_id])
             self._refresh_table()
 
     def on_table_double_click(self, index: QModelIndex):
@@ -669,24 +668,22 @@ class EditorPage(QWidget):
         if not self.session:
             return
 
-        original_index, dm = self._get_danmaku_for_row(row)
-        if original_index is None or dm is None:
+        item_id, dm = self._get_danmaku_for_row(row)
+        if item_id is None or dm is None:
             return
 
         current_text = dm.msg
-
         dialog = EditDanmakuDialog(current_text, self)
         if dialog.exec():
             new_text = dialog.get_text()
             if new_text and new_text != current_text:
-                self.session.update_item_content(original_index, new_text)
+                self.session.update_item_content(item_id, new_text)
                 self._refresh_table()
-                # 恢复选中状态
-                self.table.selectRow(row)
+                self.table.selectRow(row)  # 恢复选中状态
             elif not new_text:
                 reply = QMessageBox.question(self, "确认删除", "内容为空，是否直接删除该条弹幕？", QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No)
                 if reply == QMessageBox.StandardButton.Yes:
-                    self.session.delete_item(original_index)
+                    self.session.delete_items([item_id])
                     self._refresh_table()
 
     def delete_selected_items(self):
@@ -698,18 +695,15 @@ class EditorPage(QWidget):
         if not selected_indexes:
             return
 
-        # 收集所有的 source_index
-        original_indices = [
-            idx for row_idx in selected_indexes
-            if (idx := self.model.get_source_index(row_idx.row())) is not None
+        # 收集所有的 UUID
+        uids = [
+            uid for row_idx in selected_indexes
+            if (uid := self.model.get_item_id(row_idx.row())) is not None
         ]
 
-        if not original_indices:
-            return
-
-        self.session.delete_items(original_indices)
-
-        self._refresh_table()
+        if uids:
+            self.session.delete_items(uids)
+            self._refresh_table()
 
     def undo(self):
         """撤销"""
