@@ -16,6 +16,7 @@ from .framework.binder import UIBinder
 from ..core.engines.editor_session import EditorSession, EditorField
 from ..core.models.danmaku import Danmaku
 from ..core.state import AppState
+from ..utils.resource_utils import get_svg_icon
 from ..utils.time_utils import format_ms_to_hhmmss
 
 
@@ -355,15 +356,15 @@ class EditorPage(QWidget):
         toolbar_layout.setSpacing(8)
 
         # A: 文件级操作 (预留)
-        self.btn_new = QPushButton("📄 新建")
+        self.btn_new = QPushButton(get_svg_icon("note_add.svg"), "新建")
         self.btn_new.setEnabled(False)
         self.btn_new.setToolTip("预留功能：新建空白弹幕文件")
 
-        self.btn_import = QPushButton("📂 导入 XML")
+        self.btn_import = QPushButton(get_svg_icon("file_open.svg"), "导入 XML")
         self.btn_import.setEnabled(False)
         self.btn_import.setToolTip("预留功能：从本地导入外部 XML 文件")
 
-        self.btn_export = QPushButton("💾 导出为 XML")
+        self.btn_export = QPushButton(get_svg_icon("file_save.svg"), "导出为 XML")
         self.btn_export.setEnabled(False)
         self.btn_export.setToolTip("预留功能：将当前工作区内容导出")
 
@@ -377,25 +378,25 @@ class EditorPage(QWidget):
         toolbar_layout.addWidget(v_line1)
 
         # B: 批量处理工具 (下拉菜单)
-        self.btn_batch = QPushButton("🛠️ 批量处理")
+        self.btn_batch = QPushButton(get_svg_icon("handyman.svg"), "批量处理")
         self.btn_batch.setEnabled(False)
 
         self.batch_menu = QMenu(self)
-        self.batch_menu.addAction("✂️ 一键去除所有换行符", self.batch_remove_newlines)
-        self.batch_menu.addAction("📏 一键截断过长弹幕(>100字)", self.batch_truncate_length)
-        self.batch_menu.addAction("⏱️ 整体平移时间轴", self.open_offset_dialog)
+        self.batch_menu.addAction(get_svg_icon("format_clear.svg"), "一键去除所有换行符", self.batch_remove_newlines)
+        self.batch_menu.addAction(get_svg_icon("short_text.svg"), "一键截断过长弹幕(>100字)", self.batch_truncate_length)
+        self.batch_menu.addAction(get_svg_icon("sync_alt.svg"), "整体平移时间轴", self.open_offset_dialog)
         self.btn_batch.setMenu(self.batch_menu)
 
         toolbar_layout.addWidget(self.btn_batch)
         toolbar_layout.addStretch()
 
         # C: 核心工作流
-        self.undo_btn = QPushButton("↩️ 撤销")
+        self.undo_btn = QPushButton(get_svg_icon("undo.svg"), "撤销")
         self.undo_btn.setFixedWidth(80)
         self.undo_btn.setEnabled(False)
         self.undo_btn.clicked.connect(self.undo)
 
-        self.run_btn = QPushButton("▶️ 开始校验")
+        self.run_btn = QPushButton(get_svg_icon("play_arrow.svg"), "开始校验")
         self.run_btn.setStyleSheet("background-color: #3498db; color: white; font-weight: bold;")
         self.run_btn.setFixedWidth(100)
         self.run_btn.clicked.connect(self.run_validation)
@@ -469,7 +470,7 @@ class EditorPage(QWidget):
         self.status_label.setStyleSheet("color: #7f8c8d;")
         self.status_label.setAlignment(Qt.AlignmentFlag.AlignRight | Qt.AlignmentFlag.AlignVCenter)
 
-        self.apply_btn = QPushButton("应用所有修改")
+        self.apply_btn = QPushButton(get_svg_icon("done_all.svg"), "应用所有修改")
         self.apply_btn.setStyleSheet("""
             QPushButton {
                 background-color: #2ecc71;
@@ -653,18 +654,18 @@ class EditorPage(QWidget):
 
         menu = QMenu(self)
 
-        edit_action = menu.addAction("✏️ 编辑内容")
+        edit_action = menu.addAction(get_svg_icon("edit.svg"), "编辑内容")
         menu.addSeparator()
 
-        insert_above_action = menu.addAction("➕ 在上方插入新弹幕")
+        insert_above_action = menu.addAction(get_svg_icon("vertical_align_top.svg"), "在上方插入新弹幕")
         insert_above_action.setEnabled(False)  # 预留
 
-        insert_below_action = menu.addAction("➕ 在下方插入新弹幕")
+        insert_below_action = menu.addAction(get_svg_icon("vertical_align_bottom.svg"), "在下方插入新弹幕")
         insert_below_action.setEnabled(False)  # 预留
 
         menu.addSeparator()
 
-        delete_action = menu.addAction("🗑️ 删除选中条目")
+        delete_action = menu.addAction(get_svg_icon("delete.svg"), "删除选中条目")
 
         # 弹出菜单
         action = menu.exec(self.table.viewport().mapToGlobal(pos))
