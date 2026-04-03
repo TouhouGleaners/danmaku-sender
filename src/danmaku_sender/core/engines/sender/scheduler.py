@@ -112,7 +112,7 @@ class DanmakuScheduler:
             self.logger.info(f"[{i+1}/{ctx.total}] 准备执行: {dm.msg}")
 
             # --- 委派 Executor 发送 ---
-            result = self.executor.execute(job.target, dm)
+            result = self.executor.execute(job.target, dm, job.stop_event)
 
             # --- 回调注入层 ---
             if job.result_callback:
@@ -122,18 +122,11 @@ class DanmakuScheduler:
             if not result.is_success:
                 ctx.add_unsent(dm, result.hint)
 
-                # A: 遭遇致命封禁，直接摧毁流水线
+                # 遭遇致命封禁，直接摧毁流水线
                 if result.is_fatal:
                     ctx.fatal_error_occurred = True
                     ctx.add_unsent(job.danmakus[i+1:], f"致命错误: {result.hint}")
                     break
-
-                # B: 遭遇风控限流，下发惩罚性延时
-                if result.code == BiliDmErrorCode.FREQ_LIMIT.code:
-                    self.logger.warning("⚠️ 触发频率限制！强制附加 10 秒惩罚延时...")
-                    if job.stop_event.wait(10.0):
-                        ctx.add_unsent(job.danmakus[i+1:], "任务在惩罚延时中被手动停止")
-                        break
             else:
                 ctx.success_count += 1
 
