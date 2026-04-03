@@ -524,43 +524,35 @@ class EditorPage(QWidget):
 
     def _update_ui_state(self):
         """统一状态机控制"""
-        if not self._state:
+        if not self.session or not self._state:
             for btn in [self.run_btn, self.btn_batch, self.undo_btn, self.apply_btn]:
                 btn.setEnabled(False)
+            self.status_label.setText("提示: 请先在“发射器”页面加载文件并选择分P。")
+            self.status_label.setStyleSheet("color: #7f8c8d;")
             return
 
-        has_file = len(self._state.video_state.loaded_danmakus) > 0
-        has_cid = self._state.video_state.selected_cid is not None
-        self.run_btn.setEnabled(has_file and has_cid)
-
-        if not self.session:
-            return
-
-        session_active = self.session.has_active_session
+        video_state = self._state.video_state
+        session = self.session
         has_items = self.model.rowCount() > 0
 
-        self.btn_batch.setEnabled(session_active and has_items)
-        self.undo_btn.setEnabled(self.session.can_undo)
-        self.apply_btn.setEnabled(self.session.is_dirty)
+        self.run_btn.setEnabled(bool(video_state.loaded_danmakus) and video_state.selected_cid is not None)
+        self.btn_batch.setEnabled(session.has_active_session and has_items)
+        self.undo_btn.setEnabled(session.can_undo)
+        self.apply_btn.setEnabled(session.is_dirty)
 
-        self.undo_btn.setEnabled(self.session.can_undo)
-        self.apply_btn.setEnabled(self.session.is_dirty)
-
-        # --- 状态文案与样式切换 ---
-        if self.session.is_dirty:
+        if session.is_dirty:
             self.status_label.setText("⚠️ 有未应用的修改！请点击“应用所有修改”按钮。")
             self.status_label.setStyleSheet("color: #d35400;")
-        elif session_active:
-            if has_items:
-                # 统计未删除的错误
-                count = self.session.active_error_count
+        elif session.has_active_session:
+            count = session.active_error_count
+            if count > 0:
                 self.status_label.setText(f"❌ 发现 {count} 条问题弹幕，请处理。")
                 self.status_label.setStyleSheet("color: red;")
             else:
-                self.status_label.setText("✅ 当前无问题弹幕。")
+                self.status_label.setText("✅ 验证通过，当前无问题。")
                 self.status_label.setStyleSheet("color: green;")
         else:
-            self.status_label.setText("提示: 请先在“发射器”页面加载文件并选择分P。")
+            self.status_label.setText("提示: 点击“开始校验”以检查弹幕合法性。")
             self.status_label.setStyleSheet("color: #7f8c8d;")
 
     # --- 核心交互逻辑 ---
