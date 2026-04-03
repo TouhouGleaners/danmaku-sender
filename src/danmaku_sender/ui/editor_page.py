@@ -350,62 +350,77 @@ class EditorPage(QWidget):
         main_layout.setSpacing(10)
         main_layout.setContentsMargins(10, 10, 10, 10)
 
-        # --- 规则管理区 ---
-        self.rules_group = ValidationRulesGroup()
-        main_layout.addWidget(self.rules_group)
+        # --- 顶部工具栏 ---
+        toolbar_layout = QHBoxLayout()
+        toolbar_layout.setSpacing(8)
 
-        # --- 顶部控制栏 ---
-        top_layout = QHBoxLayout()
+        # A: 文件级操作 (预留)
+        self.btn_new = QPushButton("📄 新建")
+        self.btn_new.setEnabled(False)
+        self.btn_new.setToolTip("预留功能：新建空白弹幕文件")
 
-        self.run_btn = QPushButton("开始验证")
-        self.run_btn.setFixedWidth(100)
-        self.run_btn.clicked.connect(self.run_validation)
+        self.btn_import = QPushButton("📂 导入 XML")
+        self.btn_import.setEnabled(False)
+        self.btn_import.setToolTip("预留功能：从本地导入外部 XML 文件")
 
-        # 批量处理按钮
-        self.batch_btn = QPushButton("批量修复")
-        self.batch_btn.setFixedWidth(100)
-        self.batch_btn.setEnabled(False)
+        self.btn_export = QPushButton("💾 导出为 XML")
+        self.btn_export.setEnabled(False)
+        self.btn_export.setToolTip("预留功能：将当前工作区内容导出")
 
-        # 时间轴偏移
-        self.offset_btn = QPushButton("时间平移")
-        self.offset_btn.setEnabled(False)
-        self.offset_btn.setToolTip("在已加载弹幕的基础上，整体平移时间轴。")
-        self.offset_btn.clicked.connect(self.open_offset_dialog)
+        toolbar_layout.addWidget(self.btn_new)
+        toolbar_layout.addWidget(self.btn_import)
+        toolbar_layout.addWidget(self.btn_export)
 
-        # 创建下拉菜单
+        v_line1 = QFrame()
+        v_line1.setFrameShape(QFrame.Shape.VLine)
+        v_line1.setFrameShadow(QFrame.Shadow.Sunken)
+        toolbar_layout.addWidget(v_line1)
+
+        # B: 批量处理工具 (下拉菜单)
+        self.btn_batch = QPushButton("🛠️ 批量处理")
+        self.btn_batch.setEnabled(False)
+
         self.batch_menu = QMenu(self)
-        self.batch_menu.addAction("一键去除所有换行符", self.batch_remove_newlines)
-        self.batch_menu.addAction("一键截断过长弹幕(>100字)", self.batch_truncate_length)
-        self.batch_btn.setMenu(self.batch_menu)
+        self.batch_menu.addAction("✂️ 一键去除所有换行符", self.batch_remove_newlines)
+        self.batch_menu.addAction("📏 一键截断过长弹幕(>100字)", self.batch_truncate_length)
+        self.batch_menu.addAction("⏱️ 整体平移时间轴", self.open_offset_dialog)
+        self.btn_batch.setMenu(self.batch_menu)
 
-        # 撤销
-        self.undo_btn = QPushButton("撤销")
+        toolbar_layout.addWidget(self.btn_batch)
+        toolbar_layout.addStretch()
+
+        # C: 核心工作流
+        self.undo_btn = QPushButton("↩️ 撤销")
         self.undo_btn.setFixedWidth(80)
         self.undo_btn.setEnabled(False)
         self.undo_btn.clicked.connect(self.undo)
 
+        self.run_btn = QPushButton("▶️ 开始校验")
+        self.run_btn.setStyleSheet("background-color: #3498db; color: white; font-weight: bold;")
+        self.run_btn.setFixedWidth(100)
+        self.run_btn.clicked.connect(self.run_validation)
+
         # 预览切换
-        self.preview_mode_cb = QCheckBox("预览模式 (全量显示)")
+        self.preview_mode_cb = QCheckBox("预览模式(全量显示)")
         self.preview_mode_cb.setToolTip("开启后显示所有弹幕，正常的弹幕将以灰色显示。")
         self.preview_mode_cb.stateChanged.connect(self._refresh_table)
 
-        # 分隔线
-        v_line = QFrame()
-        v_line.setFrameShape(QFrame.Shape.VLine)
-        v_line.setFrameShadow(QFrame.Shadow.Sunken)
+        v_line2 = QFrame()
+        v_line2.setFrameShape(QFrame.Shape.VLine)
+        v_line2.setFrameShadow(QFrame.Shadow.Sunken)
 
-        top_layout.addWidget(self.run_btn)
-        top_layout.addWidget(self.batch_btn)
-        top_layout.addWidget(self.offset_btn)
-        top_layout.addWidget(self.undo_btn)
-        top_layout.addSpacing(10)
-        top_layout.addWidget(v_line)
-        top_layout.addSpacing(10)
-        top_layout.addWidget(self.preview_mode_cb)
+        toolbar_layout.addWidget(self.undo_btn)
+        toolbar_layout.addWidget(self.run_btn)
+        toolbar_layout.addSpacing(10)
+        toolbar_layout.addWidget(v_line2)
+        toolbar_layout.addSpacing(10)
+        toolbar_layout.addWidget(self.preview_mode_cb)
 
-        top_layout.addStretch()
+        main_layout.addLayout(toolbar_layout)
 
-        main_layout.addLayout(top_layout)
+        # --- 规则管理区 ---
+        self.rules_group = ValidationRulesGroup()
+        main_layout.addWidget(self.rules_group)
 
         # --- 核心区 ---
         self.splitter = QSplitter(Qt.Orientation.Horizontal)
@@ -450,11 +465,6 @@ class EditorPage(QWidget):
         # --- 底部按钮与状态区 ---
         bottom_layout = QHBoxLayout()
 
-        self.delete_btn = QPushButton("删除选中条目")
-        self.delete_btn.setStyleSheet("color: #e74c3c;")
-        self.delete_btn.setEnabled(False)
-        self.delete_btn.clicked.connect(self.delete_selected_items)
-
         self.status_label = QLabel("提示: 请先在“发射器”页面加载文件并选择分P。")
         self.status_label.setStyleSheet("color: #7f8c8d;")
         self.status_label.setAlignment(Qt.AlignmentFlag.AlignRight | Qt.AlignmentFlag.AlignVCenter)
@@ -475,10 +485,7 @@ class EditorPage(QWidget):
         self.apply_btn.setEnabled(False)
         self.apply_btn.clicked.connect(self.apply_changes)
 
-        bottom_layout.addWidget(self.delete_btn)
-        bottom_layout.addStretch()
-        bottom_layout.addWidget(self.status_label)
-        bottom_layout.addSpacing(10)
+        bottom_layout.addWidget(self.status_label, stretch=1)
         bottom_layout.addWidget(self.apply_btn)
 
         main_layout.addLayout(bottom_layout)
@@ -517,8 +524,7 @@ class EditorPage(QWidget):
     def _update_ui_state(self):
         """统一状态机控制"""
         if not self._state:
-            for btn in [self.run_btn, self.batch_btn, self.undo_btn,
-                        self.delete_btn, self.apply_btn, self.offset_btn]:
+            for btn in [self.run_btn, self.btn_batch, self.undo_btn, self.apply_btn]:
                 btn.setEnabled(False)
             return
 
@@ -532,9 +538,9 @@ class EditorPage(QWidget):
         session_active = self.session.has_active_session
         has_items = self.model.rowCount() > 0
 
-        self.offset_btn.setEnabled(session_active)
-        self.batch_btn.setEnabled(session_active and has_items)
-        self.delete_btn.setEnabled(session_active and self.table.selectionModel().hasSelection())
+        self.btn_batch.setEnabled(session_active and has_items)
+        self.undo_btn.setEnabled(self.session.can_undo)
+        self.apply_btn.setEnabled(self.session.is_dirty)
 
         self.undo_btn.setEnabled(self.session.can_undo)
         self.apply_btn.setEnabled(self.session.is_dirty)
@@ -640,25 +646,33 @@ class EditorPage(QWidget):
                 self.table.selectRow(row)
 
     def open_context_menu(self, pos):
+        """打开表格右键上下文菜单"""
         index = self.table.indexAt(pos)
         if not index.isValid() or not self.session:
             return
 
         menu = QMenu(self)
+
         edit_action = menu.addAction("✏️ 编辑内容")
-        delete_action = menu.addAction("🗑️ 删除此条")
+        menu.addSeparator()
 
+        insert_above_action = menu.addAction("➕ 在上方插入新弹幕")
+        insert_above_action.setEnabled(False)  # 预留
+
+        insert_below_action = menu.addAction("➕ 在下方插入新弹幕")
+        insert_below_action.setEnabled(False)  # 预留
+
+        menu.addSeparator()
+
+        delete_action = menu.addAction("🗑️ 删除选中条目")
+
+        # 弹出菜单
         action = menu.exec(self.table.viewport().mapToGlobal(pos))
-
-        item_id, _ = self._get_danmaku_for_row(index.row())
-        if item_id is None:
-            return
 
         if action == edit_action:
             self._edit_row(index.row())
         elif action == delete_action:
-            self.session.delete_items([item_id])
-            self._refresh_table()
+            self.delete_selected_items()
 
     def on_table_double_click(self, index: QModelIndex):
         """双击编辑内容"""
