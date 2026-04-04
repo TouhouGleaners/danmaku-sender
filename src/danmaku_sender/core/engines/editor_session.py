@@ -17,7 +17,6 @@ class EditorSession:
         self.state = state
         self.logger = logging.getLogger("App.System.Editor")
 
-
         self.items: dict[str, EditorItem] = {}          # 核心存储：UUID 映射表
         self.item_order: list[str] = []                 # 顺序表：维护弹幕在视频中的物理播放顺序
         self.undo_stack: list[list[AtomicChange]] = []  # 操作栈：撤销功能
