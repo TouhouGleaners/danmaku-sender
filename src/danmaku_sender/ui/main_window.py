@@ -15,7 +15,7 @@ from .framework.image_processor import QtImageProcessor
 from .sender_page import SenderPage
 from .settings_page import SettingsPage
 from .monitor_page import MonitorPage
-from .editor_page import EditorPage
+from .editor import EditorPage
 from .dialogs import AboutDialog, HelpDialog, UpdateDialog
 from .history_page import HistoryPage
 
