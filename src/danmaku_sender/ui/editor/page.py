@@ -5,7 +5,7 @@ from PySide6.QtCore import Qt, QModelIndex
 from PySide6.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout, QPushButton, QLabel,
     QTableView, QHeaderView, QAbstractItemView, QMessageBox,
-    QMenu, QFrame, QCheckBox, QSplitter
+    QMenu, QFrame, QCheckBox, QSplitter, QFileDialog
 )
 
 from .components import EditorTableModel, ValidationRulesGroup, PropertyInspectorGroup
@@ -15,6 +15,7 @@ from ...core.engines.editor_session import EditorSession
 from ...core.types.editor_types import EditorField, InsertPosition
 from ...core.entities.danmaku import Danmaku
 from ...core.state import AppState
+from ...core.services.danmaku_exporter import export_danmakus_to_xml
 from ...utils.resource_utils import get_svg_icon
 
 
@@ -50,7 +51,7 @@ class EditorPage(QWidget):
 
         self.btn_export = QPushButton(get_svg_icon("file_save.svg"), "导出为 XML")
         self.btn_export.setEnabled(False)
-        self.btn_export.setToolTip("预留功能：将当前工作区内容导出")
+        self.btn_export.clicked.connect(self._export_xml)
 
         toolbar_layout.addWidget(self.btn_new)
         toolbar_layout.addWidget(self.btn_import)
@@ -189,6 +190,45 @@ class EditorPage(QWidget):
 
         self._update_ui_state()
 
+
+    # region Slots
+    def _export_xml(self):
+        """将当前工作区内容导出为 XML 文件"""
+        if not self.session:
+            return
+
+        # 提取当前工作区中，未被标记删除的所有弹幕
+        working_dms = [
+            self.session.items[uid].working
+            for uid in self.session.item_order
+            if not self.session.items[uid].is_deleted
+        ]
+
+        if not working_dms:
+            QMessageBox.warning(self, "导出失败", "当前工作区没有任何可导出的弹幕。")
+            return
+
+        # 弹出保存文件对话框
+        file_path, _ = QFileDialog.getSaveFileName(
+            self,
+            "导出弹幕为 XML",
+            "exported_danmaku.xml",
+            "XML Files (*.xml)"
+        )
+
+        if file_path:
+            try:
+                export_danmakus_to_xml(working_dms, file_path)
+                QMessageBox.information(
+                    self,
+                    "导出成功",
+                    f"🎉 成功导出 {len(working_dms)} 条弹幕至：\n{file_path}"
+                )
+            except Exception as e:
+                QMessageBox.critical(self, "导出失败", f"文件写入失败，请检查路径权限。\n错误信息:\n{e}")
+
+    # endregion
+
     # --- 辅助与状态管理 ---
     def _get_danmaku_for_row(self, row: int) -> tuple[str | None, Danmaku | None]:
         """辅助方法：通过 UI 行号获取底层 UUID 与弹幕对象"""
@@ -221,6 +261,7 @@ class EditorPage(QWidget):
 
         self.run_btn.setEnabled(bool(video_state.loaded_danmakus) and video_state.selected_cid is not None)
         self.btn_batch.setEnabled(session.has_active_session and has_items)
+        self.btn_export.setEnabled(session.has_active_session and has_items)
         self.undo_btn.setEnabled(session.can_undo)
         self.apply_btn.setEnabled(session.is_dirty)
 
