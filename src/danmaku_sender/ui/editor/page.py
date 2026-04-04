@@ -11,7 +11,8 @@ from PySide6.QtWidgets import (
 from .components import EditorTableModel, ValidationRulesGroup, PropertyInspectorGroup
 from .dialogs import EditDanmakuDialog, TimeOffsetDialog
 
-from ...core.engines.editor_session import EditorSession, EditorField, InsertPosition
+from ...core.engines.editor_session import EditorSession
+from ...core.types.editor_types import EditorField, InsertPosition
 from ...core.entities.danmaku import Danmaku
 from ...core.state import AppState
 from ...utils.resource_utils import get_svg_icon
