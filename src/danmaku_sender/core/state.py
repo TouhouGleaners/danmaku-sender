@@ -4,7 +4,7 @@ from dataclasses import dataclass, field
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 from PySide6.QtCore import QObject, Signal
 
-from .models.danmaku import Danmaku
+from .entities.danmaku import Danmaku
 
 
 @dataclass

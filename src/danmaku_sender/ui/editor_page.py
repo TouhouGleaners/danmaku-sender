@@ -1,6 +1,4 @@
-from hmac import new
 import logging
-from turtle import position
 from typing import Any, Callable
 
 from PySide6.QtCore import Qt, QAbstractTableModel, QModelIndex
@@ -16,7 +14,7 @@ from .dialogs import EditDanmakuDialog, TimeOffsetDialog
 from .framework.binder import UIBinder
 
 from ..core.engines.editor_session import EditorSession, EditorField, InsertPosition
-from ..core.models.danmaku import Danmaku
+from ..core.entities.danmaku import Danmaku
 from ..core.state import AppState
 from ..utils.resource_utils import get_svg_icon
 from ..utils.time_utils import format_ms_to_hhmmss

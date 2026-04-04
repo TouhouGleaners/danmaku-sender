@@ -1,6 +1,6 @@
 from typing import TypedDict
 
-from ..models.danmaku import Danmaku
+from ..entities.danmaku import Danmaku
 from ..state import ValidationConfig
 
 
@@ -60,7 +60,7 @@ def validate_danmaku_list(
             msg_lower = msg.lower()
 
             found_ks = [k for k in keywords if k and k in msg_lower]
-            
+
             if found_ks:
                 # 格式化输出：命中自定义过滤词: '词A', '词B'
                 ks = ", ".join(f"'{k}'" for k in found_ks)

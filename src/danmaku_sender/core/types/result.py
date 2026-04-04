@@ -1,6 +1,6 @@
 from dataclasses import dataclass
 
-from .errors import BiliDmErrorCode
+from ..exceptions.api_errors import BiliDmErrorCode
 
 
 @dataclass

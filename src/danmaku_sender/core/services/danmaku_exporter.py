@@ -3,7 +3,7 @@ import xml.etree.ElementTree as ET
 from xml.dom import minidom
 from typing import TypedDict
 
-from ..models.danmaku import Danmaku
+from ..entities.danmaku import Danmaku
 
 
 logger = logging.getLogger("App.System.Exporter")

@@ -8,9 +8,9 @@ from enum import IntEnum
 from peewee import SqliteDatabase, fn, Case
 from playhouse.migrate import SqliteMigrator, migrate
 
-from ..models.danmaku import Danmaku
+from ..entities.danmaku import Danmaku
 from .orm_models import db, SentDanmaku
-from ..models.structs import VideoTarget
+from ..types.common import VideoTarget
 
 from ...config.app_config import AppInfo
 

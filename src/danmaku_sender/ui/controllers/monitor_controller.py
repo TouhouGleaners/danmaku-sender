@@ -5,7 +5,7 @@ from PySide6.QtCore import QObject, Signal, Slot
 
 from ..framework.concurrency import BaseWorker
 
-from ...core.models.structs import VideoTarget
+from ...core.types.common import VideoTarget
 from ...core.state import ApiAuthConfig, MonitorConfig
 from ...core.engines.bili_monitor import BiliDanmakuMonitor
 from ...api.bili_api_client import BiliApiClient

@@ -2,11 +2,11 @@ import logging
 from threading import Event
 
 from ....api.bili_api_client import BiliApiClient
-from ...models.danmaku import Danmaku
-from ...models.structs import VideoTarget
-from ...models.result import DanmakuSendResult
-from ...models.exceptions import BiliApiError, BiliNetworkError
-from ...models.errors import BiliDmErrorCode
+from ...entities.danmaku import Danmaku
+from ...types.common import VideoTarget
+from ...types.result import DanmakuSendResult
+from ...exceptions.exceptions import BiliApiError, BiliNetworkError
+from ...exceptions.api_errors import BiliDmErrorCode
 
 
 class DanmakuExecutor:
