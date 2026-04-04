@@ -1,4 +1,5 @@
 import copy
+from hmac import new
 import uuid
 import logging
 from enum import Enum
@@ -233,6 +234,34 @@ class EditorSession:
         self.refresh_validation()
         self.set_dirty(bool(self.undo_stack))
         return True
+
+    def insert_item(self, reference_uid: str, is_below: bool = True) -> str | None:
+        """在指定弹幕附近插入一条新弹幕"""
+        ref_item = self.items.get(reference_uid)
+        if not ref_item:
+            return None
+
+        offset = 500 if is_below else -500
+        new_progress = max(0, ref_item.working.progress + offset)
+
+        new_dm = Danmaku(
+            msg="新建弹幕",
+            color=ref_item.working.color,
+            fontsize=ref_item.working.fontsize,
+            mode=ref_item.working.mode,
+            progress=new_progress
+        )
+
+        new_item = EditorItem(head=new_dm.clone(), working=new_dm.clone())
+        new_uid = new_item.id
+
+        self.items[new_uid] = new_item
+        self.item_order.append(new_uid)
+
+        self._push_undo_record([AtomicChange(new_uid, EditorField.IS_DELETED, True)])  # 新增记录为“从无到有”，撤销时即标记删除
+
+        self.refresh_validation()
+        return new_uid
 
     def delete_items(self, uids: list[str]):
         """批量标记删除弹幕"""
