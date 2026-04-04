@@ -14,7 +14,7 @@ from .controllers.video_controller import VideoController
 from .controllers.history_controller import HistoryController
 
 from ..core.database.history_manager import DanmakuStatus
-from ..core.models.video import VideoInfo
+from ..core.entities.video import VideoInfo
 from ..core.state import AppState
 
 

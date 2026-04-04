@@ -7,9 +7,9 @@ from ..framework.concurrency import BaseWorker
 
 from ...core.database.history_manager import HistoryManager
 from ...core.engines.sender import DanmakuScheduler, DanmakuExecutor, SendingContext, SendJob
-from ...core.models.danmaku import Danmaku
-from ...core.models.result import DanmakuSendResult
-from ...core.models.structs import VideoTarget
+from ...core.entities.danmaku import Danmaku
+from ...core.types.result import DanmakuSendResult
+from ...core.types.common import VideoTarget
 from ...core.state import ApiAuthConfig, SenderConfig
 from ...api.bili_api_client import BiliApiClient
 from ...utils.system_utils import KeepSystemAwake

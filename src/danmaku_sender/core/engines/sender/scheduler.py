@@ -6,8 +6,7 @@ from .context import SendingContext, DanmakuFingerprint, SendJob
 from .delay_manager import DelayManager
 
 from ...database.history_manager import HistoryManager
-from ...models.danmaku import Danmaku
-from ...models.errors import BiliDmErrorCode
+from ...entities.danmaku import Danmaku
 
 
 class DanmakuScheduler:

@@ -14,7 +14,7 @@ from danmaku_sender.core.state import AppState
 from .framework.binder import UIBinder
 from .controllers.monitor_controller import MonitorController
 
-from ..core.models.structs import VideoTarget
+from ..core.types.common import VideoTarget
 from ..utils.resource_utils import get_svg_icon
 
 

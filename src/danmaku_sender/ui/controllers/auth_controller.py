@@ -7,7 +7,7 @@ from ..framework.concurrency import BaseWorker, GenericTask
 
 from ...api.bili_api_client import BiliApiClient
 from ...core.state import ApiAuthConfig
-from ...core.models.user import UserProfile
+from ...core.entities.user import UserProfile
 
 
 logger = logging.getLogger("App.System.Auth")

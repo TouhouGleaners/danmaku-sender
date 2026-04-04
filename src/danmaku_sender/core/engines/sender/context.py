@@ -4,9 +4,9 @@ from typing import Callable
 from dataclasses import dataclass, field
 from enum import Enum, auto
 
-from ...models.danmaku import Danmaku
-from ...models.result import DanmakuSendResult
-from ...models.structs import VideoTarget
+from ...entities.danmaku import Danmaku
+from ...types.result import DanmakuSendResult
+from ...types.common import VideoTarget
 from ...services.danmaku_exporter import UnsentDanmakusRecord
 from ...state import SenderConfig
 
@@ -46,7 +46,7 @@ class SendJob:
 class SendingContext:
     """
     发送上下文 (Context Container)
-    
+
     设计意图：在整个流水线运行期间，携带和收集运行状态（成功数、失败原因、耗时等）。
     流水线结束后，将作为最终的统计报告返回给外层调用方。
     """
@@ -63,7 +63,7 @@ class SendingContext:
     start_time: float = field(default_factory=time.time)
     auto_stop_reason: str = ""          # 如果触发了自动停止，记录具体原因
     fatal_error_occurred: bool = False  # 是否因致命错误而崩塌
-    
+
     # 失败弹幕回收站，供后续导出 XML 使用
     unsent_records: list[UnsentDanmakusRecord] = field(default_factory=list)
 

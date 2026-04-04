@@ -4,7 +4,7 @@ from typing import Callable
 from PySide6.QtCore import QObject, Signal, QThreadPool, Slot
 
 from ..framework.concurrency import GenericTask
-from ...core.models.video import VideoInfo
+from ...core.entities.video import VideoInfo
 from ...core.state import ApiAuthConfig
 from ...core.services.video_fetcher import VideoFetcher
 from ...api.bili_api_client import BiliApiClient

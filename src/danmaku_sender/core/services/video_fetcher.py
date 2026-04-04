@@ -1,7 +1,6 @@
 import logging
 
-from ..models.exceptions import BiliApiError
-from ..models.video import VideoInfo, VideoPart
+from ..entities.video import VideoInfo, VideoPart
 
 from ...api.bili_api_client import BiliApiClient
 

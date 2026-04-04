@@ -16,8 +16,8 @@ from .framework.binder import UIBinder
 from .controllers.video_controller import VideoController
 from .controllers.sender_controller import SenderController
 
-from ..core.models.video import VideoInfo
-from ..core.models.structs import VideoTarget
+from ..core.entities.video import VideoInfo
+from ..core.types.common import VideoTarget
 from ..core.services.danmaku_exporter import UnsentDanmakusRecord, create_xml_from_danmakus
 from ..core.services.danmaku_parser import DanmakuParser
 from ..core.state import AppState
