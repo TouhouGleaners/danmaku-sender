@@ -1,5 +1,6 @@
 from hmac import new
 import logging
+from turtle import position
 from typing import Any, Callable
 
 from PySide6.QtCore import Qt, QAbstractTableModel, QModelIndex
@@ -14,7 +15,7 @@ from PySide6.QtWidgets import (
 from .dialogs import EditDanmakuDialog, TimeOffsetDialog
 from .framework.binder import UIBinder
 
-from ..core.engines.editor_session import EditorSession, EditorField
+from ..core.engines.editor_session import EditorSession, EditorField, InsertPosition
 from ..core.models.danmaku import Danmaku
 from ..core.state import AppState
 from ..utils.resource_utils import get_svg_icon
@@ -668,9 +669,9 @@ class EditorPage(QWidget):
         if action == edit_action:
             self._edit_row(index.row())
         elif action == insert_above_action:
-            self._insert_row(index.row(), is_below=False)
+            self._insert_row(index.row(), InsertPosition.ABOVE)
         elif action == insert_below_action:
-            self._insert_row(index.row(), is_below=True)
+            self._insert_row(index.row(), InsertPosition.BELOW)
         elif action == delete_action:
             self.delete_selected_items()
 
@@ -696,7 +697,7 @@ class EditorPage(QWidget):
                     self.session.delete_items([item_id])
                     self._refresh_table()
 
-    def _insert_row(self, row: int, is_below: bool):
+    def _insert_row(self, row: int, position: InsertPosition):
         """插入新弹幕"""
         if not self.session:
             return
@@ -705,7 +706,7 @@ class EditorPage(QWidget):
         if not item_id:
             return
 
-        new_uid = self.session.insert_item(item_id, is_below=is_below)
+        new_uid = self.session.insert_item(item_id, position)
         if new_uid:
             self._refresh_table()
             # 定位到新插入的行

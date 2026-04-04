@@ -1,14 +1,18 @@
 import copy
-from hmac import new
 import uuid
 import logging
-from enum import Enum
+from enum import Enum, auto
 from dataclasses import dataclass, field
 from typing import Any, Callable, TypedDict
 
 from ..state import AppState
 from ..models.danmaku import Danmaku
 from ..services.danmaku_validator import validate_danmaku_list
+
+
+class InsertPosition(Enum):
+    ABOVE = auto()
+    BELOW = auto()
 
 
 @dataclass
@@ -235,13 +239,13 @@ class EditorSession:
         self.set_dirty(bool(self.undo_stack))
         return True
 
-    def insert_item(self, reference_uid: str, is_below: bool = True) -> str | None:
+    def insert_item(self, reference_uid: str, position: InsertPosition = InsertPosition.BELOW) -> str | None:
         """在指定弹幕附近插入一条新弹幕"""
         ref_item = self.items.get(reference_uid)
         if not ref_item:
             return None
 
-        offset = 500 if is_below else -500
+        offset = 500 if position == InsertPosition.BELOW else -500
         new_progress = max(0, ref_item.working.progress + offset)
 
         new_dm = Danmaku(
