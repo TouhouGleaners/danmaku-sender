@@ -1,4 +1,6 @@
+from hmac import new
 import logging
+from turtle import position
 from typing import Any, Callable
 
 from PySide6.QtCore import Qt, QAbstractTableModel, QModelIndex
@@ -13,7 +15,7 @@ from PySide6.QtWidgets import (
 from .dialogs import EditDanmakuDialog, TimeOffsetDialog
 from .framework.binder import UIBinder
 
-from ..core.engines.editor_session import EditorSession, EditorField
+from ..core.engines.editor_session import EditorSession, EditorField, InsertPosition
 from ..core.models.danmaku import Danmaku
 from ..core.state import AppState
 from ..utils.resource_utils import get_svg_icon
@@ -638,6 +640,11 @@ class EditorPage(QWidget):
             if 0 <= row < self.model.rowCount():
                 self.table.selectRow(row)
 
+    def on_table_double_click(self, index: QModelIndex):
+        """双击编辑内容"""
+        if index.column() == 3:
+            self._edit_row(index.row())
+
     def open_context_menu(self, pos):
         """打开表格右键上下文菜单"""
         index = self.table.indexAt(pos)
@@ -650,10 +657,7 @@ class EditorPage(QWidget):
         menu.addSeparator()
 
         insert_above_action = menu.addAction(get_svg_icon("vertical_align_top.svg"), "在上方插入新弹幕")
-        insert_above_action.setEnabled(False)  # 预留
-
         insert_below_action = menu.addAction(get_svg_icon("vertical_align_bottom.svg"), "在下方插入新弹幕")
-        insert_below_action.setEnabled(False)  # 预留
 
         menu.addSeparator()
 
@@ -664,13 +668,12 @@ class EditorPage(QWidget):
 
         if action == edit_action:
             self._edit_row(index.row())
+        elif action == insert_above_action:
+            self._insert_row(index.row(), InsertPosition.ABOVE)
+        elif action == insert_below_action:
+            self._insert_row(index.row(), InsertPosition.BELOW)
         elif action == delete_action:
             self.delete_selected_items()
-
-    def on_table_double_click(self, index: QModelIndex):
-        """双击编辑内容"""
-        if index.column() == 3:
-            self._edit_row(index.row())
 
     def _edit_row(self, row):
         if not self.session:
@@ -693,6 +696,25 @@ class EditorPage(QWidget):
                 if reply == QMessageBox.StandardButton.Yes:
                     self.session.delete_items([item_id])
                     self._refresh_table()
+
+    def _insert_row(self, row: int, position: InsertPosition):
+        """插入新弹幕"""
+        if not self.session:
+            return
+
+        item_id, _ = self._get_danmaku_for_row(row)
+        if not item_id:
+            return
+
+        new_uid = self.session.insert_item(item_id, position)
+        if new_uid:
+            self._refresh_table()
+            # 定位到新插入的行
+            for i in range(self.model.rowCount()):
+                if self.model.get_item_id(i) == new_uid:
+                    self.table.selectRow(i)
+                    self._edit_row(i)
+                    break
 
     def delete_selected_items(self):
         """批量删除选中项"""
