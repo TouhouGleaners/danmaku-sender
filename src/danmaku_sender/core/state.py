@@ -106,12 +106,13 @@ class AppState(QObject):
     应用程序全局状态管理。
     继承自 QObject 以支持信号槽机制，实现 UI 与 逻辑 的解耦。
     """
-    credentials_changed = Signal(str, str)
-    user_info_changed = Signal()
-    sender_log_received = Signal(str)
-    monitor_log_received = Signal(str)
-    editor_dirty_changed = Signal(bool)
-    sender_active_changed = Signal(bool)
+    credentialsChanged = Signal(str, str)
+    userInfoChanged = Signal()
+    senderLogReceived = Signal(str)
+    monitorLogReceived = Signal(str)
+    senderActiveChanged = Signal(bool)
+    monitorActiveChanged = Signal(bool)
+    editorDirtyChanged = Signal(bool)
 
     def __init__(self):
         super().__init__()
@@ -132,18 +133,9 @@ class AppState(QObject):
         # 运行时状态
         self.video_state = VideoState()
 
-        self._editor_is_dirty: bool = False
         self._sender_is_active: bool = False
-
-    @property
-    def editor_is_dirty(self) -> bool:
-        return self._editor_is_dirty
-
-    @editor_is_dirty.setter
-    def editor_is_dirty(self, value: bool):
-        if self._editor_is_dirty != value:
-            self._editor_is_dirty = value
-            self.editor_dirty_changed.emit(value)
+        self._monitor_is_active: bool = False
+        self._editor_is_dirty: bool = False
 
     @property
     def sender_is_active(self) -> bool:
@@ -153,13 +145,33 @@ class AppState(QObject):
     def sender_is_active(self, value: bool):
         if self._sender_is_active != value:
             self._sender_is_active = value
-            self.sender_active_changed.emit(value)
+            self.senderActiveChanged.emit(value)
+
+    @property
+    def monitor_is_active(self) -> bool:
+        return self._monitor_is_active
+
+    @monitor_is_active.setter
+    def monitor_is_active(self, value: bool):
+        if self._monitor_is_active != value:
+            self._monitor_is_active = value
+            self.monitorActiveChanged.emit(value)
+
+    @property
+    def editor_is_dirty(self) -> bool:
+        return self._editor_is_dirty
+
+    @editor_is_dirty.setter
+    def editor_is_dirty(self, value: bool):
+        if self._editor_is_dirty != value:
+            self._editor_is_dirty = value
+            self.editorDirtyChanged.emit(value)
 
     def update_credentials(self, sessdata: str, bili_jct: str):
         """更新凭证并通知监听者"""
         self.sessdata = sessdata
         self.bili_jct = bili_jct
-        self.credentials_changed.emit(sessdata, bili_jct)
+        self.credentialsChanged.emit(sessdata, bili_jct)
 
     def get_api_auth(self) -> ApiAuthConfig:
         """
@@ -172,13 +184,13 @@ class AppState(QObject):
         )
 
     def log_sender(self, message: str):
-        self.sender_log_received.emit(message)
+        self.senderLogReceived.emit(message)
 
     def log_monitor(self, message: str):
-        self.monitor_log_received.emit(message)
+        self.monitorLogReceived.emit(message)
 
     def set_user_info(self, is_login: bool, uname: str, face: str):
         self.user_state.is_login = is_login
         self.user_state.username = uname
         self.user_state.avatar_url = face
-        self.user_info_changed.emit()
+        self.userInfoChanged.emit()

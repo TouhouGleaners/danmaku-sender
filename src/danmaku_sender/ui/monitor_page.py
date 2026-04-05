@@ -243,6 +243,9 @@ class MonitorPage(QWidget):
         self.interval_spin.setEnabled(not running)
         self.start_btn.setEnabled(True)
 
+        if self._state:
+            self._state.monitor_is_active = running
+
         if running:
             self.start_btn.setText("停止监视")
             self._update_btn_style(True)
