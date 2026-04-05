@@ -6,6 +6,7 @@ from ...core.engines.editor_session import EditorSession
 from ...core.state import AppState
 from ...core.entities.danmaku import Danmaku
 from ...core.types.editor_types import ViewItem, InsertPosition
+from ...core.services.danmaku_parser import DanmakuParser
 
 
 class EditorController(QObject):
@@ -67,6 +68,33 @@ class EditorController(QObject):
         self.state.video_state.video_title = ""
 
         self.load_from_state()
+
+    def import_xml_workspace(self, file_path: str) -> int:
+        """
+        导入外部 XML 文件到工作区，清除视频上下文。
+
+        Returns:
+            int: 成功解析的弹幕数量
+        Raises:
+            Exception: 解析失败时向上抛出供 UI 捕获
+        """
+        parser = DanmakuParser()
+        parsed_dms = parser.parse_xml_file(file_path)
+
+        if not parsed_dms:
+            return 0
+
+        # 覆盖全局工作区
+        self.state.video_state.loaded_danmakus = parsed_dms
+
+        # 强制清除关联的视频上下文
+        self.state.video_state.bvid = ""
+        self.state.video_state.selected_cid = None
+        self.state.video_state.video_title = ""
+
+        # 将数据拉入编辑器沙盒并触发 UI 更新
+        self.load_from_state()
+        return len(parsed_dms)
 
     def load_from_state(self) -> bool:
         """从 AppState 检出数据到沙盒，并执行初次校验"""
