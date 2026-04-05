@@ -314,11 +314,11 @@ class MainWindow(QMainWindow):
         self.state.senderActiveChanged.connect(self._refresh_sidebar_badges)
 
         # 自动更新检查流
-        self.system_controller.update_found.connect(self._on_update_found)
-        self.system_controller.no_update.connect(lambda is_m:
+        self.system_controller.updateFound.connect(self._on_update_found)
+        self.system_controller.updateNotFound.connect(lambda is_m:
             QMessageBox.information(self, "检查更新", "当前已是最新版本。") if is_m else None
         )
-        self.system_controller.check_failed.connect(lambda err, is_m:
+        self.system_controller.checkFailed.connect(lambda err, is_m:
             QMessageBox.warning(self, "检查更新失败", f"无法连接到更新服务器:\n{err}") if is_m else None
         )
 

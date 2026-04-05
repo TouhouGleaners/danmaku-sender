@@ -42,7 +42,7 @@ class EditDanmakuDialog(QDialog):
         footer_layout.addWidget(self.btn_ok)
         layout.addLayout(footer_layout)
 
-        self.editor_widget.text_changed.connect(self._update_counter)
+        self.editor_widget.textChanged.connect(self._update_counter)
 
     @Slot(str)
     def _update_counter(self, text: str):
