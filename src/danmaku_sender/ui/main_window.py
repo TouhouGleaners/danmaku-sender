@@ -43,6 +43,10 @@ class MainWindow(QMainWindow):
         self._log_signals_connected = False
         self._help_dialog = None  # 存储帮助窗口的引用，防止被垃圾回收
 
+        # 运行时状态
+        self._current_sender_progress = (0, 0)
+        self._current_monitor_stats = {}
+
         # UI 初始化
         self._create_ui()
         self._init_pages()
@@ -244,6 +248,8 @@ class MainWindow(QMainWindow):
         self.tray_icon.activated.connect(self._on_tray_activated)
         self.tray_icon.show()
 
+        self._refresh_global_status()
+
     # endregion
     # region Data Binding & Signal
 
@@ -268,11 +274,11 @@ class MainWindow(QMainWindow):
 
         # 日志分流：信号 -> Tab 接口
         if self._log_signals_connected:
-            self.state.sender_log_received.disconnect(self.page_sender.append_log)
-            self.state.monitor_log_received.disconnect(self.page_monitor.append_log)
+            self.state.senderLogReceived.disconnect(self.page_sender.append_log)
+            self.state.monitorLogReceived.disconnect(self.page_monitor.append_log)
 
-        self.state.sender_log_received.connect(self.page_sender.append_log)
-        self.state.monitor_log_received.connect(self.page_monitor.append_log)
+        self.state.senderLogReceived.connect(self.page_sender.append_log)
+        self.state.monitorLogReceived.connect(self.page_monitor.append_log)
         self._log_signals_connected = True
 
         # 信号接入：底层 Handler -> 信号发射
@@ -291,8 +297,8 @@ class MainWindow(QMainWindow):
 
         if gui_handler:
             # 将 Handler 的回调指向 AppState 的信号
-            gui_handler.sender_callback = self.state.sender_log_received.emit
-            gui_handler.monitor_callback = self.state.monitor_log_received.emit
+            gui_handler.sender_callback = self.state.senderLogReceived.emit
+            gui_handler.monitor_callback = self.state.monitorLogReceived.emit
             self.logger.info("日志路由链路已接通。")
         else:
             self.logger.error("日志路由系统初始化失败：未找到 GuiLoggingHandler。")
@@ -300,12 +306,12 @@ class MainWindow(QMainWindow):
     def _connect_global_signals(self):
         """全局信号绑定"""
         # 用户认证与基础信息
-        self.state.credentials_changed.connect(self._request_user_info_refresh)
+        self.state.credentialsChanged.connect(self._request_user_info_refresh)
         self.auth_controller.userProfileReady.connect(self._on_user_profile_updated)
 
         # 系统组件联动
-        self.state.editor_dirty_changed.connect(self._refresh_sidebar_badges)
-        self.state.sender_active_changed.connect(self._refresh_sidebar_badges)
+        self.state.editorDirtyChanged.connect(self._refresh_sidebar_badges)
+        self.state.senderActiveChanged.connect(self._refresh_sidebar_badges)
 
         # 自动更新检查流
         self.system_controller.update_found.connect(self._on_update_found)
@@ -315,6 +321,12 @@ class MainWindow(QMainWindow):
         self.system_controller.check_failed.connect(lambda err, is_m:
             QMessageBox.warning(self, "检查更新失败", f"无法连接到更新服务器:\n{err}") if is_m else None
         )
+
+        self.state.senderActiveChanged.connect(self._refresh_global_status)
+        self.state.monitorActiveChanged.connect(self._refresh_global_status)
+
+        self.page_sender.sender_controller.progressUpdated.connect(self._on_sender_progress_sync)
+        self.page_monitor.monitor_controller.statsUpdated.connect(self._on_monitor_stats_sync)
 
         # 触发首次用户信息请求
         QTimer.singleShot(500, self._request_user_info_refresh)
@@ -414,5 +426,36 @@ class MainWindow(QMainWindow):
         """单击托盘图标恢复窗口"""
         if reason == reason == QSystemTrayIcon.ActivationReason.Trigger:
             self._show_from_tray()
+
+    @Slot(int, int)
+    def _on_sender_progress_sync(self, att: int, total: int):
+        self._current_sender_progress = (att, total)
+        self._refresh_global_status()
+
+    @Slot(dict)
+    def _on_monitor_stats_sync(self, stats: dict):
+        self._current_monitor_stats = stats
+        self._refresh_global_status()
+
+    @Slot()
+    def _refresh_global_status(self, _=None):
+        # 组装发送器信息
+        if self.state.sender_is_active:
+            att, total = self._current_sender_progress
+            perc = int((att/total)*100) if total > 0 else 0
+            sender_info = f"发射器: {perc}% ({att}/{total})"
+        else:
+            sender_info = "发射器: 待命"
+
+        # 组装监视器信息
+        if self.state.monitor_is_active:
+            s = self._current_monitor_stats
+            monitor_info = f"监视器: 存活{s.get('verified',0)}/丢失{s.get('lost',0)}/待验{s.get('pending',0)}"
+        else:
+            monitor_info = "监视器: 待命"
+
+        # 刷新托盘悬浮窗
+        full_status = f"{AppInfo.NAME}\n{sender_info}\n{monitor_info}"
+        self.tray_icon.setToolTip(full_status)
 
     # endregion
