@@ -12,7 +12,6 @@ from .components import EditorTableModel, ValidationRulesGroup, PropertyInspecto
 from .dialogs import EditDanmakuDialog, TimeOffsetDialog
 from ..controllers.editor_controller import EditorController
 
-from ...core.engines.editor_session import EditorSession
 from ...core.types.editor_types import EditorField, InsertPosition
 from ...core.state import AppState
 from ...core.services.danmaku_exporter import export_danmakus_to_xml
@@ -40,13 +39,12 @@ class EditorPage(QWidget):
         toolbar_layout = QHBoxLayout()
         toolbar_layout.setSpacing(8)
 
-        # A: 文件级操作 (预留)
+        # A: 文件级操作
         self.btn_new = QPushButton(get_svg_icon("note_add.svg"), "新建")
         self.btn_new.clicked.connect(self._create_new_file)
 
         self.btn_import = QPushButton(get_svg_icon("file_open.svg"), "导入 XML")
-        self.btn_import.setEnabled(False)
-        self.btn_import.setToolTip("预留功能：从本地导入外部 XML 文件")
+        self.btn_import.clicked.connect(self._import_xml)
 
         self.btn_export = QPushButton(get_svg_icon("file_save.svg"), "导出为 XML")
         self.btn_export.setEnabled(False)
@@ -66,9 +64,9 @@ class EditorPage(QWidget):
         self.btn_batch.setEnabled(False)
 
         self.batch_menu = QMenu(self)
-        self.batch_menu.addAction(get_svg_icon("format_clear.svg"), "一键去除所有换行符", self.batch_remove_newlines)
-        self.batch_menu.addAction(get_svg_icon("short_text.svg"), "一键截断过长弹幕(>100字)", self.batch_truncate_length)
-        self.batch_menu.addAction(get_svg_icon("sync_alt.svg"), "整体平移时间轴", self.open_offset_dialog)
+        self.batch_menu.addAction(get_svg_icon("format_clear.svg"), "一键去除所有换行符", self._batch_remove_newlines)
+        self.batch_menu.addAction(get_svg_icon("short_text.svg"), "一键截断过长弹幕(>100字)", self._batch_truncate_length)
+        self.batch_menu.addAction(get_svg_icon("sync_alt.svg"), "整体平移时间轴", self._open_offset_dialog)
         self.btn_batch.setMenu(self.batch_menu)
 
         toolbar_layout.addWidget(self.btn_batch)
@@ -78,12 +76,12 @@ class EditorPage(QWidget):
         self.undo_btn = QPushButton(get_svg_icon("undo.svg"), "撤销")
         self.undo_btn.setFixedWidth(80)
         self.undo_btn.setEnabled(False)
-        self.undo_btn.clicked.connect(self.undo)
+        self.undo_btn.clicked.connect(self._undo)
 
         self.run_btn = QPushButton(get_svg_icon("play_arrow.svg"), "开始校验")
         self.run_btn.setStyleSheet("background-color: #3498db; color: white; font-weight: bold;")
         self.run_btn.setFixedWidth(100)
-        self.run_btn.clicked.connect(self.run_validation)
+        self.run_btn.clicked.connect(self._run_validation)
 
         # 预览切换
         self.preview_mode_cb = QCheckBox("预览模式(全量显示)")
@@ -122,11 +120,11 @@ class EditorPage(QWidget):
         self.table.verticalHeader().setVisible(False)
 
         # 将表格选择变更连接到右侧属性面板
-        self.table.doubleClicked.connect(self.on_table_double_click)
+        self.table.doubleClicked.connect(self._on_table_double_click)
         self.table.selectionModel().selectionChanged.connect(self._on_selection_changed)
 
         self.table.setContextMenuPolicy(Qt.ContextMenuPolicy.CustomContextMenu)
-        self.table.customContextMenuRequested.connect(self.open_context_menu)
+        self.table.customContextMenuRequested.connect(self._open_context_menu)
 
         header = self.table.horizontalHeader()
         header.setSectionResizeMode(0, QHeaderView.ResizeMode.ResizeToContents)
@@ -168,7 +166,7 @@ class EditorPage(QWidget):
             }
         """)
         self.apply_btn.setEnabled(False)
-        self.apply_btn.clicked.connect(self.apply_changes)
+        self.apply_btn.clicked.connect(self._apply_changes)
 
         bottom_layout.addWidget(self.status_label, stretch=1)
         bottom_layout.addWidget(self.apply_btn)
@@ -203,6 +201,7 @@ class EditorPage(QWidget):
         ctrl = self.controller
 
         self.btn_new.setEnabled(True)
+        self.btn_import.setEnabled(True)
         self.run_btn.setEnabled(ctrl.source_data_exists)
         self.btn_batch.setEnabled(ctrl.has_data)
         self.btn_export.setEnabled(ctrl.has_data)
@@ -268,7 +267,72 @@ class EditorPage(QWidget):
         QMessageBox.information(self, "新建成功", "已创建空白工作区，你可以开始创作了！")
 
     @Slot()
-    def run_validation(self):
+    def _import_xml(self):
+        if not self.controller:
+            return
+
+        if self.controller.is_dirty:
+            reply = QMessageBox.question(
+                self, "放弃修改?",
+                "当前有未应用的修改，导入新文件将覆盖并丢失这些数据。\n是否继续？",
+                QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No
+            )
+            if reply == QMessageBox.StandardButton.No:
+                return
+
+        file_path, _ = QFileDialog.getOpenFileName(
+            self, "导入弹幕 XML", "", "XML Files (*.xml);;All Files (*.*)"
+        )
+
+        if file_path:
+            try:
+                count = self.controller.import_xml_workspace(file_path)
+                if count > 0:
+                    self.current_item_id = None
+                    self.inspector_group.reset_inspector()
+                    QMessageBox.information(
+                        self, "导入成功",
+                        f"成功导入 {count} 条弹幕！\n(当前为无视频上下文模式，已跳过时间越界检查)"
+                    )
+                else:
+                    QMessageBox.warning(self, "导入失败", "未从文件中解析出有效的弹幕。")
+            except Exception as e:
+                QMessageBox.critical(self, "导入失败", f"解析 XML 时发生错误:\n{e}")
+
+    @Slot()
+    def _export_xml(self):
+        """将当前工作区内容导出为 XML 文件"""
+        if not self.controller:
+            return
+
+        # 提取当前工作区中，未被标记删除的所有弹幕
+        working_dms = self.controller.get_working_danmakus()
+
+        if not working_dms:
+            QMessageBox.warning(self, "导出失败", "当前工作区没有任何可导出的弹幕。")
+            return
+
+        # 弹出保存文件对话框
+        file_path, _ = QFileDialog.getSaveFileName(
+            self,
+            "导出弹幕为 XML",
+            "exported_danmaku.xml",
+            "XML Files (*.xml)"
+        )
+
+        if file_path:
+            try:
+                export_danmakus_to_xml(working_dms, file_path)
+                QMessageBox.information(
+                    self,
+                    "导出成功",
+                    f"🎉 成功导出 {len(working_dms)} 条弹幕至：\n{file_path}"
+                )
+            except Exception as e:
+                QMessageBox.critical(self, "导出失败", f"文件写入失败，请检查路径权限。\n错误信息:\n{e}")
+
+    @Slot()
+    def _run_validation(self):
         """运行验证逻辑"""
         if not self.controller:
             return
@@ -308,7 +372,7 @@ class EditorPage(QWidget):
             QMessageBox.information(self, "验证通过", "所有弹幕均符合当前规范！")
 
     @Slot()
-    def apply_changes(self):
+    def _apply_changes(self):
         """应用修改"""
         if not self.controller:
             return
@@ -325,38 +389,6 @@ class EditorPage(QWidget):
             f"发送队列已更新！\n\n修复: {fixed} 条\n移除: {deleted} 条\n剩余总数: {total} 条"
         )
 
-    @Slot()
-    def _export_xml(self):
-        """将当前工作区内容导出为 XML 文件"""
-        if not self.controller:
-            return
-
-        # 提取当前工作区中，未被标记删除的所有弹幕
-        working_dms = self.controller.get_working_danmakus()
-
-        if not working_dms:
-            QMessageBox.warning(self, "导出失败", "当前工作区没有任何可导出的弹幕。")
-            return
-
-        # 弹出保存文件对话框
-        file_path, _ = QFileDialog.getSaveFileName(
-            self,
-            "导出弹幕为 XML",
-            "exported_danmaku.xml",
-            "XML Files (*.xml)"
-        )
-
-        if file_path:
-            try:
-                export_danmakus_to_xml(working_dms, file_path)
-                QMessageBox.information(
-                    self,
-                    "导出成功",
-                    f"🎉 成功导出 {len(working_dms)} 条弹幕至：\n{file_path}"
-                )
-            except Exception as e:
-                QMessageBox.critical(self, "导出失败", f"文件写入失败，请检查路径权限。\n错误信息:\n{e}")
-
     # endregion
     # region Item Operations (Row Level & Dialogs)
 
@@ -370,7 +402,7 @@ class EditorPage(QWidget):
                         break
 
     @Slot(QPoint)
-    def open_context_menu(self, pos: QPoint):
+    def _open_context_menu(self, pos: QPoint):
         """打开表格右键上下文菜单"""
         index = self.table.indexAt(pos)
         if not index.isValid() or not self.controller:
@@ -398,10 +430,10 @@ class EditorPage(QWidget):
         elif action == insert_below_action:
             self._insert_row(index.row(), InsertPosition.BELOW)
         elif action == delete_action:
-            self.delete_selected_items()
+            self._delete_selected_items()
 
     @Slot(QModelIndex)
-    def on_table_double_click(self, index: QModelIndex):
+    def _on_table_double_click(self, index: QModelIndex):
         """双击编辑内容"""
         if index.column() == 3:
             self._edit_row(index.row())
@@ -445,8 +477,7 @@ class EditorPage(QWidget):
                     self._edit_row(i)
                     break
 
-    @Slot()
-    def delete_selected_items(self):
+    def _delete_selected_items(self):
         """批量删除选中项"""
         if not self.controller:
             return
@@ -465,7 +496,7 @@ class EditorPage(QWidget):
             self.controller.delete_items(uids)
 
     @Slot()
-    def undo(self):
+    def _undo(self):
         """撤销"""
         if self.controller:
             self.controller.undo()
@@ -474,7 +505,7 @@ class EditorPage(QWidget):
     # region Batch Processing
 
     @Slot()
-    def batch_remove_newlines(self):
+    def _batch_remove_newlines(self):
         if not self.controller:
             return
 
@@ -485,7 +516,7 @@ class EditorPage(QWidget):
             QMessageBox.information(self, "无变化", "未发现相关问题。")
 
     @Slot()
-    def batch_truncate_length(self):
+    def _batch_truncate_length(self):
         if not self.controller:
             return
 
@@ -495,15 +526,8 @@ class EditorPage(QWidget):
         else:
             QMessageBox.information(self, "无变化", "未发现过长弹幕。")
 
-    def _show_batch_result(self, mod, dele):
-        if mod > 0 or dele > 0:
-            self._refresh_table()
-            QMessageBox.information(self, "处理完成", f"修复: {mod} 条\n删除: {dele} 条")
-        else:
-            QMessageBox.information(self, "无变化", "未发现相关问题。")
-
     @Slot()
-    def open_offset_dialog(self):
+    def _open_offset_dialog(self):
         if not self.controller or not self.controller.has_data:
             return
 
@@ -521,4 +545,13 @@ class EditorPage(QWidget):
     # --- Qt Methods ---
     def showEvent(self, event):
         super().showEvent(event)
+
+        if not self.controller:
+            return
+
+        # 如果全局状态里有数据 (比如刚在发射器加载了)，但编辑器是空的
+        if self.controller.source_data_exists and not self.controller.has_data:
+            self.logger.info("检测到外部加载了新数据，自动检出到编辑器沙盒并执行基础校验。")
+            self.controller.load_from_state()
+
         self._update_ui_state()
