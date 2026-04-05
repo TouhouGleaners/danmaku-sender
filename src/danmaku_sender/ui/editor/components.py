@@ -169,7 +169,7 @@ class ValidationRulesGroup(QGroupBox):
 
 class DanmakuPropertyForm(QWidget):
     """模块内高度内聚的表单控件，用于 Inspector 和 Dialog 共享"""
-    text_changed = Signal(str)
+    textChanged = Signal(str)
 
     def __init__(self, parent=None):
         super().__init__(parent)
@@ -216,7 +216,7 @@ class DanmakuPropertyForm(QWidget):
         layout.addWidget(QLabel("弹幕内容:"))
         self.prop_text = QTextEdit()
         self.prop_text.setAcceptRichText(False)
-        self.prop_text.textChanged.connect(lambda: self.text_changed.emit(self.get_cleaned_text()))
+        self.prop_text.textChanged.connect(lambda: self.textChanged.emit(self.get_cleaned_text()))
         layout.addWidget(self.prop_text)
 
     def _init_bili_palette(self):
@@ -273,7 +273,7 @@ class DanmakuPropertyForm(QWidget):
         self.prop_text.blockSignals(True)
         self.prop_text.setPlainText(dm.msg)
         self.prop_text.blockSignals(False)
-        self.text_changed.emit(self.get_cleaned_text())
+        self.textChanged.emit(self.get_cleaned_text())
 
     def clear_form(self):
         self.prop_time.setValue(0.0)
