@@ -1,4 +1,5 @@
 import sys
+import ctypes
 from pathlib import Path
 from platformdirs import user_data_dir
 
@@ -16,6 +17,12 @@ def main(argv=None):
     Args:
         argv: 命令行参数列表，默认使用 sys.argv
     """
+    if sys.platform == "win32":
+        try:
+            ctypes.windll.shell32.SetCurrentProcessExplicitAppUserModelID(AppInfo.NAME)
+        except Exception:
+            pass
+
     if argv is None:
         argv = sys.argv
 

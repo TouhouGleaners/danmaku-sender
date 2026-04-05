@@ -3,13 +3,13 @@ from .._version import __version__
 
 class AppInfo:
     """存放应用元数据"""
-    NAME = "B站弹幕补档工具"
+    NAME = "B站弹幕发射器"
     NAME_EN = "BiliDanmakuSender"
     AUTHOR = "Miku_oso"
     VERSION = __version__
     LOG_FILE_NAME = "latest.log"
     LOG_DIR_NAME = "logs"
-    
+
 
 class UI:
     """存放所有UI相关的静态配置"""

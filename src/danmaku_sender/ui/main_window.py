@@ -3,11 +3,11 @@ from pathlib import Path
 from platformdirs import user_data_dir
 
 from PySide6.QtWidgets import (
-    QMainWindow, QWidget, QMessageBox, QHBoxLayout, QVBoxLayout, QFrame,
-    QListWidget, QListWidgetItem, QStackedWidget, QLabel
+    QMainWindow, QWidget, QMessageBox, QHBoxLayout, QVBoxLayout, QFrame, QApplication,
+    QListWidget, QListWidgetItem, QStackedWidget, QLabel, QSystemTrayIcon, QMenu
 )
 from PySide6.QtGui import QAction, QCloseEvent, QDesktopServices
-from PySide6.QtCore import Qt, QUrl, QTimer, QSize, Slot
+from PySide6.QtCore import Qt, QUrl, QTimer, QSize, QEvent, Slot
 
 from .controllers.auth_controller import AuthController, UserProfile
 from .controllers.system_controller import SystemController
@@ -24,7 +24,7 @@ from ..core.state import AppState
 from ..utils.log_utils import GuiLoggingHandler
 from ..utils.credential_manager import load_credentials, save_credentials
 from ..utils.config_manager import load_app_config, save_app_config
-from ..utils.resource_utils import load_stylesheet, get_svg_icon
+from ..utils.resource_utils import load_stylesheet, get_svg_icon, get_app_icon
 
 
 class MainWindow(QMainWindow):
@@ -47,6 +47,7 @@ class MainWindow(QMainWindow):
         self._create_ui()
         self._init_pages()
         self._create_menu_bar()
+        self._init_system_tray()
 
         # 数据与配置加载
         self._load_initial_credentials()
@@ -59,6 +60,21 @@ class MainWindow(QMainWindow):
         # 加载样式与后续任务
         load_stylesheet()
         QTimer.singleShot(1000, lambda: self._run_update_check(is_manual=False))
+
+    def changeEvent(self, event: QEvent):
+        """窗口状态变化: 最小化到托盘"""
+        if event.type() == QEvent.Type.WindowStateChange:
+            if self.isMinimized():
+                self.hide()
+                self.tray_icon.showMessage(
+                    AppInfo.NAME,
+                    "程序已最小化到托盘，后台监视/发送任务将继续运行。",
+                    QSystemTrayIcon.MessageIcon.Information,
+                    2000
+                )
+                event.accept()
+                return
+        super().changeEvent(event)
 
     def closeEvent(self, event: QCloseEvent):
         """窗口关闭事件: 保存配置与凭证"""
@@ -205,6 +221,28 @@ class MainWindow(QMainWindow):
         about_action = QAction("关于", self)
         about_action.triggered.connect(self._show_about)
         help_menu.addAction(about_action)
+
+    def _init_system_tray(self):
+        """初始化系统托盘"""
+        self.tray_icon = QSystemTrayIcon(self)
+        self.tray_icon.setIcon(get_app_icon())
+
+        # 托盘右键菜单
+        tray_menu = QMenu(self)
+
+        show_action = QAction("显示主窗口", self)
+        show_action.triggered.connect(self._show_from_tray)
+
+        quit_action = QAction("完全退出", self)
+        quit_action.triggered.connect(self._force_quit)
+
+        tray_menu.addAction(show_action)
+        tray_menu.addSeparator()
+        tray_menu.addAction(quit_action)
+
+        self.tray_icon.setContextMenu(tray_menu)
+        self.tray_icon.activated.connect(self._on_tray_activated)
+        self.tray_icon.show()
 
     # endregion
     # region Data Binding & Signal
@@ -358,5 +396,23 @@ class MainWindow(QMainWindow):
 
         if dialog.exec():
             QDesktopServices.openUrl(QUrl(url))
+
+    @Slot()
+    def _show_from_tray(self):
+        """从托盘恢复窗口"""
+        self.showNormal()
+        self.activateWindow()
+
+    @Slot()
+    def _force_quit(self):
+        """强制退出程序"""
+        self.tray_icon.hide()
+        QApplication.quit()
+
+    @Slot(QSystemTrayIcon.ActivationReason)
+    def _on_tray_activated(self, reason: QSystemTrayIcon.ActivationReason):
+        """单击托盘图标恢复窗口"""
+        if reason == reason == QSystemTrayIcon.ActivationReason.Trigger:
+            self._show_from_tray()
 
     # endregion
