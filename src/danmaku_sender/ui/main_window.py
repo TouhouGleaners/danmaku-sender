@@ -424,7 +424,7 @@ class MainWindow(QMainWindow):
     @Slot(QSystemTrayIcon.ActivationReason)
     def _on_tray_activated(self, reason: QSystemTrayIcon.ActivationReason):
         """单击托盘图标恢复窗口"""
-        if reason == reason == QSystemTrayIcon.ActivationReason.Trigger:
+        if reason == QSystemTrayIcon.ActivationReason.Trigger:
             self._show_from_tray()
 
     @Slot(int, int)
