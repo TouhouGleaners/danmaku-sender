@@ -2,7 +2,7 @@ import copy
 import logging
 from typing import Any, Callable
 
-from ..state import AppState
+from ..state import ValidationConfig
 from ..entities.danmaku import Danmaku
 from ..types.editor_types import EditorItem, EditorField, AtomicChange, ViewItem, InsertPosition
 from ..services.danmaku_validator import validate_danmaku_list
@@ -10,20 +10,22 @@ from ..services.danmaku_validator import validate_danmaku_list
 
 class EditorSession:
     """
-    弹幕编辑器逻辑会话层。
-    管理暂存区的数据检出、编辑、校验与提交。
+    纯净的弹幕编辑器核心会话层 (Sandbox)。
+    只负责暂存区的增删改查与撤销树维护，不主动干涉全局状态 (AppState)。
     """
-    def __init__(self, state: AppState):
-        self.state = state
-        self.logger = logging.getLogger("App.System.Editor")
-
+    def __init__(self) -> None:
+        self.logger = logging.getLogger("App.System.Editor.Session")
         self.items: dict[str, EditorItem] = {}          # 核心存储：UUID 映射表
         self.item_order: list[str] = []                 # 顺序表：维护弹幕在视频中的物理播放顺序
         self.undo_stack: list[list[AtomicChange]] = []  # 操作栈：撤销功能
+        self._is_dirty: bool = False
 
     @property
     def is_dirty(self) -> bool:
-        return self.state.editor_is_dirty
+        return self._is_dirty
+
+    def set_dirty(self, dirty: bool):
+        self._is_dirty = dirty
 
     @property
     def has_active_session(self) -> bool:
@@ -39,43 +41,30 @@ class EditorSession:
     def can_undo(self) -> bool:
         return bool(self.undo_stack)
 
-    def set_dirty(self, dirty: bool):
-        self.state.editor_is_dirty = dirty
+    # region Data I/O
 
-    def checkout_from_state(self) -> bool:
-        """从全局状态检出数据到暂存区，并记录 HEAD 错误快照。"""
-        source = self.state.video_state.loaded_danmakus
-        if not source:
-            return False
+    def load_data(self, danmakus: list[Danmaku]):
+        """从外部数据加载到编辑器会话"""
+        self.items.clear()
+        self.item_order.clear()
+        self.undo_stack.clear()
+        self.set_dirty(False)
 
-        self._reset_session()
-
-        # 排序并包装入容器
-        sorted_source = sorted(source, key=lambda x: x.progress)
+        sorted_source = sorted(danmakus, key=lambda x: x.progress)
         for dm in sorted_source:
-            item = EditorItem(
-                head=copy.deepcopy(dm),
-                working=copy.deepcopy(dm)
-            )
+            item = EditorItem(head=copy.deepcopy(dm), working=copy.deepcopy(dm))
             self.items[item.id] = item
             self.item_order.append(item.id)
 
-        # 执行初始校验，并记录 HEAD 错误快照
-        self.refresh_validation()
-        for item in self.items.values():
-            item.head_had_error = bool(item.error_msg)
-
-        self.set_dirty(False)
-        return self.active_error_count > 0
-
-    def commit_to_state(self) -> tuple[int, int, int]:
-        """将暂存区的改动正式提交到全局状态，并计算。
+    def get_committed_data(self) -> tuple[list[Danmaku], int, int]:
+        """
+        获取当前工作区的最终数据列表（不包含标记删除的项）
 
         Returns:
-            tuple[int, int, int]: (总数, 修复数, 删除数)
+            (final_list, fixed_count, removed_count)
         """
         if not self.items:
-            return 0, 0, 0
+            return [], 0, 0
 
         final_list = []
         fixed_count = 0
@@ -91,31 +80,19 @@ class EditorSession:
                 if item.head_had_error and not item.error_msg:
                     fixed_count += 1
 
-        total = len(final_list)
-        self.state.video_state.loaded_danmakus = final_list
-        self._reset_session()  # 提交后重置编辑器状态
-
-        return total, fixed_count, removed_count
-
-    def _reset_session(self):
-        """清空工作区"""
-        self.items.clear()
-        self.item_order.clear()
-        self.undo_stack.clear()
         self.set_dirty(False)
+        return final_list, fixed_count, removed_count
 
-    def refresh_validation(self):
-        """重新验证工作区数据并回填错误信息"""
+    # endregion
+    # region Data Validation & View Rendering
+
+    def validate(self, duration_ms: int, config: ValidationConfig):
+        """对当前工作区数据进行校验，并回填错误信息"""
         self._reorder_items()
 
-        duration_ms = self.state.video_state.selected_part_duration_ms
-        config = self.state.validation_config
-
-        # 未删除的 UUID 列表
         active_uids = [uid for uid in self.item_order if not self.items[uid].is_deleted]
-
-        # 提取存活的弹幕实例传入校验器
         working_list = [self.items[uid].working for uid in active_uids]
+
         raw_issues = validate_danmaku_list(working_list, duration_ms, config)
 
         # 重置所有节点的错误状态
@@ -126,6 +103,11 @@ class EditorSession:
         for issue in raw_issues:
             uid = active_uids[issue['original_index']]
             self.items[uid].error_msg = issue['reason']
+
+    def mark_head_errors(self):
+        """根据当前错误状态更新 HEAD 错误快照"""
+        for item in self.items.values():
+            item.head_had_error = bool(item.error_msg)
 
     def generate_view_model(self, show_all: bool = False) -> list[ViewItem]:
         """生成供 UI 渲染的视图模型"""
@@ -150,6 +132,9 @@ class EditorSession:
 
         return view_data
 
+    # endregion
+    # region Atomic Operations and Batch Modification Logic
+
     def _push_undo_record(self, changes: list[AtomicChange]):
         """将一组变更记录推入撤销栈"""
         if changes:
@@ -171,8 +156,6 @@ class EditorSession:
             if item := self.items.get(change.item_id):
                 change.field.set_value(item, change.previous_value)
 
-        # 撤销后重新校验
-        self.refresh_validation()
         self.set_dirty(bool(self.undo_stack))
         return True
 
@@ -201,13 +184,12 @@ class EditorSession:
 
         self._push_undo_record([AtomicChange(new_uid, EditorField.IS_DELETED, True)])  # 新增记录为“从无到有”，撤销时即标记删除
 
-        self.refresh_validation()
         return new_uid
 
-    def delete_items(self, uids: list[str]):
+    def delete_items(self, uids: list[str]) -> bool:
         """批量标记删除弹幕"""
         if not uids:
-            return
+            return False
 
         batch_changes = []
         for uid in uids:
@@ -218,16 +200,8 @@ class EditorSession:
 
         if batch_changes:
             self._push_undo_record(batch_changes)
-            self.refresh_validation()
-            self.logger.info(f"已批量删除 {len(batch_changes)} 条弹幕。")
-
-    def update_item_content(self, uid: str, new_content: str):
-        """更新单条弹幕文本"""
-        item = self.items.get(uid)
-        if item and item.working.msg != new_content:
-            self._push_undo_record([AtomicChange(uid, EditorField.MSG, item.working.msg)])
-            item.working.msg = new_content
-            self.refresh_validation()
+            return True
+        return False
 
     def update_item_properties(self, uid: str, new_props: dict[EditorField, Any]) -> bool:
         """
@@ -247,9 +221,7 @@ class EditorSession:
 
         if changes:
             self._push_undo_record(changes)
-            self.refresh_validation()
             return True
-
         return False
 
     def _execute_batch_transform(self, op_name: str, transform_fn: Callable[[Danmaku], bool]) -> tuple[int, int]:
@@ -291,9 +263,6 @@ class EditorSession:
 
         if current_step_changes:
             self._push_undo_record(current_step_changes)
-            self.refresh_validation()
-            self.logger.info(f"批量操作 [{op_name}]: 修改 {modified_count}, 删除 {deleted_count}")
-
         return modified_count, deleted_count
 
     def batch_remove_newlines(self) -> tuple[int, int]:
@@ -354,3 +323,5 @@ class EditorSession:
         确保 items 字典的实际时间与 item_order 的索引顺序严格一致。
         """
         self.item_order.sort(key=lambda uid: self.items[uid].working.progress)
+
+    # endregion

@@ -1,7 +1,7 @@
 import logging
 from typing import Any
 
-from PySide6.QtCore import Qt, QModelIndex
+from PySide6.QtCore import Qt, QModelIndex, QPoint, Slot
 from PySide6.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout, QPushButton, QLabel,
     QTableView, QHeaderView, QAbstractItemView, QMessageBox,
@@ -10,10 +10,10 @@ from PySide6.QtWidgets import (
 
 from .components import EditorTableModel, ValidationRulesGroup, PropertyInspectorGroup
 from .dialogs import EditDanmakuDialog, TimeOffsetDialog
+from ..controllers.editor_controller import EditorController
 
 from ...core.engines.editor_session import EditorSession
 from ...core.types.editor_types import EditorField, InsertPosition
-from ...core.entities.danmaku import Danmaku
 from ...core.state import AppState
 from ...core.services.danmaku_exporter import export_danmakus_to_xml
 from ...utils.resource_utils import get_svg_icon
@@ -22,14 +22,14 @@ from ...utils.resource_utils import get_svg_icon
 class EditorPage(QWidget):
     def __init__(self):
         super().__init__()
-        self._state: AppState | None = None
-        self.session: EditorSession | None = None
+        self.controller: EditorController | None = None
         self.logger = logging.getLogger("App.System.UI.Editor")
 
         self.current_item_id: str | None = None
 
         self._create_ui()
 
+    # region UI Setup & Data Binding
     def _create_ui(self):
         # 主布局
         main_layout = QVBoxLayout(self)
@@ -42,8 +42,7 @@ class EditorPage(QWidget):
 
         # A: 文件级操作 (预留)
         self.btn_new = QPushButton(get_svg_icon("note_add.svg"), "新建")
-        self.btn_new.setEnabled(False)
-        self.btn_new.setToolTip("预留功能：新建空白弹幕文件")
+        self.btn_new.clicked.connect(self._create_new_file)
 
         self.btn_import = QPushButton(get_svg_icon("file_open.svg"), "导入 XML")
         self.btn_import.setEnabled(False)
@@ -180,29 +179,160 @@ class EditorPage(QWidget):
 
     def bind_state(self, state: AppState):
         """将 UI 控件与 AppState 进行双向绑定"""
-        if self._state is state:
+        if self.controller and self.controller.state is state:
             return
 
-        self._state = state
-        self.session = EditorSession(state)
+        self.controller = EditorController(state, self)
+        self.controller.dataChanged.connect(self._refresh_table)
 
         self.rules_group.bind_state(state)
-
         self._update_ui_state()
 
+    # endregion
+    # region State & UI Refresh Updates
 
-    # region Slots
+    def _update_ui_state(self):
+        """统一状态机控制"""
+        if not self.controller:
+            for btn in [self.run_btn, self.btn_batch, self.undo_btn, self.apply_btn, self.btn_export, self.btn_new]:
+                btn.setEnabled(False)
+            self.status_label.setText("提示: 请在“发射器”页面加载 XML，或点击新建。")
+            self.status_label.setStyleSheet("color: #7f8c8d;")
+            return
+
+        ctrl = self.controller
+
+        self.btn_new.setEnabled(True)
+        self.run_btn.setEnabled(ctrl.source_data_exists)
+        self.btn_batch.setEnabled(ctrl.has_data)
+        self.btn_export.setEnabled(ctrl.has_data)
+        self.undo_btn.setEnabled(ctrl.can_undo)
+        self.apply_btn.setEnabled(ctrl.is_dirty)
+
+        if ctrl.is_dirty:
+            self.status_label.setText("⚠️ 有未应用的修改！请点击“应用所有修改”按钮。")
+            self.status_label.setStyleSheet("color: #d35400;")
+        elif ctrl.has_data:
+            if ctrl.active_error_count > 0:
+                self.status_label.setText(f"❌ 发现 {ctrl.active_error_count} 条问题弹幕，请处理。")
+                self.status_label.setStyleSheet("color: red;")
+            else:
+                mode_str = " (深度校验)" if ctrl.has_video_context else " (无视频关联，跳过时间检查)"
+                self.status_label.setText(f"✅ 验证通过，当前无问题{mode_str}。")
+                self.status_label.setStyleSheet("color: green;")
+        else:
+            self.status_label.setText("提示: 点击“开始校验”以加载并检查弹幕。")
+            self.status_label.setStyleSheet("color: #7f8c8d;")
+
+    @Slot()
+    def _refresh_table(self):
+        """刷新表格"""
+        if self.controller:
+            view_items = self.controller.get_view_model(show_all=self.preview_mode_cb.isChecked())
+            self.model.update_data(view_items)
+            self._update_ui_state()
+
+    @Slot()
+    def _on_selection_changed(self):
+        """表格选中行变化时，更新侧边栏检查器"""
+        self._update_ui_state()
+
+        selected_indexes = self.table.selectionModel().selectedRows()
+        if not selected_indexes:
+            self.current_item_id = None
+            self.inspector_group.reset_inspector()
+            return
+
+        uid = self.model.get_item_id(selected_indexes[0].row())
+        if uid and self.controller:
+            self.current_item_id = uid
+            if dm := self.controller.get_item_danmaku(uid):
+                self.inspector_group.load_danmaku(dm)
+
+    # endregion
+    # region Core Workflow (File & Validation)
+
+    @Slot()
+    def _create_new_file(self):
+        if not self.controller:
+            return
+
+        if self.controller.is_dirty:
+            reply = QMessageBox.question(self, "放弃修改?", "当前有未应用的修改，新建将丢失这些数据。\n是否继续？", QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No)
+            if reply == QMessageBox.StandardButton.No:
+                return
+
+        self.controller.create_new_workspace()
+        self.current_item_id = None
+        self.inspector_group.reset_inspector()
+        QMessageBox.information(self, "新建成功", "已创建空白工作区，你可以开始创作了！")
+
+    @Slot()
+    def run_validation(self):
+        """运行验证逻辑"""
+        if not self.controller:
+            return
+
+        # 校验前置条件
+        if not self.controller.source_data_exists:
+            QMessageBox.warning(self, "无法验证", "当前工作区为空，请先新建或加载弹幕。")
+            return
+
+        # 检查未保存修改
+        if self.controller.is_dirty:
+            reply = QMessageBox.question(
+                self,
+                "确认",
+                "当前有未应用的修改，重新验证将丢弃这些修改。\n是否继续？",
+                buttons=QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No
+            )
+            if reply == QMessageBox.StandardButton.No:
+                return
+
+        if not self.controller.has_video_context:
+            QMessageBox.information(
+                self,
+                "降级校验模式",
+                "当前未关联目标视频（无 BVID/分P 信息）。\n\n系统将以【降级模式】执行校验：\n✔️ 检查文本长度、换行符、屏蔽词\n⏭️ 跳过弹幕发送时间是否超出视频总时长的检查"
+            )
+
+        # 执行验证
+        self.status_label.setText("正在验证...")
+        self.status_label.setStyleSheet("color: blue;")
+
+        self.current_item_id = None
+        self.inspector_group.reset_inspector()
+
+        has_issues = self.controller.load_from_state()
+        if not has_issues:
+            QMessageBox.information(self, "验证通过", "所有弹幕均符合当前规范！")
+
+    @Slot()
+    def apply_changes(self):
+        """应用修改"""
+        if not self.controller:
+            return
+
+        self.current_item_id = None
+        self.inspector_group.reset_inspector()
+
+        total, fixed, deleted = self.controller.commit_to_state()
+
+        self.logger.info(f"修改已应用: 修复 {fixed}, 删除 {deleted}")
+        QMessageBox.information(
+            self,
+            "应用成功",
+            f"发送队列已更新！\n\n修复: {fixed} 条\n移除: {deleted} 条\n剩余总数: {total} 条"
+        )
+
+    @Slot()
     def _export_xml(self):
         """将当前工作区内容导出为 XML 文件"""
-        if not self.session:
+        if not self.controller:
             return
 
         # 提取当前工作区中，未被标记删除的所有弹幕
-        working_dms = [
-            self.session.items[uid].working
-            for uid in self.session.item_order
-            if not self.session.items[uid].is_deleted
-        ]
+        working_dms = self.controller.get_working_danmakus()
 
         if not working_dms:
             QMessageBox.warning(self, "导出失败", "当前工作区没有任何可导出的弹幕。")
@@ -228,150 +358,22 @@ class EditorPage(QWidget):
                 QMessageBox.critical(self, "导出失败", f"文件写入失败，请检查路径权限。\n错误信息:\n{e}")
 
     # endregion
-
-    # --- 辅助与状态管理 ---
-    def _get_danmaku_for_row(self, row: int) -> tuple[str | None, Danmaku | None]:
-        """辅助方法：通过 UI 行号获取底层 UUID 与弹幕对象"""
-        if not self.session:
-            return None, None
-
-        item_id = self.model.get_item_id(row)
-        if not item_id:
-            return None, None
-
-        item = self.session.items.get(item_id)
-        if not item:
-            self.logger.warning(f"UI 状态不同步: 在 Session 中找不到 UUID 为 {item_id} 的弹幕。")
-            return None, None
-
-        return item_id, item.working
-
-    def _update_ui_state(self):
-        """统一状态机控制"""
-        if not self.session or not self._state:
-            for btn in [self.run_btn, self.btn_batch, self.undo_btn, self.apply_btn]:
-                btn.setEnabled(False)
-            self.status_label.setText("提示: 请先在“发射器”页面加载文件并选择分P。")
-            self.status_label.setStyleSheet("color: #7f8c8d;")
-            return
-
-        video_state = self._state.video_state
-        session = self.session
-        has_items = self.model.rowCount() > 0
-
-        self.run_btn.setEnabled(bool(video_state.loaded_danmakus) and video_state.selected_cid is not None)
-        self.btn_batch.setEnabled(session.has_active_session and has_items)
-        self.btn_export.setEnabled(session.has_active_session and has_items)
-        self.undo_btn.setEnabled(session.can_undo)
-        self.apply_btn.setEnabled(session.is_dirty)
-
-        if session.is_dirty:
-            self.status_label.setText("⚠️ 有未应用的修改！请点击“应用所有修改”按钮。")
-            self.status_label.setStyleSheet("color: #d35400;")
-        elif session.has_active_session:
-            count = session.active_error_count
-            if count > 0:
-                self.status_label.setText(f"❌ 发现 {count} 条问题弹幕，请处理。")
-                self.status_label.setStyleSheet("color: red;")
-            else:
-                self.status_label.setText("✅ 验证通过，当前无问题。")
-                self.status_label.setStyleSheet("color: green;")
-        else:
-            self.status_label.setText("提示: 点击“开始校验”以检查弹幕合法性。")
-            self.status_label.setStyleSheet("color: #7f8c8d;")
-
-    # --- 核心交互逻辑 ---
-    def run_validation(self):
-        """运行验证逻辑"""
-        if not self._state or not self.session:
-            return
-
-        # 校验前置条件
-        if not self._state.video_state.loaded_danmakus:
-            QMessageBox.warning(self, "无法验证", "请先在 “发射器” 页面加载弹幕文件。")
-            return
-
-        if not self._state.video_state.selected_cid:
-            QMessageBox.warning(self, "无法验证", "请先在 “发射器” 页面选择一个分P（用于检查时间戳）。")
-            return
-
-        duration = self._state.video_state.selected_part_duration_ms
-        if duration <= 0:
-            QMessageBox.warning(self, "数据缺失", "当前分P时长无效，无法进行时间戳校验。\n请尝试重新获取分P信息。")
-            return
-
-        # 检查未保存修改
-        if self.session.is_dirty:
-            reply = QMessageBox.question(
-                self,
-                "确认",
-                "当前有未应用的修改，重新验证将丢弃这些修改。\n是否继续？",
-                buttons=QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No
-            )
-            if reply == QMessageBox.StandardButton.No:
-                return
-
-        # 执行验证
-        self.status_label.setText("正在验证...")
-        self.status_label.setStyleSheet("color: blue;")
-
-        self.current_item_id = None
-        self.inspector_group.reset_inspector()
-        has_issues = self.session.checkout_from_state()
-
-        if not has_issues:
-            QMessageBox.information(self, "验证通过", "所有弹幕均符合规范！")
-
-        self._refresh_table()
-
-    def _refresh_table(self):
-        """刷新表格"""
-        if not self.session:
-            return
-
-        items = self.session.generate_view_model(show_all=self.preview_mode_cb.isChecked())
-        self.model.update_data(items)
-        self._update_ui_state()
-
-    def _on_selection_changed(self):
-        """当表格选中项变化时，同步更新 UI 状态并渲染属性面板"""
-        self._update_ui_state()
-
-        selected_indexes = self.table.selectionModel().selectedRows()
-        if not selected_indexes:
-            self.current_item_id = None
-            self.inspector_group.reset_inspector()
-            return
-
-        item_id, dm = self._get_danmaku_for_row(selected_indexes[0].row())
-        if item_id is None or dm is None:
-            return
-
-        self.current_item_id = item_id
-        self.inspector_group.load_danmaku(dm)
+    # region Item Operations (Row Level & Dialogs)
 
     def _apply_properties(self, new_props: dict[EditorField, Any]):
         """Inspector 回调：应用弹幕属性修改"""
-        if self.current_item_id is None or not self.session:
-            return
+        if self.current_item_id and self.controller:
+            if self.controller.update_properties(self.current_item_id, new_props):
+                for i in range(self.model.rowCount()):
+                    if self.model.get_item_id(i) == self.current_item_id:
+                        self.table.selectRow(i)
+                        break
 
-        changed = self.session.update_item_properties(self.current_item_id, new_props)
-        if changed:
-            # 记录当前选中的行，刷新表格后恢复选中
-            row = self.table.currentIndex().row()
-            self._refresh_table()
-            if 0 <= row < self.model.rowCount():
-                self.table.selectRow(row)
-
-    def on_table_double_click(self, index: QModelIndex):
-        """双击编辑内容"""
-        if index.column() == 3:
-            self._edit_row(index.row())
-
-    def open_context_menu(self, pos):
+    @Slot(QPoint)
+    def open_context_menu(self, pos: QPoint):
         """打开表格右键上下文菜单"""
         index = self.table.indexAt(pos)
-        if not index.isValid() or not self.session:
+        if not index.isValid() or not self.controller:
             return
 
         menu = QMenu(self)
@@ -398,12 +400,22 @@ class EditorPage(QWidget):
         elif action == delete_action:
             self.delete_selected_items()
 
+    @Slot(QModelIndex)
+    def on_table_double_click(self, index: QModelIndex):
+        """双击编辑内容"""
+        if index.column() == 3:
+            self._edit_row(index.row())
+
     def _edit_row(self, row):
-        if not self.session:
+        if not self.controller:
             return
 
-        item_id, dm = self._get_danmaku_for_row(row)
-        if item_id is None or dm is None:
+        uid = self.model.get_item_id(row)
+        if not uid:
+            return
+
+        dm = self.controller.get_item_danmaku(uid)
+        if not dm:
             return
 
         dialog = EditDanmakuDialog(dm, self)
@@ -411,73 +423,74 @@ class EditorPage(QWidget):
             new_props = dialog.get_properties()
             if not new_props[EditorField.MSG]:
                 if QMessageBox.question(self, "确认删除", "内容为空，是否直接删除该条弹幕？", QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No) == QMessageBox.StandardButton.Yes:
-                    self.session.delete_items([item_id])
-                    self._refresh_table()
+                    self.controller.delete_items([uid])
             else:
-                if self.session.update_item_properties(item_id, new_props):
-                    self._refresh_table()
+                if self.controller.update_properties(uid, new_props):
                     self.table.selectRow(row)
 
     def _insert_row(self, row: int, position: InsertPosition):
         """插入新弹幕"""
-        if not self.session:
+        if not self.controller:
             return
 
-        item_id, _ = self._get_danmaku_for_row(row)
-        if not item_id:
+        uid = self.model.get_item_id(row)
+        if not uid:
             return
 
-        new_uid = self.session.insert_item(item_id, position)
+        new_uid = self.controller.insert_item(uid, position)
         if new_uid:
-            self._refresh_table()
-            # 定位到新插入的行
             for i in range(self.model.rowCount()):
                 if self.model.get_item_id(i) == new_uid:
                     self.table.selectRow(i)
                     self._edit_row(i)
                     break
 
+    @Slot()
     def delete_selected_items(self):
         """批量删除选中项"""
-        if not self.session:
+        if not self.controller:
             return
 
-        selected_indexes = self.table.selectionModel().selectedRows()
-        if not selected_indexes:
+        selected_rows = self.table.selectionModel().selectedRows()
+        if not selected_rows:
             return
 
         # 收集所有的 UUID
         uids = [
-            uid for row_idx in selected_indexes
+            uid for row_idx in selected_rows
             if (uid := self.model.get_item_id(row_idx.row())) is not None
         ]
 
         if uids:
-            self.session.delete_items(uids)
-            self._refresh_table()
+            self.controller.delete_items(uids)
 
+    @Slot()
     def undo(self):
         """撤销"""
-        if not self.session:
-            return
+        if self.controller:
+            self.controller.undo()
 
-        if self.session.undo():
-            self._refresh_table()
+    # endregion
+    # region Batch Processing
 
+    @Slot()
     def batch_remove_newlines(self):
-        if not self.session:
+        if not self.controller:
             return
 
-        mod, dele = self.session.batch_remove_newlines()
-        self._show_batch_result(mod, dele)
+        mod, dele = self.controller.batch_remove_newlines()
+        if mod > 0 or dele > 0:
+            QMessageBox.information(self, "处理完成", f"修复: {mod} 条\n删除: {dele} 条")
+        else:
+            QMessageBox.information(self, "无变化", "未发现相关问题。")
 
+    @Slot()
     def batch_truncate_length(self):
-        if not self.session:
+        if not self.controller:
             return
 
-        count = self.session.batch_truncate_length()
+        count = self.controller.batch_truncate()
         if count > 0:
-            self._refresh_table()
             QMessageBox.information(self, "处理完成", f"已截断 {count} 条过长弹幕。")
         else:
             QMessageBox.information(self, "无变化", "未发现过长弹幕。")
@@ -489,42 +502,21 @@ class EditorPage(QWidget):
         else:
             QMessageBox.information(self, "无变化", "未发现相关问题。")
 
-    def apply_changes(self):
-        """应用修改"""
-        if not self.session:
-            return
-
-        self.current_item_id = None
-        self.inspector_group.reset_inspector()
-
-        total, fixed, deleted = self.session.commit_to_state()
-
-        self.logger.info(f"修改已应用: 修复 {fixed}, 删除 {deleted}")
-        QMessageBox.information(
-            self,
-            "应用成功",
-            f"发送队列已更新！\n\n修复: {fixed} 条\n移除: {deleted} 条\n剩余总数: {total} 条"
-        )
-
-        self._refresh_table()
-        self.status_label.setText("修改已应用。")
-        self.status_label.setStyleSheet("color: green;")
-        self._update_ui_state()
-
+    @Slot()
     def open_offset_dialog(self):
-        if not self.session or not self.session.has_active_session:
+        if not self.controller or not self.controller.has_data:
             return
 
         dlg = TimeOffsetDialog(self)
         if dlg.exec():
-            offset_ms = dlg.get_offset_ms()
-            if offset_ms != 0:
-                count = self.session.shift_time_axis(offset_ms)
-                self._refresh_table()
+            if offset_ms := dlg.get_offset_ms():
+                count = self.controller.shift_time(offset_ms)
                 if count > 0:
                     self.logger.info(f"成功平移了 {count} 条弹幕的时间轴。")
                 else:
                     self.logger.info("平移操作未导致任何数据变化。")
+
+    # endregion
 
     # --- Qt Methods ---
     def showEvent(self, event):
