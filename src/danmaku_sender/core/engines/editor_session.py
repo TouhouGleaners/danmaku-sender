@@ -1,5 +1,4 @@
 import copy
-from hmac import new
 import logging
 import colorsys
 from typing import Any, Callable
