@@ -1,6 +1,6 @@
 from typing import Any, Callable
 
-from PySide6.QtCore import Qt, QAbstractTableModel, QModelIndex, QRectF, Signal, Slot
+from PySide6.QtCore import Qt, QAbstractTableModel, QModelIndex, Signal, Slot
 from PySide6.QtGui import QColor, QBrush, QPainter, QPainterPath, QFont, QPen, QFontMetrics
 from PySide6.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout, QFormLayout, QPushButton,
@@ -198,9 +198,9 @@ class DanmakuPropertyForm(QWidget):
 
         # 模式
         self.prop_mode = QComboBox()
-        self.prop_mode.addItem("滚动 (1)", 1)
-        self.prop_mode.addItem("底端 (4)", 4)
-        self.prop_mode.addItem("顶端 (5)", 5)
+        self.prop_mode.addItem("滚动 (1)", Danmaku.Mode.SCROLL)
+        self.prop_mode.addItem("底端 (4)", Danmaku.Mode.BOTTOM)
+        self.prop_mode.addItem("顶端 (5)", Danmaku.Mode.TOP)
         form_layout.addRow("弹幕模式:", self.prop_mode)
 
         # 字号
@@ -414,12 +414,15 @@ class DanmakuPreviewWidget(QWidget):
 
         x = (rect.width() - text_width) / 2
 
-        if self._mode == 5:  # 顶端
-            y = text_height + 15
-        elif self._mode == 4:  # 底端
-            y = rect.height() - 15
-        else:  # 滚动 (垂直居中)
-            y = (rect.height() + text_height) / 2 - 5
+        match self._mode:
+            case Danmaku.Mode.TOP:
+                y = text_height + 15
+            case Danmaku.Mode.BOTTOM:
+                y = rect.height() - 15
+            case Danmaku.Mode.SCROLL:
+                y = (rect.height() + text_height) / 2 - 5
+            case _:
+                y = rect.center().y()
 
         # 构造文字路径
         path = QPainterPath()

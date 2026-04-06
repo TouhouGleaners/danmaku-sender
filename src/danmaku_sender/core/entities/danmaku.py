@@ -1,4 +1,5 @@
 import time
+from enum import IntEnum
 from dataclasses import dataclass, replace
 from typing import Any
 
@@ -6,6 +7,12 @@ from typing import Any
 @dataclass
 class Danmaku:
     """弹幕实体对象"""
+    class Mode(IntEnum):
+        SCROLL = 1
+        BOTTOM = 4
+        TOP = 5
+
+
     class Standards:
         """Bilibili 通用标准"""
         FONT_SIZES = {
@@ -19,19 +26,13 @@ class Danmaku:
             "#019899", "#4266BE", "#89D5FF", "#CC0273", "#222222", "#9B9B9B", "#FFFFFF"
         ]
 
-        MODES = {
-            1: "滚动",
-            4: "底端",
-            5: "顶端"
-        }
-
 
     # === 发送参数 (Request) ===
-    msg: str                # 内容 (API: msg, XML: text)
-    progress: int           # 时间毫秒 (API: progress, XML: p[0])
-    mode: int = 1           # 模式 (API: mode)
-    fontsize: int = 25      # 字号 (API: fontsize)
-    color: int = 16777215   # 颜色 (API: color)
+    msg: str                  # 内容 (API: msg, XML: text)
+    progress: int             # 时间毫秒 (API: progress, XML: p[0])
+    mode: Mode = Mode.SCROLL  # 模式 (API: mode)
+    fontsize: int = 25        # 字号 (API: fontsize)
+    color: int = 16777215     # 颜色 (API: color)
 
     # === 响应/状态数据 (Response) ===
     # 本地未发送时为空，发送成功后由 Sender 回填 API 返回的 dmid_str
@@ -44,33 +45,38 @@ class Danmaku:
     @property
     def progress_sec(self) -> float:
         return self.progress / 1000.0
-    
+
     @property
     def is_sent(self) -> bool:
         """判断是否已获得正式身份"""
         return bool(self.dmid)
-    
+
     def to_api_params(self) -> dict[str, Any]:
         """转为 API 参数字典"""
         return {
             'type': 1,
             'msg': self.msg,
             'progress': self.progress,
-            'mode': self.mode,
+            'mode': self.mode.value,
             'fontsize': self.fontsize,
             'color': self.color,
             'pool': 0,
             'rnd': int(time.time() * 1000000)
         }
-    
+
     def clone(self) -> 'Danmaku':
         return replace(self)
-    
+
     @classmethod
     def from_xml(cls, p_attr: list[str], text: str, is_online: bool = False) -> 'Danmaku':
         """工厂方法：解析 XML"""
         progress = int(float(p_attr[0]) * 1000)
-        mode = int(p_attr[1]) if len(p_attr) > 1 else 1
+
+        try:
+            mode = cls.Mode(int(p_attr[1]))
+        except ValueError:
+            mode = cls.Mode.SCROLL
+
         fontsize = int(p_attr[2]) if len(p_attr) > 2 else 25
         color = int(p_attr[3]) if len(p_attr) > 3 else 16777215
 
