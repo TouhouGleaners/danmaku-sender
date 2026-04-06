@@ -1,5 +1,6 @@
 import copy
 import logging
+import colorsys
 from typing import Any, Callable
 
 from ..state import ValidationConfig
@@ -325,3 +326,53 @@ class EditorSession:
         self.item_order.sort(key=lambda uid: self.items[uid].working.progress)
 
     # endregion
+
+    def generate_danmaku_array(self, ref_uid: str, text: str, mode: Danmaku.Mode, count: int, color_strategy: str) -> list[str]:
+        """生成同一时刻的弹幕阵列"""
+        ref_item = self.items.get(ref_uid)
+        if not ref_item:
+            return []
+
+        target_time = ref_item.working.progress
+
+        # 准备颜色序列
+        colors = []
+        if color_strategy == "classic":
+            std_colors = Danmaku.Standards.COLORS
+            for i in range(count):
+                hex_str = std_colors[i % len(std_colors)].lstrip('#')
+                colors.append(int(hex_str, 16))
+        else:  # rainbow
+            for i in range(count):
+                hue = i / max(1, count)
+                r, g, b = colorsys.hsv_to_rgb(hue, 1.0, 1.0)
+                colors.append((int(r * 255) << 16) + (int(g * 255) << 8) + int(b * 255))
+
+        # 批量创建入库
+        new_uids = []
+        batch_changes = []
+
+        for color in colors:
+            dm = Danmaku(
+                msg=text,
+                progress=target_time,
+                mode=mode,
+                fontsize=ref_item.working.fontsize,
+                color=color
+            )
+
+            new_item = EditorItem(head=dm.clone(), working=dm.clone())
+            uid = new_item.id
+
+            self.items[uid] = new_item
+            self.item_order.append(uid)
+            new_uids.append(uid)
+
+            # 记录新增事件以便撤销
+            batch_changes.append(AtomicChange(uid, EditorField.IS_DELETED, True))
+
+        if batch_changes:
+            self._push_undo_record(batch_changes)
+            self._reorder_items()
+
+        return new_uids

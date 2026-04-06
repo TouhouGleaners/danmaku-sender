@@ -1,6 +1,10 @@
 from typing import Any
-from PySide6.QtWidgets import QDialog, QVBoxLayout, QHBoxLayout, QLabel, QPushButton, QGroupBox, QDoubleSpinBox
-from PySide6.QtCore import Slot
+
+from PySide6.QtWidgets import (
+    QDialog, QVBoxLayout, QHBoxLayout, QFormLayout, QLineEdit, QLabel, QPushButton,
+    QComboBox, QSpinBox, QDoubleSpinBox, QGroupBox
+)
+from PySide6.QtCore import Qt, Slot
 
 from .components import DanmakuPropertyForm
 from ...core.entities.danmaku import Danmaku
@@ -20,6 +24,13 @@ class EditDanmakuDialog(QDialog):
         self.editor_widget.load_danmaku(dm)
 
     def _create_ui(self):
+        self.setWindowFlags(
+            Qt.WindowType.Dialog |
+            Qt.WindowType.WindowTitleHint |
+            Qt.WindowType.WindowCloseButtonHint |
+            Qt.WindowType.CustomizeWindowHint
+        )
+
         layout = QVBoxLayout(self)
         layout.addWidget(self.editor_widget)
 
@@ -66,6 +77,12 @@ class TimeOffsetDialog(QDialog):
         super().__init__(parent)
         self.setWindowTitle("时间轴平移 / 补偿")
         self.setFixedSize(300, 180)
+        self.setWindowFlags(
+            Qt.WindowType.Dialog |
+            Qt.WindowType.WindowTitleHint |
+            Qt.WindowType.WindowCloseButtonHint |
+            Qt.WindowType.CustomizeWindowHint
+        )
 
         layout = QVBoxLayout(self)
         group = QGroupBox("设置偏移秒数")
@@ -95,3 +112,75 @@ class TimeOffsetDialog(QDialog):
     def get_offset_ms(self) -> int:
         """获取转换后的毫秒值"""
         return int(self.offset_spin.value() * 1000)
+
+
+class ArrayGeneratorDialog(QDialog):
+    """弹幕阵列生成器对话框"""
+    def __init__(self, parent=None):
+        super().__init__(parent)
+        self.setWindowTitle("阵列生成器 (Array Creator)")
+        self.setFixedSize(320, 280)
+        self._create_ui()
+
+    def _create_ui(self):
+        self.setWindowFlags(
+            Qt.WindowType.Dialog |
+            Qt.WindowType.WindowTitleHint |
+            Qt.WindowType.WindowCloseButtonHint |
+            Qt.WindowType.CustomizeWindowHint
+        )
+
+        layout = QVBoxLayout(self)
+
+        # 提示文案
+        tips = QLabel("将在选中弹幕的时间点之后，生成一组绚丽的弹幕列阵。")
+        tips.setStyleSheet("color: #7f8c8d; font-size: 11px; margin-bottom: 10px;")
+        tips.setWordWrap(True)
+        layout.addWidget(tips)
+
+        form = QFormLayout()
+
+        self.text_input = QLineEdit()
+        self.text_input.setPlaceholderText("例如: 前方高能反应！")
+        form.addRow("内容:", self.text_input)
+
+        self.mode_combo = QComboBox()
+        self.mode_combo.addItem("滚动", Danmaku.Mode.SCROLL.value)
+        self.mode_combo.addItem("底端", Danmaku.Mode.BOTTOM.value)
+        self.mode_combo.addItem("顶端", Danmaku.Mode.TOP.value)
+        form.addRow("模式:", self.mode_combo)
+
+        self.color_combo = QComboBox()
+        self.color_combo.addItem("B 站原味循环", "classic")
+        self.color_combo.addItem("HSV 丝滑彩虹", "rainbow")
+        form.addRow("色彩:", self.color_combo)
+
+        self.count_spin = QSpinBox()
+        self.count_spin.setRange(2, 100)
+        self.count_spin.setValue(10)
+        self.count_spin.setSuffix(" 条")
+        form.addRow("数量:", self.count_spin)
+
+        layout.addLayout(form)
+        layout.addStretch()
+
+        # 按钮
+        btn_layout = QHBoxLayout()
+        self.btn_cancel = QPushButton("取消")
+        self.btn_cancel.clicked.connect(self.reject)
+        self.btn_ok = QPushButton("开始生成")
+        self.btn_ok.setStyleSheet("background-color: #8e44ad; color: white; font-weight: bold;") # 紫色，代表魔法/高级
+        self.btn_ok.clicked.connect(self.accept)
+
+        btn_layout.addStretch()
+        btn_layout.addWidget(self.btn_cancel)
+        btn_layout.addWidget(self.btn_ok)
+        layout.addLayout(btn_layout)
+
+    def get_params(self):
+        return {
+            "text": self.text_input.text().strip() or "测试弹幕",
+            "mode": Danmaku.Mode(self.mode_combo.currentData()),
+            "color_strategy": self.color_combo.currentData(),
+            "count": self.count_spin.value(),
+        }

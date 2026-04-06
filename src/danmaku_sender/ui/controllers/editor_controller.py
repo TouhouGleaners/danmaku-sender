@@ -180,6 +180,14 @@ class EditorController(QObject):
             self.run_validation()
         return count
 
+    def generate_array(self, ref_uid: str, text: str, mode: Danmaku.Mode, count: int, color_strategy: str) -> list[str]:
+        new_uids = self.session.generate_danmaku_array(
+            ref_uid, text, mode, count, color_strategy
+        )
+        if new_uids:
+            self.run_validation()
+        return new_uids
+
     # endregion
     # region View Data Extraction
 
