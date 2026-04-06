@@ -9,7 +9,7 @@ from PySide6.QtWidgets import (
 )
 
 from .components import EditorTableModel, ValidationRulesGroup, PropertyInspectorGroup
-from .dialogs import EditDanmakuDialog, TimeOffsetDialog
+from .dialogs import EditDanmakuDialog, TimeOffsetDialog, ArrayGeneratorDialog
 from ..controllers.editor_controller import EditorController
 
 from ...core.types.editor_types import EditorField, InsertPosition
@@ -418,6 +418,9 @@ class EditorPage(QWidget):
 
         menu.addSeparator()
 
+        adv_menu = menu.addMenu(get_svg_icon("auto_awesome.svg"), "高级生成工具")
+        array_action = adv_menu.addAction(get_svg_icon("gradient.svg"), "生成彩虹弹幕阵列")
+
         delete_action = menu.addAction(get_svg_icon("delete.svg"), "删除选中条目")
 
         # 弹出菜单
@@ -429,6 +432,8 @@ class EditorPage(QWidget):
             self._insert_row(index.row(), InsertPosition.ABOVE)
         elif action == insert_below_action:
             self._insert_row(index.row(), InsertPosition.BELOW)
+        elif action == array_action:
+            self._generate_array(index.row())
         elif action == delete_action:
             self._delete_selected_items()
 
@@ -476,6 +481,33 @@ class EditorPage(QWidget):
                     self.table.selectRow(i)
                     self._edit_row(i)
                     break
+
+    def _generate_array(self, row: int):
+        """生成弹幕阵列"""
+        if not self.controller:
+            return
+
+        uid = self.model.get_item_id(row)
+        if not uid:
+            return
+
+        dialog = ArrayGeneratorDialog(self)
+        if dialog.exec():
+            params = dialog.get_params()
+
+            new_uids = self.controller.generate_array(
+                ref_uid=uid,
+                text=params["text"],
+                mode=params["mode"],
+                count=params["count"],
+                color_strategy=params["color_strategy"]
+            )
+
+            if new_uids:
+                for i in range(self.model.rowCount()):
+                    if self.model.get_item_id(i) == new_uids[0]:
+                        self.table.selectRow(i)
+                        break
 
     def _delete_selected_items(self):
         """批量删除选中项"""
