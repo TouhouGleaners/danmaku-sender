@@ -1,7 +1,7 @@
 from typing import Any, Callable
 
-from PySide6.QtCore import Qt, QAbstractTableModel, QModelIndex, Signal
-from PySide6.QtGui import QColor, QBrush
+from PySide6.QtCore import Qt, QAbstractTableModel, QModelIndex, QRectF, Signal, Slot
+from PySide6.QtGui import QColor, QBrush, QPainter, QPainterPath, QFont, QPen, QFontMetrics
 from PySide6.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout, QFormLayout, QPushButton,
     QLabel, QSizePolicy, QColorDialog, QLineEdit, QCheckBox,
@@ -177,10 +177,15 @@ class DanmakuPropertyForm(QWidget):
 
         self._create_ui()
         self._init_bili_palette()
+        self._connect_live_preview()
 
     def _create_ui(self):
         layout = QVBoxLayout(self)
         layout.setContentsMargins(0, 0, 0, 0)
+
+        # 预览组件
+        self.preview_board = DanmakuPreviewWidget()
+        layout.addWidget(self.preview_board)
 
         form_layout = QFormLayout()
 
@@ -219,6 +224,22 @@ class DanmakuPropertyForm(QWidget):
         self.prop_text.textChanged.connect(lambda: self.textChanged.emit(self.get_cleaned_text()))
         layout.addWidget(self.prop_text)
 
+    def _connect_live_preview(self):
+        """将所有修改动作绑定到实时预览"""
+        self.prop_text.textChanged.connect(self._trigger_preview_update)
+        self.prop_mode.currentIndexChanged.connect(self._trigger_preview_update)
+        self.prop_fontsize.currentIndexChanged.connect(self._trigger_preview_update)
+
+    @Slot()
+    def _trigger_preview_update(self, *args):
+        """触发预览画板更新"""
+        self.preview_board.update_preview(
+            text=self.get_cleaned_text(),
+            color=self.current_color_val,
+            fontsize=self.prop_fontsize.currentData(),
+            mode=self.prop_mode.currentData()
+        )
+
     def _init_bili_palette(self):
         """将 Danmaku.Standards 中定义的标准色注入 QColorDialog"""
         for i, hex_color in enumerate(Danmaku.Standards.COLORS):
@@ -237,6 +258,7 @@ class DanmakuPropertyForm(QWidget):
             color = dialog.currentColor()
             self.current_color_val = int(color.name().lstrip('#'), 16)
             self._update_color_btn_style(color.name())
+            self._trigger_preview_update()
 
     def _populate_font_sizes(self, current_val: int | None = None):
         """统一填充字号选项"""
@@ -274,6 +296,7 @@ class DanmakuPropertyForm(QWidget):
         self.prop_text.setPlainText(dm.msg)
         self.prop_text.blockSignals(False)
         self.textChanged.emit(self.get_cleaned_text())
+        self._trigger_preview_update()
 
     def clear_form(self):
         self.prop_time.setValue(0.0)
@@ -282,6 +305,7 @@ class DanmakuPropertyForm(QWidget):
         self.current_color_val = 16777215
         self._update_color_btn_style("#ffffff")
         self.prop_text.clear()
+        self._trigger_preview_update()
 
     def get_cleaned_text(self) -> str:
         return self.prop_text.toPlainText().replace('\n', '').replace('\r', '').strip()
@@ -333,3 +357,84 @@ class PropertyInspectorGroup(QGroupBox):
             return
         if self.on_save_callback:
             self.on_save_callback(props)
+
+
+class DanmakuPreviewWidget(QWidget):
+    """弹幕预览组件，负责在编辑器中实时渲染当前选中弹幕的样式"""
+    def __init__(self, parent=None):
+        super().__init__(parent)
+        self.setFixedHeight(120)
+        self.setStyleSheet("background-color: #1a1a1a; border-radius: 6px;")
+
+        # 内部状态
+        self._text = ""
+        self._color_val = 16777215
+        self._fontsize = 25
+        self._mode = 1
+
+    def update_preview(self, text: str, color: int, fontsize: int, mode: int):
+        """接收最新属性并触发重绘"""
+        self._text = text
+        self._color_val = color
+        self._fontsize = fontsize
+        self._mode = mode
+        self.update()
+
+    def paintEvent(self, event):
+        super().paintEvent(event)
+
+        if not self._text:
+            return
+
+        painter = QPainter(self)
+        painter.setRenderHint(QPainter.RenderHint.Antialiasing)
+
+        base_display_size = max(10, int(self._fontsize * 0.7))
+        font = QFont("Microsoft YaHei", base_display_size)
+        font.setBold(True)
+
+        # 计算文字位置
+        fm = QFontMetrics(font)
+        text_width = fm.horizontalAdvance(self._text)
+
+        rect = self.rect()
+        max_allowed_width = rect.width() - 20
+
+        scale_factor = 1.0
+        if text_width > max_allowed_width:
+            scale_factor = max_allowed_width / text_width
+
+            new_size = max(6, int(base_display_size * scale_factor))
+            font.setPointSize(new_size)
+
+            fm = QFontMetrics(font)
+            text_width = fm.horizontalAdvance(self._text)
+
+        text_height = fm.ascent()
+
+        x = (rect.width() - text_width) / 2
+
+        if self._mode == 5:  # 顶端
+            y = text_height + 15
+        elif self._mode == 4:  # 底端
+            y = rect.height() - 15
+        else:  # 滚动 (垂直居中)
+            y = (rect.height() + text_height) / 2 - 5
+
+        # 构造文字路径
+        path = QPainterPath()
+        path.addText(x, y, font, self._text)
+
+        # 绘制描边
+        pen = QPen(QColor(0, 0, 0, 200))
+        stroke_width = max(1.0, 2.0 * scale_factor)
+        pen.setWidthF(stroke_width)
+        pen.setJoinStyle(Qt.PenJoinStyle.RoundJoin)
+
+        painter.setPen(pen)
+        painter.drawPath(path)
+
+        # 填充颜色
+        painter.fillPath(path, QBrush(QColor(f"#{self._color_val & 0xFFFFFF:06x}")))
+
+        painter.end()
