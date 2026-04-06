@@ -72,9 +72,8 @@ class Danmaku:
         """工厂方法：解析 XML"""
         progress = int(float(p_attr[0]) * 1000)
 
-        mode = int(p_attr[1]) if len(p_attr) > 1 else 1
         try:
-            mode = cls.Mode(mode)
+            mode = cls.Mode(int(p_attr[1]))
         except ValueError:
             mode = cls.Mode.SCROLL
 

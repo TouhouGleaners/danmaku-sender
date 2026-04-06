@@ -313,7 +313,7 @@ class DanmakuPropertyForm(QWidget):
     def get_properties(self) -> dict[EditorField, Any]:
         return {
             EditorField.PROGRESS: int(self.prop_time.value() * 1000),
-            EditorField.MODE: Danmaku.Mode(self.prop_mode.currentData()),
+            EditorField.MODE: self.prop_mode.currentData(),
             EditorField.FONT_SIZE: self.prop_fontsize.currentData(),
             EditorField.COLOR: self.current_color_val,
             EditorField.MSG: self.get_cleaned_text()
