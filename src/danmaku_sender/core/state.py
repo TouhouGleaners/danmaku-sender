@@ -14,14 +14,6 @@ class ApiAuthConfig:
     use_system_proxy: bool
 
 
-@dataclass
-class UserState:
-    """用户信息状态"""
-    is_login: bool = False
-    username: str = "未登录"
-    avatar_url: str = ""
-
-
 class SenderConfig(BaseModel):
     """发送器的配置数据"""
     model_config = ConfigDict(validate_assignment=True)  # 赋值时校验
@@ -107,7 +99,6 @@ class AppState(QObject):
     继承自 QObject 以支持信号槽机制，实现 UI 与 逻辑 的解耦。
     """
     credentialsChanged = Signal(str, str)
-    userInfoChanged = Signal()
     senderLogReceived = Signal(str)
     monitorLogReceived = Signal(str)
     senderActiveChanged = Signal(bool)
@@ -119,11 +110,8 @@ class AppState(QObject):
         self.app_launch_time = time.time()
 
         # 核心凭证
-        self.sessdata: str = ""
-        self.bili_jct: str = ""
-
-        # 用户信息
-        self.user_state = UserState()
+        self._sessdata: str = ""
+        self._bili_jct: str = ""
 
         # 各模块配置
         self.sender_config = SenderConfig()
@@ -136,6 +124,26 @@ class AppState(QObject):
         self._sender_is_active: bool = False
         self._monitor_is_active: bool = False
         self._editor_is_dirty: bool = False
+
+    @property
+    def sessdata(self) -> str:
+        return self._sessdata
+
+    @sessdata.setter
+    def sessdata(self, value: str):
+        if self._sessdata != value:
+            self._sessdata = value
+            self.credentialsChanged.emit(self._sessdata, self._bili_jct)
+
+    @property
+    def bili_jct(self) -> str:
+        return self._bili_jct
+
+    @bili_jct.setter
+    def bili_jct(self, value: str):
+        if self._bili_jct != value:
+            self._bili_jct = value
+            self.credentialsChanged.emit(self._sessdata, self._bili_jct)
 
     @property
     def sender_is_active(self) -> bool:
@@ -167,12 +175,6 @@ class AppState(QObject):
             self._editor_is_dirty = value
             self.editorDirtyChanged.emit(value)
 
-    def update_credentials(self, sessdata: str, bili_jct: str):
-        """更新凭证并通知监听者"""
-        self.sessdata = sessdata
-        self.bili_jct = bili_jct
-        self.credentialsChanged.emit(sessdata, bili_jct)
-
     def get_api_auth(self) -> ApiAuthConfig:
         """
         工厂方法：从当前状态生成一个用于初始化的 API 凭证对象。
@@ -182,15 +184,3 @@ class AppState(QObject):
             bili_jct=self.bili_jct,
             use_system_proxy=self.sender_config.use_system_proxy
         )
-
-    def log_sender(self, message: str):
-        self.senderLogReceived.emit(message)
-
-    def log_monitor(self, message: str):
-        self.monitorLogReceived.emit(message)
-
-    def set_user_info(self, is_login: bool, uname: str, face: str):
-        self.user_state.is_login = is_login
-        self.user_state.username = uname
-        self.user_state.avatar_url = face
-        self.userInfoChanged.emit()

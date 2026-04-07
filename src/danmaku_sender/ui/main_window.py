@@ -58,6 +58,7 @@ class MainWindow(QMainWindow):
         self._init_system_tray()
 
         # 数据与配置加载
+        self._init_auth_system()
         self._load_initial_credentials()
         load_app_config(self.state)
 
@@ -257,6 +258,12 @@ class MainWindow(QMainWindow):
     # endregion
     # region Data Binding & Signal
 
+    def _init_auth_system(self):
+        """专门用于初始化认证相关的防抖计时器与逻辑"""
+        self._auth_debounce_timer = QTimer(self)
+        self._auth_debounce_timer.setSingleShot(True)
+        self._auth_debounce_timer.timeout.connect(self._do_user_info_refresh)
+
     def _load_initial_credentials(self):
         """加载本地加密凭证"""
         try:
@@ -338,15 +345,31 @@ class MainWindow(QMainWindow):
     # endregion
     # region UI Updates & Slots
 
+    @Slot(str, str)
+    def _request_user_info_refresh(self):
+        """收到凭证变更信号后，重置/开启防抖计时器"""
+        self._auth_debounce_timer.start(800)
+
+    @Slot()
+    def _do_user_info_refresh(self):
+        """真正的防抖执行函数"""
+        sessdata = self.state.sessdata.strip()
+        bili_jct = self.state.bili_jct.strip()
+
+        if not sessdata:
+            self._on_user_profile_updated(UserProfile(is_login=False, username="未登录"))
+            return
+
+        if len(sessdata) > 10 and not bili_jct:
+            return
+
+        self.auth_controller.refresh_user_info(self.state.get_api_auth())
+
     def _refresh_default_avatar(self):
         """通用方法：渲染高清的默认头像"""
         icon = get_svg_icon("default_avatar.svg")
         pixmap = icon.pixmap(36, 36)
         self.avatar_label.setPixmap(pixmap)
-
-    def _request_user_info_refresh(self):
-        """发起异步请求刷新用户信息"""
-        self.auth_controller.refresh_user_info(self.state.get_api_auth())
 
     @Slot(UserProfile)
     def _on_user_profile_updated(self, profile: UserProfile):
