@@ -89,5 +89,5 @@ class ThemeManager(QObject):
     def _set_theme(self, palette: Palette):
         if self._current_palette != palette:
             self._current_palette = palette
-            logger.info("🎨 系统深浅色模式改变，已热切换基础调色板。")
+            logger.info("系统深浅色模式改变，已热切换基础调色板。")
             self.themeChanged.emit(palette)

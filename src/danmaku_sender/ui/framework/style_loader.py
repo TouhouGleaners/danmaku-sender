@@ -1,4 +1,5 @@
 import re
+import logging
 
 from PySide6.QtCore import Qt, QSize
 from PySide6.QtGui import QIcon, QPixmap, QPainter
@@ -8,6 +9,9 @@ from PySide6.QtWidgets import QApplication
 from ..theme_manager import ThemeManager
 
 from ...utils.path_utils import get_assets_path
+
+
+logger = logging.getLogger("App.UI.StyleLoader")
 
 
 def get_app_icon() -> QIcon:
@@ -52,7 +56,7 @@ def get_svg_icon(name: str, color: str | None = None) -> QIcon:
         return QIcon(pixmap)
 
     except Exception as e:
-        print(f"SVG 加载失败 [{name}]: {e}")
+        logger.error(f"动态渲染 SVG 图标失败 [{name}]: {e}", exc_info=True)
         return QIcon(str(icon_path))
 
 def load_stylesheet():
@@ -67,22 +71,25 @@ def load_stylesheet():
 
         palette = ThemeManager.instance().current()
 
-        # 渲染占位符
-        rendered_qss = content \
-            .replace("{bg_base}", palette.bg_base) \
-            .replace("{bg_surface}", palette.bg_surface) \
-            .replace("{bg_hover}", palette.bg_hover) \
-            .replace("{border_color}", palette.border_color) \
-            .replace("{text_main}", palette.text_main) \
-            .replace("{text_secondary}", palette.text_secondary) \
-            .replace("{primary}", palette.primary) \
-            .replace("{success}", palette.success) \
-            .replace("{danger}", palette.danger) \
-            .replace("{danger_bg}", palette.danger_bg)
+        replacements = {
+            "{bg_base}": palette.bg_base,
+            "{bg_surface}": palette.bg_surface,
+            "{bg_hover}": palette.bg_hover,
+            "{border_color}": palette.border_color,
+            "{text_main}": palette.text_main,
+            "{text_secondary}": palette.text_secondary,
+            "{primary}": palette.primary,
+            "{success}": palette.success,
+            "{danger}": palette.danger,
+            "{danger_bg}": palette.danger_bg
+        }
+
+        for key, value in replacements.items():
+            content = content.replace(key, value)
 
         app = QApplication.instance()
         if isinstance(app, QApplication):
-            app.setStyleSheet(rendered_qss)
+            app.setStyleSheet(content)
 
     except Exception as e:
-        print(f"加载样式表失败: {e}")
+        logger.error(f"渲染样式表模板失败: {e}", exc_info=True)
