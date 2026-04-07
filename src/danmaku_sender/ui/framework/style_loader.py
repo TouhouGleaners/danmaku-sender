@@ -37,13 +37,7 @@ def get_svg_icon(name: str, color: str | None = None) -> QIcon:
             else:
                 svg_content = svg_content.replace("<svg", f'<svg fill="{color}"', 1)
 
-        dpr = 1.0
-        app = QApplication.instance()
-        if isinstance(app, QApplication):
-            if screen := app.primaryScreen():
-                dpr = screen.devicePixelRatio()
-
-        pixmap = QtImageProcessor.render_svg(svg_content.encode("utf-8"), 32, dpr)
+        pixmap = QtImageProcessor.render_svg(svg_content.encode("utf-8"), 128, 1.0)
 
         if not pixmap.isNull():
             return QIcon(pixmap)

@@ -1,6 +1,6 @@
 import logging
 
-from PySide6.QtCore import Qt
+from PySide6.QtCore import Qt, QRectF
 from PySide6.QtGui import QPixmap, QImage, QPainter, QPainterPath
 from PySide6.QtSvg import QSvgRenderer
 
@@ -31,7 +31,8 @@ class QtImageProcessor:
         painter.setRenderHint(QPainter.RenderHint.Antialiasing)
         painter.setRenderHint(QPainter.RenderHint.SmoothPixmapTransform)
 
-        renderer.render(painter)
+        target_rect = QRectF(0, 0, float(physical_size), float(physical_size))
+        renderer.render(painter, target_rect)
         painter.end()
 
         pixmap.setDevicePixelRatio(dpr)
