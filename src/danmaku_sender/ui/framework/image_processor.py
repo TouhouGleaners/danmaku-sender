@@ -1,8 +1,43 @@
-from PySide6.QtCore import Qt
+import logging
+
+from PySide6.QtCore import Qt, QRectF
 from PySide6.QtGui import QPixmap, QImage, QPainter, QPainterPath
+from PySide6.QtSvg import QSvgRenderer
+
+
+logger = logging.getLogger("App.System.ImageProcessor")
 
 
 class QtImageProcessor:
+    @staticmethod
+    def render_svg(raw_bytes: bytes, logical_size: int, dpr: float = 1.0) -> QPixmap:
+        """
+        将 SVG 字节流高质量渲染为 Pixmap
+
+        logical_size: UI 设计中的逻辑尺寸 (如 32)
+        dpr: 屏幕缩放比例 (devicePixelRatio)
+        """
+        renderer = QSvgRenderer(raw_bytes)
+        if not renderer.isValid():
+            logger.error("SVG 渲染器初始化失败: 数据可能已损坏")
+            return QPixmap()
+
+        physical_size = max(1, int(logical_size * dpr))
+
+        pixmap = QPixmap(physical_size, physical_size)
+        pixmap.fill(Qt.GlobalColor.transparent)
+
+        painter = QPainter(pixmap)
+        painter.setRenderHint(QPainter.RenderHint.Antialiasing)
+        painter.setRenderHint(QPainter.RenderHint.SmoothPixmapTransform)
+
+        target_rect = QRectF(0, 0, float(physical_size), float(physical_size))
+        renderer.render(painter, target_rect)
+        painter.end()
+
+        pixmap.setDevicePixelRatio(dpr)
+        return pixmap
+
     @staticmethod
     def make_circular_pixmap(raw_bytes: bytes, logical_size: int, device_pixel_ratio: float = 1.0) -> QPixmap:
         """
@@ -15,7 +50,7 @@ class QtImageProcessor:
             return QPixmap()
 
         image = QImage.fromData(raw_bytes)
-        if image.isNull(): 
+        if image.isNull():
             return QPixmap()
 
         physical_size = max(1, int(logical_size * device_pixel_ratio))
