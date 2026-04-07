@@ -19,6 +19,7 @@ from .monitor_page import MonitorPage
 from .editor import EditorPage
 from .dialogs import AboutDialog, HelpDialog, UpdateDialog
 from .history_page import HistoryPage
+from .theme_manager import ThemeManager
 
 from ..config.app_config import AppInfo, UI
 from ..core.state import AppState
@@ -34,6 +35,9 @@ class MainWindow(QMainWindow):
 
         self.setWindowTitle(UI.MAIN_WINDOW_TITLE)
         self.resize(900, 680)
+
+        ThemeManager.instance().init_theme()
+        ThemeManager.instance().themeChanged.connect(self._on_theme_changed)
 
         # 核心状态
         self.state = AppState()
@@ -457,5 +461,10 @@ class MainWindow(QMainWindow):
         # 刷新托盘悬浮窗
         full_status = f"{AppInfo.NAME}\n{sender_info}\n{monitor_info}"
         self.tray_icon.setToolTip(full_status)
+
+    @Slot()
+    def _on_theme_changed(self, _):
+        """当系统深浅色发生改变时，热重载全局 QSS 样式表"""
+        load_stylesheet()
 
     # endregion

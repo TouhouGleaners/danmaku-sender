@@ -1,31 +1,29 @@
-/* 全局：白 */
+/* 全局基础色 */
 QMainWindow {
-    background-color: #ffffff;
+    background-color: {bg_base};
 }
-
 
 /* 侧边栏整体 */
 QFrame#sidebarFrame {
-    background-color: #f8f9fa;
-    border-right: 1px solid #e9ecef;
+    background-color: {bg_surface};
+    border-right: 1px solid {border_color};
 }
 
 /* 用户状态区 */
 QFrame#userWidget:hover {
-    background-color: rgba(0, 0, 0, 0.03); /* 增加点击暗示 */
+    background-color: {bg_hover}; /* 动态悬停反馈 */
 }
 
 QLabel#avatarLabel {
-    background-color: #e3e5e7;
+    background-color: {border_color};
     border-radius: 18px; /* 圆形头像感 */
 }
 
-
 /* 侧边栏 */
 QListWidget#sidebar {
-    background-color: #f8f9fa;
+    background-color: {bg_surface};
     border: none;
-    border-right: 1px solid #e1e4e8;
+    border-right: 1px solid {border_color};
     outline: none;
     show-decoration-selected: 1;
 }
@@ -34,25 +32,23 @@ QListWidget#sidebar {
 QListWidget#sidebar::item {
     height: 40px;
     padding-left: 15px;
-    color: #444d56;
+    color: {text_main};
     border-bottom: 1px solid transparent;
 }
 
 /* 侧边栏item 悬停 */
 QListWidget#sidebar::item:hover {
-    background-color: #f1f3f5;
+    background-color: {bg_hover};
 }
 
 /* 侧边栏item 选中 */
 QListWidget#sidebar::item:selected {
-    background-color: #ffffff;
-    color: #fb7299;
+    background-color: {bg_base};
+    color: {primary};
     font-weight: 600;
-    border-left: 4px solid #fb7299; 
-    margin-right: -1px; 
+    border-left: 4px solid {primary};
+    margin-right: -1px;
 }
-
-
 
 /* --- 操作按钮基础样式 --- */
 QPushButton[action="true"] {
@@ -65,33 +61,32 @@ QPushButton[action="true"] {
 
 /* 状态：准备就绪 (ready) -> 绿色 */
 QPushButton[action="true"][state="ready"] {
-    background-color: #2ecc71;
+    background-color: {success};
 }
 QPushButton[action="true"][state="ready"]:hover {
     background-color: #27ae60;
 }
 QPushButton[action="true"][state="ready"]:disabled {
-    background-color: #bdc3c7;
+    background-color: {border_color};
 }
 
 /* 状态：运行中 (running) -> 红色 */
 QPushButton[action="true"][state="running"] {
-    background-color: #e74c3c;
+    background-color: {danger};
 }
 QPushButton[action="true"][state="running"]:hover {
     background-color: #c0392b;
 }
-
 
 /* ========================================= */
 /* UIBinder 动态错误状态样式 (Invalid State)  */
 /* ========================================= */
 
 *[invalid="true"] {
-    border: 1px solid #e74c3c !important;  /* 鲜艳的红框 */
-    background-color: #fff0f0 !important;  /* 淡淡的红底色警告 */
+    border: 1px solid {danger} !important;
+    background-color: {danger_bg} !important;
 }
 
 *[invalid="true"]:focus {
-    border: 1px solid #c0392b !important;  /* 聚焦时边框加深 */
+    border: 1px solid {danger} !important;
 }
