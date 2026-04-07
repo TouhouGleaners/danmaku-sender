@@ -22,7 +22,7 @@ class QtImageProcessor:
             logger.error("SVG 渲染器初始化失败: 数据可能已损坏")
             return QPixmap()
 
-        physical_size = int(logical_size * dpr)
+        physical_size = max(1, int(logical_size * dpr))
 
         pixmap = QPixmap(physical_size, physical_size)
         pixmap.fill(Qt.GlobalColor.transparent)
