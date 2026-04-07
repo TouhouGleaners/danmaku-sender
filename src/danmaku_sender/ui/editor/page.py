@@ -262,6 +262,7 @@ class EditorPage(QWidget):
                 return
 
         self.controller.create_new_workspace()
+        self.preview_mode_cb.setChecked(True)
         self.current_item_id = None
         self.inspector_group.reset_inspector()
         QMessageBox.information(self, "新建成功", "已创建空白工作区，你可以开始创作了！")
@@ -288,6 +289,7 @@ class EditorPage(QWidget):
             try:
                 count = self.controller.import_xml_workspace(file_path)
                 if count > 0:
+                    self.preview_mode_cb.setChecked(True)
                     self.current_item_id = None
                     self.inspector_group.reset_inspector()
                     QMessageBox.information(
@@ -476,6 +478,8 @@ class EditorPage(QWidget):
 
         new_uid = self.controller.insert_item(uid, position)
         if new_uid:
+            self.preview_mode_cb.setChecked(True)
+
             for i in range(self.model.rowCount()):
                 if self.model.get_item_id(i) == new_uid:
                     self.table.selectRow(i)
@@ -504,6 +508,8 @@ class EditorPage(QWidget):
             )
 
             if new_uids:
+                self.preview_mode_cb.setChecked(True)
+
                 for i in range(self.model.rowCount()):
                     if self.model.get_item_id(i) == new_uids[0]:
                         self.table.selectRow(i)
