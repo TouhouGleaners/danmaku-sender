@@ -6,14 +6,14 @@ import qrcode
 from PySide6.QtCore import Qt, QUrl, Slot
 from PySide6.QtGui import QDesktopServices, QImage, QPixmap
 from PySide6.QtWidgets import (
-    QDialog, QVBoxLayout, QHBoxLayout, QTabWidget, QGroupBox, QDoubleSpinBox,
-    QTextBrowser, QPushButton, QLabel, QTextEdit
+    QDialog, QVBoxLayout, QHBoxLayout, QTabWidget,
+    QTextBrowser, QPushButton, QLabel
 )
 from PIL import Image
 
 from .controllers.auth_controller import AuthController
 from ..config.app_config import AppInfo, Links
-from ..utils.resource_utils import get_assets_path
+from ..utils.path_utils import get_assets_path
 
 
 logger = logging.getLogger("App.System.UI.Dialog")

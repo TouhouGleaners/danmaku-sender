@@ -2,7 +2,7 @@ import logging
 import platform
 import threading
 
-from .resource_utils import get_assets_path
+from .path_utils import get_assets_path
 
 from ..config.app_config import AppInfo
 

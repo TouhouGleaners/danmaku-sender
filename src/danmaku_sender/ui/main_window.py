@@ -12,6 +12,7 @@ from PySide6.QtCore import Qt, QUrl, QTimer, QSize, QEvent, Slot
 from .controllers.auth_controller import AuthController, UserProfile
 from .controllers.system_controller import SystemController
 from .framework.image_processor import QtImageProcessor
+from .framework.style_loader import load_stylesheet, get_svg_icon, get_app_icon
 from .sender_page import SenderPage
 from .settings_page import SettingsPage
 from .monitor_page import MonitorPage
@@ -24,7 +25,6 @@ from ..core.state import AppState
 from ..utils.log_utils import GuiLoggingHandler
 from ..utils.credential_manager import load_credentials, save_credentials
 from ..utils.config_manager import load_app_config, save_app_config
-from ..utils.resource_utils import load_stylesheet, get_svg_icon, get_app_icon
 
 
 class MainWindow(QMainWindow):

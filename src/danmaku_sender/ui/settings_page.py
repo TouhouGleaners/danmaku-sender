@@ -5,10 +5,10 @@ from PySide6.QtWidgets import (
 from PySide6.QtCore import Qt
 
 from .framework.binder import UIBinder
+from .framework.style_loader import get_svg_icon
 from .dialogs import QRLoginDialog
 
 from ..core.state import AppState
-from ..utils.resource_utils import get_svg_icon
 
 
 class SettingsPage(QWidget):
