@@ -153,7 +153,7 @@ class AppState(QObject):
     def sender_is_active(self, value: bool):
         if self._sender_is_active != value:
             self._sender_is_active = value
-            self.senderActiveChanged.emit(value)
+            self.senderActiveChanged.emit()
 
     @property
     def monitor_is_active(self) -> bool:
@@ -163,7 +163,7 @@ class AppState(QObject):
     def monitor_is_active(self, value: bool):
         if self._monitor_is_active != value:
             self._monitor_is_active = value
-            self.monitorActiveChanged.emit(value)
+            self.monitorActiveChanged.emit()
 
     @property
     def editor_is_dirty(self) -> bool:
@@ -173,7 +173,7 @@ class AppState(QObject):
     def editor_is_dirty(self, value: bool):
         if self._editor_is_dirty != value:
             self._editor_is_dirty = value
-            self.editorDirtyChanged.emit(value)
+            self.editorDirtyChanged.emit()
 
     def get_api_auth(self) -> ApiAuthConfig:
         """
