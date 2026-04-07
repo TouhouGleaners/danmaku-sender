@@ -1,27 +1,8 @@
-import sys
-from pathlib import Path
-
 from PySide6.QtGui import QIcon
 from PySide6.QtWidgets import QApplication
 
+from ...utils.path_utils import get_assets_path
 
-def get_assets_path() -> Path:
-    """获取 assets 文件夹路径"""
-    if getattr(sys, 'frozen', False):
-        base_path = Path(getattr(sys, '_MEIPASS', Path(sys.argv[0]).resolve().parent))
-        return base_path / 'assets'
-    
-    current_path = Path(__file__).resolve().parent
-    for _ in range(5):
-        candidate = current_path / 'assets'
-        if candidate.exists() and candidate.is_dir():
-            return candidate
-        
-        if current_path.parent == current_path:
-            break
-        current_path = current_path.parent
-    
-    return Path(__file__).resolve().parents[3] / 'assets'
 
 def get_app_icon() -> QIcon:
     """获取程序全局图标"""
@@ -44,6 +25,8 @@ def load_stylesheet():
         try:
             with open(qss_path, "r", encoding="utf-8") as f:
                 content = f.read()
-                QApplication.instance().setStyleSheet(content)
+                app = QApplication.instance()
+                if isinstance(app, QApplication):
+                    app.setStyleSheet(content)
         except Exception as e:
             print(f"加载样式表失败: {e}")

@@ -13,6 +13,7 @@ from PySide6.QtCore import Qt, QDateTime, Slot
 from danmaku_sender.core.engines.sender.context import SendingContext
 
 from .framework.binder import UIBinder
+from .framework.style_loader import get_svg_icon
 from .controllers.video_controller import VideoController
 from .controllers.sender_controller import SenderController
 
@@ -23,7 +24,6 @@ from ..core.services.danmaku_parser import DanmakuParser
 from ..core.state import AppState
 from ..utils.string_utils import parse_bilibili_link
 from ..utils.time_utils import format_seconds_to_duration
-from ..utils.resource_utils import get_svg_icon
 from ..utils.notification_utils import send_windows_notification
 
 

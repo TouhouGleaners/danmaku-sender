@@ -12,10 +12,10 @@ from PySide6.QtCore import Qt, Slot
 from danmaku_sender.core.state import AppState
 
 from .framework.binder import UIBinder
+from .framework.style_loader import get_svg_icon
 from .controllers.monitor_controller import MonitorController
 
 from ..core.types.common import VideoTarget
-from ..utils.resource_utils import get_svg_icon
 
 
 class MonitorPage(QWidget):

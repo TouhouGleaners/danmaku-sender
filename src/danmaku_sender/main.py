@@ -6,8 +6,8 @@ from platformdirs import user_data_dir
 from PySide6.QtWidgets import QApplication
 
 from .config.app_config import AppInfo
+from .ui.framework.style_loader import get_app_icon
 from .utils.log_utils import init_app_logging
-from .utils.resource_utils import get_app_icon
 
 
 def main(argv=None):
