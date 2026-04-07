@@ -262,7 +262,7 @@ class MainWindow(QMainWindow):
         """专门用于初始化认证相关的防抖计时器与逻辑"""
         self._auth_debounce_timer = QTimer(self)
         self._auth_debounce_timer.setSingleShot(True)
-        self._auth_debounce_timer.timeout.connect(self._do_user_info_refresh)
+        self._auth_debounce_timer.timeout.connect(self._refresh_user_info)
 
     def _load_initial_credentials(self):
         """加载本地加密凭证"""
@@ -317,7 +317,7 @@ class MainWindow(QMainWindow):
     def _connect_global_signals(self):
         """全局信号绑定"""
         # 用户认证与基础信息
-        self.state.credentialsChanged.connect(self._request_user_info_refresh)
+        self.state.credentialsChanged.connect(lambda: self._auth_debounce_timer.start(800))
         self.auth_controller.userProfileReady.connect(self._on_user_profile_updated)
 
         # 系统组件联动
@@ -340,19 +340,14 @@ class MainWindow(QMainWindow):
         self.page_monitor.monitor_controller.statsUpdated.connect(self._on_monitor_stats_sync)
 
         # 触发首次用户信息请求
-        QTimer.singleShot(500, self._request_user_info_refresh)
+        QTimer.singleShot(500, self._refresh_user_info)
 
     # endregion
     # region UI Updates & Slots
 
-    @Slot(str, str)
-    def _request_user_info_refresh(self):
-        """收到凭证变更信号后，重置/开启防抖计时器"""
-        self._auth_debounce_timer.start(800)
-
     @Slot()
-    def _do_user_info_refresh(self):
-        """真正的防抖执行函数"""
+    def _refresh_user_info(self):
+        """刷新用户信息"""
         sessdata = self.state.sessdata.strip()
         bili_jct = self.state.bili_jct.strip()
 
@@ -360,7 +355,7 @@ class MainWindow(QMainWindow):
             self._on_user_profile_updated(UserProfile(is_login=False, username="未登录"))
             return
 
-        if len(sessdata) > 10 and not bili_jct:
+        if len(sessdata) > 20 and not bili_jct:
             return
 
         self.auth_controller.refresh_user_info(self.state.get_api_auth())
@@ -388,8 +383,8 @@ class MainWindow(QMainWindow):
         # 未登录或无头像
         self._refresh_default_avatar()
 
-    @Slot(bool)
-    def _refresh_sidebar_badges(self, state_val: bool = False):
+    @Slot()
+    def _refresh_sidebar_badges(self):
         """动态刷新侧边栏项目的文字后缀"""
         if sender_item := self.sidebar.item(1):
             sender_item.setText("弹幕发射器 ▶" if self.state.sender_is_active else "弹幕发射器")
@@ -465,7 +460,7 @@ class MainWindow(QMainWindow):
         self._refresh_global_status()
 
     @Slot()
-    def _refresh_global_status(self, _=None):
+    def _refresh_global_status(self):
         # 组装发送器信息
         if self.state.sender_is_active:
             att, total = self._current_sender_progress

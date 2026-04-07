@@ -98,12 +98,12 @@ class AppState(QObject):
     应用程序全局状态管理。
     继承自 QObject 以支持信号槽机制，实现 UI 与 逻辑 的解耦。
     """
-    credentialsChanged = Signal(str, str)
+    credentialsChanged = Signal()
     senderLogReceived = Signal(str)
     monitorLogReceived = Signal(str)
-    senderActiveChanged = Signal(bool)
-    monitorActiveChanged = Signal(bool)
-    editorDirtyChanged = Signal(bool)
+    senderActiveChanged = Signal()
+    monitorActiveChanged = Signal()
+    editorDirtyChanged = Signal()
 
     def __init__(self):
         super().__init__()
@@ -133,7 +133,7 @@ class AppState(QObject):
     def sessdata(self, value: str):
         if self._sessdata != value:
             self._sessdata = value
-            self.credentialsChanged.emit(self._sessdata, self._bili_jct)
+            self.credentialsChanged.emit()
 
     @property
     def bili_jct(self) -> str:
@@ -143,7 +143,7 @@ class AppState(QObject):
     def bili_jct(self, value: str):
         if self._bili_jct != value:
             self._bili_jct = value
-            self.credentialsChanged.emit(self._sessdata, self._bili_jct)
+            self.credentialsChanged.emit()
 
     @property
     def sender_is_active(self) -> bool:
