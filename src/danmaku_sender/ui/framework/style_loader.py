@@ -1,11 +1,10 @@
 import re
 import logging
 
-from PySide6.QtCore import Qt, QSize
-from PySide6.QtGui import QIcon, QPixmap, QPainter
-from PySide6.QtSvg import QSvgRenderer
+from PySide6.QtGui import QIcon
 from PySide6.QtWidgets import QApplication
 
+from .image_processor import QtImageProcessor
 from ..theme_manager import ThemeManager
 
 from ...utils.path_utils import get_assets_path
@@ -34,26 +33,19 @@ def get_svg_icon(name: str, color: str | None = None) -> QIcon:
 
         if color:
             if 'fill=' in svg_content:
-                svg_content = re.sub(r'fill="[^"]*"', f'fill="{color}"', svg_content)
+                svg_content = re.sub(r'fill=(["\']).*?\1', f'fill="{color}"', svg_content)
             else:
                 svg_content = svg_content.replace("<svg", f'<svg fill="{color}"', 1)
 
-        data_bytes = svg_content.encode("utf-8")
+        app = QApplication.instance()
+        if isinstance(app, QApplication):
+            dpr = app.primaryScreen().devicePixelRatio() if app else 1.0
 
-        renderer = QSvgRenderer(data_bytes)
-        if not renderer.isValid():
-            return QIcon(str(icon_path))
+        pixmap = QtImageProcessor.render_svg(svg_content.encode("utf-8"), 32, dpr)
 
-        render_size = QSize(128, 128)
-        pixmap = QPixmap(render_size)
-        pixmap.fill(Qt.GlobalColor.transparent)
-
-        painter = QPainter(pixmap)
-        painter.setRenderHint(QPainter.RenderHint.Antialiasing)
-        renderer.render(painter)
-        painter.end()
-
-        return QIcon(pixmap)
+        if not pixmap.isNull():
+            return QIcon(pixmap)
+        return QIcon(str(icon_path))
 
     except Exception as e:
         logger.error(f"动态渲染 SVG 图标失败 [{name}]: {e}", exc_info=True)
