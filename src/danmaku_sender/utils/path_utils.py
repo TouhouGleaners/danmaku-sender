@@ -1,8 +1,5 @@
 from pathlib import Path
 
-from PySide6.QtGui import QIcon
-from PySide6.QtWidgets import QApplication
-
 
 def get_assets_path() -> Path:
     """获取 assets 文件夹路径"""
