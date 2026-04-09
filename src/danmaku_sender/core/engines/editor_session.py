@@ -225,23 +225,32 @@ class EditorSession:
             return True
         return False
 
-    def _execute_batch_transform(self, op_name: str, transform_fn: Callable[[Danmaku], bool]) -> tuple[int, int]:
+    def _execute_batch_transform(self, transform_fn: Callable[[Danmaku], bool], target_uids: list[str] | None = None) -> tuple[int, int]:
         """通用批量操作引擎
 
         Args:
-            op_name (str): 操作名称，用于日志记录
             transform_fn (Callable[[Danmaku], bool]): 业务逻辑函数。接收 Danmaku 对象，返回 True 表示发生了修改。
+            target_uids (list[str] | None): 可选的目标 UID 列表，如果为 None 则作用于所有未删除项。
 
         Returns:
             tuple[int, int]: (修改数, 删除数)
         """
+        if target_uids is not None and not target_uids:
+            return 0, 0
+
         current_step_changes: list[AtomicChange] = []
         modified_count = 0
         deleted_count = 0
 
+        # 如果传入了 target_uids，将其转为 set 提升查询性能
+        target_set = set(target_uids) if target_uids is not None else None
+
         for uid in self.item_order:
             item = self.items[uid]
             if item.is_deleted:
+                continue
+
+            if target_set is not None and uid not in target_set:
                 continue
 
             # 记录初态快照
@@ -277,7 +286,7 @@ class EditorSession:
             dm.msg = dm.msg.replace('\n', '').replace('\\n', '').replace('/n', '').strip()
             return dm.msg != original
 
-        return self._execute_batch_transform("去除换行", _rule)
+        return self._execute_batch_transform(_rule)
 
     def batch_truncate_length(self, limit: int = 100) -> int:
         """批量截断弹幕内容。
@@ -293,14 +302,15 @@ class EditorSession:
             dm.msg = dm.msg[:limit]
             return dm.msg != original
 
-        mod_count, _ = self._execute_batch_transform("长度截断", _rule)
+        mod_count, _ = self._execute_batch_transform(_rule)
         return mod_count
 
-    def shift_time_axis(self, offset_ms: int) -> int:
+    def shift_time_axis(self, offset_ms: int, target_uids: list[str] | None = None) -> int:
         """平移弹幕时间轴
 
         Args:
             offset_ms (int): 偏移毫秒数（整数向后推迟，负数向前提前）
+            target_uids (list[str] | None): 可选的目标 UID 列表，如果为 None 则作用于所有未删除项.
 
         Returns:
             int: 修改的条数
@@ -314,7 +324,7 @@ class EditorSession:
             dm.progress = target_progress
             return target_progress != initial_progress
 
-        mod_count, _ = self._execute_batch_transform("时间平移", _shift_rule)
+        mod_count, _ = self._execute_batch_transform(_shift_rule, target_uids)
         return mod_count
 
     def _reorder_items(self):

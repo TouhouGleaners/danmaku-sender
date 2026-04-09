@@ -174,8 +174,8 @@ class EditorController(QObject):
             self.run_validation()
         return count
 
-    def shift_time(self, offset_ms: int) -> int:
-        count = self.session.shift_time_axis(offset_ms)
+    def shift_time(self, offset_ms: int, target_uids: list[str] | None = None) -> int:
+        count = self.session.shift_time_axis(offset_ms, target_uids)
         if count > 0:
             self.run_validation()
         return count
