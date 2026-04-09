@@ -229,13 +229,15 @@ class EditorSession:
         """通用批量操作引擎
 
         Args:
-            op_name (str): 操作名称，用于日志记录
             transform_fn (Callable[[Danmaku], bool]): 业务逻辑函数。接收 Danmaku 对象，返回 True 表示发生了修改。
             target_uids (list[str] | None): 可选的目标 UID 列表，如果为 None 则作用于所有未删除项。
 
         Returns:
             tuple[int, int]: (修改数, 删除数)
         """
+        if target_uids is not None and not target_uids:
+            return 0, 0
+
         current_step_changes: list[AtomicChange] = []
         modified_count = 0
         deleted_count = 0

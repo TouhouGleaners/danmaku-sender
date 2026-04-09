@@ -496,12 +496,13 @@ class EditorPage(QWidget):
         dlg.setWindowTitle(f"平移选中的 {len(uids)} 条弹幕")
 
         if dlg.exec():
-            if offset_ms := dlg.get_offset_ms():
-                count = self.controller.shift_time(offset_ms, target_uids=uids)
-                if count > 0:
-                    self.logger.info(f"成功平移了 {count} 条选中弹幕的时间轴。")
-                else:
-                    self.logger.info("平移操作未导致任何数据变化。")
+            offset_ms = dlg.get_offset_ms()
+            count = self.controller.shift_time(offset_ms, target_uids=uids)
+
+            if count > 0:
+                self.logger.info(f"成功平移了 {count} 条选中弹幕的时间轴。")
+            else:
+                self.logger.info("平移操作未导致任何数据变化。")
 
     def _generate_array(self, row: int):
         """生成弹幕阵列"""
@@ -588,12 +589,13 @@ class EditorPage(QWidget):
 
         dlg = TimeOffsetDialog(self)
         if dlg.exec():
-            if offset_ms := dlg.get_offset_ms():
-                count = self.controller.shift_time(offset_ms)
-                if count > 0:
-                    self.logger.info(f"成功平移了 {count} 条弹幕的时间轴。")
-                else:
-                    self.logger.info("平移操作未导致任何数据变化。")
+            offset_ms = dlg.get_offset_ms()
+            count = self.controller.shift_time(offset_ms)
+
+            if count > 0:
+                self.logger.info(f"成功平移了 {count} 条选中弹幕的时间轴。")
+            else:
+                self.logger.info("平移操作未导致任何数据变化。")
 
     # endregion
 
