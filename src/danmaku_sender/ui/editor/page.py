@@ -411,33 +411,20 @@ class EditorPage(QWidget):
             return
 
         menu = QMenu(self)
+        row = index.row()
 
-        edit_action = menu.addAction(get_svg_icon("edit.svg"), "编辑内容")
+        menu.addAction(get_svg_icon("edit.svg"), "编辑内容", lambda: self._edit_row(row))
         menu.addSeparator()
-
-        insert_above_action = menu.addAction(get_svg_icon("vertical_align_top.svg"), "在上方插入新弹幕")
-        insert_below_action = menu.addAction(get_svg_icon("vertical_align_bottom.svg"), "在下方插入新弹幕")
-
+        menu.addAction(get_svg_icon("vertical_align_top.svg"), "在上方插入新弹幕", lambda: self._insert_row(row, InsertPosition.ABOVE))
+        menu.addAction(get_svg_icon("vertical_align_bottom.svg"), "在下方插入新弹幕", lambda: self._insert_row(row, InsertPosition.BELOW))
         menu.addSeparator()
-
+        menu.addAction(get_svg_icon("sync_alt.svg"), "平移选中弹幕的时间轴", self._shift_selected_items_time)
         adv_menu = menu.addMenu(get_svg_icon("auto_awesome.svg"), "高级生成工具")
-        array_action = adv_menu.addAction(get_svg_icon("gradient.svg"), "生成彩虹弹幕阵列")
-
-        delete_action = menu.addAction(get_svg_icon("delete.svg"), "删除选中条目")
+        adv_menu.addAction(get_svg_icon("gradient.svg"), "生成彩虹弹幕阵列", lambda: self._generate_array(row))
+        menu.addAction(get_svg_icon("delete.svg"), "删除选中条目", self._delete_selected_items)
 
         # 弹出菜单
-        action = menu.exec(self.table.viewport().mapToGlobal(pos))
-
-        if action == edit_action:
-            self._edit_row(index.row())
-        elif action == insert_above_action:
-            self._insert_row(index.row(), InsertPosition.ABOVE)
-        elif action == insert_below_action:
-            self._insert_row(index.row(), InsertPosition.BELOW)
-        elif action == array_action:
-            self._generate_array(index.row())
-        elif action == delete_action:
-            self._delete_selected_items()
+        menu.exec(self.table.viewport().mapToGlobal(pos))
 
     @Slot(QModelIndex)
     def _on_table_double_click(self, index: QModelIndex):
@@ -485,6 +472,36 @@ class EditorPage(QWidget):
                     self.table.selectRow(i)
                     self._edit_row(i)
                     break
+
+    def _shift_selected_items_time(self):
+        """平移用户选中的弹幕"""
+        if not self.controller:
+            return
+
+        selected_rows = self.table.selectionModel().selectedRows()
+        if not selected_rows:
+            return
+
+        # 收集选中的 UUID
+        uids = [
+            uid for row_idx in selected_rows
+            if (uid := self.model.get_item_id(row_idx.row())) is not None
+        ]
+
+        if not uids:
+            return
+
+        # 复用弹窗，动态修改标题以区分“全局”和“局部”
+        dlg = TimeOffsetDialog(self)
+        dlg.setWindowTitle(f"平移选中的 {len(uids)} 条弹幕")
+
+        if dlg.exec():
+            if offset_ms := dlg.get_offset_ms():
+                count = self.controller.shift_time(offset_ms, target_uids=uids)
+                if count > 0:
+                    self.logger.info(f"成功平移了 {count} 条选中弹幕的时间轴。")
+                else:
+                    self.logger.info("平移操作未导致任何数据变化。")
 
     def _generate_array(self, row: int):
         """生成弹幕阵列"""
