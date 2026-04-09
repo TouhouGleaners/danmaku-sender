@@ -89,7 +89,7 @@ class TimeOffsetDialog(QDialog):
         g_layout = QVBoxLayout(group)
 
         self.offset_spin = QDoubleSpinBox()
-        self.offset_spin.setRange(-3600, 3600)
+        self.offset_spin.setRange(-86400, 86400)
         self.offset_spin.setSuffix(" 秒")
         self.offset_spin.setDecimals(3)
         self.offset_spin.setValue(0.0)
