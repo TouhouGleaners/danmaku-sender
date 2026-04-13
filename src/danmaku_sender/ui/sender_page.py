@@ -23,7 +23,7 @@ from ..core.services.danmaku_exporter import UnsentDanmakusRecord, create_xml_fr
 from ..core.services.danmaku_parser import DanmakuParser
 from ..core.state import AppState
 from ..utils.string_utils import parse_bilibili_link
-from ..utils.time_utils import format_seconds_to_duration
+from ..utils.time_utils import format_duration
 from ..utils.notification_utils import send_windows_notification
 
 
@@ -325,7 +325,7 @@ class SenderPage(QWidget):
             remaining = total - attempted
             if remaining > 0:
                 eta_sec = self._calculate_eta_seconds(attempted, total)
-                duration = format_seconds_to_duration(eta_sec)
+                duration = format_duration(eta_sec)
                 finish_time = QDateTime.currentDateTime().addSecs(int(eta_sec)).toString("HH:mm:ss")
                 display_text = f"%p% (剩余 {duration} | 预计 {finish_time} 结束)"
                 self.progress_bar.setFormat(display_text)
