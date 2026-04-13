@@ -68,7 +68,7 @@ class EditorTableModel(QAbstractTableModel):
                 # 提供显示文本
                 match col:
                     case 0: return str(index.row() + 1)
-                    case 1: return format_duration(item['time_ms'] / 1000)
+                    case 1: return format_duration(item['time_ms'] // 1000)
                     case 2: return item['error_msg']
                     case 3: return item['content']
                     case _: return None
