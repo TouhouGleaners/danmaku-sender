@@ -13,7 +13,7 @@ from ..framework.binder import UIBinder
 from ...core.entities.danmaku import Danmaku
 from ...core.state import AppState
 from ...core.types.editor_types import EditorField
-from ...utils.time_utils import format_ms_to_hhmmss
+from ...utils.time_utils import format_duration
 
 
 class EditorTableModel(QAbstractTableModel):
@@ -68,7 +68,7 @@ class EditorTableModel(QAbstractTableModel):
                 # 提供显示文本
                 match col:
                     case 0: return str(index.row() + 1)
-                    case 1: return format_ms_to_hhmmss(item['time_ms'])
+                    case 1: return format_duration(item['time_ms'] // 1000)
                     case 2: return item['error_msg']
                     case 3: return item['content']
                     case _: return None
