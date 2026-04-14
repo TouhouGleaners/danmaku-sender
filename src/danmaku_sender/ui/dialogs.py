@@ -12,6 +12,8 @@ from PySide6.QtWidgets import (
 from PIL import Image
 
 from .controllers.auth_controller import AuthController
+
+from ..core.types.common import AuthCookies
 from ..config.app_config import AppInfo, Links
 from ..utils.path_utils import get_assets_path
 
@@ -221,7 +223,7 @@ class QRLoginDialog(QDialog):
     def __init__(self, use_system_proxy: bool, parent=None):
         super().__init__(parent)
         self.use_system_proxy = use_system_proxy
-        self.cookies = {}  # 存放获取到的 Cookie
+        self.cookies: AuthCookies = {'SESSDATA': '', 'bili_jct': ''}
 
         self.auth_controller = AuthController(self)
 
@@ -303,7 +305,7 @@ class QRLoginDialog(QDialog):
     # region Slots
 
     @Slot(dict)
-    def _on_login_succeeded(self, cookies: dict):
+    def _on_login_succeeded(self, cookies: AuthCookies):
         """登录成功，保存数据并关闭窗口"""
         self.cookies = cookies
         self.accept()  # 触发 Accepted 信号，关闭弹窗

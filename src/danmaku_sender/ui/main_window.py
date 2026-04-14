@@ -23,6 +23,7 @@ from .theme_manager import ThemeManager
 
 from ..config.app_config import AppInfo, UI
 from ..core.state import AppState
+from ..core.types.common import MonitorStats
 from ..utils.log_utils import GuiLoggingHandler
 from ..utils.credential_manager import load_credentials, save_credentials
 from ..utils.config_manager import load_app_config, save_app_config
@@ -49,7 +50,7 @@ class MainWindow(QMainWindow):
 
         # 运行时状态
         self._current_sender_progress = (0, 0)
-        self._current_monitor_stats = {}
+        self._current_monitor_stats: MonitorStats = {'total': 0, 'verified': 0, 'pending': 0, 'lost': 0}
 
         # UI 初始化
         self._create_ui()
@@ -455,7 +456,7 @@ class MainWindow(QMainWindow):
         self._refresh_global_status()
 
     @Slot(dict)
-    def _on_monitor_stats_sync(self, stats: dict):
+    def _on_monitor_stats_sync(self, stats: MonitorStats):
         self._current_monitor_stats = stats
         self._refresh_global_status()
 
