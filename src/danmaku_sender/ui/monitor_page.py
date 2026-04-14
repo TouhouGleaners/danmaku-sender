@@ -9,13 +9,12 @@ from PySide6.QtWidgets import (
 from PySide6.QtGui import QTextCursor
 from PySide6.QtCore import Qt, Slot
 
-from danmaku_sender.core.state import AppState
-
 from .framework.binder import UIBinder
 from .framework.style_loader import get_svg_icon
 from .controllers.monitor_controller import MonitorController
 
-from ..core.types.common import VideoTarget
+from danmaku_sender.core.state import AppState
+from ..core.types.common import VideoTarget, MonitorStats
 
 
 class MonitorPage(QWidget):
@@ -323,7 +322,7 @@ class MonitorPage(QWidget):
     # endregion
     # region Slots MonitorController
     @Slot(dict)
-    def _on_stats_updated(self, stats: dict):
+    def _on_stats_updated(self, stats: MonitorStats):
         """
         处理后端传回的统计数据
 

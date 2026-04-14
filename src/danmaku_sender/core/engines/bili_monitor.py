@@ -3,7 +3,7 @@ import logging
 from ..exceptions.exceptions import BiliApiError, BiliNetworkError
 from ..database.history_manager import HistoryManager
 from ..entities.danmaku import Danmaku
-from ..types.common import VideoTarget
+from ..types.common import VideoTarget, MonitorStats
 from ..services.danmaku_parser import DanmakuParser
 
 from ...api.bili_api_client import BiliApiClient
@@ -37,7 +37,7 @@ class BiliDanmakuMonitor:
             self.logger.error(f"解析在线弹幕内容时发生错误: {e}")
             return []
 
-    def monitor(self, stats_baseline: float = 0.0) -> dict:
+    def monitor(self, stats_baseline: float = 0.0) -> MonitorStats:
         """执行单次核销与统计"""
         # 提取与核销
         online_danmakus = self._fetch_online_danmakus()
@@ -56,6 +56,6 @@ class BiliDanmakuMonitor:
         return {
             'total': total,
             'verified': verified,
-            'lost': lost,
-            'pending': pending
+            'pending': pending,
+            'lost': lost
         }
