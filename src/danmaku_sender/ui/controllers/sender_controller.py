@@ -3,16 +3,17 @@ import threading
 
 from PySide6.QtCore import QObject, Signal, Slot
 
-from ..framework.concurrency import BaseWorker
+from danmaku_sender.ui.framework.concurrency import BaseWorker
 
-from ...core.database.history_manager import HistoryManager
-from ...core.engines.sender import DanmakuScheduler, DanmakuExecutor, SendingContext, SendJob
-from ...core.entities.danmaku import Danmaku
-from ...core.types.result import DanmakuSendResult
-from ...core.types.common import VideoTarget
-from ...core.state import ApiAuthConfig, SenderConfig
-from ...api.bili_api_client import BiliApiClient
-from ...utils.system_utils import KeepSystemAwake
+from danmaku_sender.core.database.history_manager import HistoryManager
+from danmaku_sender.core.engines.sender import DanmakuScheduler, DanmakuExecutor, SendingContext, SendJob
+from danmaku_sender.core.engines.sender.delay_manager import DelayManager
+from danmaku_sender.core.entities.danmaku import Danmaku
+from danmaku_sender.core.types.result import DanmakuSendResult
+from danmaku_sender.core.types.common import VideoTarget
+from danmaku_sender.core.state import ApiAuthConfig, SenderConfig
+from danmaku_sender.api.bili_api_client import BiliApiClient
+from danmaku_sender.utils.system_utils import KeepSystemAwake
 
 
 logger = logging.getLogger("App.System.SenderController")
@@ -20,7 +21,7 @@ logger = logging.getLogger("App.System.SenderController")
 
 class SenderController(QObject):
     """发送任务业务控制器"""
-    progressUpdated = Signal(int, int)
+    progressUpdated = Signal(int, int, float)
     taskFinished = Signal(object)
 
     def __init__(self, parent=None):
@@ -90,8 +91,8 @@ class SenderController(QObject):
 
 class SendTaskWorker(BaseWorker):
     """用于后台发送弹幕的线程"""
-    progressUpdated = Signal(int, int)  # 已尝试, 总数
-    taskFinished = Signal(object)       # SendingContext
+    progressUpdated = Signal(int, int, float)  # 已尝试, 总数, ETA
+    taskFinished = Signal(object)              # SendingContext
 
     def __init__(
         self,
@@ -143,7 +144,18 @@ class SendTaskWorker(BaseWorker):
             return self.scheduler.run_pipeline(job)
 
     def _handle_job_progress(self, attempted: int, total: int):
-        self.progressUpdated.emit(attempted, total)
+        avg_normal = (self.strategy_config.min_delay + self.strategy_config.max_delay) / 2
+        avg_rest = (self.strategy_config.rest_min + self.strategy_config.rest_max) / 2
+
+        eta_sec = DelayManager.calc_eta(
+            attempted=attempted,
+            total=total,
+            burst_size=self.strategy_config.burst_size,
+            avg_normal=avg_normal,
+            avg_rest=avg_rest
+        )
+
+        self.progressUpdated.emit(attempted, total, eta_sec)
 
     def _handle_job_result(self, dm: Danmaku, result: DanmakuSendResult):
         if result.is_success and result.dmid:

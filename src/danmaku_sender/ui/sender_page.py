@@ -10,21 +10,20 @@ from PySide6.QtWidgets import (
 from PySide6.QtGui import QTextCursor, QDragEnterEvent, QDropEvent
 from PySide6.QtCore import Qt, QDateTime, Slot
 
-from danmaku_sender.core.engines.sender.context import SendingContext
-
 from .framework.binder import UIBinder
 from .framework.style_loader import get_svg_icon
 from .controllers.video_controller import VideoController
 from .controllers.sender_controller import SenderController
 
-from ..core.entities.video import VideoInfo
-from ..core.types.common import VideoTarget
-from ..core.services.danmaku_exporter import UnsentDanmakusRecord, create_xml_from_danmakus
-from ..core.services.danmaku_parser import DanmakuParser
-from ..core.state import AppState
-from ..utils.string_utils import parse_bilibili_link
-from ..utils.time_utils import format_duration
-from ..utils.notification_utils import send_windows_notification
+from danmaku_sender.core.engines.sender.context import SendingContext
+from danmaku_sender.core.entities.video import VideoInfo
+from danmaku_sender.core.types.common import VideoTarget
+from danmaku_sender.core.services.danmaku_exporter import UnsentDanmakusRecord, create_xml_from_danmakus
+from danmaku_sender.core.services.danmaku_parser import DanmakuParser
+from danmaku_sender.core.state import AppState
+from danmaku_sender.utils.string_utils import parse_bilibili_link
+from danmaku_sender.utils.time_utils import format_duration
+from danmaku_sender.utils.notification_utils import send_windows_notification
 
 
 class SenderPage(QWidget):
@@ -315,8 +314,8 @@ class SenderPage(QWidget):
     # endregion
     # region Slots SenderController
 
-    @Slot(int, int)
-    def _on_send_progress(self, attempted: int, total: int):
+    @Slot(int, int, float)
+    def _on_send_progress(self, attempted: int, total: int, eta_sec: float):
         if total > 0:
             val = int((attempted / total) * 100)
             self.progress_bar.setValue(val)
@@ -324,7 +323,6 @@ class SenderPage(QWidget):
             # ETA 计算逻辑
             remaining = total - attempted
             if remaining > 0:
-                eta_sec = self._calculate_eta_seconds(attempted, total)
                 duration = format_duration(eta_sec)
                 finish_time = QDateTime.currentDateTime().addSecs(int(eta_sec)).toString("HH:mm:ss")
                 display_text = f"%p% (剩余 {duration} | 预计 {finish_time} 结束)"
@@ -358,55 +356,6 @@ class SenderPage(QWidget):
 
     # endregion
     # endregion
-
-    def _calculate_eta_seconds(self, attempted: int, total: int) -> float:
-        """从状态中提取配置，并调用纯数学方法计算 ETA"""
-        if not self._state:
-            return 0.0
-
-        cfg = self._state.sender_config
-        avg_normal = (cfg.min_delay + cfg.max_delay) / 2
-        avg_rest = (cfg.rest_min + cfg.rest_max) / 2
-
-        return self._math_calc_eta(
-            attempted=attempted,
-            total=total,
-            burst_size=cfg.burst_size,
-            avg_normal=avg_normal,
-            avg_rest=avg_rest
-        )
-
-    @staticmethod
-    def _math_calc_eta(attempted: int, total: int, burst_size: int, avg_normal: float, avg_rest: float) -> float:
-        """
-        计算剩余等待时间的纯数学辅助函数 (O(1))。
-
-        契约 (Contract):
-        1. 延时发生在发送动作之后，因此最后一条弹幕发完不产生延时，总延时次数为 total - 1。
-        2. 延时的物理索引从 1 开始（第 k 条弹幕发完后的延时索引为 k）。
-        3. 仅当延时索引能被 burst_size 整除时，触发大休息 (avg_rest)。
-        """
-        # 防御性校验：避免除零及负数异常
-        if burst_size <= 0:
-            burst_size = 1
-
-        # 统一处理 0 和 1 进度：
-        # 准备开始(0)和准备发第1条(1)时，前面都没有发生过延时，
-        # 其后续的延时索引区间都是 [1, total - 1]。
-        current_k = max(1, attempted)
-        remaining_waits = total - current_k
-
-        if remaining_waits <= 0:
-            return 0.0
-
-        if burst_size == 1:
-            return remaining_waits * avg_normal
-
-        # 在闭区间 [current_k, total - 1] 中，计算能被 burst_size 整除的元素个数
-        rest_count = (total - 1) // burst_size - (current_k - 1) // burst_size
-        normal_count = remaining_waits - rest_count
-
-        return (normal_count * avg_normal) + (rest_count * avg_rest)
 
     def _send_desktop_notification(self, ctx: SendingContext, is_stopped: bool):
         """发送系统桌面通知"""

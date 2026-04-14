@@ -2,12 +2,12 @@ import random
 import logging
 from threading import Event
 
+
 class DelayManager:
     """
     发送节奏管理器 (Pacing / Delay Manager)
 
-    设计意图：将“算时间”和“等时间”剥离成独立的控制模块。
-    支持基础的随机波动延时，以及模拟真实人类批量操作习惯的“爆发-休息”模式。
+    支持基础的随机波动延时，以及模拟人类批量操作习惯的“爆发-休息”模式。
     """
     def __init__(
         self,
@@ -76,3 +76,35 @@ class DelayManager:
             return True
 
         return False
+
+    @staticmethod
+    def calc_eta(attempted: int, total: int, burst_size: int, avg_normal: float, avg_rest: float) -> float:
+        """
+        计算剩余等待时间 (O(1))。
+
+        契约 (Contract):
+        1. 延时发生在发送动作之后，因此最后一条弹幕发完不产生延时，总延时次数为 total - 1。
+        2. 延时的物理索引从 1 开始（第 k 条弹幕发完后的延时索引为 k）。
+        3. 仅当延时索引能被 burst_size 整除时，触发大休息 (avg_rest)。
+        """
+        # 防御性校验：避免除零及负数异常
+        if burst_size <= 0:
+            burst_size = 1
+
+        # 统一处理 0 和 1 进度：
+        # 准备开始(0)和准备发第1条(1)时，前面都没有发生过延时，
+        # 其后续的延时索引区间都是 [1, total - 1]。
+        current_k = max(1, attempted)
+        remaining_waits = total - current_k
+
+        if remaining_waits <= 0:
+            return 0.0
+
+        if burst_size == 1:
+            return remaining_waits * avg_normal
+
+        # 在闭区间 [current_k, total - 1] 中，计算能被 burst_size 整除的元素个数
+        rest_count = (total - 1) // burst_size - (current_k - 1) // burst_size
+        normal_count = remaining_waits - rest_count
+
+        return (normal_count * avg_normal) + (rest_count * avg_rest)

@@ -450,8 +450,8 @@ class MainWindow(QMainWindow):
         if reason == QSystemTrayIcon.ActivationReason.Trigger:
             self._show_from_tray()
 
-    @Slot(int, int)
-    def _on_sender_progress_sync(self, att: int, total: int):
+    @Slot(int, int, float)
+    def _on_sender_progress_sync(self, att: int, total: int, eta_sec: float):
         self._current_sender_progress = (att, total)
         self._refresh_global_status()
 
