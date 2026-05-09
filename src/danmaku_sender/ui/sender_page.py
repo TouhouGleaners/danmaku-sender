@@ -138,6 +138,7 @@ class SenderPage(QWidget):
         task.signals.error.connect(lambda err: self._on_xml_parse_error(err, file_path))
         QThreadPool.globalInstance().start(task)
 
+    @Slot(list, str)
     def _on_xml_parse_success(self, parsed: list, file_path: str):
         self.basic_group.file_input.setEnabled(True)
         if parsed:
@@ -148,6 +149,7 @@ class SenderPage(QWidget):
             self.basic_group.file_input.clear()
             self.logger.warning("⚠️ 文件解析完成但无有效弹幕。")
 
+    @Slot(str, str)
     def _on_xml_parse_error(self, err: str, file_path: str):
         self.basic_group.file_input.setEnabled(True)
         self.basic_group.file_input.clear()
@@ -404,10 +406,12 @@ class SenderPage(QWidget):
                 task.signals.error.connect(lambda err: self._on_export_error(err))
                 QThreadPool.globalInstance().start(task)
 
+    @Slot(str)
     def _on_export_success(self, file_path: str):
         self.logger.info(f"✅ 未发送弹幕已保存至: {file_path}")
         QMessageBox.information(self, "保存成功", f"文件已保存至：\n{file_path}")
 
+    @Slot(str)
     def _on_export_error(self, err: str):
         self.logger.error(f"❌ 保存XML文件失败: {err}")
         QMessageBox.critical(self, "保存失败", f"无法写入文件，请检查权限或路径。\n错误信息: {err}")

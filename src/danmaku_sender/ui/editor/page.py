@@ -296,6 +296,7 @@ class EditorPage(QWidget):
             task.signals.error.connect(lambda err: QMessageBox.critical(self, "导入失败", f"解析 XML 时发生错误:\n{err}"))
             QThreadPool.globalInstance().start(task)
 
+    @Slot(object)
     def _on_import_parsed(self, parsed):
         count = self.controller.import_from_parsed(parsed)
         if count > 0:
@@ -337,6 +338,7 @@ class EditorPage(QWidget):
             task.signals.error.connect(lambda err: QMessageBox.critical(self, "导出失败", f"文件写入失败，请检查路径权限。\n错误信息:\n{err}"))
             QThreadPool.globalInstance().start(task)
 
+    @Slot(int, str)
     def _on_export_success(self, count: int, file_path: str):
         QMessageBox.information(
             self,
