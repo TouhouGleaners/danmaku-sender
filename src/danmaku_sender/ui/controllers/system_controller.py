@@ -1,6 +1,6 @@
 import logging
 
-from PySide6.QtCore import QObject, Signal, QThreadPool
+from PySide6.QtCore import QObject, Signal, Slot, QThreadPool
 
 from ..framework.concurrency import GenericTask
 from ...api.update_checker import UpdateChecker, UpdateInfo
@@ -45,6 +45,7 @@ class SystemController(QObject):
 
         QThreadPool.globalInstance().start(task)
 
+    @Slot(object)
     def _on_check_finished(self, info: UpdateInfo):
         """内部回调：更新检查成功完成"""
         is_manual = self._in_flight_is_manual
@@ -58,6 +59,7 @@ class SystemController(QObject):
         else:
             self.updateNotFound.emit(is_manual)
 
+    @Slot(str)
     def _on_check_failed(self, err: str):
         """内部回调：更新检查失败"""
         is_manual = self._in_flight_is_manual

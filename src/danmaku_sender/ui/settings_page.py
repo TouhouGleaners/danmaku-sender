@@ -2,7 +2,7 @@ from PySide6.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout, QFormLayout, QLabel, QLineEdit,
     QCheckBox, QGroupBox, QPushButton, QDialog
 )
-from PySide6.QtCore import Qt
+from PySide6.QtCore import Qt, Slot
 
 from .framework.binder import UIBinder
 from .framework.style_loader import get_svg_icon
@@ -110,6 +110,7 @@ class SettingsPage(QWidget):
         UIBinder.bind(self.prevent_sleep_checkbox, state.monitor_config, "prevent_sleep", clear_old=False)
         UIBinder.bind(self.proxy_checkbox, state.monitor_config, "use_system_proxy", clear_old=False)
 
+    @Slot()
     def _open_qr_login(self):
         if not self._state:
             return

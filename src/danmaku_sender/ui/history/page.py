@@ -96,6 +96,7 @@ class HistoryPage(QWidget):
         self._state = state
         self._refresh_table()
 
+    @Slot()
     def _refresh_table(self):
         """发起异步刷新请求"""
         keyword = self._search_input.text().strip()

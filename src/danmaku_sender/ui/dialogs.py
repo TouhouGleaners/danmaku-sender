@@ -275,6 +275,7 @@ class QRLoginDialog(QDialog):
         self.auth_controller.qrLoginSucceeded.connect(self._on_login_succeeded)
         self.auth_controller.qrLoginFailed.connect(self._on_login_failed)
 
+    @Slot(str)
     def _render_qr_code(self, url: str):
         """将 URL 转换为 Qt 图像"""
         try:
