@@ -155,6 +155,7 @@ class ValidationRulesGroup(QGroupBox):
             lambda val: self.keywords_input.setEnabled(bool(val))
         )
 
+    @Slot(str)
     def _on_keywords_changed(self, text: str):
         """处理关键词文本变更"""
         if not self._state:
@@ -350,6 +351,7 @@ class PropertyInspectorGroup(QGroupBox):
         self.setEnabled(False)
         self.editor_widget.clear_form()
 
+    @Slot()
     def _on_save_clicked(self):
         props = self.editor_widget.get_properties()
         if not props[EditorField.MSG]:
