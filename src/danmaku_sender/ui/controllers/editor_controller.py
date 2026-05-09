@@ -80,7 +80,17 @@ class EditorController(QObject):
         """
         parser = DanmakuParser()
         parsed_dms = parser.parse_xml_file(file_path)
+        return self.import_from_parsed(parsed_dms)
 
+    def import_from_parsed(self, parsed_dms: list[Danmaku] | None) -> int:
+        """
+        将已解析的弹幕列表导入工作区，清除视频上下文。
+
+        供异步解析流程的 UI 回调使用（解析在后台线程完成，状态更新在 UI 线程执行）。
+
+        Returns:
+            int: 成功解析的弹幕数量
+        """
         if not parsed_dms:
             return 0
 
