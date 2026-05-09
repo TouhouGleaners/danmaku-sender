@@ -18,7 +18,6 @@ from ..controllers.editor_controller import EditorController
 from ...core.types.editor_types import EditorField, InsertPosition
 from ...core.state import AppState
 from ...core.services.danmaku_exporter import export_danmakus_to_xml
-from ...core.services.danmaku_parser import DanmakuParser
 
 
 class EditorPage(QWidget):
@@ -290,15 +289,14 @@ class EditorPage(QWidget):
 
         if file_path:
             self.logger.info(f"📥 正在解析文件: {Path(file_path).name}")
-            parser = DanmakuParser()
-            task = GenericTask(parser.parse_xml_file, file_path)
-            task.signals.result.connect(lambda parsed: self._on_import_parsed(parsed))
-            task.signals.error.connect(lambda err: QMessageBox.critical(self, "导入失败", f"解析 XML 时发生错误:\n{err}"))
-            QThreadPool.globalInstance().start(task)
+            self.controller.import_xml_workspace_async(
+                file_path,
+                on_success=self._on_import_success,
+                on_error=self._on_import_error,
+            )
 
-    @Slot(object)
-    def _on_import_parsed(self, parsed):
-        count = self.controller.import_from_parsed(parsed)
+    @Slot(int)
+    def _on_import_success(self, count: int):
         if count > 0:
             self.preview_mode_cb.setChecked(True)
             self.current_item_id = None
@@ -309,6 +307,11 @@ class EditorPage(QWidget):
             )
         else:
             QMessageBox.warning(self, "导入失败", "未从文件中解析出有效的弹幕。")
+
+    @Slot(str)
+    def _on_import_error(self, err: str):
+        self.logger.error(f"❌ 导入失败: {err}")
+        QMessageBox.critical(self, "导入失败", f"解析 XML 时发生错误:\n{err}")
 
     @Slot()
     def _export_xml(self):
@@ -335,7 +338,7 @@ class EditorPage(QWidget):
             count = len(working_dms)
             task = GenericTask(export_danmakus_to_xml, working_dms, file_path)
             task.signals.result.connect(lambda _: self._on_export_success(count, file_path))
-            task.signals.error.connect(lambda err: QMessageBox.critical(self, "导出失败", f"文件写入失败，请检查路径权限。\n错误信息:\n{err}"))
+            task.signals.error.connect(lambda err: self._on_export_error(str(err)))
             QThreadPool.globalInstance().start(task)
 
     @Slot(int, str)
@@ -345,6 +348,11 @@ class EditorPage(QWidget):
             "导出成功",
             f"🎉 成功导出 {count} 条弹幕至：\n{file_path}"
         )
+
+    @Slot(str)
+    def _on_export_error(self, err: str):
+        self.logger.error(f"❌ 导出失败: {err}")
+        QMessageBox.critical(self, "导出失败", f"文件写入失败，请检查路径权限。\n错误信息:\n{err}")
 
     @Slot()
     def _run_validation(self):

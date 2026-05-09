@@ -1,6 +1,9 @@
 import logging
+from typing import Callable
 
-from PySide6.QtCore import QObject, Signal
+from PySide6.QtCore import QObject, Signal, QThreadPool
+
+from ..framework.concurrency import GenericTask
 
 from ...core.engines.editor_session import EditorSession
 from ...core.state import AppState
@@ -105,6 +108,21 @@ class EditorController(QObject):
         # 将数据拉入编辑器沙盒并触发 UI 更新
         self.load_from_state()
         return len(parsed_dms)
+
+    def import_xml_workspace_async(self, file_path: str, on_success: Callable[[int], None], on_error: Callable[[str], None]):
+        """
+        异步导入 XML 文件：解析在后台线程执行，状态更新在 UI 线程回调。
+
+        Args:
+            file_path: XML 文件路径
+            on_success: 成功回调，接收解析数量
+            on_error: 失败回调，接收错误信息
+        """
+        parser = DanmakuParser()
+        task = GenericTask(parser.parse_xml_file, file_path)
+        task.signals.result.connect(lambda parsed: on_success(self.import_from_parsed(parsed)))
+        task.signals.error.connect(lambda err: on_error(str(err)))
+        QThreadPool.globalInstance().start(task)
 
     def load_from_state(self) -> bool:
         """从 AppState 检出数据到沙盒，并执行初次校验"""

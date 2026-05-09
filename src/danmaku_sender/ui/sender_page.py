@@ -135,7 +135,7 @@ class SenderPage(QWidget):
 
         task = GenericTask(self.danmaku_parser.parse_xml_file, file_path)
         task.signals.result.connect(lambda parsed: self._on_xml_parse_success(parsed, file_path))
-        task.signals.error.connect(lambda err: self._on_xml_parse_error(err, file_path))
+        task.signals.error.connect(lambda err: self._on_xml_parse_error(str(err), file_path))
         QThreadPool.globalInstance().start(task)
 
     @Slot(list, str)
@@ -403,7 +403,7 @@ class SenderPage(QWidget):
                 self.logger.info(f"📥 正在保存未发送弹幕至: {file_path}")
                 task = GenericTask(create_xml_from_danmakus, unsent_danmakus, file_path)
                 task.signals.result.connect(lambda _: self._on_export_success(file_path))
-                task.signals.error.connect(lambda err: self._on_export_error(err))
+                task.signals.error.connect(lambda err: self._on_export_error(str(err)))
                 QThreadPool.globalInstance().start(task)
 
     @Slot(str)
