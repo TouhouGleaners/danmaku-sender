@@ -165,14 +165,14 @@ class HistoryPage(QWidget):
         if self._state:
             self._fetch_missing_metadata(records)
 
-    @Slot(str)
-    def _on_history_query_failed(self, err_msg: str):
+    @Slot(object)
+    def _on_history_query_failed(self, err: object):
         """
         本地 SQLite 查询失败兜底
 
         通常因数据库锁定或文件损坏导致。
         """
-        logger.error(f"历史记录数据库查询失败: {err_msg}")
+        logger.error(f"历史记录数据库查询失败: {str(err)}")
 
     # endregion
 

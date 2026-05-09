@@ -83,9 +83,9 @@ class VideoController(QObject):
         def _on_fetch_succeeded(info: VideoInfo):
             self.fetchSucceeded.emit(bvid, info)
 
-        @Slot(str)
-        def _on_fetch_failed(err_str: str):
-            self.fetchFailed.emit(bvid, err_str)
+        @Slot(object)
+        def _on_fetch_failed(err: object):
+            self.fetchFailed.emit(bvid, str(err))
 
         task.signals.result.connect(_on_fetch_succeeded)
         task.signals.error.connect(_on_fetch_failed)

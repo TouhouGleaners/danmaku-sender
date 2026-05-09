@@ -289,7 +289,7 @@ class EditorPage(QWidget):
 
         if file_path:
             self.logger.info(f"📥 正在解析文件: {Path(file_path).name}")
-            self.controller.import_xml_workspace_async(
+            self.controller.import_xml_to_workspace(
                 file_path,
                 on_success=self._on_import_success,
                 on_error=self._on_import_error,
