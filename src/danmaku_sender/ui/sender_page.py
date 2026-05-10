@@ -309,8 +309,8 @@ class SenderPage(QWidget):
 
             self._pending_part_index = None
 
-    @Slot(str, str)
-    def _on_fetch_failed(self, bvid: str, err_msg: str):
+    @Slot(str, object)
+    def _on_fetch_failed(self, bvid: str, err: Exception):
         """获取失败: 恢复 UI 状态并弹窗提示"""
         self.basic_group.fetch_btn.setEnabled(True)
         self.basic_group.fetch_btn.setText("获取分P")
@@ -320,8 +320,8 @@ class SenderPage(QWidget):
         self.basic_group.part_combo.addItem(f"获取失败，请重试")
         self.basic_group.part_combo.setEnabled(False)
 
-        self.logger.error(f"获取视频信息失败: {err_msg}")
-        QMessageBox.warning(self, "获取失败", f"无法获取视频信息:\n{err_msg}")
+        self.logger.error(f"获取视频信息失败: {str(err)}")
+        QMessageBox.warning(self, "获取失败", f"无法获取视频信息:\n{str(err)}")
 
     # endregion
     # region Slots SenderController

@@ -18,8 +18,8 @@ def _check_update(use_proxy: bool):
 class SystemController(QObject):
     """系统业务控制器 (更新检查等)"""
     updateFound = Signal(str, str, str)  # version, notes, url
-    updateNotFound = Signal(bool)        # 是否需要展示“已是最新”弹窗
-    checkFailed = Signal(object, bool)   # 异常对象, 是否需要展示”检查失败”弹窗
+    updateNotFound = Signal(bool)        # 是否需要展示 "已是最新" 弹窗
+    checkFailed = Signal(object, bool)   # 异常对象, 是否需要展示 "检查失败" 弹窗
 
     def __init__(self, parent=None):
         super().__init__(parent)
@@ -60,7 +60,7 @@ class SystemController(QObject):
             self.updateNotFound.emit(is_manual)
 
     @Slot(object)
-    def _on_check_failed(self, err: object):
+    def _on_check_failed(self, err: Exception):
         """内部回调：更新检查失败"""
         is_manual = self._in_flight_is_manual
 

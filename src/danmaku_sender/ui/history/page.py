@@ -140,8 +140,8 @@ class HistoryPage(QWidget):
         """
         self._model.update_video_cache(bvid, video_info)
 
-    @Slot(str, str)
-    def _on_video_fetch_failed(self, bvid: str, error_msg: str):
+    @Slot(str, object)
+    def _on_video_fetch_failed(self, bvid: str, err: Exception):
         """
         B 站 API 视频详情获取失败 (超时或 404)
 
@@ -166,7 +166,7 @@ class HistoryPage(QWidget):
             self._fetch_missing_metadata(records)
 
     @Slot(object)
-    def _on_history_query_failed(self, err: object):
+    def _on_history_query_failed(self, err: Exception):
         """
         本地 SQLite 查询失败兜底
 
