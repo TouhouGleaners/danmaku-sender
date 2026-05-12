@@ -20,7 +20,6 @@ from danmaku_sender.core.engines.sender.context import SendingContext
 from danmaku_sender.core.entities.video import VideoInfo
 from danmaku_sender.core.types.common import VideoTarget
 from danmaku_sender.core.services.danmaku_exporter import UnsentDanmakusRecord, create_xml_from_danmakus
-from danmaku_sender.core.services.danmaku_parser import DanmakuParser
 from danmaku_sender.core.state import AppState
 from danmaku_sender.utils.string_utils import parse_bilibili_link
 from danmaku_sender.utils.time_utils import format_duration
@@ -107,6 +106,8 @@ class SenderPage(QWidget):
         # SenderController
         self.sender_controller.progressUpdated.connect(self._on_send_progress)
         self.sender_controller.taskFinished.connect(self._on_send_finished)
+        self.sender_controller.xmlParsed.connect(self._on_xml_parsed)
+        self.sender_controller.xmlParseFailed.connect(self._on_xml_parse_failed)
 
     def bind_state(self, state: AppState):
         """将 UI 控件与 AppState 进行双向绑定"""
@@ -114,6 +115,7 @@ class SenderPage(QWidget):
             return
 
         self._state = state
+        self.sender_controller.bind_state(state)
 
         self.basic_group.bind_state(state)
         self.strategy_tabs.bind_state(state)
@@ -127,32 +129,26 @@ class SenderPage(QWidget):
         if not self._state:
             return
 
-        self._state.video_state.loaded_danmakus = []
         self.logger.info(f"📥 正在解析文件: {Path(file_path).name}")
         self.basic_group.file_input.setEnabled(False)
+        self.sender_controller.load_xml_file(file_path)
 
-        task = GenericTask(DanmakuParser().parse_xml_file, file_path)
-        task.signals.result.connect(lambda parsed: self._on_xml_parse_success(parsed, file_path))
-        task.signals.error.connect(lambda err: self._on_xml_parse_error(str(err), file_path))
-        QThreadPool.globalInstance().start(task)
-
-    @Slot(list, str)
-    def _on_xml_parse_success(self, parsed: list, file_path: str):
+    @Slot(str, int)
+    def _on_xml_parsed(self, file_path: str, count: int):
         self.basic_group.file_input.setEnabled(True)
-        if parsed:
+        if count > 0:
             self.basic_group.file_input.setText(Path(file_path).name)
-            self._state.video_state.loaded_danmakus = parsed
-            self.logger.info(f"✅ 文件解析成功，共 {len(parsed)} 条弹幕。")
+            self.logger.info(f"✅ 文件解析成功，共 {count} 条弹幕。")
         else:
             self.basic_group.file_input.clear()
             self.logger.warning("⚠️ 文件解析完成但无有效弹幕。")
 
-    @Slot(str, str)
-    def _on_xml_parse_error(self, err: str, file_path: str):
+    @Slot(str, object)
+    def _on_xml_parse_failed(self, file_path: str, err: Exception):
         self.basic_group.file_input.setEnabled(True)
         self.basic_group.file_input.clear()
-        self.logger.error(f"❌ 解析失败: {err}")
-        QMessageBox.critical(self, "解析失败", err)
+        self.logger.error(f"❌ 解析失败: {str(err)}")
+        QMessageBox.critical(self, "解析失败", str(err))
 
 
     # region Slots

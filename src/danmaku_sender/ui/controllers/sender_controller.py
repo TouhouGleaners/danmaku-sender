@@ -1,9 +1,9 @@
 import logging
 import threading
 
-from PySide6.QtCore import QObject, Signal, Slot
+from PySide6.QtCore import QObject, Signal, Slot, QThreadPool
 
-from danmaku_sender.ui.framework.concurrency import BaseWorker
+from danmaku_sender.ui.framework.concurrency import BaseWorker, GenericTask
 
 from danmaku_sender.core.database.history_manager import HistoryManager
 from danmaku_sender.core.engines.sender import DanmakuScheduler, DanmakuExecutor, SendingContext, SendJob
@@ -11,7 +11,8 @@ from danmaku_sender.core.engines.sender.delay_manager import DelayManager
 from danmaku_sender.core.entities.danmaku import Danmaku
 from danmaku_sender.core.types.result import DanmakuSendResult
 from danmaku_sender.core.types.common import VideoTarget
-from danmaku_sender.core.state import ApiAuthConfig, SenderConfig
+from danmaku_sender.core.state import ApiAuthConfig, SenderConfig, AppState
+from danmaku_sender.core.services.danmaku_parser import DanmakuParser
 from danmaku_sender.api.bili_api_client import BiliApiClient
 from danmaku_sender.utils.system_utils import KeepSystemAwake
 
@@ -23,11 +24,17 @@ class SenderController(QObject):
     """发送任务业务控制器"""
     progressUpdated = Signal(int, int, float)
     taskFinished = Signal(object)
+    xmlParsed = Signal(str, int)          # file_path, danmaku_count
+    xmlParseFailed = Signal(str, object)  # file_path, raw_exception
 
     def __init__(self, parent=None):
         super().__init__(parent)
+        self._state: AppState | None = None
         self._worker: SendTaskWorker | None = None
         self._stop_event = threading.Event()
+
+    def bind_state(self, state: AppState):
+        self._state = state
 
     def start_task(
         self,
@@ -71,6 +78,15 @@ class SenderController(QObject):
         """检查任务是否被手动中断"""
         return self._stop_event.is_set()
 
+    def load_xml_file(self, file_path: str):
+        """异步解析 XML 弹幕文件"""
+        self._state.video_state.loaded_danmakus = []
+        parser = DanmakuParser()
+        task = GenericTask(parser.parse_xml_file, file_path)
+        task.signals.result.connect(lambda parsed: self._on_parse_success(parsed, file_path))
+        task.signals.error.connect(lambda err: self._on_parse_error(err, file_path))
+        QThreadPool.globalInstance().start(task)
+
 
     # region Slots
 
@@ -85,6 +101,16 @@ class SenderController(QObject):
         if self._worker is not None:
             logger.debug("SendTaskWorker 线程生命周期结束，正在清理控制器引用。")
             self._worker = None
+
+    @Slot(list, str)
+    def _on_parse_success(self, parsed: list, file_path: str):
+        if parsed:
+            self._state.video_state.loaded_danmakus = parsed
+        self.xmlParsed.emit(file_path, len(parsed))
+
+    @Slot(object, str)
+    def _on_parse_error(self, err: Exception, file_path: str):
+        self.xmlParseFailed.emit(file_path, err)
 
     # endregion
 
