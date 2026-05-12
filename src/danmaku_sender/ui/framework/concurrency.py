@@ -50,7 +50,7 @@ class BaseWorker(QThread):
 class WorkerSignals(QObject):
     """通用任务信号载体"""
     result = Signal(object)  # 携带任意类型的返回值
-    error = Signal(str)      # 携带错误信息
+    error = Signal(object)    # 携带异常对象
     finished = Signal()      # 无论成功失败，最后都会触发
 
 
@@ -85,7 +85,7 @@ class GenericTask(QRunnable):
         except Exception as e:
             # 捕捉任何异常，打印完整堆栈，并把错误信息扔回主线程
             logger.error(f"后台任务执行异常: {e}\n{traceback.format_exc()}")
-            self.signals.error.emit(str(e))
+            self.signals.error.emit(e)
         finally:
             self.signals.finished.emit()
             GenericTask._keep_alive_registry.discard(self)

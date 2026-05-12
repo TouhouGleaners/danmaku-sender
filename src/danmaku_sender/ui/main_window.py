@@ -331,7 +331,7 @@ class MainWindow(QMainWindow):
             QMessageBox.information(self, "检查更新", "当前已是最新版本。") if is_m else None
         )
         self.system_controller.checkFailed.connect(lambda err, is_m:
-            QMessageBox.warning(self, "检查更新失败", f"无法连接到更新服务器:\n{err}") if is_m else None
+            QMessageBox.warning(self, "检查更新失败", f"无法连接到更新服务器:\n{str(err)}") if is_m else None
         )
 
         self.state.senderActiveChanged.connect(self._refresh_global_status)

@@ -1,6 +1,9 @@
 import logging
+from typing import Callable
 
-from PySide6.QtCore import QObject, Signal
+from PySide6.QtCore import QObject, Signal, QThreadPool
+
+from ..framework.concurrency import GenericTask
 
 from ...core.engines.editor_session import EditorSession
 from ...core.state import AppState
@@ -69,30 +72,36 @@ class EditorController(QObject):
 
         self.load_from_state()
 
-    def import_xml_workspace(self, file_path: str) -> int:
+    def import_xml_to_workspace(self, file_path: str, on_success: Callable[[int], None], on_error: Callable[[str], None]):
         """
-        导入外部 XML 文件到工作区，清除视频上下文。
+        异步导入 XML 文件到工作区：解析在后台线程执行，状态更新在 UI 线程回调。
+
+        Args:
+            file_path: XML 文件路径
+            on_success: 成功回调，接收解析数量
+            on_error: 失败回调，接收错误信息
+        """
+        parser = DanmakuParser()
+        task = GenericTask(parser.parse_xml_file, file_path)
+        task.signals.result.connect(lambda parsed: on_success(self._apply_parsed_to_workspace(parsed)))
+        task.signals.error.connect(lambda err: on_error(str(err)))
+        QThreadPool.globalInstance().start(task)
+
+    def _apply_parsed_to_workspace(self, parsed_dms: list[Danmaku] | None) -> int:
+        """
+        将已解析的弹幕列表写入工作区，清除视频上下文，拉入编辑器沙盒。
 
         Returns:
             int: 成功解析的弹幕数量
-        Raises:
-            Exception: 解析失败时向上抛出供 UI 捕获
         """
-        parser = DanmakuParser()
-        parsed_dms = parser.parse_xml_file(file_path)
-
         if not parsed_dms:
             return 0
 
-        # 覆盖全局工作区
         self.state.video_state.loaded_danmakus = parsed_dms
-
-        # 强制清除关联的视频上下文
         self.state.video_state.bvid = ""
         self.state.video_state.selected_cid = None
         self.state.video_state.video_title = ""
 
-        # 将数据拉入编辑器沙盒并触发 UI 更新
         self.load_from_state()
         return len(parsed_dms)
 

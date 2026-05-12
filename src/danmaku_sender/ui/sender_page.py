@@ -8,9 +8,10 @@ from PySide6.QtWidgets import (
     QFileDialog, QMessageBox
 )
 from PySide6.QtGui import QTextCursor, QDragEnterEvent, QDropEvent
-from PySide6.QtCore import Qt, QDateTime, Slot
+from PySide6.QtCore import Qt, QDateTime, Slot, QThreadPool
 
 from .framework.binder import UIBinder
+from .framework.concurrency import GenericTask
 from .framework.style_loader import get_svg_icon
 from .controllers.video_controller import VideoController
 from .controllers.sender_controller import SenderController
@@ -129,20 +130,31 @@ class SenderPage(QWidget):
             return
 
         self._state.video_state.loaded_danmakus = []
-        try:
-            self.logger.info(f"📥 正在解析文件: {Path(file_path).name}")
-            parsed = self.danmaku_parser.parse_xml_file(file_path)
-            if parsed:
-                self.basic_group.file_input.setText(Path(file_path).name)
-                self._state.video_state.loaded_danmakus = parsed
-                self.logger.info(f"✅ 文件解析成功，共 {len(parsed)} 条弹幕。")
-            else:
-                self.basic_group.file_input.clear()
-                self.logger.warning("⚠️ 文件解析完成但无有效弹幕。")
-        except Exception as e:
+        self.logger.info(f"📥 正在解析文件: {Path(file_path).name}")
+        self.basic_group.file_input.setEnabled(False)
+
+        task = GenericTask(self.danmaku_parser.parse_xml_file, file_path)
+        task.signals.result.connect(lambda parsed: self._on_xml_parse_success(parsed, file_path))
+        task.signals.error.connect(lambda err: self._on_xml_parse_error(str(err), file_path))
+        QThreadPool.globalInstance().start(task)
+
+    @Slot(list, str)
+    def _on_xml_parse_success(self, parsed: list, file_path: str):
+        self.basic_group.file_input.setEnabled(True)
+        if parsed:
+            self.basic_group.file_input.setText(Path(file_path).name)
+            self._state.video_state.loaded_danmakus = parsed
+            self.logger.info(f"✅ 文件解析成功，共 {len(parsed)} 条弹幕。")
+        else:
             self.basic_group.file_input.clear()
-            self.logger.error(f"❌ 解析失败: {e}")
-            QMessageBox.critical(self, "解析失败", str(e))
+            self.logger.warning("⚠️ 文件解析完成但无有效弹幕。")
+
+    @Slot(str, str)
+    def _on_xml_parse_error(self, err: str, file_path: str):
+        self.basic_group.file_input.setEnabled(True)
+        self.basic_group.file_input.clear()
+        self.logger.error(f"❌ 解析失败: {err}")
+        QMessageBox.critical(self, "解析失败", err)
 
 
     # region Slots
@@ -297,8 +309,8 @@ class SenderPage(QWidget):
 
             self._pending_part_index = None
 
-    @Slot(str, str)
-    def _on_fetch_failed(self, bvid: str, err_msg: str):
+    @Slot(str, object)
+    def _on_fetch_failed(self, bvid: str, err: Exception):
         """获取失败: 恢复 UI 状态并弹窗提示"""
         self.basic_group.fetch_btn.setEnabled(True)
         self.basic_group.fetch_btn.setText("获取分P")
@@ -308,8 +320,8 @@ class SenderPage(QWidget):
         self.basic_group.part_combo.addItem(f"获取失败，请重试")
         self.basic_group.part_combo.setEnabled(False)
 
-        self.logger.error(f"获取视频信息失败: {err_msg}")
-        QMessageBox.warning(self, "获取失败", f"无法获取视频信息:\n{err_msg}")
+        self.logger.error(f"获取视频信息失败: {str(err)}")
+        QMessageBox.warning(self, "获取失败", f"无法获取视频信息:\n{str(err)}")
 
     # endregion
     # region Slots SenderController
@@ -388,13 +400,21 @@ class SenderPage(QWidget):
         if reply == QMessageBox.StandardButton.Yes:
             file_path, _ = QFileDialog.getSaveFileName(self, "保存XML", "unsent.xml", "XML Files (*.xml)")
             if file_path:
-                try:
-                    create_xml_from_danmakus(unsent_danmakus, file_path)
-                    self.logger.info(f"未发送弹幕已保存至: {file_path}")
-                    QMessageBox.information(self, "保存成功", f"文件已保存至：\n{file_path}")
-                except Exception as e:
-                    self.logger.error(f"保存XML文件失败: {e}")
-                    QMessageBox.critical(self, "保存失败", f"无法写入文件，请检查权限或路径。\n错误信息: {e}")
+                self.logger.info(f"📥 正在保存未发送弹幕至: {file_path}")
+                task = GenericTask(create_xml_from_danmakus, unsent_danmakus, file_path)
+                task.signals.result.connect(lambda _: self._on_export_success(file_path))
+                task.signals.error.connect(lambda err: self._on_export_error(str(err)))
+                QThreadPool.globalInstance().start(task)
+
+    @Slot(str)
+    def _on_export_success(self, file_path: str):
+        self.logger.info(f"✅ 未发送弹幕已保存至: {file_path}")
+        QMessageBox.information(self, "保存成功", f"文件已保存至：\n{file_path}")
+
+    @Slot(str)
+    def _on_export_error(self, err: str):
+        self.logger.error(f"❌ 保存XML文件失败: {err}")
+        QMessageBox.critical(self, "保存失败", f"无法写入文件，请检查权限或路径。\n错误信息: {err}")
 
 
     # region UI State Management

@@ -30,7 +30,7 @@ def _fetch_multiple_video_infos(
     bvids: list[str],
     auth_config: ApiAuthConfig,
     on_succeeded: Callable[[str, VideoInfo], None],
-    on_failed: Callable[[str, str], None]
+    on_failed: Callable[[str, Exception], None]
 ):
     """
     复用底层连接 (Keep-Alive) 获取多个视频信息。
@@ -43,7 +43,7 @@ def _fetch_multiple_video_infos(
                 info = service.fetch_info(bvid)
                 on_succeeded(bvid, info)
             except Exception as e:
-                on_failed(bvid, str(e))
+                on_failed(bvid, e)
 
 
 class VideoController(QObject):
@@ -54,7 +54,7 @@ class VideoController(QObject):
     """
     fetchStarted = Signal()
     fetchSucceeded = Signal(str, VideoInfo)  # bvid, VideoInfo
-    fetchFailed = Signal(str, str)           # bvid, error_message
+    fetchFailed = Signal(str, object)         # bvid, 异常对象
 
     def __init__(self, parent=None):
         super().__init__(parent)
@@ -83,9 +83,9 @@ class VideoController(QObject):
         def _on_fetch_succeeded(info: VideoInfo):
             self.fetchSucceeded.emit(bvid, info)
 
-        @Slot(str)
-        def _on_fetch_failed(err_str: str):
-            self.fetchFailed.emit(bvid, err_str)
+        @Slot(object)
+        def _on_fetch_failed(err: Exception):
+            self.fetchFailed.emit(bvid, err)
 
         task.signals.result.connect(_on_fetch_succeeded)
         task.signals.error.connect(_on_fetch_failed)

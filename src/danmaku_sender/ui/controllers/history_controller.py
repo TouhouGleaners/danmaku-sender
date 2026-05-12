@@ -18,7 +18,7 @@ def _query(keyword: str, status_filter: int) -> list:
 class HistoryController(QObject):
     """历史记录业务控制器"""
     historyFetched = Signal(list)
-    errorOccurred = Signal(str)
+    errorOccurred = Signal(object)
 
     def __init__(self, parent=None):
         super().__init__(parent)

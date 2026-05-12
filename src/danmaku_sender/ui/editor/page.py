@@ -1,7 +1,8 @@
 import logging
+from pathlib import Path
 from typing import Any
 
-from PySide6.QtCore import Qt, QModelIndex, QPoint, Slot
+from PySide6.QtCore import Qt, QModelIndex, QPoint, Slot, QThreadPool
 from PySide6.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout, QPushButton, QLabel,
     QTableView, QHeaderView, QAbstractItemView, QMessageBox,
@@ -10,6 +11,7 @@ from PySide6.QtWidgets import (
 
 from .components import EditorTableModel, ValidationRulesGroup, PropertyInspectorGroup
 from .dialogs import EditDanmakuDialog, TimeOffsetDialog, ArrayGeneratorDialog
+from ..framework.concurrency import GenericTask
 from ..framework.style_loader import get_svg_icon
 from ..controllers.editor_controller import EditorController
 
@@ -286,20 +288,30 @@ class EditorPage(QWidget):
         )
 
         if file_path:
-            try:
-                count = self.controller.import_xml_workspace(file_path)
-                if count > 0:
-                    self.preview_mode_cb.setChecked(True)
-                    self.current_item_id = None
-                    self.inspector_group.reset_inspector()
-                    QMessageBox.information(
-                        self, "导入成功",
-                        f"成功导入 {count} 条弹幕！\n(当前为无视频上下文模式，已跳过时间越界检查)"
-                    )
-                else:
-                    QMessageBox.warning(self, "导入失败", "未从文件中解析出有效的弹幕。")
-            except Exception as e:
-                QMessageBox.critical(self, "导入失败", f"解析 XML 时发生错误:\n{e}")
+            self.logger.info(f"📥 正在解析文件: {Path(file_path).name}")
+            self.controller.import_xml_to_workspace(
+                file_path,
+                on_success=self._on_import_success,
+                on_error=self._on_import_error,
+            )
+
+    @Slot(int)
+    def _on_import_success(self, count: int):
+        if count > 0:
+            self.preview_mode_cb.setChecked(True)
+            self.current_item_id = None
+            self.inspector_group.reset_inspector()
+            QMessageBox.information(
+                self, "导入成功",
+                f"成功导入 {count} 条弹幕！\n(当前为无视频上下文模式，已跳过时间越界检查)"
+            )
+        else:
+            QMessageBox.warning(self, "导入失败", "未从文件中解析出有效的弹幕。")
+
+    @Slot(str)
+    def _on_import_error(self, err: str):
+        self.logger.error(f"❌ 导入失败: {err}")
+        QMessageBox.critical(self, "导入失败", f"解析 XML 时发生错误:\n{err}")
 
     @Slot()
     def _export_xml(self):
@@ -323,15 +335,24 @@ class EditorPage(QWidget):
         )
 
         if file_path:
-            try:
-                export_danmakus_to_xml(working_dms, file_path)
-                QMessageBox.information(
-                    self,
-                    "导出成功",
-                    f"🎉 成功导出 {len(working_dms)} 条弹幕至：\n{file_path}"
-                )
-            except Exception as e:
-                QMessageBox.critical(self, "导出失败", f"文件写入失败，请检查路径权限。\n错误信息:\n{e}")
+            count = len(working_dms)
+            task = GenericTask(export_danmakus_to_xml, working_dms, file_path)
+            task.signals.result.connect(lambda _: self._on_export_success(count, file_path))
+            task.signals.error.connect(lambda err: self._on_export_error(str(err)))
+            QThreadPool.globalInstance().start(task)
+
+    @Slot(int, str)
+    def _on_export_success(self, count: int, file_path: str):
+        QMessageBox.information(
+            self,
+            "导出成功",
+            f"🎉 成功导出 {count} 条弹幕至：\n{file_path}"
+        )
+
+    @Slot(str)
+    def _on_export_error(self, err: str):
+        self.logger.error(f"❌ 导出失败: {err}")
+        QMessageBox.critical(self, "导出失败", f"文件写入失败，请检查路径权限。\n错误信息:\n{err}")
 
     @Slot()
     def _run_validation(self):
