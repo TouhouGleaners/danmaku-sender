@@ -63,6 +63,7 @@ class GenericTask(QRunnable):
     """
     # 静态注册表: 存放所有正在运行的任务，以防止被 GC
     _keep_alive_registry = set()
+    _registry_lock = threading.Lock()
 
     def __init__(self, fn: Callable, *args, **kwargs):
         super().__init__()
@@ -73,7 +74,8 @@ class GenericTask(QRunnable):
 
         self.setAutoDelete(False)  # 对象生命周期管理: C++ -> Python GC
 
-        GenericTask._keep_alive_registry.add(self)
+        with GenericTask._registry_lock:
+            GenericTask._keep_alive_registry.add(self)
 
     def run(self):
         """线程池分配 OS 线程后自动调用的入口"""
@@ -88,4 +90,5 @@ class GenericTask(QRunnable):
             self.signals.error.emit(e)
         finally:
             self.signals.finished.emit()
-            GenericTask._keep_alive_registry.discard(self)
+            with GenericTask._registry_lock:
+                GenericTask._keep_alive_registry.discard(self)
