@@ -21,9 +21,9 @@ logger = logging.getLogger("App.System.UI.History")
 
 
 class HistoryPage(QWidget):
-    def __init__(self):
+    def __init__(self, state: AppState):
         super().__init__()
-        self._state: AppState | None = None
+        self._state = state
         self._fetched_bvids = set()
 
         self.video_controller = VideoController(self)
@@ -93,7 +93,6 @@ class HistoryPage(QWidget):
         self.history_controller.errorOccurred.connect(self._on_history_query_failed)
 
     def bind_state(self, state: AppState):
-        self._state = state
         self._refresh_table()
 
     @Slot()

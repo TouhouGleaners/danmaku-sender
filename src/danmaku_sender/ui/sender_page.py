@@ -27,13 +27,13 @@ from danmaku_sender.utils.notification_utils import send_windows_notification
 
 
 class SenderPage(QWidget):
-    def __init__(self):
+    def __init__(self, state: AppState):
         super().__init__()
-        self._state: AppState | None = None
+        self._state = state
         self.logger = logging.getLogger("App.Sender.UI")
         self._pending_part_index: int | None = None
         self.video_controller = VideoController(self)
-        self.sender_controller = SenderController(self)
+        self.sender_controller = SenderController(state, self)
 
         self._create_ui()
         self._connect_signals()
@@ -111,12 +111,6 @@ class SenderPage(QWidget):
 
     def bind_state(self, state: AppState):
         """将 UI 控件与 AppState 进行双向绑定"""
-        if self._state is state:
-            return
-
-        self._state = state
-        self.sender_controller.bind_state(state)
-
         self.basic_group.bind_state(state)
         self.strategy_tabs.bind_state(state)
 

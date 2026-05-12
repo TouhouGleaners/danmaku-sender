@@ -27,14 +27,11 @@ class SenderController(QObject):
     xmlParsed = Signal(str, int)          # file_path, danmaku_count
     xmlParseFailed = Signal(str, object)  # file_path, raw_exception
 
-    def __init__(self, parent=None):
+    def __init__(self, state: AppState, parent=None):
         super().__init__(parent)
-        self._state: AppState | None = None
+        self._state = state
         self._worker: SendTaskWorker | None = None
         self._stop_event = threading.Event()
-
-    def bind_state(self, state: AppState):
-        self._state = state
 
     def start_task(
         self,

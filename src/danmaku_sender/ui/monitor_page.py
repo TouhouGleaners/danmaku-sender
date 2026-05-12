@@ -18,9 +18,9 @@ from ..core.types.common import VideoTarget, MonitorStats
 
 
 class MonitorPage(QWidget):
-    def __init__(self):
+    def __init__(self, state: AppState):
         super().__init__()
-        self._state = None
+        self._state = state
         self.logger = logging.getLogger("App.Monitor.UI")
 
         self.monitor_controller = MonitorController(self)
@@ -177,11 +177,6 @@ class MonitorPage(QWidget):
         self.monitor_controller.taskFinished.connect(self._on_finished)
 
     def bind_state(self, state: AppState):
-        if self._state is state:
-            return
-
-        self._state = state
-
         # 初始化与绑定
         UIBinder.bind(self.interval_spin, state.monitor_config, "refresh_interval")
 

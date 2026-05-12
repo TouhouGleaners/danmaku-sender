@@ -99,10 +99,10 @@ class EditorTableModel(QAbstractTableModel):
 
 class ValidationRulesGroup(QGroupBox):
     """校验与过滤规则区"""
-    def __init__(self, parent=None):
+    def __init__(self, state: AppState, parent=None):
         super().__init__("校验与过滤规则", parent)
         self.setSizePolicy(QSizePolicy.Policy.Preferred, QSizePolicy.Policy.Maximum)
-        self._state: AppState | None = None
+        self._state = state
         self._create_ui()
 
     def _create_ui(self):
@@ -127,17 +127,6 @@ class ValidationRulesGroup(QGroupBox):
 
     def bind_state(self, state: AppState):
         """将 UI 控件与 AppState 进行双向绑定"""
-        if self._state is state:
-            return
-
-        if self._state is not None:
-            try:
-                self.keywords_input.textChanged.disconnect()
-                self.enable_custom_checkbox.stateChanged.disconnect()
-            except (RuntimeError, TypeError):
-                pass
-
-        self._state = state
         config = state.validation_config
 
         # 通用控件绑定

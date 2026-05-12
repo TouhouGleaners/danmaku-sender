@@ -12,10 +12,10 @@ from ..core.state import AppState
 
 
 class SettingsPage(QWidget):
-    def __init__(self):
+    def __init__(self, state: AppState):
         super().__init__()
 
-        self._state: AppState | None = None
+        self._state = state
         self._create_ui()
 
     def _create_ui(self):
@@ -93,11 +93,6 @@ class SettingsPage(QWidget):
 
     def bind_state(self, state: AppState) -> None:
         """将 UI 控件与全局状态 (AppState) 进行双向绑定"""
-        if self._state is state:
-            return
-
-        self._state = state
-
         # 普通属性，实时更新
         UIBinder.bind(self.sessdata_input, state, "sessdata", realtime=True)
         UIBinder.bind(self.bili_jct_input, state, "bili_jct", realtime=True)
