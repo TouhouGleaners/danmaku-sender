@@ -32,8 +32,6 @@ class SenderPage(QWidget):
         super().__init__()
         self._state: AppState | None = None
         self.logger = logging.getLogger("App.Sender.UI")
-        self.danmaku_parser = DanmakuParser()
-
         self._pending_part_index: int | None = None
         self.video_controller = VideoController(self)
         self.sender_controller = SenderController(self)
@@ -133,7 +131,7 @@ class SenderPage(QWidget):
         self.logger.info(f"📥 正在解析文件: {Path(file_path).name}")
         self.basic_group.file_input.setEnabled(False)
 
-        task = GenericTask(self.danmaku_parser.parse_xml_file, file_path)
+        task = GenericTask(DanmakuParser().parse_xml_file, file_path)
         task.signals.result.connect(lambda parsed: self._on_xml_parse_success(parsed, file_path))
         task.signals.error.connect(lambda err: self._on_xml_parse_error(str(err), file_path))
         QThreadPool.globalInstance().start(task)
