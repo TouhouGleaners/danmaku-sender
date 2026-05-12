@@ -1,5 +1,4 @@
 import logging
-from typing import Callable
 
 from PySide6.QtCore import QObject, Signal, QThreadPool, Slot
 
@@ -28,22 +27,24 @@ def _fetch_single_video_info(bvid: str, auth_config: ApiAuthConfig) -> VideoInfo
 
 def _fetch_multiple_video_infos(
     bvids: list[str],
-    auth_config: ApiAuthConfig,
-    on_succeeded: Callable[[str, VideoInfo], None],
-    on_failed: Callable[[str, Exception], None]
-):
+    auth_config: ApiAuthConfig
+) -> list[tuple[str, VideoInfo | Exception]]:
     """
     复用底层连接 (Keep-Alive) 获取多个视频信息。
-    通过回调函数实现结果的流式输出
+
+    Returns:
+        包含 (bvid, result) 元组的列表，其中 result 是 VideoInfo 或 Exception
     """
+    results = []
     with BiliApiClient.from_config(auth_config) as client:
         service = VideoFetcher(client)
         for bvid in bvids:
             try:
                 info = service.fetch_info(bvid)
-                on_succeeded(bvid, info)
+                results.append((bvid, info))
             except Exception as e:
-                on_failed(bvid, e)
+                results.append((bvid, e))
+    return results
 
 
 class VideoController(QObject):
@@ -97,19 +98,22 @@ class VideoController(QObject):
 
     def fetch_multiple_infos(self, bvids: list[str], auth_config: ApiAuthConfig):
         """
-        静默获取多条视频信息 (流式返回)
+        静默获取多条视频信息 (批量返回)
 
         调用此方法会自动进入后台专有队列，且享有 HTTP Keep-Alive 性能加成。
         """
         if not bvids:
             return
 
-        task = GenericTask(
-            _fetch_multiple_video_infos,
-            bvids,
-            auth_config,
-            self.fetchSucceeded.emit,
-            self.fetchFailed.emit
-        )
+        task = GenericTask(_fetch_multiple_video_infos, bvids, auth_config)
 
+        @Slot(list)
+        def _on_fetch_completed(results: list[tuple[str, VideoInfo | Exception]]):
+            for bvid, result in results:
+                if isinstance(result, Exception):
+                    self.fetchFailed.emit(bvid, result)
+                else:
+                    self.fetchSucceeded.emit(bvid, result)
+
+        task.signals.result.connect(_on_fetch_completed)
         _bg_fetch_pool.start(task)
