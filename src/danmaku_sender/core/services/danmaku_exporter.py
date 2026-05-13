@@ -79,4 +79,4 @@ def export_danmakus_to_xml(danmakus: list[Danmaku], filepath: str) -> None:
         logger.info(f"✅ 成功将 {len(danmakus)} 条弹幕导出到 '{filepath}'。")
     except Exception as e:
         logger.error(f"❌ 导出XML文件失败: {e}", exc_info=True)
-        raise e
+        raise
