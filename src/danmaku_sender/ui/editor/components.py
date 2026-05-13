@@ -102,7 +102,7 @@ class ValidationRulesGroup(QGroupBox):
     def __init__(self, state: AppState, parent=None):
         super().__init__("校验与过滤规则", parent)
         self.setSizePolicy(QSizePolicy.Policy.Preferred, QSizePolicy.Policy.Maximum)
-        self._state = state
+        self.state = state
         self._create_ui()
 
     def _create_ui(self):
@@ -125,9 +125,9 @@ class ValidationRulesGroup(QGroupBox):
 
         layout.addLayout(keyword_layout)
 
-    def bind_state(self):
+    def _init_bindings(self):
         """将 UI 控件与 AppState 进行双向绑定"""
-        config = self._state.validation_config
+        config = self.state.validation_config
 
         # 通用控件绑定
         UIBinder.bind(self.enable_custom_checkbox, config, "enabled")
@@ -147,14 +147,14 @@ class ValidationRulesGroup(QGroupBox):
     @Slot(str)
     def _on_keywords_changed(self, text: str):
         """处理关键词文本变更"""
-        if not self._state:
+        if not self.state:
             return
 
         raw_text = text.replace('，', ',').lower()
         parts = [k.strip() for k in raw_text.split(',') if k.strip()]
         unique_keywords = sorted(list(set(parts)))
 
-        self._state.validation_config.blocked_keywords = unique_keywords
+        self.state.validation_config.blocked_keywords = unique_keywords
 
 
 class DanmakuPropertyForm(QWidget):

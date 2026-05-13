@@ -29,7 +29,7 @@ from danmaku_sender.utils.notification_utils import send_windows_notification
 class SenderPage(QWidget):
     def __init__(self, state: AppState):
         super().__init__()
-        self._state = state
+        self.state = state
         self.logger = logging.getLogger("App.Sender.UI")
         self._pending_part_index: int | None = None
         self.video_controller = VideoController(self)
@@ -50,8 +50,8 @@ class SenderPage(QWidget):
         main_layout.setContentsMargins(10, 10, 10, 10)
 
         # --- 基础参数策略区 ---
-        self.basic_group = BasicParamsGroup(self._state)
-        self.strategy_tabs = StrategySettingsTabs(self._state)
+        self.basic_group = BasicParamsGroup(self.state)
+        self.strategy_tabs = StrategySettingsTabs(self.state)
 
         main_layout.addWidget(self.basic_group)
         main_layout.addWidget(self.strategy_tabs)
@@ -109,10 +109,10 @@ class SenderPage(QWidget):
         self.sender_controller.xmlParsed.connect(self._on_xml_parsed)
         self.sender_controller.xmlParseFailed.connect(self._on_xml_parse_failed)
 
-    def bind_state(self):
+    def _init_bindings(self):
         """将 UI 控件与 AppState 进行双向绑定"""
-        self.basic_group.bind_state()
-        self.strategy_tabs.bind_state()
+        self.basic_group._init_bindings()
+        self.strategy_tabs._init_bindings()
 
     def append_log(self, message: str):
         """外部调用的日志接口"""
@@ -120,7 +120,7 @@ class SenderPage(QWidget):
         self.log_output.moveCursor(QTextCursor.MoveOperation.End)
 
     def _load_xml_file(self, file_path: str):
-        if not self._state:
+        if not self.state:
             return
 
         self.logger.info(f"📥 正在解析文件: {Path(file_path).name}")
@@ -150,7 +150,7 @@ class SenderPage(QWidget):
     @Slot()
     def _select_file(self):
         """文件选择逻辑"""
-        if not self._state:
+        if not self.state:
             return
 
         file_path, _ = QFileDialog.getOpenFileName(self, "选择弹幕XML文件", "", "XML Files (*.xml);;All Files (*.*)")
@@ -160,7 +160,7 @@ class SenderPage(QWidget):
     @Slot()
     def _fetch_video_info(self):
         """UI 层: 负责获取参数，下发指令"""
-        if not self._state:
+        if not self.state:
             return
 
         raw_input = self.basic_group.bv_input.text().strip()
@@ -177,12 +177,12 @@ class SenderPage(QWidget):
         self.basic_group.bv_input.setText(bvid)
         self._pending_part_index = p_index
 
-        self.video_controller.fetch_single_info(bvid, self._state.get_api_auth())
+        self.video_controller.fetch_single_info(bvid, self.state.get_api_auth())
 
     @Slot(int)
     def _on_part_selected(self, index: int):
         """处理分P选择变化"""
-        if not self._state:
+        if not self.state:
             return
 
         if index < 0:
@@ -196,15 +196,15 @@ class SenderPage(QWidget):
         duration = data['duration']
         part_name = self.basic_group.part_combo.currentText()
 
-        self._state.video_state.selected_cid = cid
-        self._state.video_state.selected_part_duration_ms = duration * 1000
-        self._state.video_state.selected_part_name = part_name
+        self.state.video_state.selected_cid = cid
+        self.state.video_state.selected_part_duration_ms = duration * 1000
+        self.state.video_state.selected_part_name = part_name
         self.logger.info(f"已选择分P: {part_name} (CID: {cid})")
 
     @Slot()
     def _toggle_task(self):
         """开始/停止 任务"""
-        if not self._state:
+        if not self.state:
             return
 
         # 如果正在运行 -> 停止
@@ -218,7 +218,7 @@ class SenderPage(QWidget):
 
         # 如果未运行 -> 开始
         # 校验
-        state = self._state
+        state = self.state
 
         if state.editor_is_dirty:
             QMessageBox.warning(
@@ -265,15 +265,15 @@ class SenderPage(QWidget):
     @Slot(str, VideoInfo)
     def _on_fetch_succeeded(self, bvid: str, info: VideoInfo):
         """获取成功: 解析分P并允许用户选择"""
-        if not self._state:
+        if not self.state:
             return
 
         self.basic_group.fetch_btn.setEnabled(True)
         self.basic_group.fetch_btn.setText("获取分P")
         self.basic_group.part_combo.setEnabled(True)
 
-        self._state.video_state.video_title = info.title
-        self._state.video_state.cid_parts_map = {}
+        self.state.video_state.video_title = info.title
+        self.state.video_state.cid_parts_map = {}
 
         self.logger.info(f"获取成功: {info.title}, 共 {len(info.parts)} 个分P")
 
@@ -284,7 +284,7 @@ class SenderPage(QWidget):
             part_name = f"P{p.page} - {p.title}"
 
             self.basic_group.part_combo.addItem(part_name, userData={'cid': p.cid, 'duration': p.duration})
-            self._state.video_state.cid_parts_map[p.cid] = part_name
+            self.state.video_state.cid_parts_map[p.cid] = part_name
 
         if info.parts:
             if (self._pending_part_index is not None and
@@ -410,8 +410,8 @@ class SenderPage(QWidget):
     def _set_ui_for_task_start(self):
         """任务开始时的 UI 状态设置"""
         # 通知全局状态
-        if self._state:
-            self._state.sender_is_active = True
+        if self.state:
+            self.state.sender_is_active = True
 
         # 按钮变红
         self.start_btn.setText("紧急停止")
@@ -427,8 +427,8 @@ class SenderPage(QWidget):
     def _reset_ui_after_task(self):
         """任务结束后的 UI 状态复位"""
         # 通知全局状态
-        if self._state:
-            self._state.sender_is_active = False
+        if self.state:
+            self.state.sender_is_active = False
 
         # 恢复按钮状态
         self.start_btn.setText("开始发送")
@@ -464,7 +464,7 @@ class SenderPage(QWidget):
     def dragEnterEvent(self, event: QDragEnterEvent) -> None:
         """鼠标拖拽文件进入页面区域"""
         # 如果当前正在发送弹幕则拒绝拖入
-        if self._state and self._state.sender_is_active:
+        if self.state and self.state.sender_is_active:
             event.ignore()
             return
 
@@ -480,7 +480,7 @@ class SenderPage(QWidget):
     def dropEvent(self, event: QDropEvent) -> None:
         """鼠标落下"""
         # 如果当前正在发送弹幕则拒绝拖入
-        if self._state and self._state.sender_is_active:
+        if self.state and self.state.sender_is_active:
             event.ignore()
             return
 
@@ -498,7 +498,7 @@ class BasicParamsGroup(QGroupBox):
     """基础参数区"""
     def __init__(self, state: AppState, parent=None):
         super().__init__("基础参数", parent)
-        self._state = state
+        self.state = state
         self._create_ui()
 
     def _create_ui(self):
@@ -538,13 +538,13 @@ class BasicParamsGroup(QGroupBox):
         layout.addRow(QLabel("弹幕文件:"), file_layout)
         layout.addRow(QLabel(""), self.skip_sent_cb)
 
-    def bind_state(self):
+    def _init_bindings(self):
         """将 UI 控件与 AppState 进行双向绑定"""
-        UIBinder.bind(self.bv_input, self._state.video_state, "bvid", realtime=True)
-        UIBinder.bind(self.skip_sent_cb, self._state.sender_config, "skip_sent")
+        UIBinder.bind(self.bv_input, self.state.video_state, "bvid", realtime=True)
+        UIBinder.bind(self.skip_sent_cb, self.state.sender_config, "skip_sent")
 
-        if self._state.video_state.selected_part_name:
-            self.part_combo.setPlaceholderText(self._state.video_state.selected_part_name)
+        if self.state.video_state.selected_part_name:
+            self.part_combo.setPlaceholderText(self.state.video_state.selected_part_name)
 
     def set_inputs_locked(self, locked: bool):
         """供主控调用的防误触锁"""
@@ -561,7 +561,7 @@ class StrategySettingsTabs(QTabWidget):
     """策略设置区"""
     def __init__(self, state: AppState, parent=None):
         super().__init__(parent)
-        self._state = state
+        self.state = state
         self._create_ui()
 
     def _create_ui(self):
@@ -653,9 +653,9 @@ class StrategySettingsTabs(QTabWidget):
 
         self.addTab(stop_tab, "自动终止")
 
-    def bind_state(self):
+    def _init_bindings(self):
         """将 UI 控件与 AppState 进行双向绑定"""
-        config = self._state.sender_config
+        config = self.state.sender_config
 
         # 发送延迟策略
         UIBinder.bind(self.min_delay, config, "min_delay")

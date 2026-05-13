@@ -20,7 +20,7 @@ from ..core.types.common import VideoTarget, MonitorStats
 class MonitorPage(QWidget):
     def __init__(self, state: AppState):
         super().__init__()
-        self._state = state
+        self.state = state
         self.logger = logging.getLogger("App.Monitor.UI")
 
         self.monitor_controller = MonitorController(self)
@@ -176,12 +176,12 @@ class MonitorPage(QWidget):
         self.monitor_controller.statusUpdated.connect(self.status_label.setText)
         self.monitor_controller.taskFinished.connect(self._on_finished)
 
-    def bind_state(self):
+    def _init_bindings(self):
         # 初始化与绑定
-        UIBinder.bind(self.interval_spin, self._state.monitor_config, "refresh_interval")
+        UIBinder.bind(self.interval_spin, self.state.monitor_config, "refresh_interval")
 
-        if self._state.monitor_config.stats_baseline == 0.0:
-            self._state.monitor_config.stats_baseline = self._state.app_launch_time
+        if self.state.monitor_config.stats_baseline == 0.0:
+            self.state.monitor_config.stats_baseline = self.state.app_launch_time
 
             idx = self.anchor_combo.findData("launch")
             if idx >= 0:
@@ -189,7 +189,7 @@ class MonitorPage(QWidget):
                 self.anchor_combo.setCurrentIndex(idx)
                 self.anchor_combo.blockSignals(False)
 
-        self._update_anchor_display(self._state.monitor_config.stats_baseline)
+        self._update_anchor_display(self.state.monitor_config.stats_baseline)
 
     def showEvent(self, event):
         super().showEvent(event)
@@ -211,10 +211,10 @@ class MonitorPage(QWidget):
             self.anchor_display.setText(dt_str)
 
     def _refresh_info_labels(self):
-        if not self._state:
+        if not self.state:
             return
 
-        video_state = self._state.video_state
+        video_state = self.state.video_state
 
         if video_state.selected_cid:
             info_parts = []
@@ -237,8 +237,8 @@ class MonitorPage(QWidget):
         self.interval_spin.setEnabled(not running)
         self.start_btn.setEnabled(True)
 
-        if self._state:
-            self._state.monitor_is_active = running
+        if self.state:
+            self.state.monitor_is_active = running
 
         if running:
             self.start_btn.setText("停止监视")
@@ -254,7 +254,7 @@ class MonitorPage(QWidget):
     # region Slots Internal
     @Slot()
     def _toggle_task(self):
-        if not self._state:
+        if not self.state:
             return
 
         if self.monitor_controller.is_running():
@@ -263,15 +263,15 @@ class MonitorPage(QWidget):
             self.start_btn.setEnabled(False)
             return
 
-        cid = self._state.video_state.selected_cid
-        bvid = self._state.video_state.bvid
-        title = self._state.video_state.video_title
+        cid = self.state.video_state.selected_cid
+        bvid = self.state.video_state.bvid
+        title = self.state.video_state.video_title
 
         if not cid:
             QMessageBox.warning(self, "无法启动", "请先在“发射器”页面获取视频信息并选择分P。\n(监视器需要 CID 来查询数据库)")
             return
 
-        if not self._state.sessdata:
+        if not self.state.sessdata:
             QMessageBox.warning(self, "凭证缺失", "请先配置 Cookie。")
             return
 
@@ -280,34 +280,34 @@ class MonitorPage(QWidget):
         target = VideoTarget(bvid=bvid, cid=cid, title=title)
         self.monitor_controller.start_task(
             target=target,
-            auth_config=self._state.get_api_auth(),
-            monitor_config=self._state.monitor_config
+            auth_config=self.state.get_api_auth(),
+            monitor_config=self.state.monitor_config
         )
 
     @Slot(int)
     def _on_anchor_changed(self, index: int):
-        if not self._state or index < 0:
+        if not self.state or index < 0:
             return
 
         data = self.anchor_combo.currentData()
         new_baseline = 0.0
         if data == "launch":
-            new_baseline = self._state.app_launch_time
+            new_baseline = self.state.app_launch_time
         elif data == "24h":
             new_baseline = time.time() - 86400
         elif data == "all":
             new_baseline = 0.0
 
-        self._state.monitor_config.stats_baseline = new_baseline
+        self.state.monitor_config.stats_baseline = new_baseline
         self._update_anchor_display(new_baseline)
 
     @Slot()
     def _on_reset_anchor_clicked(self):
-        if not self._state:
+        if not self.state:
             return
 
         current_ts = time.time()
-        self._state.monitor_config.stats_baseline = current_ts
+        self.state.monitor_config.stats_baseline = current_ts
         self._update_anchor_display(current_ts)
 
         self.anchor_combo.blockSignals(True)

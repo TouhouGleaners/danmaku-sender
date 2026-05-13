@@ -29,7 +29,7 @@ class SenderController(QObject):
 
     def __init__(self, state: AppState, parent=None):
         super().__init__(parent)
-        self._state = state
+        self.state = state
         self._worker: SendTaskWorker | None = None
         self._stop_event = threading.Event()
 
@@ -77,7 +77,7 @@ class SenderController(QObject):
 
     def load_xml_file(self, file_path: str):
         """异步解析 XML 弹幕文件"""
-        self._state.video_state.loaded_danmakus = []
+        self.state.video_state.loaded_danmakus = []
         parser = DanmakuParser()
         task = GenericTask(parser.parse_xml_file, file_path)
         task.signals.result.connect(lambda parsed: self._on_parse_success(parsed, file_path))
@@ -102,7 +102,7 @@ class SenderController(QObject):
     @Slot(list, str)
     def _on_parse_success(self, parsed: list, file_path: str):
         if parsed:
-            self._state.video_state.loaded_danmakus = parsed
+            self.state.video_state.loaded_danmakus = parsed
         self.xmlParsed.emit(file_path, len(parsed))
 
     @Slot(object, str)
