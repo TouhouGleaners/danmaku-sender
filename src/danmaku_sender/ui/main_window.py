@@ -170,11 +170,11 @@ class MainWindow(QMainWindow):
 
     def _init_pages(self):
         """初始化页面并绑定导航"""
-        self.page_settings = SettingsPage()
-        self.page_sender = SenderPage()
-        self.page_editor = EditorPage()
-        self.page_monitor = MonitorPage()
-        self.page_history = HistoryPage()
+        self.page_settings = SettingsPage(self.state)
+        self.page_sender = SenderPage(self.state)
+        self.page_editor = EditorPage(self.state)
+        self.page_monitor = MonitorPage(self.state)
+        self.page_history = HistoryPage(self.state)
 
         # 定义页面列表
         pages = [
@@ -278,11 +278,11 @@ class MainWindow(QMainWindow):
     def _bind_state_to_pages(self):
         """绑定全局状态并配置日志路由"""
         # 页面数据绑定
-        self.page_settings.bind_state(self.state)
-        self.page_sender.bind_state(self.state)
-        self.page_editor.bind_state(self.state)
-        self.page_monitor.bind_state(self.state)
-        self.page_history.bind_state(self.state)
+        self.page_settings._init_bindings()
+        self.page_sender._init_bindings()
+        self.page_editor._init_bindings()
+        self.page_monitor._init_bindings()
+        self.page_history._init_bindings()
 
         # 日志分流：信号 -> Tab 接口
         if self._log_signals_connected:

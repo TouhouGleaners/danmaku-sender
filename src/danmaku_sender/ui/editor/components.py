@@ -99,10 +99,10 @@ class EditorTableModel(QAbstractTableModel):
 
 class ValidationRulesGroup(QGroupBox):
     """校验与过滤规则区"""
-    def __init__(self, parent=None):
+    def __init__(self, state: AppState, parent=None):
         super().__init__("校验与过滤规则", parent)
         self.setSizePolicy(QSizePolicy.Policy.Preferred, QSizePolicy.Policy.Maximum)
-        self._state: AppState | None = None
+        self.state = state
         self._create_ui()
 
     def _create_ui(self):
@@ -125,20 +125,9 @@ class ValidationRulesGroup(QGroupBox):
 
         layout.addLayout(keyword_layout)
 
-    def bind_state(self, state: AppState):
+    def _init_bindings(self):
         """将 UI 控件与 AppState 进行双向绑定"""
-        if self._state is state:
-            return
-
-        if self._state is not None:
-            try:
-                self.keywords_input.textChanged.disconnect()
-                self.enable_custom_checkbox.stateChanged.disconnect()
-            except (RuntimeError, TypeError):
-                pass
-
-        self._state = state
-        config = state.validation_config
+        config = self.state.validation_config
 
         # 通用控件绑定
         UIBinder.bind(self.enable_custom_checkbox, config, "enabled")
@@ -158,14 +147,11 @@ class ValidationRulesGroup(QGroupBox):
     @Slot(str)
     def _on_keywords_changed(self, text: str):
         """处理关键词文本变更"""
-        if not self._state:
-            return
-
         raw_text = text.replace('，', ',').lower()
         parts = [k.strip() for k in raw_text.split(',') if k.strip()]
         unique_keywords = sorted(list(set(parts)))
 
-        self._state.validation_config.blocked_keywords = unique_keywords
+        self.state.validation_config.blocked_keywords = unique_keywords
 
 
 class DanmakuPropertyForm(QWidget):

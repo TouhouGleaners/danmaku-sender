@@ -21,9 +21,9 @@ logger = logging.getLogger("App.System.UI.History")
 
 
 class HistoryPage(QWidget):
-    def __init__(self):
+    def __init__(self, state: AppState):
         super().__init__()
-        self._state: AppState | None = None
+        self.state = state
         self._fetched_bvids = set()
 
         self.video_controller = VideoController(self)
@@ -92,8 +92,7 @@ class HistoryPage(QWidget):
         self.history_controller.historyFetched.connect(self._on_history_query_succeeded)
         self.history_controller.errorOccurred.connect(self._on_history_query_failed)
 
-    def bind_state(self, state: AppState):
-        self._state = state
+    def _init_bindings(self):
         self._refresh_table()
 
     @Slot()
@@ -108,10 +107,7 @@ class HistoryPage(QWidget):
 
     def _fetch_missing_metadata(self, records):
         """扫描缺失元数据的 BVID 并推入后台队列"""
-        if not self._state:
-            return
-
-        auth_config = self._state.get_api_auth()
+        auth_config = self.state.get_api_auth()
         missing_bvids = []
         for row in records:
             bvid = row['bvid']
@@ -162,7 +158,7 @@ class HistoryPage(QWidget):
         将结果刷入表格，并触发缺失元数据的后台补全。
         """
         self._model.set_records(records)
-        if self._state:
+        if self.state:
             self._fetch_missing_metadata(records)
 
     @Slot(object)

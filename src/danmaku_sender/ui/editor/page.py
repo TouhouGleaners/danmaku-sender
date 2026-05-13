@@ -21,14 +21,15 @@ from ...core.services.danmaku_exporter import export_danmakus_to_xml
 
 
 class EditorPage(QWidget):
-    def __init__(self):
+    def __init__(self, state: AppState):
         super().__init__()
-        self.controller: EditorController | None = None
+        self.controller = EditorController(state, self)
         self.logger = logging.getLogger("App.System.UI.Editor")
 
         self.current_item_id: str | None = None
 
         self._create_ui()
+        self.controller.dataChanged.connect(self._refresh_table)
 
     # region UI Setup & Data Binding
     def _create_ui(self):
@@ -104,7 +105,7 @@ class EditorPage(QWidget):
         main_layout.addLayout(toolbar_layout)
 
         # --- 规则管理区 ---
-        self.rules_group = ValidationRulesGroup()
+        self.rules_group = ValidationRulesGroup(self.controller.state)
         main_layout.addWidget(self.rules_group)
 
         # --- 核心区 ---
@@ -177,15 +178,9 @@ class EditorPage(QWidget):
 
         self._update_ui_state()
 
-    def bind_state(self, state: AppState):
+    def _init_bindings(self):
         """将 UI 控件与 AppState 进行双向绑定"""
-        if self.controller and self.controller.state is state:
-            return
-
-        self.controller = EditorController(state, self)
-        self.controller.dataChanged.connect(self._refresh_table)
-
-        self.rules_group.bind_state(state)
+        self.rules_group._init_bindings()
         self._update_ui_state()
 
     # endregion
