@@ -147,9 +147,6 @@ class ValidationRulesGroup(QGroupBox):
     @Slot(str)
     def _on_keywords_changed(self, text: str):
         """处理关键词文本变更"""
-        if not self.state:
-            return
-
         raw_text = text.replace('，', ',').lower()
         parts = [k.strip() for k in raw_text.split(',') if k.strip()]
         unique_keywords = sorted(list(set(parts)))

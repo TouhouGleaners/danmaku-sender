@@ -107,9 +107,6 @@ class SettingsPage(QWidget):
 
     @Slot()
     def _open_qr_login(self):
-        if not self.state:
-            return
-
         proxy = self.state.sender_config.use_system_proxy
         dialog = QRLoginDialog(proxy, self)
 

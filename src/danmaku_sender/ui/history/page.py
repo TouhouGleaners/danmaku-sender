@@ -107,9 +107,6 @@ class HistoryPage(QWidget):
 
     def _fetch_missing_metadata(self, records):
         """扫描缺失元数据的 BVID 并推入后台队列"""
-        if not self.state:
-            return
-
         auth_config = self.state.get_api_auth()
         missing_bvids = []
         for row in records:

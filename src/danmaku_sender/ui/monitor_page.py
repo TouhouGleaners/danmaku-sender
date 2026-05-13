@@ -211,9 +211,6 @@ class MonitorPage(QWidget):
             self.anchor_display.setText(dt_str)
 
     def _refresh_info_labels(self):
-        if not self.state:
-            return
-
         video_state = self.state.video_state
 
         if video_state.selected_cid:
@@ -237,8 +234,7 @@ class MonitorPage(QWidget):
         self.interval_spin.setEnabled(not running)
         self.start_btn.setEnabled(True)
 
-        if self.state:
-            self.state.monitor_is_active = running
+        self.state.monitor_is_active = running
 
         if running:
             self.start_btn.setText("停止监视")
@@ -254,9 +250,6 @@ class MonitorPage(QWidget):
     # region Slots Internal
     @Slot()
     def _toggle_task(self):
-        if not self.state:
-            return
-
         if self.monitor_controller.is_running():
             self.monitor_controller.stop_task()
             self.start_btn.setText("正在停止...")
@@ -286,7 +279,7 @@ class MonitorPage(QWidget):
 
     @Slot(int)
     def _on_anchor_changed(self, index: int):
-        if not self.state or index < 0:
+        if index < 0:
             return
 
         data = self.anchor_combo.currentData()
@@ -303,9 +296,6 @@ class MonitorPage(QWidget):
 
     @Slot()
     def _on_reset_anchor_clicked(self):
-        if not self.state:
-            return
-
         current_ts = time.time()
         self.state.monitor_config.stats_baseline = current_ts
         self._update_anchor_display(current_ts)

@@ -120,9 +120,6 @@ class SenderPage(QWidget):
         self.log_output.moveCursor(QTextCursor.MoveOperation.End)
 
     def _load_xml_file(self, file_path: str):
-        if not self.state:
-            return
-
         self.logger.info(f"📥 正在解析文件: {Path(file_path).name}")
         self.basic_group.file_input.setEnabled(False)
         self.sender_controller.load_xml_file(file_path)
@@ -150,9 +147,6 @@ class SenderPage(QWidget):
     @Slot()
     def _select_file(self):
         """文件选择逻辑"""
-        if not self.state:
-            return
-
         file_path, _ = QFileDialog.getOpenFileName(self, "选择弹幕XML文件", "", "XML Files (*.xml);;All Files (*.*)")
         if file_path:
             self._load_xml_file(file_path)
@@ -160,9 +154,6 @@ class SenderPage(QWidget):
     @Slot()
     def _fetch_video_info(self):
         """UI 层: 负责获取参数，下发指令"""
-        if not self.state:
-            return
-
         raw_input = self.basic_group.bv_input.text().strip()
         if not raw_input:
             QMessageBox.warning(self, "输入错误", "请输入BV号或视频链接")
@@ -182,9 +173,6 @@ class SenderPage(QWidget):
     @Slot(int)
     def _on_part_selected(self, index: int):
         """处理分P选择变化"""
-        if not self.state:
-            return
-
         if index < 0:
             return
 
@@ -204,9 +192,6 @@ class SenderPage(QWidget):
     @Slot()
     def _toggle_task(self):
         """开始/停止 任务"""
-        if not self.state:
-            return
-
         # 如果正在运行 -> 停止
         if self.sender_controller.is_running():
             self.sender_controller.stop_task()
@@ -265,9 +250,6 @@ class SenderPage(QWidget):
     @Slot(str, VideoInfo)
     def _on_fetch_succeeded(self, bvid: str, info: VideoInfo):
         """获取成功: 解析分P并允许用户选择"""
-        if not self.state:
-            return
-
         self.basic_group.fetch_btn.setEnabled(True)
         self.basic_group.fetch_btn.setText("获取分P")
         self.basic_group.part_combo.setEnabled(True)
