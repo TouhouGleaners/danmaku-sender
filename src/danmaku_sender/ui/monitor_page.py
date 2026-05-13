@@ -176,9 +176,9 @@ class MonitorPage(QWidget):
         self.monitor_controller.statusUpdated.connect(self.status_label.setText)
         self.monitor_controller.taskFinished.connect(self._on_finished)
 
-    def bind_state(self, state: AppState):
+    def bind_state(self):
         # 初始化与绑定
-        UIBinder.bind(self.interval_spin, state.monitor_config, "refresh_interval")
+        UIBinder.bind(self.interval_spin, self._state.monitor_config, "refresh_interval")
 
         if self._state.monitor_config.stats_baseline == 0.0:
             self._state.monitor_config.stats_baseline = self._state.app_launch_time

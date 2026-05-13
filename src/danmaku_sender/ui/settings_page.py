@@ -91,19 +91,19 @@ class SettingsPage(QWidget):
 
         self.setLayout(main_layout)
 
-    def bind_state(self, state: AppState) -> None:
+    def bind_state(self) -> None:
         """将 UI 控件与全局状态 (AppState) 进行双向绑定"""
         # 普通属性，实时更新
-        UIBinder.bind(self.sessdata_input, state, "sessdata", realtime=True)
-        UIBinder.bind(self.bili_jct_input, state, "bili_jct", realtime=True)
+        UIBinder.bind(self.sessdata_input, self._state, "sessdata", realtime=True)
+        UIBinder.bind(self.bili_jct_input, self._state, "bili_jct", realtime=True)
 
         # 清空旧绑定，绑定 SenderConfig
-        UIBinder.bind(self.prevent_sleep_checkbox, state.sender_config, "prevent_sleep", clear_old=True)
-        UIBinder.bind(self.proxy_checkbox, state.sender_config, "use_system_proxy", clear_old=True)
+        UIBinder.bind(self.prevent_sleep_checkbox, self._state.sender_config, "prevent_sleep", clear_old=True)
+        UIBinder.bind(self.proxy_checkbox, self._state.sender_config, "use_system_proxy", clear_old=True)
 
         # 不清空，叠加绑定 MonitorConfig
-        UIBinder.bind(self.prevent_sleep_checkbox, state.monitor_config, "prevent_sleep", clear_old=False)
-        UIBinder.bind(self.proxy_checkbox, state.monitor_config, "use_system_proxy", clear_old=False)
+        UIBinder.bind(self.prevent_sleep_checkbox, self._state.monitor_config, "prevent_sleep", clear_old=False)
+        UIBinder.bind(self.proxy_checkbox, self._state.monitor_config, "use_system_proxy", clear_old=False)
 
     @Slot()
     def _open_qr_login(self):

@@ -50,8 +50,8 @@ class SenderPage(QWidget):
         main_layout.setContentsMargins(10, 10, 10, 10)
 
         # --- 基础参数策略区 ---
-        self.basic_group = BasicParamsGroup()
-        self.strategy_tabs = StrategySettingsTabs()
+        self.basic_group = BasicParamsGroup(self._state)
+        self.strategy_tabs = StrategySettingsTabs(self._state)
 
         main_layout.addWidget(self.basic_group)
         main_layout.addWidget(self.strategy_tabs)
@@ -109,10 +109,10 @@ class SenderPage(QWidget):
         self.sender_controller.xmlParsed.connect(self._on_xml_parsed)
         self.sender_controller.xmlParseFailed.connect(self._on_xml_parse_failed)
 
-    def bind_state(self, state: AppState):
+    def bind_state(self):
         """将 UI 控件与 AppState 进行双向绑定"""
-        self.basic_group.bind_state(state)
-        self.strategy_tabs.bind_state(state)
+        self.basic_group.bind_state()
+        self.strategy_tabs.bind_state()
 
     def append_log(self, message: str):
         """外部调用的日志接口"""
@@ -496,8 +496,9 @@ class SenderPage(QWidget):
 
 class BasicParamsGroup(QGroupBox):
     """基础参数区"""
-    def __init__(self, parent=None):
+    def __init__(self, state: AppState, parent=None):
         super().__init__("基础参数", parent)
+        self._state = state
         self._create_ui()
 
     def _create_ui(self):
@@ -537,13 +538,13 @@ class BasicParamsGroup(QGroupBox):
         layout.addRow(QLabel("弹幕文件:"), file_layout)
         layout.addRow(QLabel(""), self.skip_sent_cb)
 
-    def bind_state(self, state: AppState):
+    def bind_state(self):
         """将 UI 控件与 AppState 进行双向绑定"""
-        UIBinder.bind(self.bv_input, state.video_state, "bvid", realtime=True)
-        UIBinder.bind(self.skip_sent_cb, state.sender_config, "skip_sent")
+        UIBinder.bind(self.bv_input, self._state.video_state, "bvid", realtime=True)
+        UIBinder.bind(self.skip_sent_cb, self._state.sender_config, "skip_sent")
 
-        if state.video_state.selected_part_name:
-            self.part_combo.setPlaceholderText(state.video_state.selected_part_name)
+        if self._state.video_state.selected_part_name:
+            self.part_combo.setPlaceholderText(self._state.video_state.selected_part_name)
 
     def set_inputs_locked(self, locked: bool):
         """供主控调用的防误触锁"""
@@ -558,8 +559,9 @@ class BasicParamsGroup(QGroupBox):
 
 class StrategySettingsTabs(QTabWidget):
     """策略设置区"""
-    def __init__(self, parent=None):
+    def __init__(self, state: AppState, parent=None):
         super().__init__(parent)
+        self._state = state
         self._create_ui()
 
     def _create_ui(self):
@@ -651,9 +653,9 @@ class StrategySettingsTabs(QTabWidget):
 
         self.addTab(stop_tab, "自动终止")
 
-    def bind_state(self, state: AppState):
+    def bind_state(self):
         """将 UI 控件与 AppState 进行双向绑定"""
-        config = state.sender_config
+        config = self._state.sender_config
 
         # 发送延迟策略
         UIBinder.bind(self.min_delay, config, "min_delay")

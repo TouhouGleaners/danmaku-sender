@@ -92,7 +92,7 @@ class HistoryPage(QWidget):
         self.history_controller.historyFetched.connect(self._on_history_query_succeeded)
         self.history_controller.errorOccurred.connect(self._on_history_query_failed)
 
-    def bind_state(self, state: AppState):
+    def bind_state(self):
         self._refresh_table()
 
     @Slot()

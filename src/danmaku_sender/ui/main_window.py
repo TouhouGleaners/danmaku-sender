@@ -278,11 +278,11 @@ class MainWindow(QMainWindow):
     def _bind_state_to_pages(self):
         """绑定全局状态并配置日志路由"""
         # 页面数据绑定
-        self.page_settings.bind_state(self.state)
-        self.page_sender.bind_state(self.state)
-        self.page_editor.bind_state(self.state)
-        self.page_monitor.bind_state(self.state)
-        self.page_history.bind_state(self.state)
+        self.page_settings.bind_state()
+        self.page_sender.bind_state()
+        self.page_editor.bind_state()
+        self.page_monitor.bind_state()
+        self.page_history.bind_state()
 
         # 日志分流：信号 -> Tab 接口
         if self._log_signals_connected:

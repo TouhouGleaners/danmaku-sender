@@ -178,9 +178,9 @@ class EditorPage(QWidget):
 
         self._update_ui_state()
 
-    def bind_state(self, state: AppState):
+    def bind_state(self):
         """将 UI 控件与 AppState 进行双向绑定"""
-        self.rules_group.bind_state(state)
+        self.rules_group.bind_state()
         self._update_ui_state()
 
     # endregion
