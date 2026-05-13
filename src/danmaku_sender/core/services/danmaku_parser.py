@@ -29,13 +29,13 @@ class DanmakuParser:
             self.logger.debug(f"已成功加载 XML 文件: {xml_path}")
             return self.parse_xml_content(content, is_online=False)
 
-        except FileNotFoundError as e:
+        except FileNotFoundError:
             self.logger.error(f"弹幕文件不存在: {xml_path}")
-            raise e
+            raise
 
         except Exception as e:
             self.logger.error(f"文件读取失败: {xml_path}, error: {e}", exc_info=True)
-            raise e
+            raise
 
     def parse_xml_content(self, xml_content: str, is_online: bool = False) -> list[Danmaku]:
         """
