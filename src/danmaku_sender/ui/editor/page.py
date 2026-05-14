@@ -186,13 +186,6 @@ class EditorPage(QWidget):
 
     def _update_ui_state(self):
         """统一状态机控制"""
-        if not self.controller:
-            for btn in [self.run_btn, self.btn_batch, self.undo_btn, self.apply_btn, self.btn_export, self.btn_new]:
-                btn.setEnabled(False)
-            self.status_label.setText("提示: 请在“发射器”页面加载 XML，或点击新建。")
-            self.status_label.setStyleSheet("color: #7f8c8d;")
-            return
-
         ctrl = self.controller
 
         self.btn_new.setEnabled(True)
@@ -203,28 +196,40 @@ class EditorPage(QWidget):
         self.undo_btn.setEnabled(ctrl.can_undo)
         self.apply_btn.setEnabled(ctrl.is_dirty)
 
+        # 更新状态提示文本和样式
+        # 脏数据
         if ctrl.is_dirty:
             self.status_label.setText("⚠️ 有未应用的修改！请点击“应用所有修改”按钮。")
             self.status_label.setStyleSheet("color: #d35400;")
+
+        # 已校验数据
         elif ctrl.has_data:
+            # 如果有错误，优先显示错误信息
             if ctrl.active_error_count > 0:
                 self.status_label.setText(f"❌ 发现 {ctrl.active_error_count} 条问题弹幕，请处理。")
                 self.status_label.setStyleSheet("color: red;")
+            # 没有错误，根据是否有视频上下文显示不同的提示
             else:
-                mode_str = " (深度校验)" if ctrl.has_video_context else " (无视频关联，跳过时间检查)"
-                self.status_label.setText(f"✅ 验证通过，当前无问题{mode_str}。")
+                mode = "(深度校验)" if ctrl.has_video_context else "(无视频关联，跳过时间检查)"
+                self.status_label.setText(f"✅ 验证通过，当前无问题 {mode}。")
                 self.status_label.setStyleSheet("color: green;")
+
+        # 有源数据，待校验
+        elif ctrl.source_data_exists:
+            self.status_label.setText("提示: 点击”开始校验”以加载并检查弹幕。")
+            self.status_label.setStyleSheet("color: #7f8c8d;")
+
+        # 未加载任何数据
         else:
-            self.status_label.setText("提示: 点击“开始校验”以加载并检查弹幕。")
+            self.status_label.setText("提示: 请先在”发射器”页面加载文件，或点击新建。")
             self.status_label.setStyleSheet("color: #7f8c8d;")
 
     @Slot()
     def _refresh_table(self):
         """刷新表格"""
-        if self.controller:
-            view_items = self.controller.get_view_model(show_all=self.preview_mode_cb.isChecked())
-            self.model.update_data(view_items)
-            self._update_ui_state()
+        view_items = self.controller.get_view_model(show_all=self.preview_mode_cb.isChecked())
+        self.model.update_data(view_items)
+        self._update_ui_state()
 
     @Slot()
     def _on_selection_changed(self):
@@ -238,7 +243,7 @@ class EditorPage(QWidget):
             return
 
         uid = self.model.get_item_id(selected_indexes[0].row())
-        if uid and self.controller:
+        if uid:
             self.current_item_id = uid
             if dm := self.controller.get_item_danmaku(uid):
                 self.inspector_group.load_danmaku(dm)
@@ -248,9 +253,6 @@ class EditorPage(QWidget):
 
     @Slot()
     def _create_new_file(self):
-        if not self.controller:
-            return
-
         if self.controller.is_dirty:
             reply = QMessageBox.question(self, "放弃修改?", "当前有未应用的修改，新建将丢失这些数据。\n是否继续？", QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No)
             if reply == QMessageBox.StandardButton.No:
@@ -264,9 +266,6 @@ class EditorPage(QWidget):
 
     @Slot()
     def _import_xml(self):
-        if not self.controller:
-            return
-
         if self.controller.is_dirty:
             reply = QMessageBox.question(
                 self, "放弃修改?",
@@ -309,9 +308,6 @@ class EditorPage(QWidget):
     @Slot()
     def _export_xml(self):
         """将当前工作区内容导出为 XML 文件"""
-        if not self.controller:
-            return
-
         # 提取当前工作区中，未被标记删除的所有弹幕
         working_dms = self.controller.get_working_danmakus()
 
@@ -351,9 +347,6 @@ class EditorPage(QWidget):
     @Slot()
     def _run_validation(self):
         """运行验证逻辑"""
-        if not self.controller:
-            return
-
         # 校验前置条件
         if not self.controller.source_data_exists:
             QMessageBox.warning(self, "无法验证", "当前工作区为空，请先新建或加载弹幕。")
@@ -391,9 +384,6 @@ class EditorPage(QWidget):
     @Slot()
     def _apply_changes(self):
         """应用修改"""
-        if not self.controller:
-            return
-
         self.current_item_id = None
         self.inspector_group.reset_inspector()
 
@@ -411,7 +401,7 @@ class EditorPage(QWidget):
 
     def _apply_properties(self, new_props: dict[EditorField, Any]):
         """Inspector 回调：应用弹幕属性修改"""
-        if self.current_item_id and self.controller:
+        if self.current_item_id:
             if self.controller.update_properties(self.current_item_id, new_props):
                 for i in range(self.model.rowCount()):
                     if self.model.get_item_id(i) == self.current_item_id:
@@ -422,7 +412,7 @@ class EditorPage(QWidget):
     def _open_context_menu(self, pos: QPoint):
         """打开表格右键上下文菜单"""
         index = self.table.indexAt(pos)
-        if not index.isValid() or not self.controller:
+        if not index.isValid():
             return
 
         menu = QMenu(self)
@@ -448,9 +438,6 @@ class EditorPage(QWidget):
             self._edit_row(index.row())
 
     def _edit_row(self, row):
-        if not self.controller:
-            return
-
         uid = self.model.get_item_id(row)
         if not uid:
             return
@@ -471,9 +458,6 @@ class EditorPage(QWidget):
 
     def _insert_row(self, row: int, position: InsertPosition):
         """插入新弹幕"""
-        if not self.controller:
-            return
-
         uid = self.model.get_item_id(row)
         if not uid:
             return
@@ -490,9 +474,6 @@ class EditorPage(QWidget):
 
     def _shift_selected_items_time(self):
         """平移用户选中的弹幕"""
-        if not self.controller:
-            return
-
         selected_rows = self.table.selectionModel().selectedRows()
         if not selected_rows:
             return
@@ -521,9 +502,6 @@ class EditorPage(QWidget):
 
     def _generate_array(self, row: int):
         """生成弹幕阵列"""
-        if not self.controller:
-            return
-
         uid = self.model.get_item_id(row)
         if not uid:
             return
@@ -550,9 +528,6 @@ class EditorPage(QWidget):
 
     def _delete_selected_items(self):
         """批量删除选中项"""
-        if not self.controller:
-            return
-
         selected_rows = self.table.selectionModel().selectedRows()
         if not selected_rows:
             return
@@ -569,17 +544,13 @@ class EditorPage(QWidget):
     @Slot()
     def _undo(self):
         """撤销"""
-        if self.controller:
-            self.controller.undo()
+        self.controller.undo()
 
     # endregion
     # region Batch Processing
 
     @Slot()
     def _batch_remove_newlines(self):
-        if not self.controller:
-            return
-
         mod, dele = self.controller.batch_remove_newlines()
         if mod > 0 or dele > 0:
             QMessageBox.information(self, "处理完成", f"修复: {mod} 条\n删除: {dele} 条")
@@ -588,9 +559,6 @@ class EditorPage(QWidget):
 
     @Slot()
     def _batch_truncate_length(self):
-        if not self.controller:
-            return
-
         count = self.controller.batch_truncate()
         if count > 0:
             QMessageBox.information(self, "处理完成", f"已截断 {count} 条过长弹幕。")
@@ -599,7 +567,7 @@ class EditorPage(QWidget):
 
     @Slot()
     def _open_offset_dialog(self):
-        if not self.controller or not self.controller.has_data:
+        if not self.controller.has_data:
             return
 
         dlg = TimeOffsetDialog(self)
@@ -617,9 +585,6 @@ class EditorPage(QWidget):
     # --- Qt Methods ---
     def showEvent(self, event):
         super().showEvent(event)
-
-        if not self.controller:
-            return
 
         # 如果全局状态里有数据 (比如刚在发射器加载了)，但编辑器是空的
         if self.controller.source_data_exists and not self.controller.has_data:
