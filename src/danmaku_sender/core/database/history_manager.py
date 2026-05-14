@@ -3,25 +3,18 @@ import time
 import threading
 from pathlib import Path
 from platformdirs import user_data_dir
-from enum import IntEnum
 
 from peewee import SqliteDatabase, fn, Case
 from playhouse.migrate import SqliteMigrator, migrate
 
-from ..entities.danmaku import Danmaku
 from .orm_models import db, SentDanmaku
-from ..types.common import VideoTarget
 
-from ...config.app_config import AppInfo
+from danmaku_sender.core.entities.danmaku import Danmaku
+from danmaku_sender.core.types.common import DanmakuStatus, VideoTarget
+from danmaku_sender.config.app_config import AppInfo
 
 
 logger = logging.getLogger("App.System.DB")
-
-
-class DanmakuStatus(IntEnum):
-    PENDING = 0   # 待验证
-    VERIFIED = 1  # 已存活
-    LOST = 2      # 已丢失
 
 
 class HistoryManager:
