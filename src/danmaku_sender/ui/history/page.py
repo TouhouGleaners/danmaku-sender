@@ -158,8 +158,7 @@ class HistoryPage(QWidget):
         将结果刷入表格，并触发缺失元数据的后台补全。
         """
         self._model.set_records(records)
-        if self.state:
-            self._fetch_missing_metadata(records)
+        self._fetch_missing_metadata(records)
 
     @Slot(object)
     def _on_history_query_failed(self, err: Exception):
