@@ -2,7 +2,7 @@ import logging
 
 from PySide6.QtCore import QObject, Signal, QThreadPool, Slot
 
-from ..framework.concurrency import GenericTask
+from ..framework.concurrency import PoolTask
 from ...core.entities.video import VideoInfo
 from ...core.state import ApiAuthConfig
 from ...core.services.video_fetcher import VideoFetcher
@@ -78,7 +78,7 @@ class VideoController(QObject):
         if not is_background:
             self.fetchStarted.emit()
 
-        task = GenericTask(_fetch_single_video_info, bvid, auth_config)
+        task = PoolTask(_fetch_single_video_info, bvid, auth_config)
 
         @Slot(object)
         def _on_fetch_succeeded(info: VideoInfo):
@@ -105,7 +105,7 @@ class VideoController(QObject):
         if not bvids:
             return
 
-        task = GenericTask(_fetch_multiple_video_infos, bvids, auth_config)
+        task = PoolTask(_fetch_multiple_video_infos, bvids, auth_config)
 
         @Slot(list)
         def _on_fetch_completed(results: list[tuple[str, VideoInfo | Exception]]):
