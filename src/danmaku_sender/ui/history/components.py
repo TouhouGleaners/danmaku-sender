@@ -4,7 +4,7 @@ from datetime import datetime
 from PySide6.QtCore import Qt, QAbstractTableModel, QModelIndex
 from PySide6.QtGui import QColor, QBrush
 
-from ...core.database.history_manager import DanmakuStatus
+from ...core.types.common import DanmakuStatus
 from ...core.entities.video import VideoInfo
 
 
