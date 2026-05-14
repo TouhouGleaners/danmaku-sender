@@ -52,6 +52,7 @@ def create_xml_from_danmakus(danmakus: list[UnsentDanmakusRecord], filepath: str
         logger.info(f"✅ 成功将 {len(danmakus)} 条弹幕及原因分类保存到 '{filepath}'。")
     except Exception as e:
         logger.error(f"❌ 保存未发送弹幕到XML文件失败: {e}", exc_info=True)
+        raise
 
 def export_danmakus_to_xml(danmakus: list[Danmaku], filepath: str) -> None:
     """
