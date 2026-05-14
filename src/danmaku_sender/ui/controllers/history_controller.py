@@ -1,8 +1,8 @@
 import logging
 
-from PySide6.QtCore import QObject, Signal, QThreadPool
+from PySide6.QtCore import QObject, Signal
 
-from ..framework.concurrency import GenericTask
+from ..framework.concurrency import PoolTask
 from ...core.database.history_manager import HistoryManager
 
 
@@ -25,11 +25,4 @@ class HistoryController(QObject):
 
     def query(self, keyword: str, status_filter: int):
         """发起异步数据库查询"""
-        task = GenericTask(_query, keyword, status_filter)
-
-        # 绑定回调
-        task.signals.result.connect(self.historyFetched.emit)
-        task.signals.error.connect(self.errorOccurred.emit)
-
-        # 提交到全局线程池
-        QThreadPool.globalInstance().start(task)
+        PoolTask.submit(_query, self.historyFetched.emit, self.errorOccurred.emit, keyword, status_filter)

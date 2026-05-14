@@ -1,15 +1,16 @@
 import logging
 from typing import Callable
 
-from PySide6.QtCore import QObject, Signal, QThreadPool
+from PySide6.QtCore import QObject, Signal
 
-from ..framework.concurrency import GenericTask
+from ..framework.concurrency import PoolTask
 
 from ...core.engines.editor_session import EditorSession
 from ...core.state import AppState
 from ...core.entities.danmaku import Danmaku
 from ...core.types.editor_types import ViewItem, InsertPosition
 from ...core.services.danmaku_parser import DanmakuParser
+from ...core.services.danmaku_exporter import export_danmakus_to_xml
 
 
 class EditorController(QObject):
@@ -82,10 +83,27 @@ class EditorController(QObject):
             on_error: 失败回调，接收错误信息
         """
         parser = DanmakuParser()
-        task = GenericTask(parser.parse_xml_file, file_path)
-        task.signals.result.connect(lambda parsed: on_success(self._apply_parsed_to_workspace(parsed)))
-        task.signals.error.connect(lambda err: on_error(str(err)))
-        QThreadPool.globalInstance().start(task)
+        PoolTask.submit(
+            parser.parse_xml_file,
+            lambda parsed: on_success(self._apply_parsed_to_workspace(parsed)),
+            lambda err: on_error(str(err)),
+            file_path,
+        )
+
+    def export_to_xml(
+        self,
+        danmakus: list[Danmaku],
+        file_path: str,
+        on_success: Callable[[None], None],
+        on_error: Callable[[str], None],
+    ):
+        """异步导出弹幕列表到 XML 文件"""
+        PoolTask.submit(
+            export_danmakus_to_xml,
+            on_success,
+            lambda err: on_error(str(err)),
+            danmakus, file_path,
+        )
 
     def _apply_parsed_to_workspace(self, parsed_dms: list[Danmaku] | None) -> int:
         """

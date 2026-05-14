@@ -1,9 +1,10 @@
 import logging
 import threading
+from typing import Callable
 
-from PySide6.QtCore import QObject, Signal, Slot, QThreadPool
+from PySide6.QtCore import QObject, Signal, Slot
 
-from danmaku_sender.ui.framework.concurrency import BaseWorker, GenericTask
+from danmaku_sender.ui.framework.concurrency import WorkerThread, PoolTask
 
 from danmaku_sender.core.database.history_manager import HistoryManager
 from danmaku_sender.core.engines.sender import DanmakuScheduler, DanmakuExecutor, SendingContext, SendJob
@@ -13,6 +14,7 @@ from danmaku_sender.core.types.result import DanmakuSendResult
 from danmaku_sender.core.types.common import VideoTarget
 from danmaku_sender.core.state import ApiAuthConfig, SenderConfig, AppState
 from danmaku_sender.core.services.danmaku_parser import DanmakuParser
+from danmaku_sender.core.services.danmaku_exporter import create_xml_from_danmakus, UnsentDanmakusRecord
 from danmaku_sender.api.bili_api_client import BiliApiClient
 from danmaku_sender.utils.system_utils import KeepSystemAwake
 
@@ -79,11 +81,27 @@ class SenderController(QObject):
         """异步解析 XML 弹幕文件"""
         self.state.video_state.loaded_danmakus = []
         parser = DanmakuParser()
-        task = GenericTask(parser.parse_xml_file, file_path)
-        task.signals.result.connect(lambda parsed: self._on_parse_success(parsed, file_path))
-        task.signals.error.connect(lambda err: self._on_parse_error(err, file_path))
-        QThreadPool.globalInstance().start(task)
+        PoolTask.submit(
+            parser.parse_xml_file,
+            lambda parsed: self._on_parse_success(parsed, file_path),
+            lambda err: self._on_parse_error(err, file_path),
+            file_path,
+        )
 
+    def export_unsent_xml(
+        self,
+        unsent_danmakus: list[UnsentDanmakusRecord],
+        file_path: str,
+        on_success: Callable[[None], None],
+        on_error: Callable[[str], None],
+    ):
+        """异步保存未发送弹幕到 XML 文件"""
+        PoolTask.submit(
+            create_xml_from_danmakus,
+            on_success,
+            lambda err: on_error(str(err)),
+            unsent_danmakus, file_path,
+        )
 
     # region Slots
 
@@ -112,7 +130,7 @@ class SenderController(QObject):
     # endregion
 
 
-class SendTaskWorker(BaseWorker):
+class SendTaskWorker(WorkerThread):
     """用于后台发送弹幕的线程"""
     progressUpdated = Signal(int, int, float)  # 已尝试, 总数, ETA
     taskFinished = Signal(object)              # SendingContext

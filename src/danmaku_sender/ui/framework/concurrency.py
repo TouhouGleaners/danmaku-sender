@@ -4,13 +4,13 @@ import traceback
 from typing import Callable
 from abc import abstractmethod
 
-from PySide6.QtCore import QThread, QObject, Signal, QRunnable, Slot
+from PySide6.QtCore import QThread, QObject, Signal, QRunnable, Slot, QThreadPool
 
 
 logger = logging.getLogger("App.System.Concurrency")
 
 
-class BaseWorker(QThread):
+class WorkerThread(QThread):
     """
     所有长驻/重型 Worker 线程的抽象基类。
 
@@ -25,43 +25,42 @@ class BaseWorker(QThread):
         self.finished.connect(self._unregister)  # 线程彻底结束时，将自己从保活注册表中移除
 
     def start(self, *args, **kwargs):
-        """重写 start 方法，在启动时将自身加入保活注册表"""
-        with BaseWorker._registry_lock:
-            BaseWorker._keep_alive_registry.add(self)
+        """重写 start 方法: 在启动时将自身加入保活注册表"""
+        with WorkerThread._registry_lock:
+            WorkerThread._keep_alive_registry.add(self)
         super().start(*args, **kwargs)
 
     @Slot()
     def _unregister(self):
         """线程安全退出后释放 Python 引用"""
-        with BaseWorker._registry_lock:
-            BaseWorker._keep_alive_registry.discard(self)
+        with WorkerThread._registry_lock:
+            WorkerThread._keep_alive_registry.discard(self)
         self.logger.debug(f"{self.__class__.__name__} 已从全局存活注册表中移除。")
 
     @abstractmethod
     def run(self):
         """抽象方法: 子类必须重写此方法以实现具体的业务逻辑"""
-        raise NotImplementedError(f"继承 BaseWorker 的子类 {self.__class__.__name__} 必须实现 run() 方法")
+        raise NotImplementedError(f"继承 WorkerThread 的子类 {self.__class__.__name__} 必须实现 run() 方法")
 
     def report_error(self, title: str, exception: Exception):
         """统一的异常捕获与上报接口"""
         self.logger.error(f"{title}: {exception}", exc_info=True)
 
 
-class WorkerSignals(QObject):
+class PoolTaskSignals(QObject):
     """通用任务信号载体"""
     result = Signal(object)  # 携带任意类型的返回值
-    error = Signal(object)    # 携带异常对象
+    error = Signal(object)   # 携带异常对象
     finished = Signal()      # 无论成功失败，最后都会触发
 
 
-class GenericTask(QRunnable):
+class PoolTask(QRunnable):
     """
-    工业级通用线程池任务包装器
+    一次性线程池任务包装器
 
-    将任何普通的、阻塞的 Python 函数，
-    包装成一个可以在 QThreadPool 中安全运行的异步任务，并自动桥接信号。
+    将阻塞的 Python 函数包装成可在 QThreadPool 中安全运行的异步任务。
+    执行完毕后自动从注册表移除，适用于 API 调用、文件解析等短时操作。
     """
-    # 静态注册表: 存放所有正在运行的任务，以防止被 GC
     _keep_alive_registry = set()
     _registry_lock = threading.Lock()
 
@@ -70,15 +69,15 @@ class GenericTask(QRunnable):
         self.fn = fn
         self.args = args
         self.kwargs = kwargs
-        self.signals = WorkerSignals()
+        self.signals = PoolTaskSignals()
 
         self.setAutoDelete(False)  # 对象生命周期管理: C++ -> Python GC
 
-        with GenericTask._registry_lock:
-            GenericTask._keep_alive_registry.add(self)
+        with PoolTask._registry_lock:
+            PoolTask._keep_alive_registry.add(self)
 
     def run(self):
-        """线程池分配 OS 线程后自动调用的入口"""
+        """重写 QRunnable.run(): 线程池调度入口"""
         try:
             # 执行传入的业务函数
             result = self.fn(*self.args, **self.kwargs)
@@ -90,5 +89,14 @@ class GenericTask(QRunnable):
             self.signals.error.emit(e)
         finally:
             self.signals.finished.emit()
-            with GenericTask._registry_lock:
-                GenericTask._keep_alive_registry.discard(self)
+            with PoolTask._registry_lock:
+                PoolTask._keep_alive_registry.discard(self)
+
+    @classmethod
+    def submit(cls, fn: Callable, on_result: Callable, on_error: Callable, *args, **kwargs) -> 'PoolTask':
+        """将阻塞函数提交到全局线程池，连接结果和错误回调"""
+        task = cls(fn, *args, **kwargs)
+        task.signals.result.connect(on_result)
+        task.signals.error.connect(on_error)
+        QThreadPool.globalInstance().start(task)
+        return task

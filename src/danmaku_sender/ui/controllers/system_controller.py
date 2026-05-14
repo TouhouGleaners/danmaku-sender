@@ -1,8 +1,8 @@
 import logging
 
-from PySide6.QtCore import QObject, Signal, Slot, QThreadPool
+from PySide6.QtCore import QObject, Signal, Slot
 
-from ..framework.concurrency import GenericTask
+from ..framework.concurrency import PoolTask
 from ...api.update_checker import UpdateChecker, UpdateInfo
 from ...config.app_config import AppInfo
 
@@ -38,12 +38,7 @@ class SystemController(QObject):
         self._update_check_in_flight = True
         self._in_flight_is_manual = is_manual
 
-        task = GenericTask(_check_update, use_proxy)
-
-        task.signals.result.connect(self._on_check_finished)
-        task.signals.error.connect(self._on_check_failed)
-
-        QThreadPool.globalInstance().start(task)
+        PoolTask.submit(_check_update, self._on_check_finished, self._on_check_failed, use_proxy)
 
     @Slot(object)
     def _on_check_finished(self, info: UpdateInfo):

@@ -3,7 +3,7 @@ import threading
 
 from PySide6.QtCore import QObject, Signal, Slot
 
-from ..framework.concurrency import BaseWorker
+from ..framework.concurrency import WorkerThread
 
 from ...core.types.common import VideoTarget
 from ...core.state import ApiAuthConfig, MonitorConfig
@@ -76,7 +76,7 @@ class MonitorController(QObject):
     # endregion
 
 
-class MonitorTaskWorker(BaseWorker):
+class MonitorTaskWorker(WorkerThread):
     """监视任务后台线程"""
     statsUpdated = Signal(dict)
     statusUpdated = Signal(str)

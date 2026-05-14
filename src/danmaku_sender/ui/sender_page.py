@@ -8,10 +8,9 @@ from PySide6.QtWidgets import (
     QFileDialog, QMessageBox
 )
 from PySide6.QtGui import QTextCursor, QDragEnterEvent, QDropEvent
-from PySide6.QtCore import Qt, QDateTime, Slot, QThreadPool
+from PySide6.QtCore import Qt, QDateTime, Slot
 
 from .framework.binder import UIBinder
-from .framework.concurrency import GenericTask
 from .framework.style_loader import get_svg_icon
 from .controllers.video_controller import VideoController
 from .controllers.sender_controller import SenderController
@@ -19,7 +18,7 @@ from .controllers.sender_controller import SenderController
 from danmaku_sender.core.engines.sender.context import SendingContext
 from danmaku_sender.core.entities.video import VideoInfo
 from danmaku_sender.core.types.common import VideoTarget
-from danmaku_sender.core.services.danmaku_exporter import UnsentDanmakusRecord, create_xml_from_danmakus
+from danmaku_sender.core.services.danmaku_exporter import UnsentDanmakusRecord
 from danmaku_sender.core.state import AppState
 from danmaku_sender.utils.string_utils import parse_bilibili_link
 from danmaku_sender.utils.time_utils import format_duration
@@ -371,10 +370,11 @@ class SenderPage(QWidget):
             file_path, _ = QFileDialog.getSaveFileName(self, "保存XML", "unsent.xml", "XML Files (*.xml)")
             if file_path:
                 self.logger.info(f"📥 正在保存未发送弹幕至: {file_path}")
-                task = GenericTask(create_xml_from_danmakus, unsent_danmakus, file_path)
-                task.signals.result.connect(lambda _: self._on_export_success(file_path))
-                task.signals.error.connect(lambda err: self._on_export_error(str(err)))
-                QThreadPool.globalInstance().start(task)
+                self.sender_controller.export_unsent_xml(
+                    unsent_danmakus, file_path,
+                    on_success=lambda _: self._on_export_success(file_path),
+                    on_error=self._on_export_error,
+                )
 
     @Slot(str)
     def _on_export_success(self, file_path: str):

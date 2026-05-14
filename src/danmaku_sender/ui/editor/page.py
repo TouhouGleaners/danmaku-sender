@@ -2,7 +2,7 @@ import logging
 from pathlib import Path
 from typing import Any
 
-from PySide6.QtCore import Qt, QModelIndex, QPoint, Slot, QThreadPool
+from PySide6.QtCore import Qt, QModelIndex, QPoint, Slot
 from PySide6.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout, QPushButton, QLabel,
     QTableView, QHeaderView, QAbstractItemView, QMessageBox,
@@ -11,13 +11,11 @@ from PySide6.QtWidgets import (
 
 from .components import EditorTableModel, ValidationRulesGroup, PropertyInspectorGroup
 from .dialogs import EditDanmakuDialog, TimeOffsetDialog, ArrayGeneratorDialog
-from ..framework.concurrency import GenericTask
 from ..framework.style_loader import get_svg_icon
 from ..controllers.editor_controller import EditorController
 
 from ...core.types.editor_types import EditorField, InsertPosition
 from ...core.state import AppState
-from ...core.services.danmaku_exporter import export_danmakus_to_xml
 
 
 class EditorPage(QWidget):
@@ -331,10 +329,11 @@ class EditorPage(QWidget):
 
         if file_path:
             count = len(working_dms)
-            task = GenericTask(export_danmakus_to_xml, working_dms, file_path)
-            task.signals.result.connect(lambda _: self._on_export_success(count, file_path))
-            task.signals.error.connect(lambda err: self._on_export_error(str(err)))
-            QThreadPool.globalInstance().start(task)
+            self.controller.export_to_xml(
+                working_dms, file_path,
+                on_success=lambda _: self._on_export_success(count, file_path),
+                on_error=self._on_export_error,
+            )
 
     @Slot(int, str)
     def _on_export_success(self, count: int, file_path: str):

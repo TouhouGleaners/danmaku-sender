@@ -1,9 +1,9 @@
 import logging
 import threading
 
-from PySide6.QtCore import QObject, Signal, QThreadPool, Slot
+from PySide6.QtCore import QObject, Signal, Slot
 
-from ..framework.concurrency import BaseWorker, GenericTask
+from ..framework.concurrency import WorkerThread, PoolTask
 
 from ...api.bili_api_client import BiliApiClient
 from ...core.state import ApiAuthConfig
@@ -61,11 +61,12 @@ class AuthController(QObject):
             self.userProfileReady.emit(UserProfile(False, "未登录"))
             return
 
-        task = GenericTask(_fetch_user_nav, auth_config)
-        task.signals.result.connect(self.userProfileReady.emit)
-
-        task.signals.error.connect(lambda _: self.userProfileReady.emit(UserProfile(False, "未登录")))
-        QThreadPool.globalInstance().start(task)
+        PoolTask.submit(
+            _fetch_user_nav,
+            self.userProfileReady.emit,
+            lambda _: self.userProfileReady.emit(UserProfile(False, "未登录")),
+            auth_config,
+        )
 
     def start_qr_login(self, use_system_proxy: bool):
         """启动扫码登录后台任务"""
@@ -108,7 +109,7 @@ class AuthController(QObject):
     # endregion
 
 
-class QRLoginWorker(BaseWorker):
+class QRLoginWorker(WorkerThread):
     """扫码登录后台轮询线程"""
     qrReady = Signal(str)           # 携带生成的二维码文本 (URL)
     statusUpdated = Signal(str)     # 携带当前扫码状态文案
