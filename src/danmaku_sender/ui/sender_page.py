@@ -392,8 +392,7 @@ class SenderPage(QWidget):
     def _set_ui_for_task_start(self):
         """任务开始时的 UI 状态设置"""
         # 通知全局状态
-        if self.state:
-            self.state.sender_is_active = True
+        self.state.sender_is_active = True
 
         # 按钮变红
         self.start_btn.setText("紧急停止")
@@ -409,8 +408,7 @@ class SenderPage(QWidget):
     def _reset_ui_after_task(self):
         """任务结束后的 UI 状态复位"""
         # 通知全局状态
-        if self.state:
-            self.state.sender_is_active = False
+        self.state.sender_is_active = False
 
         # 恢复按钮状态
         self.start_btn.setText("开始发送")
@@ -446,7 +444,7 @@ class SenderPage(QWidget):
     def dragEnterEvent(self, event: QDragEnterEvent) -> None:
         """鼠标拖拽文件进入页面区域"""
         # 如果当前正在发送弹幕则拒绝拖入
-        if self.state and self.state.sender_is_active:
+        if self.state.sender_is_active:
             event.ignore()
             return
 
@@ -462,7 +460,7 @@ class SenderPage(QWidget):
     def dropEvent(self, event: QDropEvent) -> None:
         """鼠标落下"""
         # 如果当前正在发送弹幕则拒绝拖入
-        if self.state and self.state.sender_is_active:
+        if self.state.sender_is_active:
             event.ignore()
             return
 
