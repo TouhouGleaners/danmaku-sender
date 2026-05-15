@@ -9,9 +9,9 @@ from playhouse.migrate import SqliteMigrator, migrate
 
 from .orm_models import db, SentDanmaku
 
-from danmaku_sender.core.entities.danmaku import Danmaku
-from danmaku_sender.core.types.common import DanmakuStatus, VideoTarget
 from danmaku_sender.config.app_config import AppInfo
+from danmaku_sender.core.models.danmaku import Danmaku
+from danmaku_sender.core.models.common import DanmakuStatus, VideoTarget
 
 
 logger = logging.getLogger("App.System.DB")

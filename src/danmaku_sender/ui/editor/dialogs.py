@@ -7,8 +7,9 @@ from PySide6.QtWidgets import (
 from PySide6.QtCore import Qt, Slot
 
 from .components import DanmakuPropertyForm
-from ...core.entities.danmaku import Danmaku
-from ...core.types.editor_types import EditorField
+
+from danmaku_sender.core.models.danmaku import Danmaku
+from danmaku_sender.core.models.editor_types import EditorField
 
 
 class EditDanmakuDialog(QDialog):

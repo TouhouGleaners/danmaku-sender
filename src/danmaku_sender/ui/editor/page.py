@@ -11,11 +11,11 @@ from PySide6.QtWidgets import (
 
 from .components import EditorTableModel, ValidationRulesGroup, PropertyInspectorGroup
 from .dialogs import EditDanmakuDialog, TimeOffsetDialog, ArrayGeneratorDialog
-from ..framework.style_loader import get_svg_icon
-from ..controllers.editor_controller import EditorController
 
-from ...core.types.editor_types import EditorField, InsertPosition
-from ...core.state import AppState
+from danmaku_sender.ui.framework.style_loader import get_svg_icon
+from danmaku_sender.ui.controllers.editor_controller import EditorController
+from danmaku_sender.core.models.editor_types import EditorField, InsertPosition
+from danmaku_sender.core.state import AppState
 
 
 class EditorPage(QWidget):

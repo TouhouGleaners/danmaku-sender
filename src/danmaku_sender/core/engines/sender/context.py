@@ -4,10 +4,10 @@ from typing import Callable
 from dataclasses import dataclass, field
 from enum import Enum, auto
 
-from ...entities.danmaku import Danmaku
-from ...types.result import DanmakuSendResult
-from ...types.common import VideoTarget, UnsentDanmakusRecord
-from ...state import SenderConfig
+from danmaku_sender.core.models.danmaku import Danmaku
+from danmaku_sender.core.models.result import DanmakuSendResult
+from danmaku_sender.core.models.common import VideoTarget, UnsentDanmakusRecord
+from danmaku_sender.core.state import SenderConfig
 
 
 # 弹幕指纹类型别名：(内容, 进度, 模式, 字号, 颜色)

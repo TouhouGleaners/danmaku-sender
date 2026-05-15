@@ -1,20 +1,21 @@
-import time
 import logging
+import time
 from datetime import datetime
 
-from PySide6.QtWidgets import (
-    QWidget, QVBoxLayout, QHBoxLayout, QLabel, QGroupBox, QTextEdit, QComboBox,
-    QPushButton, QSpinBox, QMessageBox, QGridLayout, QSizePolicy
-)
-from PySide6.QtGui import QTextCursor
 from PySide6.QtCore import Qt, Slot
+from PySide6.QtGui import QTextCursor
+from PySide6.QtWidgets import (
+    QComboBox, QGridLayout, QGroupBox, QHBoxLayout,
+    QLabel, QMessageBox, QPushButton, QSizePolicy,
+    QSpinBox, QTextEdit, QVBoxLayout, QWidget
+)
 
+from danmaku_sender.core.models.common import MonitorStats, VideoTarget
+from danmaku_sender.core.state import AppState
+
+from .controllers.monitor_controller import MonitorController
 from .framework.binder import UIBinder
 from .framework.style_loader import get_svg_icon
-from .controllers.monitor_controller import MonitorController
-
-from danmaku_sender.core.state import AppState
-from ..core.types.common import VideoTarget, MonitorStats
 
 
 class MonitorPage(QWidget):

@@ -2,11 +2,11 @@ import logging
 
 from PySide6.QtCore import QObject, Signal, QThreadPool, Slot
 
-from ..framework.concurrency import PoolTask
-from ...core.entities.video import VideoInfo
-from ...core.state import ApiAuthConfig
-from ...core.services.video_fetcher import VideoFetcher
-from ...api.bili_api_client import BiliApiClient
+from danmaku_sender.api.bili_api_client import BiliApiClient
+from danmaku_sender.core.models.video import VideoInfo
+from danmaku_sender.core.state import ApiAuthConfig
+from danmaku_sender.core.services.video_fetcher import VideoFetcher
+from danmaku_sender.ui.framework.concurrency import PoolTask
 
 
 logger = logging.getLogger("App.System.Video")

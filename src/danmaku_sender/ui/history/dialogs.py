@@ -3,8 +3,8 @@ from datetime import datetime
 from PySide6.QtCore import Qt
 from PySide6.QtWidgets import QDialog, QFormLayout, QLabel, QFrame
 
-from ...core.entities.video import VideoInfo
-from ...core.types.common import DanmakuStatus
+from danmaku_sender.core.models.video import VideoInfo
+from danmaku_sender.core.models.common import DanmakuStatus
 
 
 class DanmakuDetailDialog(QDialog):

@@ -23,7 +23,7 @@ from .theme_manager import ThemeManager
 
 from ..config.app_config import AppInfo, UI
 from ..core.state import AppState
-from ..core.types.common import MonitorStats
+from ..core.models.common import MonitorStats
 from ..utils.log_utils import GuiLoggingHandler
 from ..utils.credential_manager import load_credentials, save_credentials
 from ..utils.config_manager import load_app_config, save_app_config

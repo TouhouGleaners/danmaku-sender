@@ -8,12 +8,11 @@ from PySide6.QtWidgets import (
     QGroupBox, QDoubleSpinBox, QComboBox, QTextEdit, QMessageBox
 )
 
-from ..framework.binder import UIBinder
-
-from ...core.entities.danmaku import Danmaku
-from ...core.state import AppState
-from ...core.types.editor_types import EditorField
-from ...utils.time_utils import format_duration
+from danmaku_sender.ui.framework.binder import UIBinder
+from danmaku_sender.core.models.danmaku import Danmaku
+from danmaku_sender.core.state import AppState
+from danmaku_sender.core.models.editor_types import EditorField
+from danmaku_sender.utils.time_utils import format_duration
 
 
 class EditorTableModel(QAbstractTableModel):

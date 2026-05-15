@@ -9,12 +9,12 @@ from PySide6.QtGui import QAction, QDesktopServices
 
 from .components import Col, HistoryTableModel
 from .dialogs import DanmakuDetailDialog
-from ..controllers.video_controller import VideoController
-from ..controllers.history_controller import HistoryController
 
-from ...core.types.common import DanmakuStatus
-from ...core.entities.video import VideoInfo
-from ...core.state import AppState
+from danmaku_sender.core.models.common import DanmakuStatus
+from danmaku_sender.core.models.video import VideoInfo
+from danmaku_sender.core.state import AppState
+from danmaku_sender.ui.controllers.video_controller import VideoController
+from danmaku_sender.ui.controllers.history_controller import HistoryController
 
 
 logger = logging.getLogger("App.System.UI.History")

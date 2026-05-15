@@ -1,7 +1,7 @@
 from typing import TypedDict
 
-from ..entities.danmaku import Danmaku
-from ..state import ValidationConfig
+from danmaku_sender.core.models.danmaku import Danmaku
+from danmaku_sender.core.state import ValidationConfig
 
 
 FORBIDDEN_SYMBOLS = "☢⚠☣☠⚡💣⚔🔥"

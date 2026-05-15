@@ -3,7 +3,7 @@ from enum import Enum, auto
 from typing import Any, TypedDict
 from dataclasses import dataclass, field
 
-from ..entities.danmaku import Danmaku
+from .danmaku import Danmaku
 
 
 class EditorField(Enum):
