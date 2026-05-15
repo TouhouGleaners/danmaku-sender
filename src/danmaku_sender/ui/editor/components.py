@@ -385,18 +385,6 @@ class DanmakuPreviewWidget(QWidget):
         text_width = fm.horizontalAdvance(self._text)
 
         rect = self.rect()
-        max_allowed_width = rect.width() - 20
-
-        scale_factor = 1.0
-        if text_width > max_allowed_width:
-            scale_factor = max_allowed_width / text_width
-
-            new_size = max(6, int(base_display_size * scale_factor))
-            font.setPointSize(new_size)
-
-            fm = QFontMetrics(font)
-            text_width = fm.horizontalAdvance(self._text)
-
         text_height = fm.ascent()
 
         x = (rect.width() - text_width) / 2
@@ -417,7 +405,7 @@ class DanmakuPreviewWidget(QWidget):
 
         # 绘制描边
         pen = QPen(QColor(0, 0, 0, 200))
-        stroke_width = max(1.0, 2.0 * scale_factor)
+        stroke_width = max(1.0, base_display_size / 12)
         pen.setWidthF(stroke_width)
         pen.setJoinStyle(Qt.PenJoinStyle.RoundJoin)
 
