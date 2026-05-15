@@ -67,7 +67,7 @@ class EditorPage(QWidget):
         self.batch_menu = QMenu(self)
         self.batch_menu.addAction(get_svg_icon("format_clear.svg"), "一键去除所有换行符", self._batch_remove_newlines)
         self.batch_menu.addAction(get_svg_icon("short_text.svg"), "一键截断过长弹幕(>100字)", self._batch_truncate_length)
-        self.batch_menu.addAction(get_svg_icon("sync_alt.svg"), "整体平移时间轴", self._open_offset_dialog)
+        self.batch_menu.addAction(get_svg_icon("sync_alt.svg"), "整体平移时间轴", self._prompt_time_offset)
         self.btn_batch.setMenu(self.batch_menu)
 
         toolbar_layout.addWidget(self.btn_batch)
@@ -399,14 +399,23 @@ class EditorPage(QWidget):
     # endregion
     # region Item Operations (Row Level & Dialogs)
 
+    def _select_row_by_uid(self, uid: str) -> int:
+        """根据 UUID 定位并选中表格行"""
+        for i in range(self.model.rowCount()):
+            if self.model.get_item_id(i) == uid:
+                self.table.selectRow(i)
+                return i
+        return -1
+
     def _apply_properties(self, new_props: dict[EditorField, Any]):
         """Inspector 回调：应用弹幕属性修改"""
-        if self.current_item_id:
-            if self.controller.update_properties(self.current_item_id, new_props):
-                for i in range(self.model.rowCount()):
-                    if self.model.get_item_id(i) == self.current_item_id:
-                        self.table.selectRow(i)
-                        break
+        if not self.current_item_id:
+            return
+
+        if not self.controller.update_properties(self.current_item_id, new_props):
+            return
+
+        self._select_row_by_uid(self.current_item_id)
 
     @Slot(QPoint)
     def _open_context_menu(self, pos: QPoint):
@@ -466,14 +475,12 @@ class EditorPage(QWidget):
         if new_uid:
             self.preview_mode_cb.setChecked(True)
 
-            for i in range(self.model.rowCount()):
-                if self.model.get_item_id(i) == new_uid:
-                    self.table.selectRow(i)
-                    self._edit_row(i)
-                    break
+            row_idx = self._select_row_by_uid(new_uid)
+            if row_idx >= 0:
+                self._edit_row(row_idx)
 
     def _shift_selected_items_time(self):
-        """平移用户选中的弹幕"""
+        """上下文菜单：平移用户选中的弹幕"""
         selected_rows = self.table.selectionModel().selectedRows()
         if not selected_rows:
             return
@@ -484,21 +491,7 @@ class EditorPage(QWidget):
             if (uid := self.model.get_item_id(row_idx.row())) is not None
         ]
 
-        if not uids:
-            return
-
-        # 复用弹窗，动态修改标题以区分“全局”和“局部”
-        dlg = TimeOffsetDialog(self)
-        dlg.setWindowTitle(f"平移选中的 {len(uids)} 条弹幕")
-
-        if dlg.exec():
-            offset_ms = dlg.get_offset_ms()
-            count = self.controller.shift_time(offset_ms, target_uids=uids)
-
-            if count > 0:
-                self.logger.info(f"成功平移了 {count} 条选中弹幕的时间轴。")
-            else:
-                self.logger.info("平移操作未导致任何数据变化。")
+        self._prompt_time_offset(uids)
 
     def _generate_array(self, row: int):
         """生成弹幕阵列"""
@@ -518,13 +511,8 @@ class EditorPage(QWidget):
                 color_strategy=params["color_strategy"]
             )
 
-            if new_uids:
-                self.preview_mode_cb.setChecked(True)
-
-                for i in range(self.model.rowCount()):
-                    if self.model.get_item_id(i) == new_uids[0]:
-                        self.table.selectRow(i)
-                        break
+            self.preview_mode_cb.setChecked(True)
+            self._select_row_by_uid(new_uids[0])
 
     def _delete_selected_items(self):
         """批量删除选中项"""
@@ -538,8 +526,7 @@ class EditorPage(QWidget):
             if (uid := self.model.get_item_id(row_idx.row())) is not None
         ]
 
-        if uids:
-            self.controller.delete_items(uids)
+        self.controller.delete_items(uids)
 
     @Slot()
     def _undo(self):
@@ -566,19 +553,27 @@ class EditorPage(QWidget):
             QMessageBox.information(self, "无变化", "未发现过长弹幕。")
 
     @Slot()
-    def _open_offset_dialog(self):
-        if not self.controller.has_data:
+    def _prompt_time_offset(self, uids: list[str] | None = None):
+        """弹出时间平移对话框，处理全局或局部时间轴平移"""
+        # 全局平移时，如果没有数据直接返回
+        if not uids and not self.controller.has_data:
             return
 
         dlg = TimeOffsetDialog(self)
-        if dlg.exec():
-            offset_ms = dlg.get_offset_ms()
-            count = self.controller.shift_time(offset_ms)
+        # 根据是否有特定 uids 动态调整标题
+        title = f"平移选中的 {len(uids)} 条弹幕" if uids else "整体平移时间轴"
+        dlg.setWindowTitle(title)
 
-            if count > 0:
-                self.logger.info(f"成功平移了 {count} 条选中弹幕的时间轴。")
-            else:
-                self.logger.info("平移操作未导致任何数据变化。")
+        if not dlg.exec():
+            return
+
+        offset_ms = dlg.get_offset_ms()
+        count = self.controller.shift_time(offset_ms, target_uids=uids)
+
+        if count > 0:
+            self.logger.info(f"成功平移了 {count} 条弹幕的时间轴。")
+        else:
+            self.logger.info("平移操作未导致任何数据变化。")
 
     # endregion
 
