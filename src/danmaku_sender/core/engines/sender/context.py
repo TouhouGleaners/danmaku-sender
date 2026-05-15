@@ -6,8 +6,7 @@ from enum import Enum, auto
 
 from ...entities.danmaku import Danmaku
 from ...types.result import DanmakuSendResult
-from ...types.common import VideoTarget
-from ...services.danmaku_exporter import UnsentDanmakusRecord
+from ...types.common import VideoTarget, UnsentDanmakusRecord
 from ...state import SenderConfig
 
 

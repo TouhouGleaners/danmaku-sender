@@ -1,17 +1,12 @@
 import logging
 import xml.etree.ElementTree as ET
 from xml.dom import minidom
-from typing import TypedDict
 
 from ..entities.danmaku import Danmaku
+from ..types.common import UnsentDanmakusRecord
 
 
 logger = logging.getLogger("App.System.Exporter")
-
-
-class UnsentDanmakusRecord(TypedDict):
-    dm: Danmaku
-    reason: str
 
 
 def create_xml_from_danmakus(danmakus: list[UnsentDanmakusRecord], filepath: str) -> None:
