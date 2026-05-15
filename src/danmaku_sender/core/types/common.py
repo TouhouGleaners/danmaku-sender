@@ -2,6 +2,8 @@ from dataclasses import dataclass
 from enum import IntEnum
 from typing import TypedDict
 
+from ..entities.danmaku import Danmaku
+
 
 class DanmakuStatus(IntEnum):
     PENDING = 0   # 待验证
@@ -34,3 +36,9 @@ class AuthCookies(TypedDict):
     """身份凭证 Cookie 结构"""
     SESSDATA: str
     bili_jct: str
+
+
+class UnsentDanmakusRecord(TypedDict):
+    """未发送弹幕记录"""
+    dm: Danmaku
+    reason: str
