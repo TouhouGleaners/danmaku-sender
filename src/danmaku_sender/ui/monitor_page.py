@@ -14,7 +14,7 @@ from .framework.style_loader import get_svg_icon
 from .controllers.monitor_controller import MonitorController
 
 from danmaku_sender.core.state import AppState
-from ..core.types.common import VideoTarget, MonitorStats
+from ..core.models.common import VideoTarget, MonitorStats
 
 
 class MonitorPage(QWidget):

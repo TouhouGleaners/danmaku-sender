@@ -2,7 +2,7 @@ from dataclasses import dataclass
 from enum import IntEnum
 from typing import TypedDict
 
-from ..entities.danmaku import Danmaku
+from .danmaku import Danmaku
 
 
 class DanmakuStatus(IntEnum):

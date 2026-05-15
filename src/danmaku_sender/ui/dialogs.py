@@ -13,7 +13,7 @@ from PIL import Image
 
 from .controllers.auth_controller import AuthController
 
-from ..core.types.common import AuthCookies
+from ..core.models.common import AuthCookies
 from ..config.app_config import AppInfo, Links
 from ..utils.path_utils import get_assets_path
 

@@ -5,8 +5,8 @@ from .executor import DanmakuExecutor
 from .context import SendingContext, DanmakuFingerprint, SendJob
 from .delay_manager import DelayManager
 
-from ...database.history_manager import HistoryManager
-from ...entities.danmaku import Danmaku
+from danmaku_sender.core.database.history_manager import HistoryManager
+from danmaku_sender.core.models.danmaku import Danmaku
 
 
 class DanmakuScheduler:
