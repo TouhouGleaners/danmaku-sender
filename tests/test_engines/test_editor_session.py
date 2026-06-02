@@ -4,10 +4,7 @@ from danmaku_sender.core.models.danmaku import Danmaku
 from danmaku_sender.core.models.editor_types import EditorField, InsertPosition
 from danmaku_sender.core.state import ValidationConfig
 from danmaku_sender.core.engines.editor_session import EditorSession
-
-
-def _dm(msg: str = "弹幕", progress: int = 1000, **kwargs) -> Danmaku:
-    return Danmaku(msg=msg, progress=progress, **kwargs)
+from tests.conftest import make_danmaku as _dm
 
 
 @pytest.fixture

@@ -1,13 +1,8 @@
 """danmaku_validator 单元测试 — validate_danmaku_list"""
 import pytest
-from danmaku_sender.core.models.danmaku import Danmaku
 from danmaku_sender.core.state import ValidationConfig
 from danmaku_sender.core.services.danmaku_validator import validate_danmaku_list, FORBIDDEN_SYMBOLS
-
-
-def _dm(msg: str, progress: int = 1000) -> Danmaku:
-    """快捷构造弹幕"""
-    return Danmaku(msg=msg, progress=progress)
+from tests.conftest import make_danmaku as _dm
 
 
 class TestNewlineDetection:

@@ -1,5 +1,6 @@
 """DelayManager 单元测试"""
 from threading import Event
+from unittest.mock import MagicMock, patch
 from danmaku_sender.core.engines.sender.delay_manager import DelayManager
 
 
@@ -63,7 +64,7 @@ class TestCalcEta:
 
 
 class TestWaitAndCheckStop:
-    """wait_and_check_stop 的行为"""
+    """wait_and_check_stop 的行为（monkeypatch 掉 sleep 和随机）"""
 
     def test_immediate_stop(self):
         dm = DelayManager(normal_min=1.0, normal_max=1.0)
@@ -71,16 +72,28 @@ class TestWaitAndCheckStop:
         stop.set()
         assert dm.wait_and_check_stop(stop) is True
 
-    def test_normal_delay_no_stop(self):
-        dm = DelayManager(normal_min=0.01, normal_max=0.01)
+    def test_normal_delay_no_stop(self, monkeypatch):
+        dm = DelayManager(normal_min=8.0, normal_max=8.5, burst_size=0)
         stop = Event()
-        result = dm.wait_and_check_stop(stop)
-        assert result is False
-        assert dm._current_count == 1
 
-    def test_burst_rest_triggered(self):
-        dm = DelayManager(normal_min=0.01, normal_max=0.01, burst_size=2, rest_min=0.01, rest_max=0.01)
+        monkeypatch.setattr("random.uniform", lambda a, b: b)
+        stop.wait = MagicMock(return_value=False)
+
+        assert dm.wait_and_check_stop(stop) is False
+        stop.wait.assert_called_once()
+        assert stop.wait.call_args[1]["timeout"] == 8.5
+
+    def test_burst_rest_triggered(self, monkeypatch):
+        dm = DelayManager(normal_min=8.0, normal_max=8.5, burst_size=2, rest_min=40.0, rest_max=45.0)
         stop = Event()
-        dm.wait_and_check_stop(stop)  # count=1, normal
-        dm.wait_and_check_stop(stop)  # count=2, burst rest
-        assert dm._current_count == 2
+
+        delays = []
+        monkeypatch.setattr("random.uniform", lambda a, b: b)
+        stop.wait = MagicMock(return_value=False)
+
+        dm.wait_and_check_stop(stop)  # count=1 → normal
+        dm.wait_and_check_stop(stop)  # count=2 → burst rest
+
+        calls = stop.wait.call_args_list
+        assert calls[0][1]["timeout"] == 8.5   # normal path
+        assert calls[1][1]["timeout"] == 45.0  # rest path
