@@ -21,6 +21,7 @@ def _fetch_user_nav(auth_config: ApiAuthConfig) -> UserProfile:
             if not nav_data.get('isLogin'):
                 return UserProfile(is_login=False, username="未登录")
 
+            uid = nav_data.get('mid', 0)
             username = nav_data.get('uname', "未知用户")
             face_url = nav_data.get('face', "")
 
@@ -32,7 +33,7 @@ def _fetch_user_nav(auth_config: ApiAuthConfig) -> UserProfile:
                 except Exception as e:
                     logger.warning(f"下载头像失败 [URL: {face_url}]", exc_info=True)
 
-            return UserProfile(is_login=True, username=username, avatar_bytes=avatar_data)
+            return UserProfile(is_login=True, username=username, uid=uid, avatar_bytes=avatar_data)
 
         except Exception as e:
             # 主流程失败

@@ -25,7 +25,8 @@ from ..config.app_config import AppInfo, UI
 from ..core.state import AppState
 from ..core.models.common import MonitorStats
 from ..utils.log_utils import GuiLoggingHandler
-from ..utils.credential_manager import load_credentials, save_credentials
+from ..utils.account_manager import load_accounts, save_accounts
+from ..core.models.account import AccountCredential
 from ..utils.config_manager import load_app_config, save_app_config
 
 
@@ -89,12 +90,13 @@ class MainWindow(QMainWindow):
     def closeEvent(self, event: QCloseEvent):
         """窗口关闭事件: 保存配置与凭证"""
         try:
-            credentials_to_save = {
-                'SESSDATA': self.state.sessdata,
-                'BILI_JCT': self.state.bili_jct
-            }
-            save_credentials(credentials_to_save)
-            self.logger.info("凭证已加密保存。")
+            if self.state.sessdata and self.state.bili_jct:
+                acc = AccountCredential(
+                    sessdata=self.state.sessdata,
+                    bili_jct=self.state.bili_jct,
+                )
+                save_accounts([acc])
+                self.logger.info("凭证已加密保存。")
         except Exception as e:
             self.logger.error(f"保存凭证失败: {e}")
 
@@ -266,12 +268,16 @@ class MainWindow(QMainWindow):
         self._auth_debounce_timer.timeout.connect(self._refresh_user_info)
 
     def _load_initial_credentials(self):
-        """加载本地加密凭证"""
+        """加载本地加密凭证（从多账号存储中取第一个）"""
         try:
-            credentials = load_credentials()
-            self.state.sessdata = credentials.get("SESSDATA", "")
-            self.state.bili_jct = credentials.get("BILI_JCT", "")
-            self.logger.info("成功加载存储的凭证。")
+            accounts = load_accounts()
+            if accounts:
+                acc = accounts[0]
+                self.state.sessdata = acc.sessdata
+                self.state.bili_jct = acc.bili_jct
+                self.logger.info(f"已加载账号: {acc.name or '(未命名)'}")
+            else:
+                self.logger.info("没有已保存的账号。")
         except Exception as e:
             self.logger.warning(f"加载凭证失败: {e}")
 
