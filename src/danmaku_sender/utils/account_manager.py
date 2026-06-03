@@ -1,24 +1,42 @@
+import os
 import json
 import logging
-import os
+import keyring
 from pathlib import Path
-
 from cryptography.fernet import Fernet, InvalidToken
 from platformdirs import user_data_dir
 
 from ..config.app_config import AppInfo
 from ..core.models.account import AccountCredential
-from . import credential_manager
 
-logger = logging.getLogger("App.System.Account")
 
+KEYRING_SERVICE_NAME = f"{AppInfo.NAME_EN}-CredentialsKey"
+KEYRING_USERNAME = "default_user"
 ACCOUNTS_FILE_NAME = "accounts.json"
+
+logger = logging.getLogger("App.System.Auth")
+
+
+def _get_encryption_key() -> bytes:
+    """
+    从系统密钥环获取加密密钥。
+    如果不存在，则生成一个新的密钥并存储。
+    """
+    key_str = keyring.get_password(KEYRING_SERVICE_NAME, KEYRING_USERNAME)
+    if key_str:
+        logger.debug("已从系统密钥环获取加密密钥。")
+        return key_str.encode('utf-8')
+    else:
+        new_key = Fernet.generate_key()
+        keyring.set_password(KEYRING_SERVICE_NAME, KEYRING_USERNAME, new_key.decode('utf-8'))
+        logger.info("已生成新的加密密钥并存储在系统密钥环中。")
+        return new_key
 
 
 def get_accounts_filepath() -> Path:
     """获取账号存储文件的完整路径"""
-    credentials_dir = Path(user_data_dir(AppInfo.NAME_EN, AppInfo.AUTHOR, ensure_exists=True))
-    return credentials_dir / ACCOUNTS_FILE_NAME
+    data_dir = Path(user_data_dir(AppInfo.NAME_EN, AppInfo.AUTHOR, ensure_exists=True))
+    return data_dir / ACCOUNTS_FILE_NAME
 
 
 def load_accounts() -> list[AccountCredential]:
@@ -32,7 +50,7 @@ def load_accounts() -> list[AccountCredential]:
         return []
 
     try:
-        key = credential_manager._get_encryption_key()
+        key = _get_encryption_key()
         fernet = Fernet(key)
 
         encrypted_data = accounts_file.read_bytes()
@@ -83,41 +101,14 @@ def save_accounts(accounts: list[AccountCredential]):
         return
 
     try:
-        key = credential_manager._get_encryption_key()
-        fernet = Fernet(key)
+        key = _get_encryption_key()
+        f = Fernet(key)
 
         raw_list = [acc.model_dump() for acc in accounts]
         json_bytes = json.dumps(raw_list, ensure_ascii=False).encode('utf-8')
-        encrypted_bytes = fernet.encrypt(json_bytes)
+        encrypted_bytes = f.encrypt(json_bytes)
 
         accounts_file.write_bytes(encrypted_bytes)
         logger.info(f"已保存 {len(accounts)} 个账号到 {accounts_file}")
     except Exception as e:
         logger.error(f"保存账号数据失败: {e}", exc_info=True)
-
-
-def migrate_from_legacy() -> list[AccountCredential]:
-    """
-    从旧的单账号 credentials.json 迁移到多账号格式。
-    迁移成功后删除旧文件。如果旧文件不存在则返回空列表。
-    """
-    legacy_creds = credential_manager.load_credentials()
-    sessdata = legacy_creds.get('SESSDATA', '').strip()
-    bili_jct = legacy_creds.get('BILI_JCT', '').strip()
-
-    if not sessdata or not bili_jct:
-        return []
-
-    migrated = AccountCredential(uid=0, name="(已迁移)", sessdata=sessdata, bili_jct=bili_jct)
-    logger.info("已从旧凭证文件迁移一个账号。")
-
-    # 删除旧文件
-    legacy_path = credential_manager.get_credentials_filepath()
-    if legacy_path.exists():
-        try:
-            os.remove(legacy_path)
-            logger.info("已删除旧的 credentials.json。")
-        except OSError as e:
-            logger.warning(f"删除旧凭证文件失败: {e}")
-
-    return [migrated]

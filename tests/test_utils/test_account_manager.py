@@ -1,8 +1,7 @@
-"""account_manager 单元测试"""
+"""account_manager 单元测试 — 多账号存储"""
 import json
 import pytest
 from pathlib import Path
-from unittest.mock import patch, MagicMock
 
 from danmaku_sender.core.models.account import AccountCredential
 from danmaku_sender.utils import account_manager
@@ -18,12 +17,12 @@ def accounts_file(tmp_path: Path, monkeypatch):
 
 @pytest.fixture
 def mock_fernet(monkeypatch):
-    """mock 掉 credential_manager._get_encryption_key，使用临时 Fernet 密钥"""
+    """mock 掉 _get_encryption_key，使用临时 Fernet 密钥"""
     from cryptography.fernet import Fernet
     key = Fernet.generate_key()
     fernet = Fernet(key)
     monkeypatch.setattr(
-        "danmaku_sender.utils.credential_manager._get_encryption_key",
+        "danmaku_sender.utils.account_manager._get_encryption_key",
         lambda: key
     )
     return fernet
@@ -84,9 +83,9 @@ class TestLoadAccounts:
         """列表中混入格式异常的条目应被跳过"""
         fernet = mock_fernet
         data = [
-            {"sessdata": "ok", "bili_jct": "ok"},           # 合法
-            {"bad_field": True},                              # 缺少必填字段
-            {"sessdata": "ok2", "bili_jct": "ok2", "uid": 3},  # 合法
+            {"sessdata": "ok", "bili_jct": "ok"},              # 合法
+            {"bad_field": True},                                 # 缺少必填字段
+            {"sessdata": "ok2", "bili_jct": "ok2", "uid": 3},   # 合法
         ]
         encrypted = fernet.encrypt(json.dumps(data).encode())
         accounts_file.write_bytes(encrypted)
@@ -103,7 +102,6 @@ class TestSaveAccounts:
         assert not accounts_file.exists()
 
     def test_empty_list_no_file_no_error(self, accounts_file, mock_fernet):
-        # 文件本就不存在，保存空列表不报错
         account_manager.save_accounts([])
 
     def test_save_creates_encrypted_file(self, accounts_file, mock_fernet):
@@ -113,40 +111,3 @@ class TestSaveAccounts:
         # 文件内容不应是明文
         raw = accounts_file.read_bytes()
         assert b"sessdata" not in raw
-
-
-class TestMigrateFromLegacy:
-    """migrate_from_legacy"""
-
-    def test_no_legacy_file_returns_empty(self, tmp_path, monkeypatch):
-        monkeypatch.setattr(
-            "danmaku_sender.utils.credential_manager.load_credentials",
-            lambda: {'SESSDATA': '', 'BILI_JCT': ''}
-        )
-        assert account_manager.migrate_from_legacy() == []
-
-    def test_migrate_valid_legacy(self, tmp_path, monkeypatch):
-        monkeypatch.setattr(
-            "danmaku_sender.utils.credential_manager.load_credentials",
-            lambda: {'SESSDATA': 'old_s', 'BILI_JCT': 'old_j'}
-        )
-        # mock 删除旧文件
-        legacy_path = tmp_path / "credentials.json"
-        legacy_path.write_text("dummy")
-        monkeypatch.setattr(
-            "danmaku_sender.utils.credential_manager.get_credentials_filepath",
-            lambda: legacy_path
-        )
-
-        result = account_manager.migrate_from_legacy()
-        assert len(result) == 1
-        assert result[0].sessdata == "old_s"
-        assert result[0].name == "(已迁移)"
-        assert not legacy_path.exists()  # 旧文件应被删除
-
-    def test_migrate_empty_legacy_returns_empty(self, monkeypatch):
-        monkeypatch.setattr(
-            "danmaku_sender.utils.credential_manager.load_credentials",
-            lambda: {'SESSDATA': '', 'BILI_JCT': ''}
-        )
-        assert account_manager.migrate_from_legacy() == []
