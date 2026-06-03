@@ -17,13 +17,14 @@ from .sender_page import SenderPage
 from .settings_page import SettingsPage
 from .monitor_page import MonitorPage
 from .editor import EditorPage
-from .dialogs import AboutDialog, HelpDialog, UpdateDialog
+from .dialogs import AboutDialog, HelpDialog, UpdateDialog, AccountDialog
 from .history import HistoryPage
 from .theme_manager import ThemeManager
 
 from ..config.app_config import AppInfo, UI
 from ..core.state import AppState
 from ..core.models.common import MonitorStats
+from ..core.models.user import UserProfile
 from ..utils.log_utils import GuiLoggingHandler
 from ..utils.account_manager import load_accounts, save_accounts
 from ..core.models.account import AccountCredential
@@ -48,6 +49,7 @@ class MainWindow(QMainWindow):
         self.logger = logging.getLogger("App.System.UI.Main")
         self._log_signals_connected = False
         self._help_dialog = None  # 存储帮助窗口的引用，防止被垃圾回收
+        self._current_profile: UserProfile | None = None
 
         # 运行时状态
         self._current_sender_progress = (0, 0)
@@ -90,7 +92,17 @@ class MainWindow(QMainWindow):
     def closeEvent(self, event: QCloseEvent):
         """窗口关闭事件: 保存配置与凭证"""
         try:
-            self._sync_active_account_to_list()
+            # 同步当前凭证到已保存列表
+            if self.state.sessdata and self.state.bili_jct:
+                for acc in self.state.saved_accounts:
+                    if acc.uid == self.state.active_account_uid:
+                        acc.sessdata = self.state.sessdata
+                        acc.bili_jct = self.state.bili_jct
+                        if self._current_profile and self._current_profile.is_login:
+                            acc.name = self._current_profile.username
+                            acc.uid = self._current_profile.uid
+                        break
+
             save_accounts(self.state.saved_accounts)
             if self.state.saved_accounts:
                 self.logger.info(f"已保存 {len(self.state.saved_accounts)} 个账号。")
@@ -192,9 +204,9 @@ class MainWindow(QMainWindow):
         self.sidebar.currentRowChanged.connect(self.content_stack.setCurrentIndex)
         self.sidebar.setCurrentRow(1)
 
-        # 用户页眉点击跳转到设置页
+        # 用户页眉点击打开账号管理弹窗
         self.user_widget.setCursor(Qt.CursorShape.PointingHandCursor)
-        self.user_widget.mousePressEvent = lambda e: self.sidebar.setCurrentRow(0)
+        self.user_widget.mousePressEvent = lambda e: self._open_account_dialog()
 
     def _create_menu_bar(self):
         menu_bar = self.menuBar()
@@ -280,22 +292,10 @@ class MainWindow(QMainWindow):
         except Exception as e:
             self.logger.warning(f"加载凭证失败: {e}")
 
-        self.page_settings._refresh_account_list()
-
-    def _sync_active_account_to_list(self):
-        """将当前 AppState 的凭证同步回 saved_accounts 中对应的条目"""
-        if not self.state.sessdata or not self.state.bili_jct:
-            return
-        for acc in self.state.saved_accounts:
-            if acc.uid == self.state.active_account_uid:
-                acc.sessdata = self.state.sessdata
-                acc.bili_jct = self.state.bili_jct
-                return
-        # 没有匹配的 uid（新登录），追加到列表
-        self.state.saved_accounts.append(AccountCredential(
-            sessdata=self.state.sessdata,
-            bili_jct=self.state.bili_jct,
-        ))
+    def _open_account_dialog(self):
+        """打开账号管理弹窗"""
+        dialog = AccountDialog(self.state, self._current_profile, self)
+        dialog.exec()
 
     def _bind_state_to_pages(self):
         """绑定全局状态并配置日志路由"""
@@ -392,11 +392,10 @@ class MainWindow(QMainWindow):
     @Slot(UserProfile)
     def _on_user_profile_updated(self, profile: UserProfile):
         """同步更新 UI"""
+        self._current_profile = profile
+
         # 更新文字
         self.username_label.setText(profile.username)
-
-        # 同步到设置页（用于保存账号时获取 uid/用户名）
-        self.page_settings.set_current_profile(profile)
 
         # 更新头像
         if profile.is_login and profile.avatar_bytes:
