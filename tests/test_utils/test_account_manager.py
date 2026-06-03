@@ -63,9 +63,7 @@ class TestLoadAccounts:
         ]
         account_manager.save_accounts(original)
         loaded = account_manager.load_accounts()
-        assert len(loaded) == 2
-        assert loaded[0].uid == 1
-        assert loaded[1].name == "B"
+        assert loaded == original
 
     def test_corrupted_file_returns_empty(self, accounts_file, mock_fernet):
         """InvalidToken 路径: 非 Fernet 数据"""
@@ -86,6 +84,7 @@ class TestLoadAccounts:
         encrypted = fernet.encrypt(json.dumps({"bad": "data"}).encode())
         accounts_file.write_bytes(encrypted)
         assert account_manager.load_accounts() == []
+        assert not accounts_file.exists()
 
     def test_malformed_entry_skipped(self, accounts_file, mock_fernet):
         """列表中混入格式异常的条目应被跳过"""

@@ -59,7 +59,8 @@ def load_accounts() -> list[AccountCredential]:
         raw_list = json.loads(decrypted_data.decode('utf-8'))
 
         if not isinstance(raw_list, list):
-            logger.warning("accounts.json 格式异常：顶层不是列表，返回空。")
+            logger.warning("accounts.json 格式异常：顶层不是列表，已删除。")
+            os.remove(accounts_file)
             return []
 
         accounts = []
