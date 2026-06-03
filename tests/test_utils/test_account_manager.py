@@ -68,9 +68,17 @@ class TestLoadAccounts:
         assert loaded[1].name == "B"
 
     def test_corrupted_file_returns_empty(self, accounts_file, mock_fernet):
+        """InvalidToken 路径: 非 Fernet 数据"""
         accounts_file.write_bytes(b"not-valid-fernet-data")
         assert account_manager.load_accounts() == []
         assert not accounts_file.exists()  # 损坏文件应被删除
+
+    def test_decrypted_garbage_returns_empty(self, accounts_file, mock_fernet):
+        """JSONDecodeError 路径: 解密成功但内容不是合法 JSON"""
+        fernet = mock_fernet
+        accounts_file.write_bytes(fernet.encrypt(b"not-json"))
+        assert account_manager.load_accounts() == []
+        assert not accounts_file.exists()
 
     def test_non_list_json_returns_empty(self, accounts_file, mock_fernet):
         """如果加密内容是 dict 而非 list"""
