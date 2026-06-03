@@ -407,7 +407,12 @@ class AccountDialog(QDialog):
         self.setMinimumWidth(360)
         self.setMaximumWidth(420)
         self.setWindowTitle("账号管理")
-        self.setWindowFlags(self.windowFlags() & ~Qt.WindowType.WindowContextHelpButtonHint)
+        self.setWindowFlags(
+            Qt.WindowType.Dialog |
+            Qt.WindowType.WindowTitleHint |
+            Qt.WindowType.WindowCloseButtonHint |
+            Qt.WindowType.CustomizeWindowHint
+        )
 
         self._create_ui()
         self._populate()
@@ -615,7 +620,12 @@ class ManualLoginDialog(QDialog):
         self.credentials: tuple[str, str] = ("", "")
         self.setWindowTitle("手动输入凭证")
         self.setFixedWidth(380)
-        self.setWindowFlags(self.windowFlags() & ~Qt.WindowType.WindowContextHelpButtonHint)
+        self.setWindowFlags(
+            Qt.WindowType.Dialog |
+            Qt.WindowType.WindowTitleHint |
+            Qt.WindowType.WindowCloseButtonHint |
+            Qt.WindowType.CustomizeWindowHint
+        )
 
         layout = QVBoxLayout(self)
         form = QFormLayout()
