@@ -90,13 +90,10 @@ class MainWindow(QMainWindow):
     def closeEvent(self, event: QCloseEvent):
         """窗口关闭事件: 保存配置与凭证"""
         try:
-            if self.state.sessdata and self.state.bili_jct:
-                acc = AccountCredential(
-                    sessdata=self.state.sessdata,
-                    bili_jct=self.state.bili_jct,
-                )
-                save_accounts([acc])
-                self.logger.info("凭证已加密保存。")
+            self._sync_active_account_to_list()
+            save_accounts(self.state.saved_accounts)
+            if self.state.saved_accounts:
+                self.logger.info(f"已保存 {len(self.state.saved_accounts)} 个账号。")
         except Exception as e:
             self.logger.error(f"保存凭证失败: {e}")
 
@@ -268,18 +265,37 @@ class MainWindow(QMainWindow):
         self._auth_debounce_timer.timeout.connect(self._refresh_user_info)
 
     def _load_initial_credentials(self):
-        """加载本地加密凭证（从多账号存储中取第一个）"""
+        """加载已保存的账号列表，激活第一个"""
         try:
             accounts = load_accounts()
+            self.state.saved_accounts = accounts
             if accounts:
                 acc = accounts[0]
                 self.state.sessdata = acc.sessdata
                 self.state.bili_jct = acc.bili_jct
+                self.state.active_account_uid = acc.uid
                 self.logger.info(f"已加载账号: {acc.name or '(未命名)'}")
             else:
                 self.logger.info("没有已保存的账号。")
         except Exception as e:
             self.logger.warning(f"加载凭证失败: {e}")
+
+        self.page_settings._refresh_account_list()
+
+    def _sync_active_account_to_list(self):
+        """将当前 AppState 的凭证同步回 saved_accounts 中对应的条目"""
+        if not self.state.sessdata or not self.state.bili_jct:
+            return
+        for acc in self.state.saved_accounts:
+            if acc.uid == self.state.active_account_uid:
+                acc.sessdata = self.state.sessdata
+                acc.bili_jct = self.state.bili_jct
+                return
+        # 没有匹配的 uid（新登录），追加到列表
+        self.state.saved_accounts.append(AccountCredential(
+            sessdata=self.state.sessdata,
+            bili_jct=self.state.bili_jct,
+        ))
 
     def _bind_state_to_pages(self):
         """绑定全局状态并配置日志路由"""
@@ -378,6 +394,9 @@ class MainWindow(QMainWindow):
         """同步更新 UI"""
         # 更新文字
         self.username_label.setText(profile.username)
+
+        # 同步到设置页（用于保存账号时获取 uid/用户名）
+        self.page_settings.set_current_profile(profile)
 
         # 更新头像
         if profile.is_login and profile.avatar_bytes:

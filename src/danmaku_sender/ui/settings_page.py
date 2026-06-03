@@ -1,6 +1,6 @@
 from PySide6.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout, QFormLayout, QLabel, QLineEdit,
-    QCheckBox, QGroupBox, QPushButton, QDialog
+    QCheckBox, QGroupBox, QPushButton, QDialog, QListWidget, QListWidgetItem, QAbstractItemView
 )
 from PySide6.QtCore import Qt, Slot
 
@@ -9,6 +9,8 @@ from .framework.style_loader import get_svg_icon
 from .dialogs import QRLoginDialog
 
 from ..core.state import AppState
+from ..core.models.account import AccountCredential
+from ..core.models.user import UserProfile
 
 
 class SettingsPage(QWidget):
@@ -16,6 +18,7 @@ class SettingsPage(QWidget):
         super().__init__()
 
         self.state = state
+        self._current_profile: UserProfile | None = None
         self._create_ui()
 
     def _create_ui(self):
@@ -23,6 +26,31 @@ class SettingsPage(QWidget):
         main_layout = QVBoxLayout()
         main_layout.setContentsMargins(20, 20, 20, 20)
         main_layout.setSpacing(15)
+
+        # --- 账号管理 ---
+        account_group = QGroupBox("账号管理")
+        account_layout = QVBoxLayout()
+
+        self.account_list = QListWidget()
+        self.account_list.setSelectionMode(QAbstractItemView.SelectionMode.SingleSelection)
+        self.account_list.setMinimumHeight(80)
+        self.account_list.setMaximumHeight(160)
+        self.account_list.currentRowChanged.connect(self._on_account_selected)
+        account_layout.addWidget(self.account_list)
+
+        account_btn_layout = QHBoxLayout()
+        self.btn_save_account = QPushButton("保存当前账号")
+        self.btn_save_account.clicked.connect(self._save_current_account)
+        self.btn_delete_account = QPushButton("删除选中")
+        self.btn_delete_account.clicked.connect(self._delete_selected_account)
+        self.btn_delete_account.setEnabled(False)
+        account_btn_layout.addWidget(self.btn_save_account)
+        account_btn_layout.addWidget(self.btn_delete_account)
+        account_btn_layout.addStretch()
+        account_layout.addLayout(account_btn_layout)
+
+        account_group.setLayout(account_layout)
+        main_layout.addWidget(account_group)
 
         # --- 身份凭证 ---
         auth_group = QGroupBox("身份凭证 (Cookie)")
@@ -119,3 +147,69 @@ class SettingsPage(QWidget):
             if sessdata and bili_jct:
                 self.sessdata_input.setText(sessdata)
                 self.bili_jct_input.setText(bili_jct)
+
+    # region 账号管理
+
+    def set_current_profile(self, profile: UserProfile):
+        """由 MainWindow 调用，传入当前登录的用户信息"""
+        self._current_profile = profile
+
+    @Slot()
+    def _save_current_account(self):
+        """保存当前凭证为新账号"""
+        sessdata = self.state.sessdata.strip()
+        bili_jct = self.state.bili_jct.strip()
+        if not sessdata or not bili_jct:
+            return
+
+        profile = self._current_profile
+        uid = profile.uid if profile and profile.is_login else 0
+        name = profile.username if profile and profile.is_login else ""
+
+        # 检查是否已存在同 uid 账号
+        for acc in self.state.saved_accounts:
+            if acc.uid == uid and uid != 0:
+                # 更新已有账号的凭证
+                acc.sessdata = sessdata
+                acc.bili_jct = bili_jct
+                self._refresh_account_list()
+                return
+
+        # 新增
+        self.state.saved_accounts.append(AccountCredential(
+            uid=uid, name=name, sessdata=sessdata, bili_jct=bili_jct
+        ))
+        self._refresh_account_list()
+
+    @Slot()
+    def _delete_selected_account(self):
+        """删除选中的账号"""
+        row = self.account_list.currentRow()
+        if row < 0 or row >= len(self.state.saved_accounts):
+            return
+        self.state.saved_accounts.pop(row)
+        self._refresh_account_list()
+
+    @Slot(int)
+    def _on_account_selected(self, row: int):
+        """点击账号列表项：切换到该账号"""
+        self.btn_delete_account.setEnabled(row >= 0)
+        if row < 0 or row >= len(self.state.saved_accounts):
+            return
+        acc = self.state.saved_accounts[row]
+        if acc.sessdata == self.state.sessdata and acc.bili_jct == self.state.bili_jct:
+            return  # 已经是当前账号
+        self.state.sessdata = acc.sessdata
+        self.state.bili_jct = acc.bili_jct
+        self.state.active_account_uid = acc.uid
+
+    def _refresh_account_list(self):
+        """刷新账号列表显示"""
+        self.account_list.clear()
+        for acc in self.state.saved_accounts:
+            label = (acc.name or f"UID:{acc.uid}") if acc.uid else "(未命名)"
+            if acc.uid == self.state.active_account_uid:
+                label += "  ← 当前"
+            self.account_list.addItem(label)
+
+    # endregion
