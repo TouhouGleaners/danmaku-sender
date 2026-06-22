@@ -45,7 +45,8 @@ class AccountData:
 
 
 def _mask(value: str) -> str:
-    """遮蔽凭据：保留前4后4，中间用 * 替代"""
+    """遮蔽凭据：保留前4后4，中间用 * 替代，总长不超过 20"""
     if len(value) <= 8:
         return value
-    return f"{value[:4]}{'*' * (len(value) - 8)}{value[-4:]}"
+    stars = min(len(value) - 8, 8)
+    return f"{value[:4]}{'*' * stars}{value[-4:]}"
