@@ -12,8 +12,6 @@ class CredLine(QWidget):
     def __init__(self, prefix: str, full_value: str, parent=None):
         super().__init__(parent)
         self._full_value = full_value
-        self._popup: CredPopup | None = None
-        self._is_showing = False
 
         layout = QHBoxLayout(self)
         layout.setContentsMargins(0, 0, 0, 0)
@@ -34,28 +32,16 @@ class CredLine(QWidget):
         layout.addStretch()
 
     def _on_click(self, event):
-        if self._is_showing:
-            self._close_popup()
+        if CredPopup.is_visible():
+            CredPopup.close_popup()
+            self._reset_style()
         else:
-            self._show_popup()
+            CredPopup.show_popup(self._full_value, self._value_label)
+            self._value_label.setStyleSheet(
+                "font-family: Consolas, monospace; font-size: 11px; color: #2196F3;"
+            )
 
-    def _show_popup(self):
-        CredPopup.close_existing()
-        self._popup = CredPopup()
-        self._popup.destroyed.connect(self._on_popup_closed)
-        self._popup.show_at(self._full_value, self._value_label)
-        self._is_showing = True
-        self._value_label.setStyleSheet(
-            "font-family: Consolas, monospace; font-size: 11px; color: #2196F3;"
-        )
-
-    def _on_popup_closed(self):
-        self._popup = None
-        self._is_showing = False
+    def _reset_style(self):
         self._value_label.setStyleSheet(
             "font-family: Consolas, monospace; font-size: 11px; color: #555;"
         )
-
-    def _close_popup(self):
-        if self._popup:
-            self._popup.close()

@@ -1,35 +1,39 @@
 """凭据弹出框：深色悬浮框，显示完整值 + 复制按钮"""
-from PySide6.QtCore import Qt, QTimer, QEvent, QObject
+from PySide6.QtCore import Qt, QTimer
+from PySide6.QtGui import QFocusEvent
 from PySide6.QtWidgets import QWidget, QVBoxLayout, QHBoxLayout, QLabel, QPushButton, QApplication
 
 
 class CredPopup(QWidget):
-    """独立顶层窗口，显示完整凭据值"""
+    """全局单例悬浮框"""
 
     _INSTANCE: 'CredPopup | None' = None
 
-    def __init__(self, parent=None):
-        super().__init__(parent)
+    def __init__(self):
+        super().__init__(None)  # 无父级，独立顶层窗口
         self.setWindowFlags(
             Qt.WindowType.FramelessWindowHint |
-            Qt.WindowType.Tool |
-            Qt.WindowType.WindowStaysOnTopHint
+            Qt.WindowType.Tool
         )
-        self.setAttribute(Qt.WidgetAttribute.WA_TranslucentBackground)
+        self.setFocusPolicy(Qt.FocusPolicy.StrongFocus)
         self.setFixedWidth(320)
 
-        layout = QVBoxLayout(self)
-        layout.setContentsMargins(12, 10, 12, 10)
-        layout.setSpacing(8)
+        outer = QVBoxLayout(self)
+        outer.setContentsMargins(0, 0, 0, 0)
+
+        container = QWidget()
+        container.setObjectName("credPopupContainer")
+        inner = QVBoxLayout(container)
+        inner.setContentsMargins(12, 10, 12, 10)
+        inner.setSpacing(8)
 
         self._value_label = QLabel()
         self._value_label.setTextInteractionFlags(Qt.TextInteractionFlag.TextSelectableByMouse)
         self._value_label.setWordWrap(True)
         self._value_label.setStyleSheet(
-            "font-family: Consolas, monospace; font-size: 12px; color: #e0e0e0; "
-            "background: transparent;"
+            "font-family: Consolas, monospace; font-size: 12px; color: #e0e0e0;"
         )
-        layout.addWidget(self._value_label)
+        inner.addWidget(self._value_label)
 
         btn_row = QHBoxLayout()
         btn_row.addStretch()
@@ -43,62 +47,63 @@ class CredPopup(QWidget):
         )
         self._copy_btn.clicked.connect(self._on_copy)
         btn_row.addWidget(self._copy_btn)
-        layout.addLayout(btn_row)
+        inner.addLayout(btn_row)
+
+        outer.addWidget(container)
 
         self._full_value = ""
         self._copy_timer = QTimer(self)
         self._copy_timer.setSingleShot(True)
         self._copy_timer.timeout.connect(lambda: self._copy_btn.setText("复制"))
 
-        self.setStyleSheet("""
-            CredPopup {
-                background: #1e1e1e;
-                border: 1px solid #444;
-                border-radius: 6px;
-            }
-        """)
+        container.setStyleSheet(
+            "QWidget#credPopupContainer { background: #1e1e1e; border: 1px solid #444; border-radius: 6px; }"
+        )
 
-        # 监听全局鼠标点击，点击弹窗外任意位置关闭
-        QApplication.instance().installEventFilter(self)
+    @staticmethod
+    def show_popup(full_value: str, anchor_widget: QWidget):
+        """在 anchor_widget 正上方显示，全局单例"""
+        if CredPopup._INSTANCE is None:
+            CredPopup._INSTANCE = CredPopup()
 
-    def show_at(self, full_value: str, anchor_widget: QWidget):
-        """在指定控件正上方显示"""
-        self._full_value = full_value
-        self._value_label.setText(full_value)
-        self._copy_btn.setText("复制")
-        self.adjustSize()
+        popup = CredPopup._INSTANCE
+        popup._full_value = full_value
+        popup._value_label.setText(full_value)
+        popup._copy_btn.setText("复制")
 
-        # 定位到 anchor 正上方
-        anchor_global = anchor_widget.mapToGlobal(anchor_widget.rect().topLeft())
-        x = anchor_global.x()
-        y = anchor_global.y() - self.height() - 4
-        self.move(x, max(0, y))
-        self.show()
-        self.raise_()
+        # 先 resize 到合适大小
+        popup.adjustSize()
 
-        CredPopup._INSTANCE = self
+        # 计算 anchor 在屏幕上的全局坐标
+        global_top_left = anchor_widget.mapToGlobal(anchor_widget.rect().topLeft())
+        x = global_top_left.x()
+        y = global_top_left.y() - popup.height() - 4
+
+        popup.move(x, max(0, y))
+        popup.show()
+        popup.raise_()
+        popup.setFocus()
+
+    @staticmethod
+    def close_popup():
+        if CredPopup._INSTANCE and CredPopup._INSTANCE.isVisible():
+            CredPopup._INSTANCE.hide()
+
+    @staticmethod
+    def is_visible() -> bool:
+        return CredPopup._INSTANCE is not None and CredPopup._INSTANCE.isVisible()
+
+    def focusOutEvent(self, event: QFocusEvent):
+        """失去焦点时关闭"""
+        super().focusOutEvent(event)
+        # 延迟关闭，避免点击复制按钮时立刻关闭
+        QTimer.singleShot(150, self._check_focus)
+
+    def _check_focus(self):
+        if not self.isActiveWindow():
+            self.hide()
 
     def _on_copy(self):
         QApplication.clipboard().setText(self._full_value)
         self._copy_btn.setText("✓")
         self._copy_timer.start(1200)
-
-    def eventFilter(self, obj: QObject, event: QEvent) -> bool:
-        """全局鼠标点击：点击弹窗外关闭"""
-        if event.type() == QEvent.Type.MouseButtonPress:
-            if self.isVisible() and not self.underMouse():
-                self.close()
-                if CredPopup._INSTANCE is self:
-                    CredPopup._INSTANCE = None
-        return super().eventFilter(obj, event)
-
-    @staticmethod
-    def close_existing():
-        if CredPopup._INSTANCE and CredPopup._INSTANCE.isVisible():
-            CredPopup._INSTANCE.close()
-            CredPopup._INSTANCE = None
-
-    def closeEvent(self, event):
-        # 移除全局事件过滤器
-        QApplication.instance().removeEventFilter(self)
-        super().closeEvent(event)
