@@ -23,6 +23,7 @@ class CredLine(QWidget):
 
         self._value_label = QLabel(_mask(full_value))
         self._value_label.setCursor(Qt.CursorShape.PointingHandCursor)
+        self._value_label.setWordWrap(False)
         self._value_label.setStyleSheet(
             "font-family: Consolas, monospace; font-size: 11px; color: #555;"
         )
