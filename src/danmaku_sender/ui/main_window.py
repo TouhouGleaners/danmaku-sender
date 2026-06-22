@@ -17,7 +17,8 @@ from .sender_page import SenderPage
 from .settings_page import SettingsPage
 from .monitor_page import MonitorPage
 from .editor import EditorPage
-from .dialogs import AboutDialog, HelpDialog, UpdateDialog, AccountDialog
+from .dialogs import AboutDialog, HelpDialog, UpdateDialog
+from .account_manager.main import AccountDialog
 from .history import HistoryPage
 from .theme_manager import ThemeManager
 
@@ -294,7 +295,7 @@ class MainWindow(QMainWindow):
 
     def _open_account_dialog(self):
         """打开账号管理弹窗"""
-        dialog = AccountDialog(self.state, self._current_profile, self)
+        dialog = AccountDialog(self.state, self)
         dialog.exec()
 
     def _bind_state_to_pages(self):
