@@ -10,6 +10,7 @@ from .cred_line import CredLine
 class AccountRow(QFrame):
     """单个账号的展示卡片"""
 
+    use_clicked = Signal(object)     # AccountData
     edit_clicked = Signal(object)    # AccountData
     delete_clicked = Signal(object)  # AccountData
     check_clicked = Signal(object)   # AccountData
@@ -47,6 +48,11 @@ class AccountRow(QFrame):
         top_row.addWidget(self._status_label)
 
         top_row.addStretch()
+
+        btn_use = QPushButton("使用")
+        btn_use.setCursor(Qt.CursorShape.PointingHandCursor)
+        btn_use.clicked.connect(lambda: self.use_clicked.emit(self.account))
+        top_row.addWidget(btn_use)
 
         btn_check = QPushButton("检测")
         btn_check.setCursor(Qt.CursorShape.PointingHandCursor)

@@ -105,12 +105,23 @@ class AccountDialog(QDialog):
 
         for acc in self.accounts:
             row = AccountRow(acc)
+            row.use_clicked.connect(self._use_account)
             row.edit_clicked.connect(self._edit_account)
             row.delete_clicked.connect(self._delete_account)
             row.check_clicked.connect(self._check_account)
             self._scroll_layout.insertWidget(self._scroll_layout.count() - 1, row)
 
         self._count_label.setText(f"共 {len(self.accounts)} 个账号")
+
+    def _use_account(self, account: AccountData):
+        self.state.sessdata = account.sessdata
+        self.state.bili_jct = account.bili_jct
+        # 从 credentials 找 uid
+        for acc in self.state.saved_accounts:
+            if acc.sessdata == account.sessdata:
+                self.state.active_account_uid = acc.uid
+                break
+        self.accept()
 
     def _add_account(self):
         proxy = self.state.sender_config.use_system_proxy
