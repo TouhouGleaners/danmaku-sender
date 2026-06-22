@@ -19,22 +19,12 @@ class AccountRow(QFrame):
         self.account = account
         self.setFixedHeight(72)
         self.setObjectName("accountRow")
-        self.setStyleSheet("""
-            QFrame#accountRow {
-                background: white;
-                border: 1px solid #e0e0e0;
-                border-radius: 8px;
-            }
-            QFrame#accountRow:hover {
-                border-color: #bdbdbd;
-            }
-        """)
 
         layout = QHBoxLayout(self)
         layout.setContentsMargins(12, 10, 12, 10)
         layout.setSpacing(12)
 
-        # 圆形头像
+        # 圆形字母头像
         avatar = QLabel()
         avatar.setFixedSize(44, 44)
         avatar.setPixmap(self._make_avatar(account.initial, account.color))
@@ -52,33 +42,25 @@ class AccountRow(QFrame):
         name_label.setStyleSheet("font-size: 14px; font-weight: bold;")
         top_row.addWidget(name_label)
 
-        status_label = self._make_status_label(account.is_valid)
-        top_row.addWidget(status_label)
+        self._status_label = QLabel()
+        self._update_status(account.is_valid)
+        top_row.addWidget(self._status_label)
 
         top_row.addStretch()
 
-        btn_check = QPushButton("🔍")
-        btn_check.setFixedSize(28, 28)
+        btn_check = QPushButton("检测")
         btn_check.setCursor(Qt.CursorShape.PointingHandCursor)
-        btn_check.setToolTip("检测登录状态")
         btn_check.clicked.connect(lambda: self.check_clicked.emit(self.account))
-        btn_check.setStyleSheet(self._icon_btn_style())
         top_row.addWidget(btn_check)
 
-        btn_edit = QPushButton("✎")
-        btn_edit.setFixedSize(28, 28)
+        btn_edit = QPushButton("编辑")
         btn_edit.setCursor(Qt.CursorShape.PointingHandCursor)
-        btn_edit.setToolTip("编辑")
         btn_edit.clicked.connect(lambda: self.edit_clicked.emit(self.account))
-        btn_edit.setStyleSheet(self._icon_btn_style())
         top_row.addWidget(btn_edit)
 
-        btn_del = QPushButton("✕")
-        btn_del.setFixedSize(28, 28)
+        btn_del = QPushButton("删除")
         btn_del.setCursor(Qt.CursorShape.PointingHandCursor)
-        btn_del.setToolTip("删除")
         btn_del.clicked.connect(lambda: self.delete_clicked.emit(self.account))
-        btn_del.setStyleSheet(self._icon_btn_style_hover_red())
         top_row.addWidget(btn_del)
 
         right.addLayout(top_row)
@@ -93,8 +75,18 @@ class AccountRow(QFrame):
 
         layout.addLayout(right, 1)
 
+    def _update_status(self, is_valid: bool | None):
+        if is_valid is True:
+            self._status_label.setText("✓ 有效")
+            self._status_label.setStyleSheet("color: #4CAF50; font-size: 12px;")
+        elif is_valid is False:
+            self._status_label.setText("✗ 失效")
+            self._status_label.setStyleSheet("color: #E53935; font-size: 12px;")
+        else:
+            self._status_label.setText("未检测")
+            self._status_label.setStyleSheet("color: #999; font-size: 12px;")
+
     def _make_avatar(self, letter: str, color: str) -> QPixmap:
-        """生成圆形字母头像"""
         size = 44
         pixmap = QPixmap(size, size)
         pixmap.fill(QColor("transparent"))
@@ -111,41 +103,3 @@ class AccountRow(QFrame):
         painter.drawText(pixmap.rect(), Qt.AlignmentFlag.AlignCenter, letter)
         painter.end()
         return pixmap
-
-    def _make_status_label(self, is_valid: bool | None) -> QLabel:
-        label = QLabel()
-        if is_valid is True:
-            label.setText("✓ 有效")
-            label.setStyleSheet(
-                "color: #4CAF50; background: #E8F5E9; padding: 2px 8px; "
-                "border-radius: 10px; font-size: 11px;"
-            )
-        elif is_valid is False:
-            label.setText("✗ 失效")
-            label.setStyleSheet(
-                "color: #E53935; background: #FFEBEE; padding: 2px 8px; "
-                "border-radius: 10px; font-size: 11px;"
-            )
-        else:
-            label.setText("未检测")
-            label.setStyleSheet(
-                "color: #999; background: #f5f5f5; padding: 2px 8px; "
-                "border-radius: 10px; font-size: 11px;"
-            )
-        return label
-
-    @staticmethod
-    def _icon_btn_style() -> str:
-        return """
-            QPushButton { background: transparent; border: none; border-radius: 14px;
-                          font-size: 14px; }
-            QPushButton:hover { background: #f0f0f0; }
-        """
-
-    @staticmethod
-    def _icon_btn_style_hover_red() -> str:
-        return """
-            QPushButton { background: transparent; border: none; border-radius: 14px;
-                          font-size: 14px; }
-            QPushButton:hover { background: #FFEBEE; color: #E53935; }
-        """

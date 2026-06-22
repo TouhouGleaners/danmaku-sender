@@ -1,7 +1,7 @@
 """账号管理主窗口"""
 import logging
 
-from PySide6.QtCore import Qt, Signal, Slot
+from PySide6.QtCore import Qt, Slot
 from PySide6.QtWidgets import (
     QDialog, QVBoxLayout, QHBoxLayout, QScrollArea,
     QPushButton, QLabel, QWidget, QMessageBox
@@ -12,7 +12,7 @@ from .widgets.account_row import AccountRow
 from .dialogs.account_form import AccountFormDialog
 
 from ...core.models.account import AccountCredential
-from ...core.state import AppState
+from ...core.state import AppState, ApiAuthConfig
 from ...ui.framework.concurrency import PoolTask
 from ...api.bili_api_client import BiliApiClient
 
@@ -24,7 +24,6 @@ def _credential_to_data(acc: AccountCredential) -> AccountData:
         nickname=acc.name or "未知用户",
         sessdata=acc.sessdata,
         bili_jct=acc.bili_jct,
-        is_valid=None,
     )
 
 
@@ -52,7 +51,6 @@ class AccountDialog(QDialog):
             Qt.WindowType.CustomizeWindowHint
         )
 
-        # 从 state 加载
         self.accounts: list[AccountData] = [
             _credential_to_data(a) for a in state.saved_accounts
         ]
@@ -80,7 +78,6 @@ class AccountDialog(QDialog):
         self._scroll = QScrollArea()
         self._scroll.setWidgetResizable(True)
         self._scroll.setHorizontalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
-        self._scroll.setStyleSheet("QScrollArea { border: none; }")
 
         self._scroll_container = QWidget()
         self._scroll_layout = QVBoxLayout(self._scroll_container)
@@ -94,26 +91,18 @@ class AccountDialog(QDialog):
         # 底部按钮
         btn_row = QHBoxLayout()
         btn_row.addStretch()
-        btn_add = QPushButton("＋ 添加账号")
+        btn_add = QPushButton("添加账号")
         btn_add.setCursor(Qt.CursorShape.PointingHandCursor)
-        btn_add.setStyleSheet("""
-            QPushButton { background: #2196F3; color: white; border: none; border-radius: 6px;
-                          padding: 8px 20px; font-size: 13px; }
-            QPushButton:hover { background: #1976D2; }
-        """)
         btn_add.clicked.connect(self._add_account)
         btn_row.addWidget(btn_add)
         layout.addLayout(btn_row)
 
     def _refresh(self):
-        """重建账号列表"""
-        # 清除所有 widget（保留末尾 stretch）
         while self._scroll_layout.count() > 1:
             item = self._scroll_layout.takeAt(0)
             if item.widget():
                 item.widget().deleteLater()
 
-        # 重建
         for acc in self.accounts:
             row = AccountRow(acc)
             row.edit_clicked.connect(self._edit_account)
@@ -137,7 +126,7 @@ class AccountDialog(QDialog):
     def _delete_account(self, account: AccountData):
         reply = QMessageBox.question(
             self, "删除账号",
-            f"确定要删除账号「{account.nickname}」吗？\n删除后需要重新添加才能使用。",
+            f"确定要删除账号「{account.nickname}」吗？",
             QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
             QMessageBox.StandardButton.No
         )
@@ -146,8 +135,6 @@ class AccountDialog(QDialog):
             self._refresh()
 
     def _check_account(self, account: AccountData):
-        """异步检测账号有效性"""
-        from ...core.state import ApiAuthConfig
         config = ApiAuthConfig(
             sessdata=account.sessdata,
             bili_jct=account.bili_jct,
@@ -172,8 +159,6 @@ class AccountDialog(QDialog):
     def _on_check_result(self, account: AccountData, is_valid: bool):
         account.is_valid = is_valid
         if is_valid:
-            # 更新昵称
-            from ...core.state import ApiAuthConfig
             config = ApiAuthConfig(
                 sessdata=account.sessdata,
                 bili_jct=account.bili_jct,
@@ -192,7 +177,6 @@ class AccountDialog(QDialog):
         self._refresh()
 
     def accept(self):
-        """关闭时同步回 state"""
         self.state.saved_accounts = [
             _data_to_credential(a) for a in self.accounts
         ]

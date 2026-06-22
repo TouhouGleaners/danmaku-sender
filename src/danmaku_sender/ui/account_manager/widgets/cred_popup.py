@@ -26,7 +26,7 @@ class CredPopup(QWidget):
         self._value_label.setTextInteractionFlags(Qt.TextInteractionFlag.TextSelectableByMouse)
         self._value_label.setWordWrap(True)
         self._value_label.setStyleSheet(
-            "font-family: Consolas, 'Courier New', monospace; font-size: 12px; color: #e0e0e0;"
+            "font-family: Consolas, monospace; font-size: 12px; color: #e0e0e0;"
         )
         layout.addWidget(self._value_label)
 
@@ -35,11 +35,6 @@ class CredPopup(QWidget):
         self._copy_btn = QPushButton("复制")
         self._copy_btn.setFixedWidth(60)
         self._copy_btn.setCursor(Qt.CursorShape.PointingHandCursor)
-        self._copy_btn.setStyleSheet("""
-            QPushButton { background: #333; color: #e0e0e0; border: 1px solid #555;
-                          border-radius: 4px; padding: 4px 8px; }
-            QPushButton:hover { background: #444; }
-        """)
         self._copy_btn.clicked.connect(self._on_copy)
         btn_row.addWidget(self._copy_btn)
         layout.addLayout(btn_row)
@@ -53,26 +48,21 @@ class CredPopup(QWidget):
             CredPopup {
                 background: #1e1e1e;
                 border: 1px solid #333;
-                border-radius: 8px;
+                border-radius: 6px;
             }
         """)
 
     def show_at(self, full_value: str, global_pos):
-        """在指定全局坐标附近显示"""
         self._full_value = full_value
         self._value_label.setText(full_value)
         self._copy_btn.setText("复制")
-
-        # 调整高度自适应
         self.adjustSize()
 
-        # 定位到目标上方
         x = global_pos.x()
         y = global_pos.y() - self.height() - 4
         self.move(x, max(0, y))
         self.show()
         self.raise_()
-
         CredPopup._INSTANCE = self
 
     def _on_copy(self):
@@ -82,7 +72,6 @@ class CredPopup(QWidget):
 
     @staticmethod
     def close_existing():
-        """关闭已有的弹出框"""
         if CredPopup._INSTANCE and CredPopup._INSTANCE.isVisible():
             CredPopup._INSTANCE.close()
             CredPopup._INSTANCE = None
