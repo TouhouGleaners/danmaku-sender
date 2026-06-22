@@ -42,18 +42,20 @@ class CredLine(QWidget):
     def _show_popup(self):
         CredPopup.close_existing()
         self._popup = CredPopup()
-        global_pos = self._value_label.mapToGlobal(self._value_label.rect().bottomLeft())
-        self._popup.show_at(self._full_value, global_pos)
+        self._popup.destroyed.connect(self._on_popup_closed)
+        self._popup.show_at(self._full_value, self._value_label)
         self._is_showing = True
         self._value_label.setStyleSheet(
             "font-family: Consolas, monospace; font-size: 11px; color: #2196F3;"
         )
 
-    def _close_popup(self):
-        if self._popup:
-            self._popup.close()
-            self._popup = None
+    def _on_popup_closed(self):
+        self._popup = None
         self._is_showing = False
         self._value_label.setStyleSheet(
             "font-family: Consolas, monospace; font-size: 11px; color: #555;"
         )
+
+    def _close_popup(self):
+        if self._popup:
+            self._popup.close()
