@@ -176,8 +176,15 @@ class AccountDialog(QDialog):
         self.accounts.append(account)
         self._refresh()
 
-    def accept(self):
+    def _sync_state(self):
         self.state.saved_accounts = [
             _data_to_credential(a) for a in self.accounts
         ]
+
+    def accept(self):
+        self._sync_state()
         super().accept()
+
+    def reject(self):
+        self._sync_state()
+        super().reject()
