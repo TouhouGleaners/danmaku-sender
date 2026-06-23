@@ -97,6 +97,8 @@ class AccountDialog(QDialog):
         self._count_label.setText(f"共 {len(self.accounts)} 个账号")
 
     def _use_account(self, account: AccountCredential):
+        if account.sessdata == self.state.sessdata:
+            return
         self.state.sessdata = account.sessdata
         self.state.bili_jct = account.bili_jct
         self.accept()

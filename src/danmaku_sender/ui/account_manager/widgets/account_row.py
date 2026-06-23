@@ -87,6 +87,10 @@ class AccountRow(QFrame):
 
         layout.addLayout(right, 1)
 
+    def mouseDoubleClickEvent(self, event):
+        self.use_clicked.emit(self.account)
+        super().mouseDoubleClickEvent(event)
+
     def _update_status(self, is_valid: bool | None):
         if is_valid is True:
             self._status_label.setText("✓ 有效")
