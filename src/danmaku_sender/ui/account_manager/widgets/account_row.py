@@ -19,6 +19,9 @@ class AccountRow(QFrame):
         self.account = account
         self.setFixedHeight(72)
         self.setObjectName("accountRow")
+        self.setFrameShape(QFrame.Shape.StyledPanel)
+        self.setAttribute(Qt.WidgetAttribute.WA_StyledBackground, True)
+        self.setProperty("active", is_active)
 
         layout = QHBoxLayout(self)
         layout.setContentsMargins(12, 10, 12, 10)
