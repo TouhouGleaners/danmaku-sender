@@ -37,6 +37,11 @@ class AccountDialog(QDialog):
             a.model_copy() for a in state.saved_accounts
         ]
 
+        self._batch_total: int = 0
+        self._batch_done: int = 0
+        self._rows: list[AccountRow] = []
+        self._is_batching: bool = False
+
         self._controller = AccountController(self)
         self._controller.checkFinished.connect(self._on_check_finished)
         self._controller.userInfoFetched.connect(self._on_user_info_fetched)
@@ -51,9 +56,9 @@ class AccountDialog(QDialog):
 
         # 标题栏
         header = QHBoxLayout()
-        title = QLabel("账号管理")
-        title.setObjectName("accountDialogTitle")
-        header.addWidget(title)
+        self._title_label = QLabel("账号管理")
+        self._title_label.setObjectName("accountDialogTitle")
+        header.addWidget(self._title_label)
         self._count_label = QLabel()
         self._count_label.setObjectName("accountDialogCount")
         header.addWidget(self._count_label)
@@ -76,7 +81,21 @@ class AccountDialog(QDialog):
 
         # 底部按钮
         btn_row = QHBoxLayout()
+        self._btn_clear = QPushButton("清除失效")
+        self._btn_clear.setIcon(get_svg_icon("delete_sweep.svg"))
+        self._btn_clear.setCursor(Qt.CursorShape.PointingHandCursor)
+        self._btn_clear.clicked.connect(self._clear_invalid)
+        self._btn_clear.setEnabled(False)
+        btn_row.addWidget(self._btn_clear)
+
+        self._btn_check_all = QPushButton("全部检测")
+        self._btn_check_all.setIcon(get_svg_icon("troubleshoot.svg"))
+        self._btn_check_all.setCursor(Qt.CursorShape.PointingHandCursor)
+        self._btn_check_all.clicked.connect(self._check_all)
+        btn_row.addWidget(self._btn_check_all)
+
         btn_row.addStretch()
+
         btn_add = QPushButton("添加账号")
         btn_add.setIcon(get_svg_icon("person_add.svg"))
         btn_add.setCursor(Qt.CursorShape.PointingHandCursor)
@@ -90,6 +109,7 @@ class AccountDialog(QDialog):
             if item and (w := item.widget()):
                 w.deleteLater()
 
+        self._rows.clear()
         for acc in self.accounts:
             is_active = acc.sessdata == self.state.sessdata
             row = AccountRow(acc, is_active=is_active)
@@ -99,9 +119,14 @@ class AccountDialog(QDialog):
             row.edit_clicked.connect(self._edit_account)
             row.delete_clicked.connect(self._delete_account)
             row.check_clicked.connect(self._check_account)
+            if self._is_batching:
+                row.set_check_enabled(False)
             self._scroll_layout.insertWidget(self._scroll_layout.count() - 1, row)
+            self._rows.append(row)
 
         self._count_label.setText(f"共 {len(self.accounts)} 个账号")
+        if not self._is_batching:
+            self._btn_clear.setEnabled(any(a.is_valid is False for a in self.accounts))
 
     def _make_config(self, account: AccountCredential) -> ApiAuthConfig:
         return ApiAuthConfig(
@@ -161,7 +186,52 @@ class AccountDialog(QDialog):
         account.is_valid = is_valid
         if is_valid:
             self._controller.fetch_user_info(account, self._make_config(account))
+
+        if self._batch_total > 0:
+            self._batch_done += 1
+            self._title_label.setText(f"检测中 {self._batch_done}/{self._batch_total}...")
+            if self._batch_done >= self._batch_total:
+                self._finish_batch()
+
         self._refresh()
+
+    def _check_all(self):
+        if not self.accounts:
+            return
+        self._batch_total = len(self.accounts)
+        self._batch_done = 0
+        self._is_batching = True
+        self._btn_check_all.setEnabled(False)
+        self._btn_clear.setEnabled(False)
+        self._title_label.setText(f"检测中 0/{self._batch_total}...")
+        for row in self._rows:
+            row.set_check_enabled(False)
+
+        for acc in self.accounts:
+            self._controller.check_account(acc, self._make_config(acc))
+
+    def _finish_batch(self):
+        self._batch_total = 0
+        self._batch_done = 0
+        self._is_batching = False
+        self._btn_check_all.setEnabled(True)
+        self._title_label.setText("账号管理")
+        for row in self._rows:
+            row.set_check_enabled(True)
+
+    def _clear_invalid(self):
+        invalid_count = sum(1 for a in self.accounts if a.is_valid is False)
+        if not invalid_count:
+            return
+        reply = QMessageBox.question(
+            self, "清除失效账号",
+            f"确定要删除 {invalid_count} 个失效账号吗？",
+            QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
+            QMessageBox.StandardButton.No
+        )
+        if reply == QMessageBox.StandardButton.Yes:
+            self.accounts = [a for a in self.accounts if a.is_valid is not False]
+            self._refresh()
 
     def _on_account_saved(self, new: AccountCredential, _old: AccountCredential):
         if self._is_duplicate(new.sessdata):
@@ -177,11 +247,13 @@ class AccountDialog(QDialog):
             return
         account.uid = info.get('mid', 0)
         account.name = info.get('uname', account.name)
-        for existing in self.accounts:
-            if existing is not account and existing.uid == account.uid and existing.uid != 0:
-                self.accounts.remove(existing)
-                logger.info(f"合并重复账号: {existing.name} → {account.name}")
-                break
+        duplicate = next(
+            (a for a in self.accounts if a is not account and a.uid == account.uid and a.uid != 0),
+            None,
+        )
+        if duplicate:
+            self.accounts.remove(duplicate)
+            logger.info(f"合并重复账号: {duplicate.name} → {account.name}")
         self._refresh()
 
     def _sync_state(self):

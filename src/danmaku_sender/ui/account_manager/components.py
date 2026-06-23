@@ -21,12 +21,17 @@ class AccountRow(QFrame):
     def __init__(self, account: AccountCredential, is_active: bool = False, parent=None):
         super().__init__(parent)
         self.account = account
+        self._check_btn: QPushButton | None = None
+
         self.setFixedHeight(72)
         self.setObjectName("accountRow")
         self.setFrameShape(QFrame.Shape.StyledPanel)
         self.setAttribute(Qt.WidgetAttribute.WA_StyledBackground, True)
         self.setProperty("active", is_active)
 
+        self._create_ui(is_active)
+
+    def _create_ui(self, is_active: bool):
         layout = QHBoxLayout(self)
         layout.setContentsMargins(12, 10, 12, 10)
         layout.setSpacing(12)
@@ -46,15 +51,15 @@ class AccountRow(QFrame):
         top_row = QHBoxLayout()
         top_row.setSpacing(8)
 
-        display_name = account.name or "未知用户"
-        name_label = QLabel(display_name)
+        name_label = QLabel(self.account.name or "未知用户")
         name_label.setObjectName("accountName")
         top_row.addWidget(name_label)
 
         self._status_icon = QLabel()
         self._status_text = QLabel()
         self._status_text.setObjectName("accountStatus")
-        self._update_status(account.is_valid)
+        self._update_status(self.account.is_valid)
+
         status_widget = QWidget()
         status_layout = QHBoxLayout(status_widget)
         status_layout.setContentsMargins(0, 0, 0, 0)
@@ -62,9 +67,7 @@ class AccountRow(QFrame):
         status_layout.addWidget(self._status_icon)
         status_layout.addWidget(self._status_text)
         top_row.addWidget(status_widget)
-
         top_row.addStretch()
-
         right.addLayout(top_row)
 
         # 第二行：凭据（由 add_cred 填充）
@@ -75,13 +78,13 @@ class AccountRow(QFrame):
         layout.addLayout(right, 1)
 
         # 右侧操作按钮
-        icon_btns = [
+        actions = [
             ("how_to_reg.svg", "使用", self.use_clicked),
             ("troubleshoot.svg", "检测", self.check_clicked),
             ("edit.svg", "编辑", self.edit_clicked),
             ("delete.svg", "删除", self.delete_clicked),
         ]
-        for icon_name, tooltip, signal in icon_btns:
+        for icon_name, tooltip, signal in actions:
             btn = QPushButton()
             btn.setIcon(get_svg_icon(icon_name))
             btn.setIconSize(QSize(20, 20))
@@ -91,6 +94,8 @@ class AccountRow(QFrame):
             btn.setObjectName("accountIconBtn")
             btn.clicked.connect(lambda checked=False, s=signal: s.emit(self.account))
             layout.addWidget(btn, alignment=Qt.AlignmentFlag.AlignVCenter)
+            if signal is self.check_clicked:
+                self._check_btn = btn
 
     def add_cred(self, prefix: str, masked_value: str, full_value: str):
         """添加一个凭据字段：单击遮蔽值复制到剪贴板"""
@@ -114,6 +119,10 @@ class AccountRow(QFrame):
     def mouseDoubleClickEvent(self, event):
         self.use_clicked.emit(self.account)
         super().mouseDoubleClickEvent(event)
+
+    def set_check_enabled(self, enabled: bool):
+        if self._check_btn:
+            self._check_btn.setEnabled(enabled)
 
     def _update_status(self, is_valid: bool | None):
         if is_valid is True:
