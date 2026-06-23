@@ -1,180 +1,12 @@
-"""账号管理子组件：凭据弹出框、凭据行、账号卡片"""
-from typing import Callable
-
-from PySide6.QtCore import QSize, Qt, QEvent, QObject, QPoint, QTimer, Signal
+"""账号管理子组件：账号卡片"""
+from PySide6.QtCore import QSize, Qt, QTimer, Signal
 from PySide6.QtWidgets import (
     QFrame, QHBoxLayout, QVBoxLayout, QLabel, QPushButton, QWidget,
-    QApplication, QScrollArea, QSizePolicy,
+    QApplication,
 )
 
 from danmaku_sender.core.models.account import AccountCredential
 from danmaku_sender.ui.framework.style_loader import get_svg_icon
-
-
-# ── CredPopup 凭据弹出框 ──────────────────────────────────────────
-
-_popup: 'CredPopup | None' = None
-_popup_close_cb: Callable[[], None] | None = None
-
-
-class CredPopup(QWidget):
-    """父窗口内的浮层控件（单例），eventFilter 检测点击外部区域关闭"""
-
-    def __init__(self, parent: QWidget):
-        super().__init__(parent)
-        self.setWindowFlags(Qt.WindowType.SubWindow)
-        self.setAttribute(Qt.WidgetAttribute.WA_TransparentForMouseEvents, False)
-        self.setFixedWidth(320)
-        self.setMaximumHeight(180)
-
-        outer = QVBoxLayout(self)
-        outer.setContentsMargins(0, 0, 0, 0)
-
-        container = QWidget()
-        container.setObjectName("credPopupContainer")
-
-        inner = QVBoxLayout(container)
-        inner.setContentsMargins(12, 10, 12, 10)
-        inner.setSpacing(8)
-
-        self._value_label = QLabel()
-        self._value_label.setTextInteractionFlags(Qt.TextInteractionFlag.TextSelectableByMouse)
-        self._value_label.setWordWrap(True)
-        self._value_label.setSizePolicy(QSizePolicy.Policy.Preferred, QSizePolicy.Policy.Maximum)
-
-        scroll = QScrollArea()
-        scroll.setWidgetResizable(True)
-        scroll.setWidget(self._value_label)
-        scroll.setFrameShape(QScrollArea.Shape.NoFrame)
-        scroll.setHorizontalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
-        scroll.setMaximumHeight(120)
-        inner.addWidget(scroll)
-
-        btn_row = QHBoxLayout()
-        btn_row.addStretch()
-        self._copy_btn = QPushButton("复制")
-        self._copy_btn.setFixedWidth(60)
-        self._copy_btn.setCursor(Qt.CursorShape.PointingHandCursor)
-        self._copy_btn.clicked.connect(self._on_copy)
-        btn_row.addWidget(self._copy_btn)
-        inner.addLayout(btn_row)
-
-        outer.addWidget(container)
-
-        self._full_value = ""
-        QApplication.instance().installEventFilter(self)
-
-    def eventFilter(self, obj: QObject, event: QEvent) -> bool:
-        if event.type() == QEvent.Type.MouseButtonPress and self.isVisible():
-            local_pos = self.mapFromGlobal(event.globalPosition().toPoint())
-            if not self.rect().contains(local_pos):
-                self.hide()
-        return False
-
-    def _on_copy(self):
-        QApplication.clipboard().setText(self._full_value)
-        self._copy_btn.setText("✓")
-        QTimer.singleShot(1200, lambda: self._copy_btn.setText("复制"))
-
-    def hideEvent(self, event):
-        global _popup_close_cb
-        if _popup_close_cb:
-            try:
-                _popup_close_cb()
-            except RuntimeError:
-                _popup_close_cb = None
-        super().hideEvent(event)
-
-    def closeEvent(self, event):
-        QApplication.instance().removeEventFilter(self)
-        super().closeEvent(event)
-
-
-def show_popup(full_value: str, anchor: QWidget, on_close: Callable[[], None] | None = None):
-    """在 anchor 控件正上方显示凭据弹出框"""
-    global _popup, _popup_close_cb
-    _popup_close_cb = on_close
-
-    parent = anchor.window()
-    if _popup is None or _popup.parent() is not parent:
-        if _popup:
-            _popup.deleteLater()
-        _popup = CredPopup(parent)
-
-    _popup._full_value = full_value
-    _popup._value_label.setText(full_value)
-    _popup._copy_btn.setText("复制")
-    _popup.adjustSize()
-
-    anchor_pos = anchor.mapTo(parent, QPoint(0, 0))
-    x = anchor_pos.x()
-    y = anchor_pos.y() - _popup.height() - 4
-    _popup.move(x, max(0, y))
-    _popup.show()
-    _popup.raise_()
-
-
-def close_popup():
-    global _popup
-    if _popup and _popup.isVisible():
-        _popup.hide()
-
-
-def is_popup_visible() -> bool:
-    return _popup is not None and _popup.isVisible()
-
-
-# ── CredLine 凭据显示行 ────────────────────────────────────────────
-
-_active_cred_line: 'CredLine | None' = None
-
-
-class CredLine(QWidget):
-    """单个凭据字段的遮蔽显示，点击可弹出完整值"""
-
-    def __init__(self, prefix: str, masked_value: str, full_value: str, parent=None):
-        super().__init__(parent)
-        self._full_value = full_value
-
-        layout = QHBoxLayout(self)
-        layout.setContentsMargins(0, 0, 0, 0)
-        layout.setSpacing(4)
-
-        prefix_label = QLabel(f"{prefix}:")
-        prefix_label.setObjectName("credPrefix")
-        layout.addWidget(prefix_label)
-
-        self._value_label = QLabel(masked_value)
-        self._value_label.setCursor(Qt.CursorShape.PointingHandCursor)
-        self._value_label.setWordWrap(False)
-        self._value_label.setObjectName("credValue")
-        self._set_normal_style()
-        self._value_label.mousePressEvent = self._on_click
-        layout.addWidget(self._value_label)
-
-        layout.addStretch()
-
-    def _on_click(self, event):
-        global _active_cred_line
-        if is_popup_visible():
-            close_popup()
-            return
-        _active_cred_line = self
-        self._value_label.setProperty("active", True)
-        self._value_label.style().unpolish(self._value_label)
-        self._value_label.style().polish(self._value_label)
-        show_popup(self._full_value, self._value_label, on_close=self._on_popup_closed)
-
-    def _on_popup_closed(self):
-        global _active_cred_line
-        if _active_cred_line:
-            _active_cred_line._set_normal_style()
-            _active_cred_line = None
-
-    def _set_normal_style(self):
-        self._value_label.setProperty("active", False)
-        self._value_label.style().unpolish(self._value_label)
-        self._value_label.style().polish(self._value_label)
 
 
 # ── AccountRow 账号行 ──────────────────────────────────────────────
@@ -236,13 +68,10 @@ class AccountRow(QFrame):
 
         right.addLayout(top_row)
 
-        # 第二行：凭据
-        cred_row = QHBoxLayout()
-        cred_row.setSpacing(16)
-        cred_row.addWidget(CredLine("SESSDATA", account.masked_sessdata, account.sessdata))
-        cred_row.addWidget(CredLine("bili_jct", account.masked_bili_jct, account.bili_jct))
-        cred_row.addStretch()
-        right.addLayout(cred_row)
+        # 第二行：凭据（由 add_cred 填充）
+        self._cred_row = QHBoxLayout()
+        self._cred_row.setSpacing(16)
+        right.addLayout(self._cred_row)
 
         layout.addLayout(right, 1)
 
@@ -263,6 +92,20 @@ class AccountRow(QFrame):
             btn.setObjectName("accountIconBtn")
             btn.clicked.connect(lambda checked=False, s=signal: s.emit(self.account))
             layout.addWidget(btn, alignment=Qt.AlignmentFlag.AlignVCenter)
+
+    def add_cred(self, prefix: str, masked_value: str, full_value: str):
+        """添加一个凭据字段：单击遮蔽值复制到剪贴板"""
+        label = QLabel(f"{prefix}: {masked_value}")
+        label.setObjectName("credValue")
+        label.setCursor(Qt.CursorShape.PointingHandCursor)
+
+        def _on_click(_event):
+            QApplication.clipboard().setText(full_value)
+            label.setText(f"{prefix}: 已复制")
+            QTimer.singleShot(500, lambda: label.setText(f"{prefix}: {masked_value}"))
+
+        label.mousePressEvent = _on_click
+        self._cred_row.addWidget(label)
 
     def mouseDoubleClickEvent(self, event):
         self.use_clicked.emit(self.account)

@@ -87,12 +87,14 @@ class AccountDialog(QDialog):
     def _refresh(self):
         while self._scroll_layout.count() > 1:
             item = self._scroll_layout.takeAt(0)
-            if item.widget():
-                item.widget().deleteLater()
+            if item and (w := item.widget()):
+                w.deleteLater()
 
         for acc in self.accounts:
             is_active = acc.sessdata == self.state.sessdata
             row = AccountRow(acc, is_active=is_active)
+            row.add_cred("SESSDATA", acc.masked_sessdata, acc.sessdata)
+            row.add_cred("bili_jct", acc.masked_bili_jct, acc.bili_jct)
             row.use_clicked.connect(self._use_account)
             row.edit_clicked.connect(self._edit_account)
             row.delete_clicked.connect(self._delete_account)
