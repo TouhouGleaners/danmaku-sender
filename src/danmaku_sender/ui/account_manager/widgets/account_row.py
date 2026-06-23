@@ -1,6 +1,5 @@
-"""单条账号行：头像 + 昵称 + 状态 + 凭据 + 操作按钮"""
+"""单条账号行：昵称 + 状态 + 凭据 + 操作按钮"""
 from PySide6.QtCore import Qt, Signal
-from PySide6.QtGui import QPixmap, QPainter, QColor, QFont
 from PySide6.QtWidgets import QFrame, QHBoxLayout, QVBoxLayout, QLabel, QPushButton
 
 from ..models import AccountData
@@ -24,12 +23,6 @@ class AccountRow(QFrame):
         layout = QHBoxLayout(self)
         layout.setContentsMargins(12, 10, 12, 10)
         layout.setSpacing(12)
-
-        # 圆形字母头像
-        avatar = QLabel()
-        avatar.setFixedSize(44, 44)
-        avatar.setPixmap(self._make_avatar(account.initial, account.color))
-        layout.addWidget(avatar)
 
         # 右侧信息区
         right = QVBoxLayout()
@@ -91,21 +84,3 @@ class AccountRow(QFrame):
         else:
             self._status_label.setText("未检测")
             self._status_label.setStyleSheet("color: #999; font-size: 12px;")
-
-    def _make_avatar(self, letter: str, color: str) -> QPixmap:
-        size = 44
-        pixmap = QPixmap(size, size)
-        pixmap.fill(QColor("transparent"))
-
-        painter = QPainter(pixmap)
-        painter.setRenderHint(QPainter.RenderHint.Antialiasing)
-        painter.setBrush(QColor(color))
-        painter.setPen(Qt.PenStyle.NoPen)
-        painter.drawEllipse(0, 0, size, size)
-
-        painter.setPen(QColor("white"))
-        font = QFont("Arial", 18, QFont.Weight.Bold)
-        painter.setFont(font)
-        painter.drawText(pixmap.rect(), Qt.AlignmentFlag.AlignCenter, letter)
-        painter.end()
-        return pixmap
