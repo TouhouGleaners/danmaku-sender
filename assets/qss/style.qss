@@ -90,3 +90,15 @@ QPushButton[action="true"][state="running"]:hover {
 *[invalid="true"]:focus {
     border: 1px solid {danger} !important;
 }
+
+/* 账号管理 - 账号行 */
+QFrame#accountRow {
+    border: none;
+    border-bottom: 1px solid {border_color};
+}
+QFrame#accountRow:hover {
+    background-color: {bg_hover};
+}
+QFrame#accountRow[active="true"] {
+    background-color: {bg_hover};
+}

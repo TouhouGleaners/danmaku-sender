@@ -13,7 +13,6 @@ from .dialogs.account_form import AccountFormDialog
 from danmaku_sender.core.models.account import AccountCredential
 from danmaku_sender.core.state import AppState, ApiAuthConfig
 from danmaku_sender.ui.framework.concurrency import PoolTask
-from danmaku_sender.ui.theme_manager import ThemeManager
 from danmaku_sender.api.bili_api_client import BiliApiClient
 
 logger = logging.getLogger("App.System.Account")
@@ -79,20 +78,6 @@ class AccountDialog(QDialog):
         btn_add.clicked.connect(self._add_account)
         btn_row.addWidget(btn_add)
         layout.addLayout(btn_row)
-
-        p = ThemeManager.instance().current()
-        self.setStyleSheet(f"""
-            QFrame#accountRow {{
-                border: none;
-                border-bottom: 1px solid {p.border_color};
-            }}
-            QFrame#accountRow:hover {{
-                background-color: {p.bg_hover};
-            }}
-            QFrame#accountRow[active="true"] {{
-                background-color: {p.bg_hover};
-            }}
-        """)
 
     def _refresh(self):
         while self._scroll_layout.count() > 1:
