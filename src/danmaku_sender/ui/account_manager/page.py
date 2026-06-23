@@ -235,11 +235,13 @@ class AccountDialog(QDialog):
             return
         account.uid = info.get('mid', 0)
         account.name = info.get('uname', account.name)
-        for existing in self.accounts:
-            if existing is not account and existing.uid == account.uid and existing.uid != 0:
-                self.accounts.remove(existing)
-                logger.info(f"合并重复账号: {existing.name} → {account.name}")
-                break
+        duplicate = next(
+            (a for a in self.accounts if a is not account and a.uid == account.uid and a.uid != 0),
+            None,
+        )
+        if duplicate:
+            self.accounts.remove(duplicate)
+            logger.info(f"合并重复账号: {duplicate.name} → {account.name}")
         self._refresh()
 
     def _sync_state(self):
