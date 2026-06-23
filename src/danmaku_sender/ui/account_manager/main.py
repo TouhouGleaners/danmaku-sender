@@ -13,6 +13,7 @@ from .dialogs.account_form import AccountFormDialog
 from danmaku_sender.core.models.account import AccountCredential
 from danmaku_sender.core.state import AppState, ApiAuthConfig
 from danmaku_sender.ui.framework.concurrency import PoolTask
+from danmaku_sender.ui.framework.style_loader import get_svg_icon
 from danmaku_sender.api.bili_api_client import BiliApiClient
 
 logger = logging.getLogger("App.System.Account")
@@ -74,6 +75,7 @@ class AccountDialog(QDialog):
         btn_row = QHBoxLayout()
         btn_row.addStretch()
         btn_add = QPushButton("添加账号")
+        btn_add.setIcon(get_svg_icon("person_add.svg"))
         btn_add.setCursor(Qt.CursorShape.PointingHandCursor)
         btn_add.clicked.connect(self._add_account)
         btn_row.addWidget(btn_add)
