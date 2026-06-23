@@ -122,7 +122,7 @@ QFrame#accountAccent {
     border-radius: 1px;
 }
 QFrame#accountAccent[active="true"] {
-    background-color: {primary};
+    background-color: #2196F3;
 }
 
 /* 账号管理 - 标题 */
