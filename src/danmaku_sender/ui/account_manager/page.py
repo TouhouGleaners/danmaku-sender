@@ -39,6 +39,8 @@ class AccountDialog(QDialog):
 
         self._batch_total: int = 0
         self._batch_done: int = 0
+        self._rows: list[AccountRow] = []
+        self._is_batching: bool = False
 
         self._controller = AccountController(self)
         self._controller.checkFinished.connect(self._on_check_finished)
@@ -107,6 +109,7 @@ class AccountDialog(QDialog):
             if item and (w := item.widget()):
                 w.deleteLater()
 
+        self._rows.clear()
         for acc in self.accounts:
             is_active = acc.sessdata == self.state.sessdata
             row = AccountRow(acc, is_active=is_active)
@@ -116,7 +119,10 @@ class AccountDialog(QDialog):
             row.edit_clicked.connect(self._edit_account)
             row.delete_clicked.connect(self._delete_account)
             row.check_clicked.connect(self._check_account)
+            if self._is_batching:
+                row.set_check_enabled(False)
             self._scroll_layout.insertWidget(self._scroll_layout.count() - 1, row)
+            self._rows.append(row)
 
         self._count_label.setText(f"共 {len(self.accounts)} 个账号")
         self._btn_clear.setEnabled(any(a.is_valid is False for a in self.accounts))
@@ -193,9 +199,12 @@ class AccountDialog(QDialog):
             return
         self._batch_total = len(self.accounts)
         self._batch_done = 0
+        self._is_batching = True
         self._btn_check_all.setEnabled(False)
         self._btn_clear.setEnabled(False)
         self._title_label.setText(f"检测中 0/{self._batch_total}...")
+        for row in self._rows:
+            row.set_check_enabled(False)
 
         for acc in self.accounts:
             self._controller.check_account(acc, self._make_config(acc))
@@ -203,8 +212,11 @@ class AccountDialog(QDialog):
     def _finish_batch(self):
         self._batch_total = 0
         self._batch_done = 0
+        self._is_batching = False
         self._btn_check_all.setEnabled(True)
         self._title_label.setText("账号管理")
+        for row in self._rows:
+            row.set_check_enabled(True)
 
     def _clear_invalid(self):
         invalid = [a for a in self.accounts if a.is_valid is False]
