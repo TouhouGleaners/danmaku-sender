@@ -7,7 +7,6 @@ from PySide6.QtWidgets import (
     QPushButton, QLabel, QWidget, QMessageBox
 )
 
-from .models import AccountData
 from .widgets.account_row import AccountRow
 from .dialogs.account_form import AccountFormDialog
 
@@ -17,23 +16,6 @@ from ...ui.framework.concurrency import PoolTask
 from ...api.bili_api_client import BiliApiClient
 
 logger = logging.getLogger("App.System.Account")
-
-
-def _credential_to_data(acc: AccountCredential) -> AccountData:
-    return AccountData(
-        nickname=acc.name or "未知用户",
-        sessdata=acc.sessdata,
-        bili_jct=acc.bili_jct,
-    )
-
-
-def _data_to_credential(data: AccountData, uid: int = 0) -> AccountCredential:
-    return AccountCredential(
-        uid=uid,
-        name=data.nickname if data.nickname != "未知用户" else "",
-        sessdata=data.sessdata,
-        bili_jct=data.bili_jct,
-    )
 
 
 class AccountDialog(QDialog):
@@ -51,8 +33,8 @@ class AccountDialog(QDialog):
             Qt.WindowType.CustomizeWindowHint
         )
 
-        self.accounts: list[AccountData] = [
-            _credential_to_data(a) for a in state.saved_accounts
+        self.accounts: list[AccountCredential] = [
+            a.model_copy() for a in state.saved_accounts
         ]
 
         self._create_ui()
@@ -113,7 +95,7 @@ class AccountDialog(QDialog):
 
         self._count_label.setText(f"共 {len(self.accounts)} 个账号")
 
-    def _use_account(self, account: AccountData):
+    def _use_account(self, account: AccountCredential):
         self.state.sessdata = account.sessdata
         self.state.bili_jct = account.bili_jct
         # 从 credentials 找 uid
@@ -129,15 +111,16 @@ class AccountDialog(QDialog):
         dialog.saved.connect(self._on_account_saved)
         dialog.exec()
 
-    def _edit_account(self, account: AccountData):
+    def _edit_account(self, account: AccountCredential):
         dialog = AccountFormDialog(edit_data=account, parent=self)
         dialog.saved.connect(lambda _: self._refresh())
         dialog.exec()
 
-    def _delete_account(self, account: AccountData):
+    def _delete_account(self, account: AccountCredential):
+        display_name = account.name or "未知用户"
         reply = QMessageBox.question(
             self, "删除账号",
-            f"确定要删除账号「{account.nickname}」吗？",
+            f"确定要删除账号「{display_name}」吗？",
             QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
             QMessageBox.StandardButton.No
         )
@@ -145,7 +128,7 @@ class AccountDialog(QDialog):
             self.accounts.remove(account)
             self._refresh()
 
-    def _check_account(self, account: AccountData):
+    def _check_account(self, account: AccountCredential):
         config = ApiAuthConfig(
             sessdata=account.sessdata,
             bili_jct=account.bili_jct,
@@ -167,7 +150,7 @@ class AccountDialog(QDialog):
         except Exception:
             return False
 
-    def _on_check_result(self, account: AccountData, is_valid: bool):
+    def _on_check_result(self, account: AccountCredential, is_valid: bool):
         account.is_valid = is_valid
         if is_valid:
             config = ApiAuthConfig(
@@ -178,18 +161,18 @@ class AccountDialog(QDialog):
             try:
                 with BiliApiClient.from_config(config) as client:
                     nav = client.get_user_info()
-                    account.nickname = nav.get('uname', account.nickname)
+                    account.name = nav.get('uname', account.name)
             except Exception:
                 pass
         self._refresh()
 
-    def _on_account_saved(self, account: AccountData):
+    def _on_account_saved(self, account: AccountCredential):
         self.accounts.append(account)
         self._refresh()
 
     def _sync_state(self):
         self.state.saved_accounts = [
-            _data_to_credential(a) for a in self.accounts
+            a.model_copy() for a in self.accounts
         ]
 
     def accept(self):

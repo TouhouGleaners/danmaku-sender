@@ -2,19 +2,19 @@
 from PySide6.QtCore import Qt, Signal
 from PySide6.QtWidgets import QFrame, QHBoxLayout, QVBoxLayout, QLabel, QPushButton
 
-from ..models import AccountData
+from ...core.models.account import AccountCredential
 from .cred_line import CredLine
 
 
 class AccountRow(QFrame):
     """单个账号的展示卡片"""
 
-    use_clicked = Signal(object)     # AccountData
-    edit_clicked = Signal(object)    # AccountData
-    delete_clicked = Signal(object)  # AccountData
-    check_clicked = Signal(object)   # AccountData
+    use_clicked = Signal(AccountCredential)
+    edit_clicked = Signal(AccountCredential)
+    delete_clicked = Signal(AccountCredential)
+    check_clicked = Signal(AccountCredential)
 
-    def __init__(self, account: AccountData, parent=None):
+    def __init__(self, account: AccountCredential, parent=None):
         super().__init__(parent)
         self.account = account
         self.setFixedHeight(72)
@@ -32,7 +32,8 @@ class AccountRow(QFrame):
         top_row = QHBoxLayout()
         top_row.setSpacing(8)
 
-        name_label = QLabel(account.nickname)
+        display_name = account.name or "未知用户"
+        name_label = QLabel(display_name)
         name_label.setStyleSheet("font-size: 14px; font-weight: bold;")
         top_row.addWidget(name_label)
 

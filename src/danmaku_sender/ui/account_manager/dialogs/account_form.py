@@ -5,16 +5,16 @@ from PySide6.QtWidgets import (
     QPushButton, QLabel, QLineEdit, QTabBar, QFormLayout, QWidget, QMessageBox
 )
 
-from ..models import AccountData
+from ...core.models.account import AccountCredential
 from ...dialogs import QRLoginDialog
 
 
 class AccountFormDialog(QDialog):
     """添加/编辑账号弹窗"""
 
-    saved = Signal(AccountData)
+    saved = Signal(AccountCredential)
 
-    def __init__(self, edit_data: AccountData | None = None, use_system_proxy: bool = True, parent=None):
+    def __init__(self, edit_data: AccountCredential | None = None, use_system_proxy: bool = True, parent=None):
         super().__init__(parent)
         self._edit_data = edit_data
         self._use_system_proxy = use_system_proxy
@@ -87,7 +87,7 @@ class AccountFormDialog(QDialog):
         layout.addStretch()
         return page
 
-    def _build_manual_page(self, edit_data: AccountData | None) -> QWidget:
+    def _build_manual_page(self, edit_data: AccountCredential | None) -> QWidget:
         page = QWidget()
         layout = QVBoxLayout(page)
         layout.setContentsMargins(0, 10, 0, 0)
@@ -124,7 +124,7 @@ class AccountFormDialog(QDialog):
             se = cookies.get('SESSDATA', '')
             jct = cookies.get('bili_jct', '')
             if se and jct:
-                self.saved.emit(AccountData(sessdata=se, bili_jct=jct))
+                self.saved.emit(AccountCredential(sessdata=se, bili_jct=jct))
                 self.accept()
 
     def _on_submit(self):
@@ -142,6 +142,6 @@ class AccountFormDialog(QDialog):
             self._edit_data.is_valid = None
             self.saved.emit(self._edit_data)
         else:
-            self.saved.emit(AccountData(sessdata=se, bili_jct=jct))
+            self.saved.emit(AccountCredential(sessdata=se, bili_jct=jct))
 
         self.accept()
