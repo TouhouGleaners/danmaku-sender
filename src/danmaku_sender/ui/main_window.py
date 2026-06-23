@@ -77,29 +77,39 @@ class MainWindow(QMainWindow):
 
     def changeEvent(self, event: QEvent):
         """窗口状态变化: 最小化到托盘"""
-        if event.type() != QEvent.Type.WindowStateChange or not self.isMinimized():
-            return super().changeEvent(event)
+        super().changeEvent(event)
 
-        self.hide()
-        self.tray_icon.showMessage(
-            AppInfo.NAME,
-            "程序已最小化到托盘，后台监视/发送任务将继续运行。",
-            QSystemTrayIcon.MessageIcon.Information,
-            2000
-        )
-        event.accept()
+        if event.type() == QEvent.Type.WindowStateChange and self.isMinimized():
+            self.hide()
+            self.tray_icon.showMessage(
+                AppInfo.NAME,
+                "程序已最小化到托盘，后台监视/发送任务将继续运行。",
+                QSystemTrayIcon.MessageIcon.Information,
+                2000
+            )
 
     def closeEvent(self, event: QCloseEvent):
         """窗口关闭事件: 保存配置与凭证"""
         try:
             # 同步当前凭证到已保存列表
             if self.state.sessdata and self.state.bili_jct:
+                found = False
                 for acc in self.state.saved_accounts:
                     if acc.sessdata == self.state.sessdata:
                         acc.bili_jct = self.state.bili_jct
                         if self._current_profile and self._current_profile.is_login:
                             acc.name = self._current_profile.username
+                        found = True
                         break
+
+                if not found:
+                    acc = AccountCredential(
+                        sessdata=self.state.sessdata,
+                        bili_jct=self.state.bili_jct,
+                    )
+                    if self._current_profile and self._current_profile.is_login:
+                        acc.name = self._current_profile.username
+                    self.state.saved_accounts.append(acc)
 
                 save_accounts(self.state.saved_accounts)
                 if self.state.saved_accounts:
