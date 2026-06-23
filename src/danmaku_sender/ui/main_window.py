@@ -96,12 +96,11 @@ class MainWindow(QMainWindow):
             # 同步当前凭证到已保存列表
             if self.state.sessdata and self.state.bili_jct:
                 for acc in self.state.saved_accounts:
-                    if acc.uid == self.state.active_account_uid:
+                    if acc.sessdata == self.state.sessdata:
                         acc.sessdata = self.state.sessdata
                         acc.bili_jct = self.state.bili_jct
                         if self._current_profile and self._current_profile.is_login:
                             acc.name = self._current_profile.username
-                            acc.uid = self._current_profile.uid
                         break
 
             save_accounts(self.state.saved_accounts)
@@ -286,7 +285,6 @@ class MainWindow(QMainWindow):
                 acc = accounts[0]
                 self.state.sessdata = acc.sessdata
                 self.state.bili_jct = acc.bili_jct
-                self.state.active_account_uid = acc.uid
                 self.logger.info(f"已加载账号: {acc.name or '(未命名)'}")
             else:
                 self.logger.info("没有已保存的账号。")

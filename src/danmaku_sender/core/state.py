@@ -124,7 +124,6 @@ class AppState(QObject):
 
         # 多账号
         self.saved_accounts: list[AccountCredential] = []
-        self.active_account_uid: int = 0
 
         self._sender_is_active: bool = False
         self._monitor_is_active: bool = False

@@ -10,10 +10,10 @@ from PySide6.QtWidgets import (
 from .widgets.account_row import AccountRow
 from .dialogs.account_form import AccountFormDialog
 
-from ...core.models.account import AccountCredential
-from ...core.state import AppState, ApiAuthConfig
-from ...ui.framework.concurrency import PoolTask
-from ...api.bili_api_client import BiliApiClient
+from danmaku_sender.core.models.account import AccountCredential
+from danmaku_sender.core.state import AppState, ApiAuthConfig
+from danmaku_sender.ui.framework.concurrency import PoolTask
+from danmaku_sender.api.bili_api_client import BiliApiClient
 
 logger = logging.getLogger("App.System.Account")
 
@@ -86,7 +86,8 @@ class AccountDialog(QDialog):
                 item.widget().deleteLater()
 
         for acc in self.accounts:
-            row = AccountRow(acc)
+            is_active = acc.sessdata == self.state.sessdata
+            row = AccountRow(acc, is_active=is_active)
             row.use_clicked.connect(self._use_account)
             row.edit_clicked.connect(self._edit_account)
             row.delete_clicked.connect(self._delete_account)
@@ -98,11 +99,6 @@ class AccountDialog(QDialog):
     def _use_account(self, account: AccountCredential):
         self.state.sessdata = account.sessdata
         self.state.bili_jct = account.bili_jct
-        # 从 credentials 找 uid
-        for acc in self.state.saved_accounts:
-            if acc.sessdata == account.sessdata:
-                self.state.active_account_uid = acc.uid
-                break
         self.accept()
 
     def _add_account(self):
