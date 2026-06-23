@@ -15,7 +15,6 @@ class AccountCredential(BaseModel):
     """已保存的账号凭证"""
     uid: int = 0
     name: str = ""
-    avatar_url: str = ""
     sessdata: str = ""
     bili_jct: str = ""
     is_valid: bool | None = Field(default=None, exclude=True)  # None=未检测, True=有效, False=失效 (UI 瞬态)
