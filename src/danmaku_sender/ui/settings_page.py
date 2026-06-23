@@ -1,12 +1,9 @@
 from PySide6.QtWidgets import (
-    QWidget, QVBoxLayout, QHBoxLayout, QFormLayout, QLabel, QLineEdit,
-    QCheckBox, QGroupBox, QPushButton, QDialog
+    QWidget, QVBoxLayout, QFormLayout, QLabel, QCheckBox, QGroupBox
 )
-from PySide6.QtCore import Qt, Slot
+from PySide6.QtCore import Qt
 
 from .framework.binder import UIBinder
-from .framework.style_loader import get_svg_icon
-from .dialogs import QRLoginDialog
 
 from ..core.state import AppState
 
@@ -19,43 +16,9 @@ class SettingsPage(QWidget):
         self._create_ui()
 
     def _create_ui(self):
-        # 主布局 - 垂直布局
         main_layout = QVBoxLayout()
         main_layout.setContentsMargins(20, 20, 20, 20)
         main_layout.setSpacing(15)
-
-        # --- 身份凭证 ---
-        auth_group = QGroupBox("身份凭证 (Cookie)")
-        auth_layout = QFormLayout()
-        auth_layout.setLabelAlignment(Qt.AlignmentFlag.AlignRight)
-
-        btn_layout = QHBoxLayout()
-        self.btn_qr_login = QPushButton("扫码登录")
-        self.btn_qr_login.setIcon(get_svg_icon("qr_scan.svg"))
-        self.btn_qr_login.setCursor(Qt.CursorShape.PointingHandCursor)
-        self.btn_qr_login.clicked.connect(self._open_qr_login)
-
-        btn_layout.addWidget(self.btn_qr_login)
-        btn_layout.addStretch()
-
-        auth_layout.addRow("", btn_layout)
-
-        # SESSDATA / bili_jct
-        self.sessdata_input = QLineEdit()
-        self.sessdata_input.setPlaceholderText("请输入您的 SESSDATA")
-        self.sessdata_input.setEchoMode(QLineEdit.EchoMode.Password)
-        self.sessdata_input.setToolTip("SESSDATA 用于身份验证，请妥善保管。")
-
-        self.bili_jct_input = QLineEdit()
-        self.bili_jct_input.setPlaceholderText("请输入您的 bili_jct")
-        self.bili_jct_input.setEchoMode(QLineEdit.EchoMode.Password)
-        self.bili_jct_input.setToolTip("bili_jct 用于请求验证，请妥善保管。")
-
-        auth_layout.addRow(QLabel("SESSDATA:"), self.sessdata_input)
-        auth_layout.addRow(QLabel("bili_jct:"), self.bili_jct_input)
-
-        auth_group.setLayout(auth_layout)
-        main_layout.addWidget(auth_group)
 
         # --- 系统设置 ---
         system_group = QGroupBox("系统设置")
@@ -81,11 +44,9 @@ class SettingsPage(QWidget):
         network_group.setLayout(network_layout)
         main_layout.addWidget(network_group)
 
-        # 添加伸缩项以推送内容到顶部
         main_layout.addStretch()
 
-        # 底部提示
-        info_label = QLabel("ℹ️ 提示：凭证将在关闭时保存以供下次使用。")
+        info_label = QLabel("💡 账号管理请点击左上角头像区域。")
         info_label.setStyleSheet("color: gray; font-size: 12px;")
         main_layout.addWidget(info_label)
 
@@ -93,29 +54,8 @@ class SettingsPage(QWidget):
 
     def _init_bindings(self) -> None:
         """将 UI 控件与全局状态 (AppState) 进行双向绑定"""
-        # 普通属性，实时更新
-        UIBinder.bind(self.sessdata_input, self.state, "sessdata", realtime=True)
-        UIBinder.bind(self.bili_jct_input, self.state, "bili_jct", realtime=True)
-
-        # 清空旧绑定，绑定 SenderConfig
         UIBinder.bind(self.prevent_sleep_checkbox, self.state.sender_config, "prevent_sleep", clear_old=True)
         UIBinder.bind(self.proxy_checkbox, self.state.sender_config, "use_system_proxy", clear_old=True)
 
-        # 不清空，叠加绑定 MonitorConfig
         UIBinder.bind(self.prevent_sleep_checkbox, self.state.monitor_config, "prevent_sleep", clear_old=False)
         UIBinder.bind(self.proxy_checkbox, self.state.monitor_config, "use_system_proxy", clear_old=False)
-
-    @Slot()
-    def _open_qr_login(self):
-        proxy = self.state.sender_config.use_system_proxy
-        dialog = QRLoginDialog(proxy, self)
-
-        # 阻塞等待弹窗返回。如果返回 Accepted，说明扫码成功
-        if dialog.exec() == QDialog.DialogCode.Accepted:
-            cookies = dialog.cookies
-            sessdata = cookies.get('SESSDATA', '')
-            bili_jct = cookies.get('bili_jct', '')
-
-            if sessdata and bili_jct:
-                self.sessdata_input.setText(sessdata)
-                self.bili_jct_input.setText(bili_jct)

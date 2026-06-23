@@ -5,6 +5,7 @@ from pydantic import BaseModel, ConfigDict, Field, model_validator
 from PySide6.QtCore import QObject, Signal
 
 from .models.danmaku import Danmaku
+from .models.account import AccountCredential
 
 
 @dataclass
@@ -120,6 +121,9 @@ class AppState(QObject):
 
         # 运行时状态
         self.video_state = VideoState()
+
+        # 多账号
+        self.saved_accounts: list[AccountCredential] = []
 
         self._sender_is_active: bool = False
         self._monitor_is_active: bool = False

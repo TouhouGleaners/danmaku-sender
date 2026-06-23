@@ -427,7 +427,7 @@ class EditorPage(QWidget):
         menu = QMenu(self)
         row = index.row()
 
-        menu.addAction(get_svg_icon("edit.svg"), "编辑内容", lambda: self._edit_row(row))
+        menu.addAction(get_svg_icon("edit_document.svg"), "编辑内容", lambda: self._edit_row(row))
         menu.addSeparator()
         menu.addAction(get_svg_icon("vertical_align_top.svg"), "在上方插入新弹幕", lambda: self._insert_row(row, InsertPosition.ABOVE))
         menu.addAction(get_svg_icon("vertical_align_bottom.svg"), "在下方插入新弹幕", lambda: self._insert_row(row, InsertPosition.BELOW))
