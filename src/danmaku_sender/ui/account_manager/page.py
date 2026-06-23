@@ -124,15 +124,22 @@ class AccountDialog(QDialog):
         dialog.exec()
 
     def _edit_account(self, account: AccountCredential):
-        dialog = AccountFormDialog(edit_data=account, parent=self)
-        dialog.saved.connect(lambda _: self._on_edit_saved(account))
+        proxy = self.state.sender_config.use_system_proxy
+        dialog = AccountFormDialog(edit_data=account, use_system_proxy=proxy, parent=self)
+        dialog.saved.connect(lambda new, _old: self._on_edit_saved(new, account))
         dialog.exec()
 
-    def _on_edit_saved(self, account: AccountCredential):
-        for acc in self.accounts:
-            if acc is not account and acc.sessdata == account.sessdata:
-                QMessageBox.warning(self, "重复账号", "该 SESSDATA 已存在，不可重复添加。")
-                return
+    def _is_duplicate(self, sessdata: str, exclude: AccountCredential | None = None) -> bool:
+        """检查 SESSDATA 是否已存在（可排除指定账号）"""
+        return any(acc is not exclude and acc.sessdata == sessdata for acc in self.accounts)
+
+    def _on_edit_saved(self, new: AccountCredential, old: AccountCredential):
+        if self._is_duplicate(new.sessdata, exclude=old):
+            QMessageBox.warning(self, "重复账号", "该 SESSDATA 已存在，不可重复添加。")
+            return
+        old.sessdata = new.sessdata
+        old.bili_jct = new.bili_jct
+        old.is_valid = None
         self._refresh()
 
     def _delete_account(self, account: AccountCredential):
@@ -156,15 +163,14 @@ class AccountDialog(QDialog):
             self._controller.fetch_user_info(account, self._make_config(account))
         self._refresh()
 
-    def _on_account_saved(self, account: AccountCredential):
-        for acc in self.accounts:
-            if acc.sessdata == account.sessdata:
-                QMessageBox.warning(self, "重复账号", "该 SESSDATA 已存在，不可重复添加。")
-                return
-        self.accounts.append(account)
+    def _on_account_saved(self, new: AccountCredential, _old: AccountCredential):
+        if self._is_duplicate(new.sessdata):
+            QMessageBox.warning(self, "重复账号", "该 SESSDATA 已存在，不可重复添加。")
+            return
+        self.accounts.append(new)
         self._refresh()
 
-        self._controller.fetch_user_info(account, self._make_config(account))
+        self._controller.fetch_user_info(new, self._make_config(new))
 
     def _on_user_info_fetched(self, account: AccountCredential, info: dict | None):
         if not info or not info.get('isLogin'):

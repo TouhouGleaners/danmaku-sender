@@ -12,7 +12,7 @@ from danmaku_sender.ui.dialogs import QRLoginDialog
 class AccountFormDialog(QDialog):
     """添加/编辑账号弹窗"""
 
-    saved = Signal(AccountCredential)
+    saved = Signal(AccountCredential, AccountCredential)  # (new, old)
 
     def __init__(self, edit_data: AccountCredential | None = None, use_system_proxy: bool = True, parent=None):
         super().__init__(parent)
@@ -124,7 +124,9 @@ class AccountFormDialog(QDialog):
             se = cookies.get('SESSDATA', '')
             jct = cookies.get('bili_jct', '')
             if se and jct:
-                self.saved.emit(AccountCredential(sessdata=se, bili_jct=jct))
+                new = AccountCredential(sessdata=se, bili_jct=jct)
+                old = self._edit_data or AccountCredential()
+                self.saved.emit(new, old)
                 self.accept()
 
     def _on_submit(self):
@@ -136,12 +138,7 @@ class AccountFormDialog(QDialog):
             self._tab_bar.setCurrentIndex(1)
             return
 
-        if self._edit_data:
-            self._edit_data.sessdata = se
-            self._edit_data.bili_jct = jct
-            self._edit_data.is_valid = None
-            self.saved.emit(self._edit_data)
-        else:
-            self.saved.emit(AccountCredential(sessdata=se, bili_jct=jct))
-
+        new = AccountCredential(sessdata=se, bili_jct=jct)
+        old = self._edit_data or AccountCredential()
+        self.saved.emit(new, old)
         self.accept()
