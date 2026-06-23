@@ -2,7 +2,7 @@
 from PySide6.QtCore import Qt, Signal
 from PySide6.QtWidgets import (
     QDialog, QVBoxLayout, QHBoxLayout, QStackedWidget,
-    QPushButton, QLabel, QLineEdit, QTabBar, QFormLayout, QWidget, QMessageBox
+    QPushButton, QLabel, QLineEdit, QTabBar, QFormLayout, QWidget,
 )
 
 from danmaku_sender.core.models.account import AccountCredential
