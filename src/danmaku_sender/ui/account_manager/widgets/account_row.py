@@ -2,7 +2,7 @@
 from PySide6.QtCore import Qt, Signal
 from PySide6.QtWidgets import QFrame, QHBoxLayout, QVBoxLayout, QLabel, QPushButton
 
-from ...core.models.account import AccountCredential
+from danmaku_sender.core.models.account import AccountCredential
 from .cred_line import CredLine
 
 
@@ -14,7 +14,7 @@ class AccountRow(QFrame):
     delete_clicked = Signal(AccountCredential)
     check_clicked = Signal(AccountCredential)
 
-    def __init__(self, account: AccountCredential, parent=None):
+    def __init__(self, account: AccountCredential, is_active: bool = False, parent=None):
         super().__init__(parent)
         self.account = account
         self.setFixedHeight(72)
@@ -23,6 +23,15 @@ class AccountRow(QFrame):
         layout = QHBoxLayout(self)
         layout.setContentsMargins(12, 10, 12, 10)
         layout.setSpacing(12)
+
+        # 左侧激活指示条
+        accent = QFrame()
+        accent.setFixedSize(3, 40)
+        if is_active:
+            accent.setStyleSheet("background: #2196F3; border-radius: 1px;")
+        else:
+            accent.setStyleSheet("background: transparent;")
+        layout.addWidget(accent)
 
         # 右侧信息区
         right = QVBoxLayout()

@@ -2,7 +2,7 @@
 from PySide6.QtCore import Qt
 from PySide6.QtWidgets import QHBoxLayout, QLabel, QWidget
 
-from ...core.models.account import _mask
+from danmaku_sender.core.models.account import _mask
 from .cred_popup import CredPopup
 
 

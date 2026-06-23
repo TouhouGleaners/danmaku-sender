@@ -5,8 +5,8 @@ from PySide6.QtWidgets import (
     QPushButton, QLabel, QLineEdit, QTabBar, QFormLayout, QWidget, QMessageBox
 )
 
-from ...core.models.account import AccountCredential
-from ...dialogs import QRLoginDialog
+from danmaku_sender.core.models.account import AccountCredential
+from danmaku_sender.ui.dialogs import QRLoginDialog
 
 
 class AccountFormDialog(QDialog):
