@@ -109,8 +109,16 @@ class AccountDialog(QDialog):
 
     def _edit_account(self, account: AccountCredential):
         dialog = AccountFormDialog(edit_data=account, parent=self)
-        dialog.saved.connect(lambda _: self._refresh())
+        dialog.saved.connect(lambda _: self._on_edit_saved(account))
         dialog.exec()
+
+    def _on_edit_saved(self, account: AccountCredential):
+        # account 已被 dialog 就地修改，只需检查重复
+        for acc in self.accounts:
+            if acc is not account and acc.sessdata == account.sessdata:
+                QMessageBox.warning(self, "重复账号", "该 SESSDATA 已存在，不可重复添加。")
+                return
+        self._refresh()
 
     def _delete_account(self, account: AccountCredential):
         display_name = account.name or "未知用户"
@@ -158,12 +166,53 @@ class AccountDialog(QDialog):
                 with BiliApiClient.from_config(config) as client:
                     nav = client.get_user_info()
                     account.name = nav.get('uname', account.name)
+                    if not account.uid:
+                        account.uid = nav.get('mid', 0)
             except Exception:
                 pass
         self._refresh()
 
     def _on_account_saved(self, account: AccountCredential):
+        # 快速检查：sessdata 重复
+        for acc in self.accounts:
+            if acc.sessdata == account.sessdata:
+                QMessageBox.warning(self, "重复账号", "该 SESSDATA 已存在，不可重复添加。")
+                return
         self.accounts.append(account)
+        self._refresh()
+
+        # 异步获取 uid，用于同用户凭证更新时去重
+        config = ApiAuthConfig(
+            sessdata=account.sessdata,
+            bili_jct=account.bili_jct,
+            use_system_proxy=self.state.sender_config.use_system_proxy
+        )
+        PoolTask.submit(
+            self._do_fetch_user_info,
+            lambda info: self._on_user_info_fetched(account, info),
+            lambda _: None,
+            config,
+        )
+
+    @staticmethod
+    def _do_fetch_user_info(config) -> dict | None:
+        try:
+            with BiliApiClient.from_config(config) as client:
+                return client.get_user_info()
+        except Exception:
+            return None
+
+    def _on_user_info_fetched(self, account: AccountCredential, info: dict | None):
+        if not info or not info.get('isLogin'):
+            return
+        account.uid = info.get('mid', 0)
+        account.name = info.get('uname', account.name)
+        # uid 去重：合并同用户的旧条目
+        for existing in self.accounts:
+            if existing is not account and existing.uid == account.uid and existing.uid != 0:
+                self.accounts.remove(existing)
+                logger.info(f"合并重复账号: {existing.name} → {account.name}")
+                break
         self._refresh()
 
     def _sync_state(self):
