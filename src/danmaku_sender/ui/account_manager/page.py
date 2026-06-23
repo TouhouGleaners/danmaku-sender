@@ -13,9 +13,8 @@ from .account_form import AccountFormDialog
 
 from danmaku_sender.core.models.account import AccountCredential, _mask
 from danmaku_sender.core.state import AppState, ApiAuthConfig
-from danmaku_sender.ui.framework.concurrency import PoolTask
+from danmaku_sender.ui.controllers.account_controller import AccountController
 from danmaku_sender.ui.framework.style_loader import get_svg_icon
-from danmaku_sender.api.bili_api_client import BiliApiClient
 
 logger = logging.getLogger("App.System.Account")
 
@@ -315,6 +314,13 @@ class AccountDialog(QDialog):
             a.model_copy() for a in state.saved_accounts
         ]
 
+        self._checking_account: AccountCredential | None = None
+        self._fetching_account: AccountCredential | None = None
+
+        self._controller = AccountController(self)
+        self._controller.checkFinished.connect(self._on_check_finished)
+        self._controller.userInfoFetched.connect(self._on_user_info_fetched)
+
         self._create_ui()
         self._refresh()
 
@@ -412,44 +418,23 @@ class AccountDialog(QDialog):
             self.accounts.remove(account)
             self._refresh()
 
-    def _check_account(self, account: AccountCredential):
-        config = ApiAuthConfig(
+    def _make_config(self, account: AccountCredential) -> ApiAuthConfig:
+        return ApiAuthConfig(
             sessdata=account.sessdata,
             bili_jct=account.bili_jct,
-            use_system_proxy=self.state.sender_config.use_system_proxy
-        )
-        PoolTask.submit(
-            self._do_check,
-            lambda result: self._on_check_result(account, result),
-            lambda _: self._on_check_result(account, False),
-            config,
+            use_system_proxy=self.state.sender_config.use_system_proxy,
         )
 
-    @staticmethod
-    def _do_check(config) -> bool:
-        try:
-            with BiliApiClient.from_config(config) as client:
-                nav = client.get_user_info()
-                return bool(nav.get('isLogin'))
-        except Exception:
-            return False
+    def _check_account(self, account: AccountCredential):
+        self._checking_account = account
+        self._controller.check_account(self._make_config(account))
 
-    def _on_check_result(self, account: AccountCredential, is_valid: bool):
+    def _on_check_finished(self, is_valid: bool):
+        account = self._checking_account
         account.is_valid = is_valid
         if is_valid:
-            config = ApiAuthConfig(
-                sessdata=account.sessdata,
-                bili_jct=account.bili_jct,
-                use_system_proxy=self.state.sender_config.use_system_proxy
-            )
-            try:
-                with BiliApiClient.from_config(config) as client:
-                    nav = client.get_user_info()
-                    account.name = nav.get('uname', account.name)
-                    if not account.uid:
-                        account.uid = nav.get('mid', 0)
-            except Exception:
-                pass
+            self._fetching_account = account
+            self._controller.fetch_user_info(self._make_config(account))
         self._refresh()
 
     def _on_account_saved(self, account: AccountCredential):
@@ -460,28 +445,12 @@ class AccountDialog(QDialog):
         self.accounts.append(account)
         self._refresh()
 
-        config = ApiAuthConfig(
-            sessdata=account.sessdata,
-            bili_jct=account.bili_jct,
-            use_system_proxy=self.state.sender_config.use_system_proxy
-        )
-        PoolTask.submit(
-            self._do_fetch_user_info,
-            lambda info: self._on_user_info_fetched(account, info),
-            lambda _: None,
-            config,
-        )
+        self._fetching_account = account
+        self._controller.fetch_user_info(self._make_config(account))
 
-    @staticmethod
-    def _do_fetch_user_info(config) -> dict | None:
-        try:
-            with BiliApiClient.from_config(config) as client:
-                return client.get_user_info()
-        except Exception:
-            return None
-
-    def _on_user_info_fetched(self, account: AccountCredential, info: dict | None):
-        if not info or not info.get('isLogin'):
+    def _on_user_info_fetched(self, info: dict | None):
+        account = self._fetching_account
+        if not account or not info or not info.get('isLogin'):
             return
         account.uid = info.get('mid', 0)
         account.name = info.get('uname', account.name)
