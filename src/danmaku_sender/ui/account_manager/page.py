@@ -125,7 +125,8 @@ class AccountDialog(QDialog):
             self._rows.append(row)
 
         self._count_label.setText(f"共 {len(self.accounts)} 个账号")
-        self._btn_clear.setEnabled(any(a.is_valid is False for a in self.accounts))
+        if not self._is_batching:
+            self._btn_clear.setEnabled(any(a.is_valid is False for a in self.accounts))
 
     def _make_config(self, account: AccountCredential) -> ApiAuthConfig:
         return ApiAuthConfig(
@@ -219,18 +220,17 @@ class AccountDialog(QDialog):
             row.set_check_enabled(True)
 
     def _clear_invalid(self):
-        invalid = [a for a in self.accounts if a.is_valid is False]
-        if not invalid:
+        invalid_count = sum(1 for a in self.accounts if a.is_valid is False)
+        if not invalid_count:
             return
         reply = QMessageBox.question(
             self, "清除失效账号",
-            f"确定要删除 {len(invalid)} 个失效账号吗？",
+            f"确定要删除 {invalid_count} 个失效账号吗？",
             QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
             QMessageBox.StandardButton.No
         )
         if reply == QMessageBox.StandardButton.Yes:
-            for acc in invalid:
-                self.accounts.remove(acc)
+            self.accounts = [a for a in self.accounts if a.is_valid is not False]
             self._refresh()
 
     def _on_account_saved(self, new: AccountCredential, _old: AccountCredential):
