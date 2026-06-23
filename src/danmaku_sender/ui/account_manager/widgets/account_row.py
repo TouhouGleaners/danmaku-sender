@@ -1,9 +1,11 @@
 """单条账号行：昵称 + 状态 + 凭据 + 操作按钮"""
-from PySide6.QtCore import Qt, Signal
+from PySide6.QtCore import QSize, Qt, Signal
 from PySide6.QtWidgets import QFrame, QHBoxLayout, QVBoxLayout, QLabel, QPushButton
 
-from danmaku_sender.core.models.account import AccountCredential
 from .cred_line import CredLine
+
+from danmaku_sender.core.models.account import AccountCredential
+from danmaku_sender.ui.framework.style_loader import get_svg_icon
 
 
 class AccountRow(QFrame):
@@ -55,26 +57,6 @@ class AccountRow(QFrame):
 
         top_row.addStretch()
 
-        btn_use = QPushButton("使用")
-        btn_use.setCursor(Qt.CursorShape.PointingHandCursor)
-        btn_use.clicked.connect(lambda: self.use_clicked.emit(self.account))
-        top_row.addWidget(btn_use)
-
-        btn_check = QPushButton("检测")
-        btn_check.setCursor(Qt.CursorShape.PointingHandCursor)
-        btn_check.clicked.connect(lambda: self.check_clicked.emit(self.account))
-        top_row.addWidget(btn_check)
-
-        btn_edit = QPushButton("编辑")
-        btn_edit.setCursor(Qt.CursorShape.PointingHandCursor)
-        btn_edit.clicked.connect(lambda: self.edit_clicked.emit(self.account))
-        top_row.addWidget(btn_edit)
-
-        btn_del = QPushButton("删除")
-        btn_del.setCursor(Qt.CursorShape.PointingHandCursor)
-        btn_del.clicked.connect(lambda: self.delete_clicked.emit(self.account))
-        top_row.addWidget(btn_del)
-
         right.addLayout(top_row)
 
         # 第二行：凭据
@@ -86,6 +68,23 @@ class AccountRow(QFrame):
         right.addLayout(cred_row)
 
         layout.addLayout(right, 1)
+
+        icon_btns = [
+            ("how_to_reg.svg", "使用", self.use_clicked),
+            ("troubleshoot.svg", "检测", self.check_clicked),
+            ("edit.svg", "编辑", self.edit_clicked),
+            ("delete.svg", "删除", self.delete_clicked),
+        ]
+        for icon_name, tooltip, signal in icon_btns:
+            btn = QPushButton()
+            btn.setIcon(get_svg_icon(icon_name, color="#434343"))
+            btn.setIconSize(QSize(20, 20))
+            btn.setToolTip(tooltip)
+            btn.setCursor(Qt.CursorShape.PointingHandCursor)
+            btn.setFixedSize(32, 32)
+            btn.setObjectName("accountIconBtn")
+            btn.clicked.connect(lambda checked=False, s=signal: s.emit(self.account))
+            layout.addWidget(btn, alignment=Qt.AlignmentFlag.AlignVCenter)
 
     def mouseDoubleClickEvent(self, event):
         self.use_clicked.emit(self.account)

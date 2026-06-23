@@ -102,3 +102,16 @@ QFrame#accountRow:hover {
 QFrame#accountRow[active="true"] {
     background-color: {bg_hover};
 }
+QPushButton#accountIconBtn {
+    border: 1px solid transparent;
+    border-radius: 4px;
+    background: transparent;
+    padding: 2px;
+}
+QPushButton#accountIconBtn:hover {
+    background-color: {bg_hover};
+    border-color: {border_color};
+}
+QPushButton#accountIconBtn:pressed {
+    background-color: {border_color};
+}

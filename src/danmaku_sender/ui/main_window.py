@@ -191,7 +191,7 @@ class MainWindow(QMainWindow):
         pages = [
             ("全局设置", self.page_settings, "settings.svg"),
             ("弹幕发射器", self.page_sender, "send.svg"),
-            ("弹幕编辑器", self.page_editor, "edit.svg"),
+            ("弹幕编辑器", self.page_editor, "edit_document.svg"),
             ("弹幕监视器", self.page_monitor, "monitor.svg"),
             ("弹幕历史记录", self.page_history, "history.svg"),
         ]
