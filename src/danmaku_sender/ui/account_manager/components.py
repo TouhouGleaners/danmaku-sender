@@ -1,15 +1,14 @@
 """账号管理子组件：账号卡片"""
 from PySide6.QtCore import QSize, Qt, QTimer, Signal
+from PySide6.QtGui import QMouseEvent
 from PySide6.QtWidgets import (
-    QFrame, QHBoxLayout, QVBoxLayout, QLabel, QPushButton, QWidget,
-    QApplication,
+    QFrame, QHBoxLayout, QVBoxLayout, QLabel,
+    QPushButton, QWidget, QApplication
 )
 
 from danmaku_sender.core.models.account import AccountCredential
 from danmaku_sender.ui.framework.style_loader import get_svg_icon
 
-
-# ── AccountRow 账号行 ──────────────────────────────────────────────
 
 class AccountRow(QFrame):
     """单个账号的展示卡片"""
@@ -99,9 +98,14 @@ class AccountRow(QFrame):
         label.setObjectName("credValue")
         label.setCursor(Qt.CursorShape.PointingHandCursor)
 
-        def _on_click(_event):
+        def _on_click(event: QMouseEvent):
+            if not (event.modifiers() & Qt.KeyboardModifier.ControlModifier):
+                label.setText(f"{prefix}: 按 Ctrl+单击复制完整值")
+                QTimer.singleShot(1000, lambda: label.setText(f"{prefix}: {masked_value}"))
+                return
+
             QApplication.clipboard().setText(full_value)
-            label.setText(f"{prefix}: 已复制")
+            label.setText(f"{prefix}: 已复制完整值")
             QTimer.singleShot(500, lambda: label.setText(f"{prefix}: {masked_value}"))
 
         label.mousePressEvent = _on_click

@@ -18,7 +18,8 @@ def _check_login(config: ApiAuthConfig) -> bool:
         with BiliApiClient.from_config(config) as client:
             nav = client.get_user_info()
             return bool(nav.get('isLogin'))
-    except Exception:
+    except Exception as e:
+        logger.debug(f"账号检测失败: {e}")
         return False
 
 
@@ -27,7 +28,8 @@ def _fetch_user_info(config: ApiAuthConfig) -> dict | None:
     try:
         with BiliApiClient.from_config(config) as client:
             return client.get_user_info()
-    except Exception:
+    except Exception as e:
+        logger.debug(f"获取用户信息失败: {e}")
         return None
 
 
