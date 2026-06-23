@@ -4,6 +4,7 @@ import logging
 from PySide6.QtCore import QObject, Signal
 
 from danmaku_sender.api.bili_api_client import BiliApiClient
+from danmaku_sender.core.models.account import AccountCredential
 from danmaku_sender.core.state import ApiAuthConfig
 from danmaku_sender.ui.framework.concurrency import PoolTask
 
@@ -33,26 +34,26 @@ def _fetch_user_info(config: ApiAuthConfig) -> dict | None:
 class AccountController(QObject):
     """账号管理控制器"""
 
-    checkFinished = Signal(bool)
-    userInfoFetched = Signal(object)  # dict | None
+    checkFinished = Signal(AccountCredential, bool)
+    userInfoFetched = Signal(AccountCredential, object)  # dict | None
 
     def __init__(self, parent=None):
         super().__init__(parent)
 
-    def check_account(self, config: ApiAuthConfig):
+    def check_account(self, account: AccountCredential, config: ApiAuthConfig):
         """异步检测账号是否有效"""
         PoolTask.submit(
             _check_login,
-            self.checkFinished.emit,
-            lambda _: self.checkFinished.emit(False),
+            lambda result: self.checkFinished.emit(account, result),
+            lambda _: self.checkFinished.emit(account, False),
             config,
         )
 
-    def fetch_user_info(self, config: ApiAuthConfig):
+    def fetch_user_info(self, account: AccountCredential, config: ApiAuthConfig):
         """异步获取用户信息（昵称、uid）"""
         PoolTask.submit(
             _fetch_user_info,
-            self.userInfoFetched.emit,
-            lambda _: self.userInfoFetched.emit(None),
+            lambda result: self.userInfoFetched.emit(account, result),
+            lambda _: self.userInfoFetched.emit(account, None),
             config,
         )

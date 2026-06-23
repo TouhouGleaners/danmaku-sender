@@ -37,9 +37,6 @@ class AccountDialog(QDialog):
             a.model_copy() for a in state.saved_accounts
         ]
 
-        self._checking_account: AccountCredential | None = None
-        self._fetching_account: AccountCredential | None = None
-
         self._controller = AccountController(self)
         self._controller.checkFinished.connect(self._on_check_finished)
         self._controller.userInfoFetched.connect(self._on_user_info_fetched)
@@ -149,15 +146,12 @@ class AccountDialog(QDialog):
             self._refresh()
 
     def _check_account(self, account: AccountCredential):
-        self._checking_account = account
-        self._controller.check_account(self._make_config(account))
+        self._controller.check_account(account, self._make_config(account))
 
-    def _on_check_finished(self, is_valid: bool):
-        account = self._checking_account
+    def _on_check_finished(self, account: AccountCredential, is_valid: bool):
         account.is_valid = is_valid
         if is_valid:
-            self._fetching_account = account
-            self._controller.fetch_user_info(self._make_config(account))
+            self._controller.fetch_user_info(account, self._make_config(account))
         self._refresh()
 
     def _on_account_saved(self, account: AccountCredential):
@@ -168,12 +162,10 @@ class AccountDialog(QDialog):
         self.accounts.append(account)
         self._refresh()
 
-        self._fetching_account = account
-        self._controller.fetch_user_info(self._make_config(account))
+        self._controller.fetch_user_info(account, self._make_config(account))
 
-    def _on_user_info_fetched(self, info: dict | None):
-        account = self._fetching_account
-        if not account or not info or not info.get('isLogin'):
+    def _on_user_info_fetched(self, account: AccountCredential, info: dict | None):
+        if not info or not info.get('isLogin'):
             return
         account.uid = info.get('mid', 0)
         account.name = info.get('uname', account.name)
