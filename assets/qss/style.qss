@@ -115,3 +115,55 @@ QPushButton#accountIconBtn:hover {
 QPushButton#accountIconBtn:pressed {
     background-color: {border_color};
 }
+
+/* 账号管理 - 凭据行 */
+QLabel#credPrefix {
+    color: {text_secondary};
+    font-size: 11px;
+}
+QLabel#credValue {
+    font-family: Consolas, monospace;
+    font-size: 11px;
+    color: {text_secondary};
+}
+QLabel#credValue[active="true"] {
+    color: {primary};
+}
+
+/* 账号管理 - 凭据弹出框 */
+QWidget#credPopupContainer {
+    background: {bg_base};
+    border: 1px solid {border_color};
+    border-radius: 6px;
+}
+QWidget#credPopupContainer QLabel {
+    color: {text_main};
+    background: transparent;
+    font-family: Consolas, monospace;
+    font-size: 12px;
+}
+QWidget#credPopupContainer QScrollArea {
+    background: transparent;
+    border: none;
+}
+QWidget#credPopupContainer QPushButton {
+    background: {bg_surface};
+    color: {text_main};
+    border: 1px solid {border_color};
+    border-radius: 4px;
+    padding: 4px 8px;
+}
+QWidget#credPopupContainer QPushButton:hover {
+    background: {bg_hover};
+}
+
+/* 账号管理 - 状态文字 */
+QLabel#accountStatus[status="valid"] {
+    color: {success};
+}
+QLabel#accountStatus[status="invalid"] {
+    color: {danger};
+}
+QLabel#accountStatus[status="unknown"] {
+    color: {text_secondary};
+}

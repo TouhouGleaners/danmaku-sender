@@ -18,7 +18,7 @@ from .settings_page import SettingsPage
 from .monitor_page import MonitorPage
 from .editor import EditorPage
 from .dialogs import AboutDialog, HelpDialog, UpdateDialog
-from .account_manager.main import AccountDialog
+from .account_manager import AccountDialog
 from .history import HistoryPage
 from .theme_manager import ThemeManager
 
