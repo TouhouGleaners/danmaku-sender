@@ -366,8 +366,8 @@ class MainWindow(QMainWindow):
         self.state.senderActiveChanged.connect(self._refresh_global_status)
         self.state.monitorActiveChanged.connect(self._refresh_global_status)
 
-        self.page_sender.sender_controller.progressUpdated.connect(self._on_sender_progress_sync)
-        self.page_monitor.monitor_controller.statsUpdated.connect(self._on_monitor_stats_sync)
+        self.page_sender.progressUpdated.connect(self._on_sender_progress_sync)
+        self.page_monitor.statsUpdated.connect(self._on_monitor_stats_sync)
 
         # 触发首次用户信息请求
         QTimer.singleShot(500, self._refresh_user_info)

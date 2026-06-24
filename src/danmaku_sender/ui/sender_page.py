@@ -8,7 +8,7 @@ from PySide6.QtWidgets import (
     QFileDialog, QMessageBox
 )
 from PySide6.QtGui import QTextCursor, QDragEnterEvent, QDropEvent
-from PySide6.QtCore import Qt, QDateTime, Slot
+from PySide6.QtCore import Qt, QDateTime, Signal, Slot
 
 from .framework.binder import UIBinder
 from .framework.style_loader import get_svg_icon
@@ -25,6 +25,8 @@ from danmaku_sender.utils.notification_utils import send_windows_notification
 
 
 class SenderPage(QWidget):
+    progressUpdated = Signal(int, int, float)
+
     def __init__(self, state: AppState):
         super().__init__()
         self.state = state
@@ -103,6 +105,7 @@ class SenderPage(QWidget):
 
         # SenderController
         self.sender_controller.progressUpdated.connect(self._on_send_progress)
+        self.sender_controller.progressUpdated.connect(self.progressUpdated.emit)
         self.sender_controller.taskFinished.connect(self._on_send_finished)
         self.sender_controller.xmlParsed.connect(self._on_xml_parsed)
         self.sender_controller.xmlParseFailed.connect(self._on_xml_parse_failed)

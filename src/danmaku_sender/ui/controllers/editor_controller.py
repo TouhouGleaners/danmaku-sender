@@ -76,6 +76,9 @@ class EditorController(QObject):
         """
         异步导入 XML 文件到工作区：解析在后台线程执行，状态更新在 UI 线程回调。
 
+        注意: on_success / on_error 回调由 Qt 信号机制保证在主线程执行，
+        因此回调内可安全操作 UI 状态。
+
         Args:
             file_path: XML 文件路径
             on_success: 成功回调，接收解析数量
