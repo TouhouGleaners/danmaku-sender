@@ -10,6 +10,7 @@ from PySide6.QtGui import QAction, QCloseEvent, QDesktopServices
 from PySide6.QtCore import Qt, QUrl, QTimer, QSize, QEvent, Slot
 
 from .controllers.auth_controller import AuthController, UserProfile
+from .controllers.account_controller import AccountController
 from .controllers.system_controller import SystemController
 from .framework.image_processor import QtImageProcessor
 from .framework.style_loader import load_stylesheet, get_svg_icon, get_app_icon
@@ -27,8 +28,7 @@ from ..core.state import AppState
 from ..core.models.common import MonitorStats
 from ..core.models.user import UserProfile
 from ..utils.log_utils import GuiLoggingHandler
-from ..utils.account_manager import load_accounts, save_accounts
-from ..core.models.account import AccountCredential
+from ..utils.account_manager import load_accounts
 from ..utils.config_manager import load_app_config, save_app_config
 
 
@@ -91,29 +91,7 @@ class MainWindow(QMainWindow):
     def closeEvent(self, event: QCloseEvent):
         """窗口关闭事件: 保存配置与凭证"""
         try:
-            # 同步当前凭证到已保存列表
-            if self.state.sessdata and self.state.bili_jct:
-                found = False
-                for acc in self.state.saved_accounts:
-                    if acc.sessdata == self.state.sessdata:
-                        acc.bili_jct = self.state.bili_jct
-                        if self._current_profile and self._current_profile.is_login:
-                            acc.name = self._current_profile.username
-                        found = True
-                        break
-
-                if not found:
-                    acc = AccountCredential(
-                        sessdata=self.state.sessdata,
-                        bili_jct=self.state.bili_jct,
-                    )
-                    if self._current_profile and self._current_profile.is_login:
-                        acc.name = self._current_profile.username
-                    self.state.saved_accounts.append(acc)
-
-                save_accounts(self.state.saved_accounts)
-                if self.state.saved_accounts:
-                    self.logger.info(f"已保存 {len(self.state.saved_accounts)} 个账号。")
+            AccountController.save_credentials(self.state, self._current_profile)
         except Exception as e:
             self.logger.error(f"保存凭证失败: {e}")
 
@@ -307,11 +285,11 @@ class MainWindow(QMainWindow):
     def _bind_state_to_pages(self):
         """绑定全局状态并配置日志路由"""
         # 页面数据绑定
-        self.page_settings._init_bindings()
-        self.page_sender._init_bindings()
-        self.page_editor._init_bindings()
-        self.page_monitor._init_bindings()
-        self.page_history._init_bindings()
+        self.page_settings.init_bindings()
+        self.page_sender.init_bindings()
+        self.page_editor.init_bindings()
+        self.page_monitor.init_bindings()
+        self.page_history.init_bindings()
 
         # 日志分流：信号 -> Tab 接口
         if self._log_signals_connected:

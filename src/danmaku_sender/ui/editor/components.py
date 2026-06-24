@@ -124,7 +124,7 @@ class ValidationRulesGroup(QGroupBox):
 
         layout.addLayout(keyword_layout)
 
-    def _init_bindings(self):
+    def init_bindings(self):
         """将 UI 控件与 AppState 进行双向绑定"""
         config = self.state.validation_config
 
