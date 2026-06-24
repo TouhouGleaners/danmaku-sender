@@ -3,7 +3,8 @@ import logging
 import logging.handlers
 from pathlib import Path
 from datetime import datetime, timezone
-from typing import Callable
+
+from PySide6.QtCore import SignalInstance
 
 from ..config.app_config import AppInfo
 
@@ -16,30 +17,61 @@ class LogNamespace:
 
 
 class GuiLoggingHandler(logging.Handler):
-    """基于命名空间前缀路由日志到 UI 窗口"""
+    """基于命名空间前缀路由日志到 UI 窗口。
+
+    回调约束: sender / monitor 信号必须是 Qt SignalInstance，
+    以确保跨线程 emit 时自动排队到主线程，避免后台线程直接操作 UI。
+    """
     def __init__(self):
         super().__init__()
-        self.sender_callback: Callable[[str], None] | None = None
-        self.monitor_callback: Callable[[str], None] | None = None
+        self._sender_signal: SignalInstance | None = None
+        self._monitor_signal: SignalInstance | None = None
+
+    @property
+    def sender_signal(self) -> SignalInstance | None:
+        return self._sender_signal
+
+    @sender_signal.setter
+    def sender_signal(self, signal: SignalInstance | None):
+        if signal is not None and not isinstance(signal, SignalInstance):
+            raise TypeError(
+                f"sender_signal 必须是 SignalInstance，收到 {type(signal).__name__}。"
+                "直接 UI 操作在后台线程调用会导致崩溃。"
+            )
+        self._sender_signal = signal
+
+    @property
+    def monitor_signal(self) -> SignalInstance | None:
+        return self._monitor_signal
+
+    @monitor_signal.setter
+    def monitor_signal(self, signal: SignalInstance | None):
+        if signal is not None and not isinstance(signal, SignalInstance):
+            raise TypeError(
+                f"monitor_signal 必须是 SignalInstance，收到 {type(signal).__name__}。"
+                "直接 UI 操作在后台线程调用会导致崩溃。"
+            )
+        self._monitor_signal = signal
 
     def emit(self, record):
         """
         发出一条日志记录。
 
-        该方法会处理日志记录，并根据日志器名称前缀，将其路由至对应的回调函数。
+        该方法会处理日志记录，并根据日志器名称前缀，将其路由至对应的信号。
         它针对不同组件的日志做分流处理:
-        来自 "App.Sender" 的日志，分发至 sender_callback
-        来自 "App.Monitor" 的日志，分发至 monitor_callback
+        来自 "App.Sender" 的日志，发送至 sender_signal
+        来自 "App.Monitor" 的日志，发送至 monitor_signal
         来自 "App.System" 及其他来源的日志，将被忽略
 
         Args:
             record (logging.LogRecord)：待输出的日志记录对象。
         """
         try:
-            if record.name.startswith(LogNamespace.SENDER) and self.sender_callback:
-                self.sender_callback(self.format(record))
-            elif record.name.startswith(LogNamespace.MONITOR) and self.monitor_callback:
-                self.monitor_callback(self.format(record))
+            text = self.format(record)
+            if record.name.startswith(LogNamespace.SENDER) and self._sender_signal:
+                self._sender_signal.emit(text)
+            elif record.name.startswith(LogNamespace.MONITOR) and self._monitor_signal:
+                self._monitor_signal.emit(text)
             # App.System 或其他开头的日志直接忽略
         except Exception:
             self.handleError(record)
