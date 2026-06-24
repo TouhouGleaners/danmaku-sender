@@ -57,6 +57,22 @@ class WbiSigner:
         return params
 
     @classmethod
+    def _fetch_keys_from_api(cls) -> tuple[str, str]:
+        """从 B 站 API 获取 WBI 密钥（含网络 I/O）"""
+        headers = {
+            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/139.0.0.0 Safari/537.36 Edg/139.0.0.0',
+            'Referer': 'https://www.bilibili.com/'
+        }
+        resp = requests.get('https://api.bilibili.com/x/web-interface/nav', headers=headers, timeout=10)
+        resp.raise_for_status()
+        json_content = resp.json()
+        img_url: str = json_content['data']['wbi_img']['img_url']
+        sub_url: str = json_content['data']['wbi_img']['sub_url']
+        img_key = img_url.rsplit('/', 1)[1].split('.')[0]
+        sub_key = sub_url.rsplit('/', 1)[1].split('.')[0]
+        return (img_key, sub_key)
+
+    @classmethod
     def get_wbi_keys(cls) -> tuple[str, str]:
         """获取最新的 img_key 和 sub_key"""
         # 锁外第一次检查
@@ -65,33 +81,21 @@ class WbiSigner:
             and current_now - cls._cached_time < cls.CACHE_DURATION):
             return cls._cached_keys
 
+        # 锁外执行网络请求，避免阻塞其他线程
+        try:
+            keys = cls._fetch_keys_from_api()
+        except (requests.RequestException, ValueError, KeyError) as e:
+            logger.critical(f"获取B站签名密钥失败，请检查网络连接或稍后再试。错误: {e}")
+            raise RuntimeError(f"获取B站签名密钥失败，请检查网络连接或稍后再试。错误: {e}") from e
+
         with cls._lock:
+            # 锁内双重检查：其他线程可能已更新缓存
             now_inside_lock = time.time()
-            # 锁内第二次检查
             if (cls._cached_keys is not None
                 and now_inside_lock - cls._cached_time < cls.CACHE_DURATION):
                 return cls._cached_keys
 
-            # 获取新的键值
-            headers = {
-                'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/139.0.0.0 Safari/537.36 Edg/139.0.0.0',
-                'Referer': 'https://www.bilibili.com/'
-            }
-            try:
-                resp = requests.get('https://api.bilibili.com/x/web-interface/nav', headers=headers, timeout=10)
-                resp.raise_for_status()
-                json_content = resp.json()
-                img_url: str = json_content['data']['wbi_img']['img_url']
-                sub_url: str = json_content['data']['wbi_img']['sub_url']
-                img_key = img_url.rsplit('/', 1)[1].split('.')[0]
-                sub_key = sub_url.rsplit('/', 1)[1].split('.')[0]
-
-                # 更新缓存
-                cls._cached_keys = (img_key, sub_key)
-                cls._cached_time = now_inside_lock
-
-                logger.debug("WBI 密钥获取成功并已缓存。")
-                return cls._cached_keys
-            except (requests.RequestException, ValueError) as e:
-                logger.critical(f"获取B站签名密钥失败，请检查网络连接或稍后再试。错误: {e}")
-                raise RuntimeError(f"获取B站签名密钥失败，请检查网络连接或稍后再试。错误: {e}") from e
+            cls._cached_keys = keys
+            cls._cached_time = now_inside_lock
+            logger.debug("WBI 密钥获取成功并已缓存。")
+            return cls._cached_keys
