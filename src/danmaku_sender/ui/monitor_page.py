@@ -180,7 +180,7 @@ class MonitorPage(QWidget):
         self.monitor_controller.statusUpdated.connect(self.status_label.setText)
         self.monitor_controller.taskFinished.connect(self._on_finished)
 
-    def _init_bindings(self):
+    def init_bindings(self):
         # 初始化与绑定
         UIBinder.bind(self.interval_spin, self.state.monitor_config, "refresh_interval")
 

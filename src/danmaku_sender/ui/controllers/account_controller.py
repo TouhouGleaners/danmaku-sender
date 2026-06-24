@@ -5,8 +5,10 @@ from PySide6.QtCore import QObject, Signal
 
 from danmaku_sender.api.bili_api_client import BiliApiClient
 from danmaku_sender.core.models.account import AccountCredential
-from danmaku_sender.core.state import ApiAuthConfig
+from danmaku_sender.core.models.user import UserProfile
+from danmaku_sender.core.state import ApiAuthConfig, AppState
 from danmaku_sender.ui.framework.concurrency import PoolTask
+from danmaku_sender.utils.account_manager import save_accounts
 
 
 logger = logging.getLogger("App.System.Account")
@@ -41,6 +43,28 @@ class AccountController(QObject):
 
     def __init__(self, parent=None):
         super().__init__(parent)
+
+    @staticmethod
+    def save_credentials(state: AppState, profile: UserProfile | None):
+        """同步 sessdata/bili_jct 到已保存账号列表并写盘"""
+        if not state.sessdata or not state.bili_jct:
+            return
+
+        for acc in state.saved_accounts:
+            if acc.sessdata == state.sessdata:
+                acc.bili_jct = state.bili_jct
+                if profile and profile.is_login:
+                    acc.name = profile.username
+                break
+        else:
+            acc = AccountCredential(sessdata=state.sessdata, bili_jct=state.bili_jct)
+            if profile and profile.is_login:
+                acc.name = profile.username
+            state.saved_accounts.append(acc)
+
+        save_accounts(state.saved_accounts)
+        if state.saved_accounts:
+            logger.info(f"已保存 {len(state.saved_accounts)} 个账号。")
 
     def check_account(self, account: AccountCredential, config: ApiAuthConfig):
         """异步检测账号是否有效"""

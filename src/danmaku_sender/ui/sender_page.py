@@ -110,10 +110,10 @@ class SenderPage(QWidget):
         self.sender_controller.xmlParsed.connect(self._on_xml_parsed)
         self.sender_controller.xmlParseFailed.connect(self._on_xml_parse_failed)
 
-    def _init_bindings(self):
+    def init_bindings(self):
         """将 UI 控件与 AppState 进行双向绑定"""
-        self.basic_group._init_bindings()
-        self.strategy_tabs._init_bindings()
+        self.basic_group.init_bindings()
+        self.strategy_tabs.init_bindings()
 
     def append_log(self, message: str):
         """外部调用的日志接口"""
@@ -519,7 +519,7 @@ class BasicParamsGroup(QGroupBox):
         layout.addRow(QLabel("弹幕文件:"), file_layout)
         layout.addRow(QLabel(""), self.skip_sent_cb)
 
-    def _init_bindings(self):
+    def init_bindings(self):
         """将 UI 控件与 AppState 进行双向绑定"""
         UIBinder.bind(self.bv_input, self.state.video_state, "bvid", realtime=True)
         UIBinder.bind(self.skip_sent_cb, self.state.sender_config, "skip_sent")
@@ -634,7 +634,7 @@ class StrategySettingsTabs(QTabWidget):
 
         self.addTab(stop_tab, "自动终止")
 
-    def _init_bindings(self):
+    def init_bindings(self):
         """将 UI 控件与 AppState 进行双向绑定"""
         config = self.state.sender_config
 
