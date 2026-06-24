@@ -337,9 +337,9 @@ class MainWindow(QMainWindow):
                 break
 
         if gui_handler:
-            # 将 Handler 的回调指向 AppState 的信号
-            gui_handler.sender_callback = self.state.senderLogReceived.emit
-            gui_handler.monitor_callback = self.state.monitorLogReceived.emit
+            # 将 Handler 的信号指向 AppState 的信号
+            gui_handler.sender_signal = self.state.senderLogReceived
+            gui_handler.monitor_signal = self.state.monitorLogReceived
             self.logger.info("日志路由链路已接通。")
         else:
             self.logger.error("日志路由系统初始化失败：未找到 GuiLoggingHandler。")
