@@ -62,6 +62,7 @@ class SendingContext:
     start_time: float = field(default_factory=time.time)
     auto_stop_reason: str = ""          # 如果触发了自动停止，记录具体原因
     fatal_error_occurred: bool = False  # 是否因致命错误而崩塌
+    is_manually_stopped: bool = False   # 是否被用户手动停止
 
     # 失败弹幕回收站，供后续导出 XML 使用
     unsent_records: list[UnsentDanmakusRecord] = field(default_factory=list)

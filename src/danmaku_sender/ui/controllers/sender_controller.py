@@ -163,6 +163,7 @@ class SendTaskWorker(WorkerThread):
             self.report_error("任务发生严重错误", e)
         finally:
             if ctx:
+                ctx.is_manually_stopped = self.stop_event.is_set()
                 self._log_summary(ctx)
             self.taskFinished.emit(ctx)
 
@@ -209,7 +210,7 @@ class SendTaskWorker(WorkerThread):
         self.logger.info("--- 发送任务结束 ---")
         if ctx.auto_stop_reason:
             self.logger.info(f"原因：{ctx.auto_stop_reason}")
-        elif self.stop_event.is_set():
+        elif ctx.is_manually_stopped:
             self.logger.info("原因：任务被用户手动停止。")
         elif ctx.fatal_error_occurred:
             self.logger.critical("原因：任务因致命错误中断。请检查配置或网络！")
