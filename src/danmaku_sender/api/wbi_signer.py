@@ -84,7 +84,7 @@ class WbiSigner:
         # 锁外执行网络请求，避免阻塞其他线程
         try:
             keys = cls._fetch_keys_from_api()
-        except (requests.RequestException, ValueError) as e:
+        except (requests.RequestException, ValueError, KeyError) as e:
             logger.critical(f"获取B站签名密钥失败，请检查网络连接或稍后再试。错误: {e}")
             raise RuntimeError(f"获取B站签名密钥失败，请检查网络连接或稍后再试。错误: {e}") from e
 
