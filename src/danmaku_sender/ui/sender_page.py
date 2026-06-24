@@ -322,8 +322,7 @@ class SenderPage(QWidget):
         # 恢复 UI
         self._reset_ui_after_task()
 
-        is_stopped = self.sender_controller.is_stopped_manually()
-        if is_stopped:
+        if ctx and ctx.is_manually_stopped:
             self.status_label.setText("发送器：任务中止")
             self.progress_bar.setFormat("%p% (已停止)")
         else:
@@ -331,7 +330,7 @@ class SenderPage(QWidget):
             self.progress_bar.setFormat("%p% (已完成)")
 
         if ctx:
-            self._send_desktop_notification(ctx, is_stopped)
+            self._send_desktop_notification(ctx, ctx.is_manually_stopped)
 
             # 如果有未发出的弹幕，引导保存
             if ctx.unsent_records:
