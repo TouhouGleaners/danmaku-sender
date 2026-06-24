@@ -27,8 +27,10 @@ class HistoryManager:
     - Peewee 的 SqliteDatabase 内部使用 threading.local() 为每个线程维护
       独立的 SQLite 连接，不存在跨线程共享连接的问题。
     - WAL 模式允许并发读 + 单写，配合 Peewee 的线程本地连接机制，
-      多线程并发调用是安全的。
-    - 每个写操作均为单条 SQL（Peewee 默认 autocommit），天然原子。
+      在"短事务 + 适度写入并发"的前提下，多线程并发调用通常是安全的；
+      高写入并发或长事务仍可能触发 ``database is locked`` 错误。
+    - 每个写操作均为单条 SQL（Peewee 默认 autocommit），在上述前提下是原子操作，
+      但不意味着该历史层在任意写入压力下都具备高可扩展性。
 
     注意：当前的单例实现仅针对单进程多线程环境。
     如果在多进程环境中使用，SQLite 的文件锁机制会处理并发，但单例逻辑会失效。
