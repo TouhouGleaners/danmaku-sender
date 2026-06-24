@@ -2,7 +2,7 @@ import logging
 import time
 from datetime import datetime
 
-from PySide6.QtCore import Qt, Slot
+from PySide6.QtCore import Qt, Signal, Slot
 from PySide6.QtGui import QTextCursor
 from PySide6.QtWidgets import (
     QComboBox, QGridLayout, QGroupBox, QHBoxLayout,
@@ -19,6 +19,8 @@ from .framework.style_loader import get_svg_icon
 
 
 class MonitorPage(QWidget):
+    statsUpdated = Signal(dict)
+
     def __init__(self, state: AppState):
         super().__init__()
         self.state = state
@@ -174,6 +176,7 @@ class MonitorPage(QWidget):
 
         # MonitorController
         self.monitor_controller.statsUpdated.connect(self._on_stats_updated)
+        self.monitor_controller.statsUpdated.connect(self.statsUpdated.emit)
         self.monitor_controller.statusUpdated.connect(self.status_label.setText)
         self.monitor_controller.taskFinished.connect(self._on_finished)
 
