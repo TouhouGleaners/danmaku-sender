@@ -1,7 +1,11 @@
+import logging
+
 from .resources import AppResources
 from .app_state import AppState
 from .config_manager import ConfigManager
 from .account_manager import AccountManager
+
+logger = logging.getLogger("App.Runtime")
 
 
 class Runtime:
@@ -31,5 +35,10 @@ class Runtime:
         self._bootstrapped = True
 
         self.resources.theme.init_theme()
-        self.account_manager.load_credentials(self.app_state)
+
+        try:
+            self.account_manager.load_credentials(self.app_state)
+        except Exception as e:
+            logger.error(f"凭据加载失败，将以未登录状态继续: {e}")
+
         self.config_manager.load(self.app_state)

@@ -26,15 +26,23 @@ class AccountManager:
         从系统密钥环获取加密密钥。
         如果不存在，则生成一个新的密钥并存储。
         """
-        key_str = keyring.get_password(KEYRING_SERVICE_NAME, KEYRING_USERNAME)
+        try:
+            key_str = keyring.get_password(KEYRING_SERVICE_NAME, KEYRING_USERNAME)
+        except Exception as e:
+            logger.warning(f"密钥环读取失败: {e}，将生成新密钥。")
+            key_str = None
+
         if key_str:
             logger.debug("已从系统密钥环获取加密密钥。")
             return key_str.encode('utf-8')
-        else:
-            new_key = Fernet.generate_key()
+
+        new_key = Fernet.generate_key()
+        try:
             keyring.set_password(KEYRING_SERVICE_NAME, KEYRING_USERNAME, new_key.decode('utf-8'))
             logger.info("已生成新的加密密钥并存储在系统密钥环中。")
-            return new_key
+        except Exception as e:
+            logger.warning(f"密钥环写入失败: {e}，密钥仅在本次会话有效。")
+        return new_key
 
     def get_accounts_filepath(self) -> Path:
         """获取账号存储文件的完整路径"""
@@ -79,10 +87,11 @@ class AccountManager:
             logger.warning(f"无法加载或解密账号数据: {e}，返回空列表。")
             if accounts_file.exists():
                 try:
-                    os.remove(accounts_file)
-                    logger.info("已删除损坏的账号文件。")
+                    backup = accounts_file.with_suffix(".json.corrupt")
+                    accounts_file.rename(backup)
+                    logger.info(f"已将损坏的账号文件备份为: {backup}")
                 except OSError as del_e:
-                    logger.error(f"无法删除损坏的账号文件: {del_e}")
+                    logger.error(f"无法备份损坏的账号文件: {del_e}")
             return []
 
         except Exception as unexpected_e:
