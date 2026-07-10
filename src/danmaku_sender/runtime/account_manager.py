@@ -21,10 +21,13 @@ logger = logging.getLogger("App.System.Auth")
 class AccountManager:
     """凭据管理器"""
 
-    def _get_encryption_key(self) -> bytes:
+    def _get_encryption_key(self) -> tuple[bytes, bool]:
         """
         从系统密钥环获取加密密钥。
         如果不存在，则生成一个新的密钥并存储。
+
+        Returns:
+            (key, persisted): 密钥字节，以及密钥是否已持久化到密钥环。
         """
         try:
             key_str = keyring.get_password(KEYRING_SERVICE_NAME, KEYRING_USERNAME)
@@ -34,15 +37,16 @@ class AccountManager:
 
         if key_str:
             logger.debug("已从系统密钥环获取加密密钥。")
-            return key_str.encode('utf-8')
+            return key_str.encode('utf-8'), True
 
         new_key = Fernet.generate_key()
         try:
             keyring.set_password(KEYRING_SERVICE_NAME, KEYRING_USERNAME, new_key.decode('utf-8'))
             logger.info("已生成新的加密密钥并存储在系统密钥环中。")
+            return new_key, True
         except Exception as e:
-            logger.warning(f"密钥环写入失败: {e}，密钥仅在本次会话有效。")
-        return new_key
+            logger.warning(f"密钥环写入失败: {e}，密钥仅在本次会话有效，跳过凭据持久化。")
+            return new_key, False
 
     def get_accounts_filepath(self) -> Path:
         """获取账号存储文件的完整路径"""
@@ -60,7 +64,7 @@ class AccountManager:
             return []
 
         try:
-            key = self._get_encryption_key()
+            key, _ = self._get_encryption_key()
             fernet = Fernet(key)
 
             encrypted_data = accounts_file.read_bytes()
@@ -69,8 +73,8 @@ class AccountManager:
             raw_list = json.loads(decrypted_data.decode('utf-8'))
 
             if not isinstance(raw_list, list):
-                logger.warning("accounts.json 格式异常：顶层不是列表，已删除。")
-                os.remove(accounts_file)
+                logger.warning("accounts.json 格式异常：顶层不是列表，已备份。")
+                self._backup_corrupt_file(accounts_file)
                 return []
 
             accounts = []
@@ -83,15 +87,13 @@ class AccountManager:
             logger.info(f"已加载 {len(accounts)} 个保存的账号。")
             return accounts
 
-        except (InvalidToken, json.JSONDecodeError) as e:
-            logger.warning(f"无法加载或解密账号数据: {e}，返回空列表。")
-            if accounts_file.exists():
-                try:
-                    backup = accounts_file.with_suffix(".json.corrupt")
-                    accounts_file.rename(backup)
-                    logger.info(f"已将损坏的账号文件备份为: {backup}")
-                except OSError as del_e:
-                    logger.error(f"无法备份损坏的账号文件: {del_e}")
+        except InvalidToken:
+            logger.warning("账号文件解密失败（密钥不匹配），文件已保留，修复密钥环后可恢复。")
+            return []
+
+        except json.JSONDecodeError as e:
+            logger.warning(f"账号文件 JSON 解析失败（文件损坏）: {e}")
+            self._backup_corrupt_file(accounts_file)
             return []
 
         except Exception as unexpected_e:
@@ -112,7 +114,11 @@ class AccountManager:
             return
 
         try:
-            key = self._get_encryption_key()
+            key, persisted = self._get_encryption_key()
+            if not persisted:
+                logger.warning("密钥未持久化，跳过凭据写盘以避免产生无法解密的文件。")
+                return
+
             f = Fernet(key)
 
             raw_list = [acc.model_dump() for acc in accounts]
@@ -131,3 +137,13 @@ class AccountManager:
             first = state.saved_accounts[0]
             state.sessdata = first.sessdata
             state.bili_jct = first.bili_jct
+
+    @staticmethod
+    def _backup_corrupt_file(path: Path) -> None:
+        """将损坏的文件备份为 .corrupt 后缀。"""
+        try:
+            backup = path.with_suffix(".json.corrupt")
+            path.rename(backup)
+            logger.info(f"已将损坏的文件备份为: {backup}")
+        except OSError as e:
+            logger.error(f"无法备份损坏的文件: {e}")
