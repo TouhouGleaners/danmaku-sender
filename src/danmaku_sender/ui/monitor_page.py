@@ -11,7 +11,7 @@ from PySide6.QtWidgets import (
 )
 
 from danmaku_sender.core.models.common import MonitorStats, VideoTarget
-from danmaku_sender.core.state import AppState
+from danmaku_sender.runtime.app_state import AppState
 
 from .controllers.monitor_controller import MonitorController
 from .framework.binder import UIBinder

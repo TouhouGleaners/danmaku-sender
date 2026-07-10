@@ -12,7 +12,8 @@ from danmaku_sender.core.engines.sender.delay_manager import DelayManager
 from danmaku_sender.core.models.danmaku import Danmaku
 from danmaku_sender.core.models.result import DanmakuSendResult
 from danmaku_sender.core.models.common import VideoTarget, UnsentDanmakusRecord
-from danmaku_sender.core.state import ApiAuthConfig, SenderConfig, AppState
+from danmaku_sender.core.config import ApiAuthConfig, SenderConfig
+from danmaku_sender.runtime.app_state import AppState
 from danmaku_sender.core.services.danmaku_parser import DanmakuParser
 from danmaku_sender.core.services.danmaku_exporter import create_xml_from_danmakus
 from danmaku_sender.api.bili_api_client import BiliApiClient

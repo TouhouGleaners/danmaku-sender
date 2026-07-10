@@ -30,6 +30,7 @@ def main(argv=None):
     log_dir = Path(user_data_dir(AppInfo.NAME_EN, AppInfo.AUTHOR)) / AppInfo.LOG_DIR_NAME
     init_app_logging(log_dir)
 
+    from .runtime import Runtime
     from .ui.main_window import MainWindow
 
     app = QApplication(argv)
@@ -38,7 +39,10 @@ def main(argv=None):
     app.setApplicationName(AppInfo.NAME)
     app.setApplicationVersion(AppInfo.VERSION)
 
-    window = MainWindow()
+    rt = Runtime()
+    rt.bootstrap()
+
+    window = MainWindow(rt)
     window.show()
 
     sys.exit(app.exec())

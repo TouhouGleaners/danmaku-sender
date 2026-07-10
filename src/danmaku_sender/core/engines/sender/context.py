@@ -7,7 +7,7 @@ from enum import Enum, auto
 from danmaku_sender.core.models.danmaku import Danmaku
 from danmaku_sender.core.models.result import DanmakuSendResult
 from danmaku_sender.core.models.common import VideoTarget, UnsentDanmakusRecord
-from danmaku_sender.core.state import SenderConfig
+from danmaku_sender.core.config import SenderConfig
 
 
 # 弹幕指纹类型别名：(内容, 进度, 模式, 字号, 颜色)

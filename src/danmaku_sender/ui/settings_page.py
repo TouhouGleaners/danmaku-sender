@@ -5,7 +5,7 @@ from PySide6.QtCore import Qt
 
 from .framework.binder import UIBinder
 
-from ..core.state import AppState
+from ..runtime.app_state import AppState
 
 
 class SettingsPage(QWidget):
