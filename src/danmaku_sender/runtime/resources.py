@@ -1,6 +1,6 @@
 import logging
 
-from ..ui.theme_manager import ThemeManager
+from .theme_manager import ThemeManager
 
 
 class AppResources:
