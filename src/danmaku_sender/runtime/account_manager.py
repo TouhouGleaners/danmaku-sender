@@ -137,6 +137,7 @@ class AccountManager:
             first = state.saved_accounts[0]
             state.sessdata = first.sessdata
             state.bili_jct = first.bili_jct
+            logger.info(f"已激活账号: {first.name or '(未命名)'}")
 
     @staticmethod
     def _backup_corrupt_file(path: Path) -> None:
