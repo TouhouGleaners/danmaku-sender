@@ -18,7 +18,7 @@ from .controllers.sender_controller import SenderController
 from danmaku_sender.core.engines.sender.context import SendingContext
 from danmaku_sender.core.models.video import VideoInfo
 from danmaku_sender.core.models.common import VideoTarget, UnsentDanmakusRecord
-from danmaku_sender.core.state import AppState
+from danmaku_sender.runtime.app_state import AppState
 from danmaku_sender.utils.string_utils import parse_bilibili_link
 from danmaku_sender.utils.time_utils import format_duration
 from danmaku_sender.utils.notification_utils import send_windows_notification

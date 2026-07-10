@@ -4,7 +4,7 @@ import threading
 from PySide6.QtCore import QObject, Signal, Slot
 
 from danmaku_sender.api.bili_api_client import BiliApiClient
-from danmaku_sender.core.state import ApiAuthConfig
+from danmaku_sender.core.config import ApiAuthConfig
 from danmaku_sender.core.models.user import UserProfile
 from danmaku_sender.ui.framework.concurrency import WorkerThread, PoolTask
 

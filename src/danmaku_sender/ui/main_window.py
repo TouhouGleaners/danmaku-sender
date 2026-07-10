@@ -24,27 +24,26 @@ from .history import HistoryPage
 from .theme_manager import ThemeManager
 
 from ..config.app_config import AppInfo, UI
-from ..core.state import AppState
 from ..core.models.common import MonitorStats
 from ..core.models.user import UserProfile
+from ..runtime import Runtime
+from ..runtime.app_state import AppState
 from ..utils.log_utils import GuiLoggingHandler
-from ..utils.account_manager import load_accounts
-from ..utils.config_manager import load_app_config, save_app_config
 
 
 class MainWindow(QMainWindow):
     # region Lifecycle & Initialization
-    def __init__(self):
+    def __init__(self, rt: Runtime):
         super().__init__()
+        self.rt = rt
+        self.state = rt.app_state
 
         self.setWindowTitle(UI.MAIN_WINDOW_TITLE)
         self.resize(900, 680)
 
-        ThemeManager.instance().init_theme()
         ThemeManager.instance().themeChanged.connect(self._on_theme_changed)
 
-        # 核心状态
-        self.state = AppState()
+        # 控制器
         self.auth_controller = AuthController(self)
         self.system_controller = SystemController(self)
         self.logger = logging.getLogger("App.System.UI.Main")
@@ -62,12 +61,8 @@ class MainWindow(QMainWindow):
         self._create_menu_bar()
         self._init_system_tray()
 
-        # 数据与配置加载
-        self._init_auth_system()
-        self._load_initial_credentials()
-        load_app_config(self.state)
-
         # 信号与状态绑定
+        self._init_auth_system()
         self._bind_state_to_pages()
         self._connect_global_signals()
 
@@ -91,11 +86,11 @@ class MainWindow(QMainWindow):
     def closeEvent(self, event: QCloseEvent):
         """窗口关闭事件: 保存配置与凭证"""
         try:
-            AccountController.save_credentials(self.state, self._current_profile)
+            AccountController.save_credentials(self.state, self._current_profile, self.rt.account_manager)
         except Exception as e:
             self.logger.error(f"保存凭证失败: {e}")
 
-        save_app_config(self.state)
+        self.rt.config_manager.save(self.state)
 
         if self._help_dialog:
             self._help_dialog.close()
@@ -261,21 +256,6 @@ class MainWindow(QMainWindow):
         self._auth_debounce_timer = QTimer(self)
         self._auth_debounce_timer.setSingleShot(True)
         self._auth_debounce_timer.timeout.connect(self._refresh_user_info)
-
-    def _load_initial_credentials(self):
-        """加载已保存的账号列表，激活第一个"""
-        try:
-            accounts = load_accounts()
-            self.state.saved_accounts = accounts
-            if accounts:
-                acc = accounts[0]
-                self.state.sessdata = acc.sessdata
-                self.state.bili_jct = acc.bili_jct
-                self.logger.info(f"已加载账号: {acc.name or '(未命名)'}")
-            else:
-                self.logger.info("没有已保存的账号。")
-        except Exception as e:
-            self.logger.warning(f"加载凭证失败: {e}")
 
     def _open_account_dialog(self):
         """打开账号管理弹窗"""
