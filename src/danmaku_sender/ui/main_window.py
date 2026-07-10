@@ -21,7 +21,7 @@ from .editor import EditorPage
 from .dialogs import AboutDialog, HelpDialog, UpdateDialog
 from .account_manager import AccountDialog
 from .history import HistoryPage
-from .theme_manager import ThemeManager
+from danmaku_sender.runtime.theme_manager import ThemeManager
 
 from ..config.app_config import AppInfo, UI
 from ..core.models.common import MonitorStats

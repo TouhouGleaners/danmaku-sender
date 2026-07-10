@@ -5,7 +5,7 @@ from PySide6.QtGui import QIcon
 from PySide6.QtWidgets import QApplication
 
 from .image_processor import QtImageProcessor
-from ..theme_manager import ThemeManager
+from danmaku_sender.runtime.theme_manager import ThemeManager
 
 from ...utils.path_utils import get_assets_path
 
