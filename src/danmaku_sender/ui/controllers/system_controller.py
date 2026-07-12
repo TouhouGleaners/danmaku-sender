@@ -3,7 +3,7 @@ import logging
 from PySide6.QtCore import QObject, Signal, Slot
 
 from ..framework.concurrency import PoolTask
-from ...api.update_checker import UpdateChecker, UpdateInfo
+from ...repo.github_client import UpdateChecker, UpdateInfo
 from ...config.app_meta import AppInfo
 
 

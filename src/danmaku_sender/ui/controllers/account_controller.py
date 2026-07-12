@@ -3,7 +3,7 @@ import logging
 
 from PySide6.QtCore import QObject, Signal
 
-from danmaku_sender.api.bili_api_client import BiliApiClient
+from danmaku_sender.repo.bili_api_client import BiliApiClient
 from danmaku_sender.types.models.account import AccountCredential
 from danmaku_sender.types.models.user import UserProfile
 from danmaku_sender.config import ApiAuthConfig
