@@ -4,7 +4,7 @@ from PySide6.QtCore import QObject, Signal, Slot
 
 from ..framework.concurrency import PoolTask
 from ...api.update_checker import UpdateChecker, UpdateInfo
-from ...config.app_config import AppInfo
+from ...config.app_meta import AppInfo
 
 
 logger = logging.getLogger("App.System.System")

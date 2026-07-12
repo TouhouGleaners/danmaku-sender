@@ -23,7 +23,7 @@ from .account_manager import AccountDialog
 from .history import HistoryPage
 from danmaku_sender.runtime.theme_manager import ThemeManager
 
-from ..config.app_config import AppInfo, UI
+from ..config.app_meta import AppInfo, UI
 from ..types.models.common import MonitorStats
 from ..types.models.user import UserProfile
 from ..runtime import Runtime

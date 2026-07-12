@@ -2,7 +2,7 @@ import logging
 import requests
 from packaging import version
 
-from ..config.app_config import Links
+from ..config.app_meta import Links
 
 
 logger = logging.getLogger("App.System.Updater")

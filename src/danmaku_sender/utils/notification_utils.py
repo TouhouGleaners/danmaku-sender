@@ -4,7 +4,7 @@ import threading
 
 from .path_utils import get_assets_path
 
-from ..config.app_config import AppInfo
+from ..config.app_meta import AppInfo
 
 
 logger = logging.getLogger("App.System.Notify")

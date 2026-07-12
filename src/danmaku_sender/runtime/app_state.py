@@ -2,7 +2,7 @@ import time
 
 from PySide6.QtCore import QObject, Signal
 
-from ..core.config import ApiAuthConfig, SenderConfig, MonitorConfig, ValidationConfig
+from ..config import ApiAuthConfig, SenderConfig, MonitorConfig, ValidationConfig
 from ..types.models.account import AccountCredential
 from ..types.models.video_state import VideoState
 

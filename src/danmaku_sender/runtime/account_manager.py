@@ -6,7 +6,7 @@ from pathlib import Path
 from cryptography.fernet import Fernet, InvalidToken
 from platformdirs import user_data_dir
 
-from ..config.app_config import AppInfo
+from ..config.app_meta import AppInfo
 from ..types.models.account import AccountCredential
 from .app_state import AppState
 
