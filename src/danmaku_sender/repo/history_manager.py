@@ -41,6 +41,7 @@ class HistoryManager:
     _instance: "HistoryManager | None" = None
     _lock = threading.Lock()
     _initialized = False
+    db_path: Path  # 由 initialize() 设置的实例属性
 
     def __new__(cls, *args, **kwargs):
         if not cls._instance:
