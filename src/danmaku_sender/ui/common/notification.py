@@ -2,9 +2,8 @@ import logging
 import platform
 import threading
 
-from .path_utils import get_assets_path
-
-from ..config.app_meta import AppInfo
+from danmaku_sender.config.app_meta import AppInfo
+from danmaku_sender.ui.framework.path_utils import get_assets_path
 
 
 logger = logging.getLogger("App.System.Notify")

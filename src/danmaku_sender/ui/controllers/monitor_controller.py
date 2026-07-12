@@ -3,12 +3,13 @@ import threading
 
 from PySide6.QtCore import QObject, Signal, Slot
 
+from .system_utils import KeepSystemAwake
+
 from danmaku_sender.repo.bili_api_client import BiliApiClient
 from danmaku_sender.service.bili_monitor import BiliDanmakuMonitor
 from danmaku_sender.types.models.common import VideoTarget
 from danmaku_sender.config import ApiAuthConfig, MonitorConfig
 from danmaku_sender.ui.framework.concurrency import WorkerThread
-from danmaku_sender.utils.system_utils import KeepSystemAwake
 
 
 logger = logging.getLogger("App.System.MonitorController")

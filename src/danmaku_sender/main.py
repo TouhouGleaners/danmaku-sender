@@ -7,7 +7,7 @@ from PySide6.QtWidgets import QApplication
 
 from .config.app_meta import AppInfo
 from .ui.framework.style_loader import get_app_icon
-from .utils.log_utils import init_app_logging
+from .runtime.log_utils import init_app_logging
 
 
 def main(argv=None):
