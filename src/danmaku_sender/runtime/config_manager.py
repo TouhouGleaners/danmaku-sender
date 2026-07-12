@@ -5,8 +5,8 @@ from platformdirs import user_data_dir
 
 from pydantic import ValidationError, BaseModel
 
-from ..config.app_config import AppInfo
-from ..core.config import SenderConfig, MonitorConfig, ValidationConfig
+from ..config.app_meta import AppInfo
+from ..config import SenderConfig, MonitorConfig, ValidationConfig
 from .app_state import AppState
 
 

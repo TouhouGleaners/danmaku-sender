@@ -6,7 +6,7 @@ from PySide6.QtCore import QObject, Signal
 from danmaku_sender.api.bili_api_client import BiliApiClient
 from danmaku_sender.types.models.account import AccountCredential
 from danmaku_sender.types.models.user import UserProfile
-from danmaku_sender.core.config import ApiAuthConfig
+from danmaku_sender.config import ApiAuthConfig
 from danmaku_sender.runtime.app_state import AppState
 from danmaku_sender.runtime.account_manager import AccountManager
 from danmaku_sender.ui.framework.concurrency import PoolTask

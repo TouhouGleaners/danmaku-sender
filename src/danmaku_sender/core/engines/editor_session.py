@@ -3,7 +3,7 @@ import logging
 import colorsys
 from typing import Any, Callable
 
-from danmaku_sender.core.config import ValidationConfig
+from danmaku_sender.config import ValidationConfig
 from danmaku_sender.types.models.danmaku import Danmaku
 from danmaku_sender.types.models.editor_types import EditorItem, EditorField, AtomicChange, ViewItem, InsertPosition
 from danmaku_sender.core.services.danmaku_validator import validate_danmaku_list
