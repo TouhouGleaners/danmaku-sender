@@ -24,8 +24,8 @@ from .history import HistoryPage
 from danmaku_sender.runtime.theme_manager import ThemeManager
 
 from ..config.app_config import AppInfo, UI
-from ..core.models.common import MonitorStats
-from ..core.models.user import UserProfile
+from ..types.models.common import MonitorStats
+from ..types.models.user import UserProfile
 from ..runtime import Runtime
 from ..runtime.app_state import AppState
 from ..utils.log_utils import GuiLoggingHandler

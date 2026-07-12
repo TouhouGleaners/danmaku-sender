@@ -6,7 +6,7 @@ from PySide6.QtWidgets import (
     QPushButton, QWidget, QApplication
 )
 
-from danmaku_sender.core.models.account import AccountCredential
+from danmaku_sender.types.models.account import AccountCredential
 from danmaku_sender.ui.framework.style_loader import get_svg_icon
 
 

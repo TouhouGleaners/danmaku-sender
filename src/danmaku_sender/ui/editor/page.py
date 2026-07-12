@@ -14,7 +14,7 @@ from .dialogs import EditDanmakuDialog, TimeOffsetDialog, ArrayGeneratorDialog
 
 from danmaku_sender.ui.framework.style_loader import get_svg_icon
 from danmaku_sender.ui.controllers.editor_controller import EditorController
-from danmaku_sender.core.models.editor_types import EditorField, InsertPosition
+from danmaku_sender.types.models.editor_types import EditorField, InsertPosition
 from danmaku_sender.runtime.app_state import AppState
 
 

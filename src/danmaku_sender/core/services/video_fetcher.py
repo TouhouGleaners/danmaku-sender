@@ -1,7 +1,7 @@
 import logging
 
 from danmaku_sender.api.bili_api_client import BiliApiClient
-from danmaku_sender.core.models.video import VideoInfo, VideoPart
+from danmaku_sender.types.models.video import VideoInfo, VideoPart
 
 
 class VideoFetcher:

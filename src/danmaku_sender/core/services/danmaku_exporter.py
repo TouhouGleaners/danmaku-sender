@@ -2,8 +2,8 @@ import logging
 import xml.etree.ElementTree as ET
 from xml.dom import minidom
 
-from danmaku_sender.core.models.danmaku import Danmaku
-from danmaku_sender.core.models.common import UnsentDanmakusRecord
+from danmaku_sender.types.models.danmaku import Danmaku
+from danmaku_sender.types.models.common import UnsentDanmakusRecord
 
 
 logger = logging.getLogger("App.System.Exporter")

@@ -1,7 +1,7 @@
 import logging
 import xml.etree.ElementTree as ET
 
-from danmaku_sender.core.models.danmaku import Danmaku
+from danmaku_sender.types.models.danmaku import Danmaku
 
 
 class DanmakuParser:

@@ -8,8 +8,8 @@ from PySide6.QtCore import Qt, Slot
 
 from .components import DanmakuPropertyForm
 
-from danmaku_sender.core.models.danmaku import Danmaku
-from danmaku_sender.core.models.editor_types import EditorField
+from danmaku_sender.types.models.danmaku import Danmaku
+from danmaku_sender.types.models.editor_types import EditorField
 
 
 class EditDanmakuDialog(QDialog):

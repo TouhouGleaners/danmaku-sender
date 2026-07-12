@@ -4,9 +4,9 @@ from typing import Callable
 from dataclasses import dataclass, field
 from enum import Enum, auto
 
-from danmaku_sender.core.models.danmaku import Danmaku
-from danmaku_sender.core.models.result import DanmakuSendResult
-from danmaku_sender.core.models.common import VideoTarget, UnsentDanmakusRecord
+from danmaku_sender.types.models.danmaku import Danmaku
+from danmaku_sender.types.models.result import DanmakuSendResult
+from danmaku_sender.types.models.common import VideoTarget, UnsentDanmakusRecord
 from danmaku_sender.core.config import SenderConfig
 
 

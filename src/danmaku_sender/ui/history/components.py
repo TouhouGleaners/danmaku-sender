@@ -4,8 +4,8 @@ from datetime import datetime
 from PySide6.QtCore import Qt, QAbstractTableModel, QModelIndex
 from PySide6.QtGui import QColor, QBrush
 
-from danmaku_sender.core.models.common import DanmakuStatus
-from danmaku_sender.core.models.video import VideoInfo
+from danmaku_sender.types.models.common import DanmakuStatus
+from danmaku_sender.types.models.video import VideoInfo
 
 
 class Col(IntEnum):
