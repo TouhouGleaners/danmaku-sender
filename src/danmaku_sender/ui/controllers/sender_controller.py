@@ -7,8 +7,7 @@ from PySide6.QtCore import QObject, Signal, Slot
 from danmaku_sender.ui.framework.concurrency import WorkerThread, PoolTask
 
 from danmaku_sender.repo.history_manager import HistoryManager
-from danmaku_sender.service import DanmakuScheduler, DanmakuExecutor, SendingContext, SendJob
-from danmaku_sender.service.sender.delay_manager import DelayManager
+from danmaku_sender.service.sender import DanmakuScheduler, DanmakuExecutor, SendingContext, SendJob, DelayManager
 from danmaku_sender.types.models.danmaku import Danmaku
 from danmaku_sender.types.models.result import DanmakuSendResult
 from danmaku_sender.types.models.common import VideoTarget, UnsentDanmakusRecord
