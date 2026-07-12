@@ -41,7 +41,6 @@ class HistoryManager:
     _instance: "HistoryManager | None" = None
     _lock = threading.Lock()
     _initialized = False
-    db_path: Path
 
     def __new__(cls, *args, **kwargs):
         if not cls._instance:
@@ -64,9 +63,6 @@ class HistoryManager:
         Raises:
             RuntimeError: 重复初始化时抛出
         """
-        if cls._initialized:
-            raise RuntimeError("HistoryManager 已经初始化，不可重复调用 initialize()")
-
         with cls._lock:
             if cls._initialized:
                 raise RuntimeError("HistoryManager 已经初始化，不可重复调用 initialize()")
