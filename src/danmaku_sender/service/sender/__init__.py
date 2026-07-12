@@ -10,6 +10,7 @@
 from .scheduler import DanmakuScheduler
 from .executor import DanmakuExecutor
 from .context import SendingContext, SendJob
+from .delay_manager import DelayManager
 
 
-__all__ = ["DanmakuScheduler", "DanmakuExecutor", "SendingContext", "SendJob"]
+__all__ = ["DanmakuScheduler", "DanmakuExecutor", "SendingContext", "SendJob", "DelayManager"]

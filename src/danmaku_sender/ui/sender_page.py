@@ -15,7 +15,7 @@ from .framework.style_loader import get_svg_icon
 from .controllers.video_controller import VideoController
 from .controllers.sender_controller import SenderController
 
-from danmaku_sender.core.engines.sender.context import SendingContext
+from danmaku_sender.service.sender import SendingContext
 from danmaku_sender.types.models.video import VideoInfo
 from danmaku_sender.types.models.common import VideoTarget, UnsentDanmakusRecord
 from danmaku_sender.runtime.app_state import AppState

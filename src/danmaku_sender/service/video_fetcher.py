@@ -1,6 +1,6 @@
 import logging
 
-from danmaku_sender.repo.bili_api_client import BiliApiClient
+from danmaku_sender.types.protocols import BiliApiProtocol
 from danmaku_sender.types.models.video import VideoInfo, VideoPart
 
 
@@ -9,7 +9,7 @@ class VideoFetcher:
     视频业务服务层
     负责协调 API 调用与数据转换
     """
-    def __init__(self, api_client: BiliApiClient, logger: logging.Logger | None = None):
+    def __init__(self, api_client: BiliApiProtocol, logger: logging.Logger | None = None):
         self.client = api_client
         self.logger = logger if logger else logging.getLogger("App.System.Fetcher")
 
