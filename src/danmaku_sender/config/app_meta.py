@@ -1,3 +1,7 @@
+from pathlib import Path
+
+from platformdirs import user_data_dir
+
 from .._version import __version__
 
 
@@ -9,6 +13,16 @@ class AppInfo:
     VERSION = __version__
     LOG_FILE_NAME = "latest.log"
     LOG_DIR_NAME = "logs"
+
+
+def get_data_dir() -> Path:
+    """获取应用数据目录（跨平台）"""
+    return Path(user_data_dir(AppInfo.NAME_EN, AppInfo.AUTHOR))
+
+
+def get_history_db_path() -> Path:
+    """获取历史记录数据库路径"""
+    return get_data_dir() / "history.db"
 
 
 class UI:

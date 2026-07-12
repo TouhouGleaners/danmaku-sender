@@ -1,7 +1,7 @@
 import logging
 from threading import Event
 
-from danmaku_sender.api.bili_api_client import BiliApiClient
+from danmaku_sender.repo.bili_api_client import BiliApiClient
 from danmaku_sender.types.models.danmaku import Danmaku
 from danmaku_sender.types.models.common import VideoTarget
 from danmaku_sender.types.models.result import DanmakuSendResult

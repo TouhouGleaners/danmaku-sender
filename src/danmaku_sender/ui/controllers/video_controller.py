@@ -2,7 +2,7 @@ import logging
 
 from PySide6.QtCore import QObject, Signal, QThreadPool, Slot
 
-from danmaku_sender.api.bili_api_client import BiliApiClient
+from danmaku_sender.repo.bili_api_client import BiliApiClient
 from danmaku_sender.types.models.video import VideoInfo
 from danmaku_sender.config import ApiAuthConfig
 from danmaku_sender.core.services.video_fetcher import VideoFetcher

@@ -3,7 +3,7 @@ import logging
 from PySide6.QtCore import QObject, Signal
 
 from ..framework.concurrency import PoolTask
-from ...core.database.history_manager import HistoryManager
+from ...repo.history_manager import HistoryManager
 
 
 logger = logging.getLogger("App.System.History")
