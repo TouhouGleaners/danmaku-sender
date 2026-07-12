@@ -4,12 +4,12 @@ from typing import Callable
 from PySide6.QtCore import QObject, Signal
 
 from danmaku_sender.ui.framework.concurrency import PoolTask
-from danmaku_sender.core.engines.editor_session import EditorSession
+from danmaku_sender.service.editor_session import EditorSession
 from danmaku_sender.runtime.app_state import AppState
 from danmaku_sender.types.models.danmaku import Danmaku
 from danmaku_sender.types.models.editor_types import ViewItem, InsertPosition
-from danmaku_sender.core.services.danmaku_parser import DanmakuParser
-from danmaku_sender.core.services.danmaku_exporter import export_danmakus_to_xml
+from danmaku_sender.service.danmaku_parser import DanmakuParser
+from danmaku_sender.service.danmaku_exporter import export_danmakus_to_xml
 
 
 class EditorController(QObject):

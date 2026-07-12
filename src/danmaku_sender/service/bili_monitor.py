@@ -1,11 +1,11 @@
 import logging
 
-from danmaku_sender.repo.bili_api_client import BiliApiClient
+from danmaku_sender.types.protocols import BiliApiProtocol
 from danmaku_sender.types.exceptions.exceptions import BiliApiError, BiliNetworkError
 from danmaku_sender.repo.history_manager import HistoryManager
 from danmaku_sender.types.models.danmaku import Danmaku
 from danmaku_sender.types.models.common import VideoTarget, MonitorStats
-from danmaku_sender.core.services.danmaku_parser import DanmakuParser
+from .danmaku_parser import DanmakuParser
 
 
 class BiliDanmakuMonitor:
@@ -14,7 +14,7 @@ class BiliDanmakuMonitor:
 
     负责执行单次的网络请求与数据库比对
     """
-    def __init__(self, api_client: BiliApiClient, target: VideoTarget):
+    def __init__(self, api_client: BiliApiProtocol, target: VideoTarget):
         self.api_client = api_client
         self.target = target
 
