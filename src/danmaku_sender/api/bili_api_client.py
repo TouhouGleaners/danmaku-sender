@@ -7,8 +7,8 @@ from requests.exceptions import ConnectionError, HTTPError, RequestException, Ti
 
 from .wbi_signer import WbiSigner
 
-from ..core.exceptions.exceptions import BiliNetworkError, BiliApiError
-from ..core.exceptions.api_errors import BiliDmErrorCode
+from ..types.exceptions.exceptions import BiliNetworkError, BiliApiError
+from ..types.exceptions.api_errors import BiliDmErrorCode
 
 
 class BiliConfigProto(Protocol):

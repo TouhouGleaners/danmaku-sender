@@ -10,7 +10,7 @@ from PySide6.QtWidgets import (
     QSpinBox, QTextEdit, QVBoxLayout, QWidget
 )
 
-from danmaku_sender.core.models.common import MonitorStats, VideoTarget
+from danmaku_sender.types.models.common import MonitorStats, VideoTarget
 from danmaku_sender.runtime.app_state import AppState
 
 from .controllers.monitor_controller import MonitorController

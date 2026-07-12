@@ -3,8 +3,8 @@ import time
 from PySide6.QtCore import QObject, Signal
 
 from ..core.config import ApiAuthConfig, SenderConfig, MonitorConfig, ValidationConfig
-from ..core.models.account import AccountCredential
-from ..core.models.video_state import VideoState
+from ..types.models.account import AccountCredential
+from ..types.models.video_state import VideoState
 
 
 class AppState(QObject):

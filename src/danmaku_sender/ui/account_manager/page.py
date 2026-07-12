@@ -10,7 +10,7 @@ from PySide6.QtWidgets import (
 from .components import AccountRow
 from .account_form import AccountFormDialog
 
-from danmaku_sender.core.models.account import AccountCredential
+from danmaku_sender.types.models.account import AccountCredential
 from danmaku_sender.core.config import ApiAuthConfig
 from danmaku_sender.runtime.app_state import AppState
 from danmaku_sender.ui.controllers.account_controller import AccountController
