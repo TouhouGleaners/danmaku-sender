@@ -27,8 +27,7 @@ from ..config.app_meta import AppInfo, UI
 from ..types.models.common import MonitorStats
 from ..types.models.user import UserProfile
 from ..runtime import Runtime
-from ..runtime.app_state import AppState
-from ..utils.log_utils import GuiLoggingHandler
+from ..runtime.log_utils import GuiLoggingHandler
 
 
 class MainWindow(QMainWindow):

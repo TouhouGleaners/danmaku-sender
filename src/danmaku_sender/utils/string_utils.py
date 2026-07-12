@@ -9,7 +9,7 @@ def parse_bilibili_link(text: str) -> tuple[str | None, int | None]:
     """
     从文本中提取 BVID 和 分P索引 (p=X)。
     如果文本本身就是一个纯 BVID，也可正常提取。
-    
+
     Returns:
         (bvid, p_index)
         - bvid: BV号字符串 (如 BV1xx...) 或 None

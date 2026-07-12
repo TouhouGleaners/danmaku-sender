@@ -15,7 +15,7 @@ from .controllers.auth_controller import AuthController
 
 from ..types.models.common import AuthCookies
 from ..config.app_meta import AppInfo, Links
-from ..utils.path_utils import get_assets_path
+from .framework.path_utils import get_assets_path
 
 
 logger = logging.getLogger("App.System.UI.Dialog")
