@@ -3,37 +3,17 @@ import logging
 
 from PySide6.QtCore import QObject, Signal
 
-from danmaku_sender.repo.bili_api_client import BiliApiClient
+from .concurrency import PoolTask
+
 from danmaku_sender.types.models.account import AccountCredential
 from danmaku_sender.types.models.user import UserProfile
 from danmaku_sender.config import ApiAuthConfig
 from danmaku_sender.runtime.app_state import AppState
 from danmaku_sender.runtime.account_manager import AccountManager
-from .concurrency import PoolTask
+from danmaku_sender.service.auth_service import AuthService
 
 
 logger = logging.getLogger("App.Controller.Account")
-
-
-def _check_login(config: ApiAuthConfig) -> bool:
-    """检测账号登录状态"""
-    try:
-        with BiliApiClient.from_config(config) as client:
-            nav = client.get_user_info()
-            return bool(nav.get('isLogin'))
-    except Exception as e:
-        logger.debug(f"账号检测失败: {e}")
-        return False
-
-
-def _fetch_user_info(config: ApiAuthConfig) -> dict | None:
-    """获取用户详细信息"""
-    try:
-        with BiliApiClient.from_config(config) as client:
-            return client.get_user_info()
-    except Exception as e:
-        logger.debug(f"获取用户信息失败: {e}")
-        return None
 
 
 class AccountController(QObject):
@@ -70,7 +50,7 @@ class AccountController(QObject):
     def check_account(self, account: AccountCredential, config: ApiAuthConfig):
         """异步检测账号是否有效"""
         PoolTask.submit(
-            _check_login,
+            AuthService.check_login,
             lambda result: self.checkFinished.emit(account, result),
             lambda _: self.checkFinished.emit(account, False),
             config,
@@ -79,7 +59,7 @@ class AccountController(QObject):
     def fetch_user_info(self, account: AccountCredential, config: ApiAuthConfig):
         """异步获取用户信息（昵称、uid）"""
         PoolTask.submit(
-            _fetch_user_info,
+            AuthService.fetch_raw_user_info,
             lambda result: self.userInfoFetched.emit(account, result),
             lambda _: self.userInfoFetched.emit(account, None),
             config,

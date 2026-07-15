@@ -2,7 +2,6 @@ import logging
 
 from PySide6.QtCore import QObject, Signal, QThreadPool, Slot
 
-from danmaku_sender.repo.bili_api_client import BiliApiClient
 from danmaku_sender.types.models.video import VideoInfo
 from danmaku_sender.config import ApiAuthConfig
 from danmaku_sender.service.video_fetcher import VideoFetcher
@@ -17,34 +16,6 @@ logger = logging.getLogger("App.Controller.Video")
 _bg_fetch_pool = QThreadPool()
 _bg_fetch_pool.setMaxThreadCount(1)
 _bg_fetch_pool.setObjectName("BackgroundVideoFetchPool")
-
-
-def _fetch_single_video_info(bvid: str, auth_config: ApiAuthConfig) -> VideoInfo:
-    """获取单个视频的详细信息"""
-    with BiliApiClient.from_config(auth_config) as client:
-        service = VideoFetcher(client)
-        return service.fetch_info(bvid)
-
-def _fetch_multiple_video_infos(
-    bvids: list[str],
-    auth_config: ApiAuthConfig
-) -> list[tuple[str, VideoInfo | Exception]]:
-    """
-    复用底层连接 (Keep-Alive) 获取多个视频信息。
-
-    Returns:
-        包含 (bvid, result) 元组的列表，其中 result 是 VideoInfo 或 Exception
-    """
-    results = []
-    with BiliApiClient.from_config(auth_config) as client:
-        service = VideoFetcher(client)
-        for bvid in bvids:
-            try:
-                info = service.fetch_info(bvid)
-                results.append((bvid, info))
-            except Exception as e:
-                results.append((bvid, e))
-    return results
 
 
 class VideoController(QObject):
@@ -78,7 +49,7 @@ class VideoController(QObject):
         if not is_background:
             self.fetchStarted.emit()
 
-        task = PoolTask(_fetch_single_video_info, bvid, auth_config)
+        task = PoolTask(VideoFetcher.fetch_info_from_config, bvid, auth_config)
 
         @Slot(object)
         def _on_fetch_succeeded(info: VideoInfo):
@@ -105,7 +76,7 @@ class VideoController(QObject):
         if not bvids:
             return
 
-        task = PoolTask(_fetch_multiple_video_infos, bvids, auth_config)
+        task = PoolTask(VideoFetcher.fetch_infos_from_config, bvids, auth_config)
 
         @Slot(list)
         def _on_fetch_completed(results: list[tuple[str, VideoInfo | Exception]]):

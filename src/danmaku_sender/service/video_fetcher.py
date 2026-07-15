@@ -1,7 +1,8 @@
 import logging
 
-from danmaku_sender.types.protocols import BiliApiProtocol
 from danmaku_sender.types.models.video import VideoInfo, VideoPart
+from danmaku_sender.config import ApiAuthConfig
+from danmaku_sender.repo.bili_api_client import BiliApiClient
 
 
 class VideoFetcher:
@@ -9,9 +10,30 @@ class VideoFetcher:
     视频业务服务层
     负责协调 API 调用与数据转换
     """
-    def __init__(self, api_client: BiliApiProtocol, logger: logging.Logger | None = None):
+    def __init__(self, api_client: BiliApiClient, logger: logging.Logger | None = None):
         self.client = api_client
         self.logger = logger if logger else logging.getLogger("App.System.Fetcher")
+
+    @classmethod
+    def fetch_info_from_config(cls, bvid: str, auth_config: ApiAuthConfig) -> VideoInfo:
+        """从配置直接获取单条视频信息（内部管理 client 生命周期）"""
+        with BiliApiClient.from_config(auth_config) as client:
+            return cls(client).fetch_info(bvid)
+
+    @classmethod
+    def fetch_infos_from_config(
+        cls, bvids: list[str], auth_config: ApiAuthConfig
+    ) -> list[tuple[str, VideoInfo | Exception]]:
+        """批量获取视频信息（复用 HTTP 连接）"""
+        results = []
+        with BiliApiClient.from_config(auth_config) as client:
+            fetcher = cls(client)
+            for bvid in bvids:
+                try:
+                    results.append((bvid, fetcher.fetch_info(bvid)))
+                except Exception as e:
+                    results.append((bvid, e))
+        return results
 
     def fetch_info(self, bvid: str) -> VideoInfo:
         """
