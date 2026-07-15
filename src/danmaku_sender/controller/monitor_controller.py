@@ -3,13 +3,12 @@ import threading
 
 from PySide6.QtCore import QObject, Signal, Slot
 
+from .concurrency import WorkerThread
 from .system_utils import KeepSystemAwake
 
-from danmaku_sender.repo.bili_api_client import BiliApiClient
-from danmaku_sender.service.bili_monitor import BiliDanmakuMonitor
 from danmaku_sender.types.models.common import VideoTarget
 from danmaku_sender.config import ApiAuthConfig, MonitorConfig
-from .concurrency import WorkerThread
+from danmaku_sender.service.bili_monitor import BiliDanmakuMonitor
 
 
 logger = logging.getLogger("App.Controller.Monitor")
@@ -108,9 +107,8 @@ class MonitorTaskWorker(WorkerThread):
     def _run_monitor_loop(self):
         with (
             KeepSystemAwake(self.monitor_config.prevent_sleep),
-            BiliApiClient.from_config(self.auth_config) as client
+            BiliDanmakuMonitor.create(self.target, self.auth_config) as monitor
         ):
-            monitor = BiliDanmakuMonitor(api_client=client, target=self.target)
             self.logger.info(f"🛡️ 监视启动: {self.target.display_string} | CID: {self.target.cid}")
 
             while not self.stop_event.is_set():

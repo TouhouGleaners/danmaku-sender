@@ -1,19 +1,24 @@
 import logging
+from contextlib import contextmanager
+
+from .danmaku_parser import DanmakuParser
 
 from danmaku_sender.repo.bili_api_client import BiliApiClient
 from danmaku_sender.types.exceptions.exceptions import BiliApiError, BiliNetworkError
 from danmaku_sender.repo.history_manager import HistoryManager
 from danmaku_sender.types.models.danmaku import Danmaku
 from danmaku_sender.types.models.common import VideoTarget, MonitorStats
-from .danmaku_parser import DanmakuParser
+from danmaku_sender.config import ApiAuthConfig
 
 
 class BiliDanmakuMonitor:
     """
     弹幕监视核心引擎
 
-    负责执行单次的网络请求与数据库比对
+    负责执行单次的网络请求与数据库比对。
+    通过 context manager 工厂创建，自动管理 BiliApiClient 生命周期。
     """
+
     def __init__(self, api_client: BiliApiClient, target: VideoTarget):
         self.api_client = api_client
         self.target = target
@@ -21,6 +26,13 @@ class BiliDanmakuMonitor:
         self.danmaku_parser = DanmakuParser()
         self.history_manager = HistoryManager()
         self.logger = logging.getLogger("App.Monitor.Engine")
+
+    @staticmethod
+    @contextmanager
+    def create(target: VideoTarget, auth_config: ApiAuthConfig):
+        """Context manager 工厂：自动管理 client 生命周期"""
+        with BiliApiClient.from_config(auth_config) as client:
+            yield BiliDanmakuMonitor(api_client=client, target=target)
 
     def _fetch_online_danmakus(self) -> list[Danmaku]:
         """获取在线弹幕列表"""
