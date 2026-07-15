@@ -8,6 +8,7 @@ import logging
 from contextlib import contextmanager
 
 from danmaku_sender.repo.bili_api_client import BiliApiClient
+from danmaku_sender.types.exceptions.exceptions import BiliApiError
 from danmaku_sender.types.models.user import UserProfile
 from danmaku_sender.config import ApiAuthConfig
 
@@ -77,6 +78,6 @@ class AuthService:
             qrcode_key = data.get('qrcode_key')
 
             if not url or not qrcode_key:
-                raise RuntimeError("获取二维码失败：B站接口返回异常")
+                raise BiliApiError(code=-1, message="获取二维码失败：B站接口返回异常")
 
             yield client, url, qrcode_key
