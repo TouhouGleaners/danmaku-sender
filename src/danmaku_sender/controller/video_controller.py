@@ -6,10 +6,10 @@ from danmaku_sender.repo.bili_api_client import BiliApiClient
 from danmaku_sender.types.models.video import VideoInfo
 from danmaku_sender.config import ApiAuthConfig
 from danmaku_sender.service.video_fetcher import VideoFetcher
-from danmaku_sender.ui.framework.concurrency import PoolTask
+from .concurrency import PoolTask
 
 
-logger = logging.getLogger("App.System.Video")
+logger = logging.getLogger("App.Controller.Video")
 
 
 # 使用独立单线程后台线程池处理批量获取任务，避免过度并发。

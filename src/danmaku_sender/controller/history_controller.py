@@ -2,11 +2,11 @@ import logging
 
 from PySide6.QtCore import QObject, Signal
 
-from ..framework.concurrency import PoolTask
-from ...repo.history_manager import HistoryManager
+from .concurrency import PoolTask
+from danmaku_sender.repo.history_manager import HistoryManager
 
 
-logger = logging.getLogger("App.System.History")
+logger = logging.getLogger("App.Controller.History")
 
 
 def _query(keyword: str, status_filter: int) -> list:

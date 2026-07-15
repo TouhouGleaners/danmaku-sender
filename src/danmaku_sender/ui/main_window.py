@@ -9,9 +9,9 @@ from PySide6.QtWidgets import (
 from PySide6.QtGui import QAction, QCloseEvent, QDesktopServices
 from PySide6.QtCore import Qt, QUrl, QTimer, QSize, QEvent, Slot
 
-from .controllers.auth_controller import AuthController, UserProfile
-from .controllers.account_controller import AccountController
-from .controllers.system_controller import SystemController
+from danmaku_sender.controller.auth_controller import AuthController, UserProfile
+from danmaku_sender.controller.account_controller import AccountController
+from danmaku_sender.controller.system_controller import SystemController
 from .framework.image_processor import QtImageProcessor
 from .framework.style_loader import load_stylesheet, get_svg_icon, get_app_icon
 from .sender_page import SenderPage

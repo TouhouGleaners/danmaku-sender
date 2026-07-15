@@ -9,10 +9,10 @@ from danmaku_sender.repo.bili_api_client import BiliApiClient
 from danmaku_sender.service.bili_monitor import BiliDanmakuMonitor
 from danmaku_sender.types.models.common import VideoTarget
 from danmaku_sender.config import ApiAuthConfig, MonitorConfig
-from danmaku_sender.ui.framework.concurrency import WorkerThread
+from .concurrency import WorkerThread
 
 
-logger = logging.getLogger("App.System.MonitorController")
+logger = logging.getLogger("App.Controller.Monitor")
 
 
 class MonitorController(QObject):
@@ -91,7 +91,7 @@ class MonitorTaskWorker(WorkerThread):
         parent=None
     ):
         super().__init__(parent)
-        self.logger = logging.getLogger("App.Monitor.Worker")
+        self.logger = logging.getLogger("App.Controller.Monitor.Worker")
         self.target = target
         self.auth_config = auth_config
         self.monitor_config = monitor_config

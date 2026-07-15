@@ -3,7 +3,7 @@ from typing import Callable
 
 from PySide6.QtCore import QObject, Signal
 
-from danmaku_sender.ui.framework.concurrency import PoolTask
+from .concurrency import PoolTask
 from danmaku_sender.service.editor_session import EditorSession
 from danmaku_sender.runtime.app_state import AppState
 from danmaku_sender.types.models.danmaku import Danmaku
@@ -22,7 +22,7 @@ class EditorController(QObject):
 
     def __init__(self, state: AppState, parent=None):
         super().__init__(parent)
-        self.logger = logging.getLogger("App.System.Editor.Controller")
+        self.logger = logging.getLogger("App.Controller.Editor")
         self.state = state
         self.session = EditorSession()
 

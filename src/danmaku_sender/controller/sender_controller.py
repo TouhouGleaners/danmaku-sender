@@ -4,7 +4,7 @@ from typing import Callable
 
 from PySide6.QtCore import QObject, Signal, Slot
 
-from danmaku_sender.ui.framework.concurrency import WorkerThread, PoolTask
+from .concurrency import WorkerThread, PoolTask
 
 from .system_utils import KeepSystemAwake
 
@@ -20,7 +20,7 @@ from danmaku_sender.service.danmaku_exporter import create_xml_from_danmakus
 from danmaku_sender.repo.bili_api_client import BiliApiClient
 
 
-logger = logging.getLogger("App.System.SenderController")
+logger = logging.getLogger("App.Controller.Sender")
 
 
 class SenderController(QObject):
@@ -146,7 +146,7 @@ class SendTaskWorker(WorkerThread):
         parent=None
     ):
         super().__init__(parent)
-        self.logger = logging.getLogger("App.Sender.Worker")
+        self.logger = logging.getLogger("App.Controller.Sender.Worker")
         self.target = target
         self.danmakus = danmakus
         self.auth_config = auth_config

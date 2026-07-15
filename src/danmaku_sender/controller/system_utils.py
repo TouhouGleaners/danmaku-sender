@@ -4,7 +4,7 @@ import platform
 import threading
 
 
-logger = logging.getLogger("App.System.Utils")
+logger = logging.getLogger("App.Controller.Utils")
 
 
 IS_WINDOWS = platform.system() == "Windows"

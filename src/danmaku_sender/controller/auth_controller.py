@@ -6,10 +6,10 @@ from PySide6.QtCore import QObject, Signal, Slot
 from danmaku_sender.repo.bili_api_client import BiliApiClient
 from danmaku_sender.config import ApiAuthConfig
 from danmaku_sender.types.models.user import UserProfile
-from danmaku_sender.ui.framework.concurrency import WorkerThread, PoolTask
+from .concurrency import WorkerThread, PoolTask
 
 
-logger = logging.getLogger("App.System.Auth")
+logger = logging.getLogger("App.Controller.Auth")
 
 
 def _fetch_user_nav(auth_config: ApiAuthConfig) -> UserProfile:
@@ -120,7 +120,7 @@ class QRLoginWorker(WorkerThread):
         super().__init__(parent)
         self.use_system_proxy = use_system_proxy
         self.stop_event = stop_event  # Controller 传入
-        self.logger = logging.getLogger("App.Auth.QRWorker")
+        self.logger = logging.getLogger("App.Controller.Auth.QRWorker")
 
     def run(self):
         try:
