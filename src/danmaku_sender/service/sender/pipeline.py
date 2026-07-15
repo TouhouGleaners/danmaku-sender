@@ -59,28 +59,32 @@ class SendPipeline:
             executor = DanmakuExecutor(client)
             scheduler = DanmakuScheduler(executor, self.history_manager)
 
-            # 组装回调链：结果记录 → 外部回调
-            original_result_callback = job.result_callback
+            # 包装回调链，不修改原始 job 对象
+            outer_result_callback = job.result_callback
+            outer_progress_callback = job.progress_callback
 
             def on_result(dm: Danmaku, result: DanmakuSendResult):
                 self._record_result(job.target, dm, result)
-                if original_result_callback:
-                    original_result_callback(dm, result)
-
-            # 组装回调链：ETA 计算 → 进度发射 → 外部回调
-            original_progress_callback = job.progress_callback
+                if outer_result_callback:
+                    outer_result_callback(dm, result)
 
             def on_progress(attempted: int, total: int):
                 eta_sec = self._calc_eta(attempted, total)
                 if progress_emitter:
                     progress_emitter(attempted, total, eta_sec)
-                if original_progress_callback:
-                    original_progress_callback(attempted, total)
+                if outer_progress_callback:
+                    outer_progress_callback(attempted, total)
 
-            job.result_callback = on_result
-            job.progress_callback = on_progress
+            wrapped_job = SendJob(
+                target=job.target,
+                danmakus=job.danmakus,
+                config=job.config,
+                stop_event=job.stop_event,
+                progress_callback=on_progress,
+                result_callback=on_result,
+            )
 
-            ctx = scheduler.run_pipeline(job)
+            ctx = scheduler.run_pipeline(wrapped_job)
 
         # 补充生命周期状态
         ctx.is_manually_stopped = job.stop_event.is_set()
@@ -90,6 +94,8 @@ class SendPipeline:
     def _record_result(self, target: VideoTarget, dm: Danmaku, result: DanmakuSendResult):
         """将成功发送的弹幕记录到历史数据库"""
         if result.is_success:
+            if result.dmid and not dm.dmid:
+                dm.dmid = result.dmid
             self.history_manager.record_danmaku(target, dm, result.is_visible)
 
     def _calc_eta(self, attempted: int, total: int) -> float:
