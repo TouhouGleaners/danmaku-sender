@@ -13,7 +13,7 @@ from PySide6.QtWidgets import (
 from danmaku_sender.types.models.common import MonitorStats, VideoTarget
 from danmaku_sender.runtime.app_state import AppState
 
-from .controllers.monitor_controller import MonitorController
+from danmaku_sender.controller.monitor_controller import MonitorController
 from .framework.binder import UIBinder
 from .framework.style_loader import get_svg_icon
 

@@ -11,7 +11,7 @@ from PySide6.QtWidgets import (
 )
 from PIL import Image
 
-from .controllers.auth_controller import AuthController
+from danmaku_sender.controller.auth_controller import AuthController
 
 from ..types.models.common import AuthCookies
 from ..config.app_meta import AppInfo, Links

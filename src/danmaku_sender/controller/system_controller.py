@@ -2,9 +2,9 @@ import logging
 
 from PySide6.QtCore import QObject, Signal, Slot
 
-from ..framework.concurrency import PoolTask
-from ...repo.github_client import UpdateChecker, UpdateInfo
-from ...config.app_meta import AppInfo
+from danmaku_sender.ui.framework.concurrency import PoolTask
+from danmaku_sender.repo.github_client import UpdateChecker, UpdateInfo
+from danmaku_sender.config.app_meta import AppInfo
 
 
 logger = logging.getLogger("App.System.System")
