@@ -3,42 +3,14 @@ import threading
 
 from PySide6.QtCore import QObject, Signal, Slot
 
-from danmaku_sender.repo.bili_api_client import BiliApiClient
+from .concurrency import WorkerThread, PoolTask
+
 from danmaku_sender.config import ApiAuthConfig
 from danmaku_sender.types.models.user import UserProfile
-from .concurrency import WorkerThread, PoolTask
+from danmaku_sender.service.auth_service import AuthService
 
 
 logger = logging.getLogger("App.Controller.Auth")
-
-
-def _fetch_user_nav(auth_config: ApiAuthConfig) -> UserProfile:
-    with BiliApiClient.from_config(auth_config) as client:
-        try:
-            # 用户信息
-            nav_data = client.get_user_info()
-
-            if not nav_data.get('isLogin'):
-                return UserProfile(is_login=False, username="未登录")
-
-            uid = nav_data.get('mid', 0)
-            username = nav_data.get('uname', "未知用户")
-            face_url = nav_data.get('face', "")
-
-            # 下载头像
-            avatar_data = b""
-            if face_url:
-                try:
-                    avatar_data = client.get_raw_resource(face_url)
-                except Exception as e:
-                    logger.warning(f"下载头像失败 [URL: {face_url}]", exc_info=True)
-
-            return UserProfile(is_login=True, username=username, uid=uid, avatar_bytes=avatar_data)
-
-        except Exception as e:
-            # 主流程失败
-            logger.error(f"同步获取用户信息任务崩溃: {e}", exc_info=True)
-            raise
 
 
 class AuthController(QObject):
@@ -62,7 +34,7 @@ class AuthController(QObject):
             return
 
         PoolTask.submit(
-            _fetch_user_nav,
+            AuthService.fetch_user_profile,
             self.userProfileReady.emit,
             lambda _: self.userProfileReady.emit(UserProfile(False, "未登录")),
             auth_config,
@@ -124,18 +96,7 @@ class QRLoginWorker(WorkerThread):
 
     def run(self):
         try:
-            config = ApiAuthConfig(sessdata="", bili_jct="", use_system_proxy=self.use_system_proxy)
-
-            with BiliApiClient.from_config(config) as client:
-                # 申请二维码
-                data = client.generate_qr_code()
-                url = data.get('url')
-                qrcode_key = data.get('qrcode_key')
-
-                if not url or not qrcode_key:
-                    self.loginFailed.emit("获取二维码失败：B站接口返回异常")
-                    return
-
+            with AuthService.qr_login_session(self.use_system_proxy) as (client, url, qrcode_key):
                 # 通知 UI 渲染二维码
                 self.qrReady.emit(url)
                 self.statusUpdated.emit("请使用哔哩哔哩客户端扫码")
