@@ -6,6 +6,7 @@ Controller 层的 Worker 只需调用 pipeline.execute()，无需接触 Executor
 """
 
 import logging
+from dataclasses import replace
 from typing import Callable
 
 from .scheduler import DanmakuScheduler
@@ -69,17 +70,14 @@ class SendPipeline:
                     outer_result_callback(dm, result)
 
             def on_progress(attempted: int, total: int):
-                eta_sec = self._calc_eta(attempted, total)
+                eta_sec = self._calc_eta(attempted, total, job.config)
                 if progress_emitter:
                     progress_emitter(attempted, total, eta_sec)
                 if outer_progress_callback:
                     outer_progress_callback(attempted, total)
 
-            wrapped_job = SendJob(
-                target=job.target,
-                danmakus=job.danmakus,
-                config=job.config,
-                stop_event=job.stop_event,
+            wrapped_job = replace(
+                job,
                 progress_callback=on_progress,
                 result_callback=on_result,
             )
@@ -98,9 +96,9 @@ class SendPipeline:
                 dm.dmid = result.dmid
             self.history_manager.record_danmaku(target, dm, result.is_visible)
 
-    def _calc_eta(self, attempted: int, total: int) -> float:
-        """基于当前策略配置计算 ETA（秒）"""
-        cfg = self.strategy_config
+    def _calc_eta(self, attempted: int, total: int, config: SenderConfig) -> float:
+        """基于任务配置计算 ETA（秒）"""
+        cfg = config
         avg_normal = (cfg.min_delay + cfg.max_delay) / 2
         avg_rest = (cfg.rest_min + cfg.rest_max) / 2
         return DelayManager.calc_eta(
