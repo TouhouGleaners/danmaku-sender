@@ -9,10 +9,10 @@ from danmaku_sender.types.models.user import UserProfile
 from danmaku_sender.config import ApiAuthConfig
 from danmaku_sender.runtime.app_state import AppState
 from danmaku_sender.runtime.account_manager import AccountManager
-from danmaku_sender.ui.framework.concurrency import PoolTask
+from .concurrency import PoolTask
 
 
-logger = logging.getLogger("App.System.Account")
+logger = logging.getLogger("App.Controller.Account")
 
 
 def _check_login(config: ApiAuthConfig) -> bool:

@@ -7,7 +7,7 @@ from abc import abstractmethod
 from PySide6.QtCore import QThread, QObject, Signal, QRunnable, Slot, QThreadPool
 
 
-logger = logging.getLogger("App.System.Concurrency")
+logger = logging.getLogger("App.Controller.Concurrency")
 
 
 class WorkerThread(QThread):
@@ -21,7 +21,7 @@ class WorkerThread(QThread):
 
     def __init__(self, parent=None):
         super().__init__(parent)
-        self.logger = logging.getLogger("App.System.Worker.Base")
+        self.logger = logging.getLogger("App.Controller.Worker")
         self.finished.connect(self._unregister)  # 线程彻底结束时，将自己从保活注册表中移除
 
     def start(self, *args, **kwargs):
