@@ -7,9 +7,8 @@ from requests.exceptions import ConnectionError, HTTPError, RequestException, Ti
 
 from .wbi_signer import WbiSigner
 
-from ..types.exceptions.exceptions import BiliNetworkError, BiliApiError
-from ..types.exceptions.api_errors import BiliDmErrorCode
-from ..types.protocols import BiliApiProtocol
+from danmaku_sender.types.exceptions.exceptions import BiliNetworkError, BiliApiError
+from danmaku_sender.types.exceptions.api_errors import BiliDmErrorCode
 
 
 class BiliConfigProto(Protocol):
@@ -18,7 +17,7 @@ class BiliConfigProto(Protocol):
     use_system_proxy: bool
 
 
-class BiliApiClient(BiliApiProtocol):
+class BiliApiClient:
     """
     一个专门用于与Bilibili API交互的客户端。
     封装了会话管理、WBI签名、请求发送和底层错误处理。

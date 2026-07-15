@@ -1,12 +1,12 @@
 import logging
 from threading import Event
 
-from danmaku_sender.types.protocols import BiliApiProtocol
 from danmaku_sender.types.models.danmaku import Danmaku
 from danmaku_sender.types.models.common import VideoTarget
 from danmaku_sender.types.models.result import DanmakuSendResult
 from danmaku_sender.types.exceptions.exceptions import BiliApiError, BiliNetworkError
 from danmaku_sender.types.exceptions.api_errors import BiliDmErrorCode
+from danmaku_sender.repo.bili_api_client import BiliApiClient
 
 
 class DanmakuExecutor:
@@ -16,7 +16,7 @@ class DanmakuExecutor:
     网络发包层。剥离了所有与“业务流转”、“耗时计算”相关的逻辑。
     职责：接收一条弹幕 -> 请求 B 站 API -> 标准化返回结果。
     """
-    def __init__(self, api_client: BiliApiProtocol):
+    def __init__(self, api_client: BiliApiClient):
         self.api_client = api_client
         self.logger = logging.getLogger("App.Sender.Executor")
 
