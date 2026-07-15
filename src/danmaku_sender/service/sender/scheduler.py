@@ -20,7 +20,6 @@ class DanmakuScheduler:
         self.logger = logging.getLogger("App.Sender.Scheduler")
         self.executor = executor
         self.history_manager = history_manager
-        self.unsent_danmakus = []
 
     @staticmethod
     def _get_fingerprint(dm: Danmaku) -> DanmakuFingerprint:
@@ -79,7 +78,6 @@ class DanmakuScheduler:
 
         # 初始化统计容器
         ctx = SendingContext(total=len(job.danmakus), config=job.config, target=job.target)
-        self.unsent_danmakus = []
 
         if not job.danmakus:
             return ctx
@@ -143,5 +141,4 @@ class DanmakuScheduler:
                     ctx.add_unsent(job.danmakus[i+1:], "任务手动停止")
                 break
 
-        self.unsent_danmakus = ctx.unsent_records
         return ctx

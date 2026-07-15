@@ -5,19 +5,15 @@ from typing import Callable
 from PySide6.QtCore import QObject, Signal, Slot
 
 from .concurrency import WorkerThread, PoolTask
-
 from .system_utils import KeepSystemAwake
 
-from danmaku_sender.repo.history_manager import HistoryManager
-from danmaku_sender.service.sender import DanmakuScheduler, DanmakuExecutor, SendingContext, SendJob, DelayManager
+from danmaku_sender.service.sender import SendPipeline, SendingContext, SendJob
+from danmaku_sender.service.danmaku_parser import DanmakuParser
+from danmaku_sender.service.danmaku_exporter import create_xml_from_danmakus
 from danmaku_sender.types.models.danmaku import Danmaku
-from danmaku_sender.types.models.result import DanmakuSendResult
 from danmaku_sender.types.models.common import VideoTarget, UnsentDanmakusRecord
 from danmaku_sender.config import ApiAuthConfig, SenderConfig
 from danmaku_sender.runtime.app_state import AppState
-from danmaku_sender.service.danmaku_parser import DanmakuParser
-from danmaku_sender.service.danmaku_exporter import create_xml_from_danmakus
-from danmaku_sender.repo.bili_api_client import BiliApiClient
 
 
 logger = logging.getLogger("App.Controller.Sender")
@@ -132,7 +128,7 @@ class SenderController(QObject):
 
 
 class SendTaskWorker(WorkerThread):
-    """用于后台发送弹幕的线程"""
+    """用于后台发送弹幕的线程（薄壳：仅负责线程生命周期与信号桥接）"""
     progressUpdated = Signal(int, int, float)  # 已尝试, 总数, ETA
     taskFinished = Signal(object)              # SendingContext
 
@@ -146,76 +142,25 @@ class SendTaskWorker(WorkerThread):
         parent=None
     ):
         super().__init__(parent)
-        self.logger = logging.getLogger("App.Controller.Sender.Worker")
         self.target = target
         self.danmakus = danmakus
         self.auth_config = auth_config
         self.strategy_config = strategy_config
         self.stop_event = stop_event
-        self.sender_instance = None
-        self.history_manager = HistoryManager()
-        self.scheduler = None
 
     def run(self):
         ctx = None
         try:
-            ctx = self._execute_pipeline()
+            with KeepSystemAwake(self.strategy_config.prevent_sleep):
+                pipeline = SendPipeline(self.auth_config, self.strategy_config)
+                job = SendJob(
+                    target=self.target,
+                    danmakus=self.danmakus,
+                    config=self.strategy_config,
+                    stop_event=self.stop_event,
+                )
+                ctx = pipeline.execute(job, progress_emitter=self.progressUpdated.emit)
         except Exception as e:
             self.report_error("任务发生严重错误", e)
         finally:
-            if ctx:
-                ctx.is_manually_stopped = self.stop_event.is_set()
-                self._log_summary(ctx)
             self.taskFinished.emit(ctx)
-
-    def _execute_pipeline(self):
-        with (
-            KeepSystemAwake(self.strategy_config.prevent_sleep),
-            BiliApiClient.from_config(self.auth_config) as client
-        ):
-            executor = DanmakuExecutor(client)
-            self.scheduler = DanmakuScheduler(executor, self.history_manager)
-
-            job = SendJob(
-                target=self.target,
-                danmakus=self.danmakus,
-                config=self.strategy_config,
-                stop_event=self.stop_event,
-                progress_callback=self._handle_job_progress,
-                result_callback=self._handle_job_result
-            )
-            return self.scheduler.run_pipeline(job)
-
-    def _handle_job_progress(self, attempted: int, total: int):
-        avg_normal = (self.strategy_config.min_delay + self.strategy_config.max_delay) / 2
-        avg_rest = (self.strategy_config.rest_min + self.strategy_config.rest_max) / 2
-
-        eta_sec = DelayManager.calc_eta(
-            attempted=attempted,
-            total=total,
-            burst_size=self.strategy_config.burst_size,
-            avg_normal=avg_normal,
-            avg_rest=avg_rest
-        )
-
-        self.progressUpdated.emit(attempted, total, eta_sec)
-
-    def _handle_job_result(self, dm: Danmaku, result: DanmakuSendResult):
-        if result.is_success and result.dmid:
-            if not dm.dmid:
-                dm.dmid = result.dmid
-            self.history_manager.record_danmaku(self.target, dm, result.is_visible)
-
-    def _log_summary(self, ctx: SendingContext):
-        """日志输出"""
-        self.logger.info("--- 发送任务结束 ---")
-        if ctx.auto_stop_reason:
-            self.logger.info(f"原因：{ctx.auto_stop_reason}")
-        elif ctx.is_manually_stopped:
-            self.logger.info("原因：任务被用户手动停止。")
-        elif ctx.fatal_error_occurred:
-            self.logger.critical("原因：任务因致命错误中断。请检查配置或网络！")
-        else:
-            self.logger.info("原因：所有弹幕已处理完毕。")
-
-        self.logger.info(f"总计: {ctx.total} | 成功: {ctx.success_count} | 跳过: {ctx.skipped_count} | 失败: {ctx.attempted_count - ctx.success_count}")

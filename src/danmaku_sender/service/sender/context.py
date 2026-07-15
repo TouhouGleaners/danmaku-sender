@@ -2,7 +2,6 @@ import time
 from threading import Event
 from typing import Callable
 from dataclasses import dataclass, field
-from enum import Enum, auto
 
 from danmaku_sender.types.models.danmaku import Danmaku
 from danmaku_sender.types.models.result import DanmakuSendResult
@@ -13,15 +12,6 @@ from danmaku_sender.config import SenderConfig
 # 弹幕指纹类型别名：(内容, 进度, 模式, 字号, 颜色)
 # 用于在断点续传时，精准判断两条弹幕是否在物理表现上完全一致
 DanmakuFingerprint = tuple[str, int, int, int, int]
-
-
-class SendFlowAction(Enum):
-    """
-    发送流程控制动作枚举
-    指示调度器在收到一次发送结果后，下一步该作何反应
-    """
-    CONTINUE = auto()     # 结果正常，继续发送下一条
-    STOP_FATAL = auto()   # 遇到严重权限/网络错误，立即停止
 
 
 @dataclass
