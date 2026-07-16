@@ -31,7 +31,6 @@ class HistoryManager:
 
     def __init__(self, db_path: Path):
         self.db_path = db_path
-        db_path.parent.mkdir(parents=True, exist_ok=True)
         self._init_db()
         logger.debug("HistoryManager 初始化完成")
 
