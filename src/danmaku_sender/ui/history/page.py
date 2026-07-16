@@ -13,6 +13,7 @@ from .dialogs import DanmakuDetailDialog
 from danmaku_sender.types.models.common import DanmakuStatus
 from danmaku_sender.types.models.video import VideoInfo
 from danmaku_sender.runtime.app_state import AppState
+from danmaku_sender.repo.history_manager import HistoryManager
 from danmaku_sender.controller.video_controller import VideoController
 from danmaku_sender.controller.history_controller import HistoryController
 
@@ -21,13 +22,13 @@ logger = logging.getLogger("App.System.UI.History")
 
 
 class HistoryPage(QWidget):
-    def __init__(self, state: AppState):
+    def __init__(self, state: AppState, history_manager: HistoryManager):
         super().__init__()
         self.state = state
         self._fetched_bvids = set()
 
         self.video_controller = VideoController(self)
-        self.history_controller = HistoryController(self)
+        self.history_controller = HistoryController(history_manager, self)
 
         self._create_ui()
         self._connect_signals()

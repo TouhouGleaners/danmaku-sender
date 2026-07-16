@@ -19,6 +19,7 @@ from danmaku_sender.service.sender import SendingContext
 from danmaku_sender.types.models.video import VideoInfo
 from danmaku_sender.types.models.common import VideoTarget, UnsentDanmakusRecord
 from danmaku_sender.runtime.app_state import AppState
+from danmaku_sender.repo.history_manager import HistoryManager
 from danmaku_sender.utils.string_utils import parse_bilibili_link
 from danmaku_sender.utils.time_utils import format_duration
 from danmaku_sender.ui.common.notification import send_windows_notification
@@ -27,13 +28,13 @@ from danmaku_sender.ui.common.notification import send_windows_notification
 class SenderPage(QWidget):
     progressUpdated = Signal(int, int, float)
 
-    def __init__(self, state: AppState):
+    def __init__(self, state: AppState, history_manager: HistoryManager):
         super().__init__()
         self.state = state
         self.logger = logging.getLogger("App.Sender.UI")
         self._pending_part_index: int | None = None
         self.video_controller = VideoController(self)
-        self.sender_controller = SenderController(state, self)
+        self.sender_controller = SenderController(state, history_manager, self)
 
         self._create_ui()
         self._connect_signals()

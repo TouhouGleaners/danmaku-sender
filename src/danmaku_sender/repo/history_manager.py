@@ -1,6 +1,5 @@
 import logging
 import time
-import threading
 from pathlib import Path
 
 from peewee import SqliteDatabase, fn, Case
@@ -21,7 +20,6 @@ class HistoryManager:
     负责实现"发送 -> 存证 -> 核销"的数据层逻辑。
 
     线程安全契约:
-    - 单例在主线程初始化，之后可安全地在任意线程调用其公共方法。
     - Peewee 的 SqliteDatabase 内部使用 threading.local() 为每个线程维护
       独立的 SQLite 连接，不存在跨线程共享连接的问题。
     - WAL 模式允许并发读 + 单写，配合 Peewee 的线程本地连接机制，
@@ -29,55 +27,12 @@ class HistoryManager:
       高写入并发或长事务仍可能触发 ``database is locked`` 错误。
     - 每个写操作均为单条 SQL（Peewee 默认 autocommit），在上述前提下是原子操作，
       但不意味着该历史层在任意写入压力下都具备高可扩展性。
-
-    注意：当前的单例实现仅针对单进程多线程环境。
-    如果在多进程环境中使用，SQLite 的文件锁机制会处理并发，但单例逻辑会失效。
-
-    初始化契约:
-    - 应用启动时必须先调用 ``HistoryManager.initialize(db_path)`` 完成初始化。
-    - 之后任意位置可通过 ``HistoryManager()`` 获取单例实例。
-    - 未初始化时调用 ``HistoryManager()`` 会抛出 ``RuntimeError``。
     """
-    _instance: "HistoryManager | None" = None
-    _lock = threading.Lock()
-    _initialized = False
-    db_path: Path  # 由 initialize() 设置的实例属性
 
-    def __new__(cls, *args, **kwargs):
-        if not cls._instance:
-            raise RuntimeError(
-                "HistoryManager 尚未初始化，请先调用 HistoryManager.initialize(db_path)"
-            )
-        return cls._instance
-
-    @classmethod
-    def initialize(cls, db_path: Path) -> "HistoryManager":
-        """
-        初始化单例（应用启动时调用一次）。
-
-        Args:
-            db_path: SQLite 数据库文件路径
-
-        Returns:
-            初始化后的 HistoryManager 单例
-
-        Raises:
-            RuntimeError: 重复初始化时抛出
-        """
-        with cls._lock:
-            if cls._initialized:
-                raise RuntimeError("HistoryManager 已经初始化，不可重复调用 initialize()")
-
-            instance = super().__new__(cls)
-            cls._instance = instance
-
-            db_path.parent.mkdir(parents=True, exist_ok=True)
-            instance.db_path = db_path
-            instance._init_db()
-
-            cls._initialized = True
-            logger.debug("HistoryManager 单例初始化完成")
-            return instance
+    def __init__(self, db_path: Path):
+        self.db_path = db_path
+        self._init_db()
+        logger.debug("HistoryManager 初始化完成")
 
     def _init_db(self):
         """初始化数据库，自动迁移"""

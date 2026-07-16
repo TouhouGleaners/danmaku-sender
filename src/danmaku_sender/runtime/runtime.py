@@ -4,8 +4,10 @@ from .resources import AppResources
 from .app_state import AppState
 from .config_manager import ConfigManager
 from .account_manager import AccountManager
-from ..repo.history_manager import HistoryManager
-from ..config.app_meta import get_history_db_path
+
+from danmaku_sender.config.app_meta import AppInfo
+from danmaku_sender.repo.history_manager import HistoryManager
+
 
 logger = logging.getLogger("App.Runtime")
 
@@ -37,7 +39,7 @@ class Runtime:
         self._bootstrapped = True
 
         # === 数据库 ===
-        self.history_manager = HistoryManager.initialize(get_history_db_path())
+        self.history_manager = HistoryManager(AppInfo.Paths.HISTORY_DB)
 
         self.resources.theme.init_theme()
 

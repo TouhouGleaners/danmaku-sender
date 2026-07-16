@@ -19,20 +19,20 @@ class BiliDanmakuMonitor:
     通过 context manager 工厂创建，自动管理 BiliApiClient 生命周期。
     """
 
-    def __init__(self, api_client: BiliApiClient, target: VideoTarget):
+    def __init__(self, api_client: BiliApiClient, target: VideoTarget, history_manager: HistoryManager):
         self.api_client = api_client
         self.target = target
 
         self.danmaku_parser = DanmakuParser()
-        self.history_manager = HistoryManager()
+        self.history_manager = history_manager
         self.logger = logging.getLogger("App.Monitor.Engine")
 
     @staticmethod
     @contextmanager
-    def create(target: VideoTarget, auth_config: ApiAuthConfig):
+    def create(target: VideoTarget, auth_config: ApiAuthConfig, history_manager: HistoryManager):
         """Context manager 工厂：自动管理 client 生命周期"""
         with BiliApiClient.from_config(auth_config) as client:
-            yield BiliDanmakuMonitor(api_client=client, target=target)
+            yield BiliDanmakuMonitor(api_client=client, target=target, history_manager=history_manager)
 
     def _fetch_online_danmakus(self) -> list[Danmaku]:
         """获取在线弹幕列表"""

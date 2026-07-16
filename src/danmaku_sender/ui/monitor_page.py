@@ -12,6 +12,7 @@ from PySide6.QtWidgets import (
 
 from danmaku_sender.types.models.common import MonitorStats, VideoTarget
 from danmaku_sender.runtime.app_state import AppState
+from danmaku_sender.repo.history_manager import HistoryManager
 
 from danmaku_sender.controller.monitor_controller import MonitorController
 from .framework.binder import UIBinder
@@ -21,12 +22,12 @@ from .framework.style_loader import get_svg_icon
 class MonitorPage(QWidget):
     statsUpdated = Signal(dict)
 
-    def __init__(self, state: AppState):
+    def __init__(self, state: AppState, history_manager: HistoryManager):
         super().__init__()
         self.state = state
         self.logger = logging.getLogger("App.Monitor.UI")
 
-        self.monitor_controller = MonitorController(self)
+        self.monitor_controller = MonitorController(history_manager, self)
 
         self._create_ui()
         self._connect_signals()

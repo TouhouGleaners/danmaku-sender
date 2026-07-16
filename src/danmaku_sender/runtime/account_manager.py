@@ -4,16 +4,16 @@ import logging
 import keyring
 from pathlib import Path
 from cryptography.fernet import Fernet, InvalidToken
-from platformdirs import user_data_dir
 
-from ..config.app_meta import AppInfo
-from ..types.models.account import AccountCredential
 from .app_state import AppState
+
+from danmaku_sender.config.app_meta import AppInfo
+from danmaku_sender.types.models.account import AccountCredential
 
 
 KEYRING_SERVICE_NAME = f"{AppInfo.NAME_EN}-CredentialsKey"
 KEYRING_USERNAME = "default_user"
-ACCOUNTS_FILE_NAME = "accounts.json"
+ACCOUNTS_PATH = AppInfo.Paths.ACCOUNTS
 
 logger = logging.getLogger("App.System.Auth")
 
@@ -48,33 +48,26 @@ class AccountManager:
             logger.warning(f"密钥环写入失败: {e}，密钥仅在本次会话有效，跳过凭据持久化。")
             return new_key, False
 
-    def get_accounts_filepath(self) -> Path:
-        """获取账号存储文件的完整路径"""
-        data_dir = Path(user_data_dir(AppInfo.NAME_EN, AppInfo.AUTHOR, ensure_exists=True))
-        return data_dir / ACCOUNTS_FILE_NAME
-
     def load_accounts(self) -> list[AccountCredential]:
         """
         从加密的 accounts.json 加载账号列表。
         如果文件不存在或解密失败，返回空列表。
         """
-        accounts_file = self.get_accounts_filepath()
-
-        if not accounts_file.exists():
+        if not ACCOUNTS_PATH.exists():
             return []
 
         try:
             key, _ = self._get_encryption_key()
             fernet = Fernet(key)
 
-            encrypted_data = accounts_file.read_bytes()
+            encrypted_data = ACCOUNTS_PATH.read_bytes()
             decrypted_data = fernet.decrypt(encrypted_data)
 
             raw_list = json.loads(decrypted_data.decode('utf-8'))
 
             if not isinstance(raw_list, list):
                 logger.warning("accounts.json 格式异常：顶层不是列表，已备份。")
-                self._backup_corrupt_file(accounts_file)
+                self._backup_corrupt_file(ACCOUNTS_PATH)
                 return []
 
             accounts = []
@@ -93,7 +86,7 @@ class AccountManager:
 
         except json.JSONDecodeError as e:
             logger.warning(f"账号文件 JSON 解析失败（文件损坏）: {e}")
-            self._backup_corrupt_file(accounts_file)
+            self._backup_corrupt_file(ACCOUNTS_PATH)
             return []
 
         except Exception as unexpected_e:
@@ -102,13 +95,11 @@ class AccountManager:
 
     def save_accounts(self, accounts: list[AccountCredential]) -> None:
         """将账号列表加密后写入 accounts.json。"""
-        accounts_file = self.get_accounts_filepath()
-
         if not accounts:
             logger.info("账号列表为空，删除账号文件。")
-            if accounts_file.exists():
+            if ACCOUNTS_PATH.exists():
                 try:
-                    os.remove(accounts_file)
+                    os.remove(ACCOUNTS_PATH)
                 except OSError as e:
                     logger.error(f"删除账号文件失败: {e}", exc_info=True)
             return
@@ -125,8 +116,8 @@ class AccountManager:
             json_bytes = json.dumps(raw_list, ensure_ascii=False).encode('utf-8')
             encrypted_bytes = f.encrypt(json_bytes)
 
-            accounts_file.write_bytes(encrypted_bytes)
-            logger.info(f"已保存 {len(accounts)} 个账号到 {accounts_file}")
+            ACCOUNTS_PATH.write_bytes(encrypted_bytes)
+            logger.info(f"已保存 {len(accounts)} 个账号到 {ACCOUNTS_PATH}")
         except Exception as e:
             logger.error(f"保存账号数据失败: {e}", exc_info=True)
 

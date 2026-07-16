@@ -2,7 +2,12 @@ from pathlib import Path
 
 from platformdirs import user_data_dir
 
-from .._version import __version__
+from danmaku_sender._version import __version__
+
+
+# 应用数据目录（import 时计算，运行时不变）
+_DATA_DIR = Path(user_data_dir("BiliDanmakuSender", "Miku_oso"))
+_DATA_DIR.mkdir(parents=True, exist_ok=True)
 
 
 class AppInfo:
@@ -12,17 +17,14 @@ class AppInfo:
     AUTHOR = "Miku_oso"
     VERSION = __version__
     LOG_FILE_NAME = "latest.log"
-    LOG_DIR_NAME = "logs"
 
-
-def get_data_dir() -> Path:
-    """获取应用数据目录（跨平台）"""
-    return Path(user_data_dir(AppInfo.NAME_EN, AppInfo.AUTHOR))
-
-
-def get_history_db_path() -> Path:
-    """获取历史记录数据库路径"""
-    return get_data_dir() / "history.db"
+    class Paths:
+        """所有应用路径的集中定义"""
+        DATA = _DATA_DIR
+        HISTORY_DB = _DATA_DIR / "history.db"
+        CONFIG = _DATA_DIR / "config.json"
+        LOGS = _DATA_DIR / "logs"
+        ACCOUNTS = _DATA_DIR / "accounts.json"
 
 
 class UI:

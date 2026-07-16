@@ -1,13 +1,11 @@
 import sys
 import ctypes
-from pathlib import Path
-from platformdirs import user_data_dir
 
 from PySide6.QtWidgets import QApplication
 
-from .config.app_meta import AppInfo
-from .ui.framework.style_loader import get_app_icon
-from .runtime.log_utils import init_app_logging
+from danmaku_sender.config.app_meta import AppInfo
+from danmaku_sender.runtime.log_utils import init_app_logging
+from danmaku_sender.ui.framework.style_loader import get_app_icon
 
 
 def main(argv=None):
@@ -27,7 +25,7 @@ def main(argv=None):
         argv = sys.argv
 
     # 初始化日志
-    log_dir = Path(user_data_dir(AppInfo.NAME_EN, AppInfo.AUTHOR)) / AppInfo.LOG_DIR_NAME
+    log_dir = AppInfo.Paths.LOGS
     init_app_logging(log_dir)
 
     from .runtime import Runtime
