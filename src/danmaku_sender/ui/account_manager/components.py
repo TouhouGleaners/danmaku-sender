@@ -11,6 +11,10 @@ from danmaku_sender.types.models.account import AccountCredential
 from danmaku_sender.ui.framework.style_loader import get_svg_icon, get_assets_path
 
 
+# 等级图标缓存：{icon_name: QPixmap}，避免重复 SVG 解析
+_level_icon_cache: dict[str, QPixmap] = {}
+
+
 class AccountRow(QFrame):
     """单个账号的展示卡片"""
 
@@ -144,7 +148,10 @@ class AccountRow(QFrame):
         return f"LV{level}.svg"
 
     def _render_level_icon(self, name: str) -> QPixmap:
-        """直接从 SVG 渲染等级图标，DPI 感知，保持原始宽高比，固定逻辑高度 12px"""
+        """渲染等级图标（带缓存），DPI 感知，保持原始宽高比，固定逻辑高度 12px"""
+        if name in _level_icon_cache:
+            return _level_icon_cache[name]
+
         logical_h = 12
         svg_path = get_assets_path() / "icons" / "account_levels" / name
         renderer = QSvgRenderer(str(svg_path))
@@ -166,6 +173,8 @@ class AccountRow(QFrame):
         renderer.render(painter, QRectF(0, 0, phys_w, phys_h))
         painter.end()
         pixmap.setDevicePixelRatio(dpr)
+
+        _level_icon_cache[name] = pixmap
         return pixmap
 
     def _update_status(self, is_valid: bool | None):
