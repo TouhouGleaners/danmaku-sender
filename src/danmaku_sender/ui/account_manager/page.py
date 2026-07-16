@@ -248,6 +248,9 @@ class AccountDialog(QDialog):
             return
         account.uid = info.get('mid', 0)
         account.name = info.get('uname', account.name)
+        level_info = info.get('level_info', {})
+        account.level = level_info.get('current_level', -1)
+        account.is_senior_member = bool(info.get('is_senior_member', 0))
         duplicate = next(
             (a for a in self.accounts if a is not account and a.uid == account.uid and a.uid != 0),
             None,

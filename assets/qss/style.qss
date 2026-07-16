@@ -136,6 +136,13 @@ QLabel#accountDialogCount {
     color: {text_secondary};
 }
 
+/* 账号管理 - 昵称 */
+QLabel#accountName {
+    font-size: 15px;
+    font-weight: bold;
+    color: {text_main};
+}
+
 /* 账号管理 - 凭据行 */
 QLabel#credValue {
     font-family: Consolas, monospace;

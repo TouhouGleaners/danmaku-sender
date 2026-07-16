@@ -20,9 +20,12 @@ def get_app_icon() -> QIcon:
         return QIcon(str(icon_path))
     return QIcon()
 
-def get_svg_icon(name: str, color: str | None = None) -> QIcon:
+def get_svg_icon(name: str, color: str | None = None, subfolder: str | None = None) -> QIcon:
     """加载矢量图标"""
-    icon_path = get_assets_path() / "icons" / name
+    if subfolder:
+        icon_path = get_assets_path() / "icons" / subfolder / name
+    else:
+        icon_path = get_assets_path() / "icons" / name
     if not icon_path.exists():
         return QIcon()
 

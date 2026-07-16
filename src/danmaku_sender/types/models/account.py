@@ -17,6 +17,8 @@ class AccountCredential(BaseModel):
     name: str = ""
     sessdata: str = ""
     bili_jct: str = ""
+    level: int = -1  # -1=未知, 0-6 对应 LV0-LV6
+    is_senior_member: bool = False  # 硬核会员 (level==6 且此值为 True 时使用 LV6_Lightning)
     is_valid: bool | None = Field(default=None, exclude=True)  # None=未检测, True=有效, False=失效 (UI 瞬态)
 
     @property
