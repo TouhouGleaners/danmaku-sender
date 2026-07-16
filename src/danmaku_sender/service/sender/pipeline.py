@@ -36,10 +36,15 @@ class SendPipeline:
     - 输出任务摘要日志
     """
 
-    def __init__(self, auth_config: ApiAuthConfig, strategy_config: SenderConfig):
+    def __init__(
+        self,
+        auth_config: ApiAuthConfig,
+        strategy_config: SenderConfig,
+        history_manager: HistoryManager,
+    ):
         self.auth_config = auth_config
         self.strategy_config = strategy_config
-        self.history_manager = HistoryManager()
+        self.history_manager = history_manager
 
     def execute(
         self,

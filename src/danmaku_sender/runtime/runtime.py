@@ -37,7 +37,7 @@ class Runtime:
         self._bootstrapped = True
 
         # === 数据库 ===
-        self.history_manager = HistoryManager.initialize(get_history_db_path())
+        self.history_manager = HistoryManager(get_history_db_path())
 
         self.resources.theme.init_theme()
 

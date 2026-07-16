@@ -12,6 +12,7 @@ from danmaku_sender.service.danmaku_parser import DanmakuParser
 from danmaku_sender.service.danmaku_exporter import create_xml_from_danmakus
 from danmaku_sender.types.models.danmaku import Danmaku
 from danmaku_sender.types.models.common import VideoTarget, UnsentDanmakusRecord
+from danmaku_sender.repo.history_manager import HistoryManager
 from danmaku_sender.config import ApiAuthConfig, SenderConfig
 from danmaku_sender.runtime.app_state import AppState
 
@@ -26,9 +27,10 @@ class SenderController(QObject):
     xmlParsed = Signal(str, int)          # file_path, danmaku_count
     xmlParseFailed = Signal(str, object)  # file_path, raw_exception
 
-    def __init__(self, state: AppState, parent=None):
+    def __init__(self, state: AppState, history_manager: HistoryManager, parent=None):
         super().__init__(parent)
         self.state = state
+        self.history_manager = history_manager
         self._worker: SendTaskWorker | None = None
         self._stop_event = threading.Event()
 
@@ -51,7 +53,8 @@ class SenderController(QObject):
             danmakus=danmakus,
             auth_config=auth_config,
             strategy_config=strategy_config,
-            stop_event=self._stop_event
+            stop_event=self._stop_event,
+            history_manager=self.history_manager,
         )
 
         self._worker.progressUpdated.connect(self.progressUpdated.emit)
@@ -139,6 +142,7 @@ class SendTaskWorker(WorkerThread):
         auth_config: ApiAuthConfig,
         strategy_config: SenderConfig,
         stop_event: threading.Event,
+        history_manager: HistoryManager,
         parent=None
     ):
         super().__init__(parent)
@@ -147,12 +151,13 @@ class SendTaskWorker(WorkerThread):
         self.auth_config = auth_config
         self.strategy_config = strategy_config
         self.stop_event = stop_event
+        self.history_manager = history_manager
 
     def run(self):
         ctx = None
         try:
             with KeepSystemAwake(self.strategy_config.prevent_sleep):
-                pipeline = SendPipeline(self.auth_config, self.strategy_config)
+                pipeline = SendPipeline(self.auth_config, self.strategy_config, self.history_manager)
                 job = SendJob(
                     target=self.target,
                     danmakus=self.danmakus,

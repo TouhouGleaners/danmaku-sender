@@ -6,6 +6,7 @@ from PySide6.QtCore import QObject, Signal, Slot
 from .concurrency import WorkerThread
 from .system_utils import KeepSystemAwake
 
+from danmaku_sender.repo.history_manager import HistoryManager
 from danmaku_sender.types.models.common import VideoTarget
 from danmaku_sender.config import ApiAuthConfig, MonitorConfig
 from danmaku_sender.service.bili_monitor import BiliDanmakuMonitor
@@ -20,8 +21,9 @@ class MonitorController(QObject):
     statusUpdated = Signal(str)
     taskFinished = Signal()
 
-    def __init__(self, parent=None):
+    def __init__(self, history_manager: HistoryManager, parent=None):
         super().__init__(parent)
+        self.history_manager = history_manager
         self._worker: MonitorTaskWorker | None = None
         self._stop_event = threading.Event()
 
@@ -37,7 +39,8 @@ class MonitorController(QObject):
             target=target,
             auth_config=auth_config,
             monitor_config=monitor_config,
-            stop_event=self._stop_event
+            stop_event=self._stop_event,
+            history_manager=self.history_manager,
         )
 
         self._worker.statsUpdated.connect(self.statsUpdated.emit)
@@ -87,6 +90,7 @@ class MonitorTaskWorker(WorkerThread):
         auth_config: ApiAuthConfig,
         monitor_config: MonitorConfig,
         stop_event: threading.Event,
+        history_manager: HistoryManager,
         parent=None
     ):
         super().__init__(parent)
@@ -95,6 +99,7 @@ class MonitorTaskWorker(WorkerThread):
         self.auth_config = auth_config
         self.monitor_config = monitor_config
         self.stop_event = stop_event
+        self.history_manager = history_manager
 
     def run(self):
         try:
@@ -107,7 +112,7 @@ class MonitorTaskWorker(WorkerThread):
     def _run_monitor_loop(self):
         with (
             KeepSystemAwake(self.monitor_config.prevent_sleep),
-            BiliDanmakuMonitor.create(self.target, self.auth_config) as monitor
+            BiliDanmakuMonitor.create(self.target, self.auth_config, self.history_manager) as monitor
         ):
             self.logger.info(f"🛡️ 监视启动: {self.target.display_string} | CID: {self.target.cid}")
 

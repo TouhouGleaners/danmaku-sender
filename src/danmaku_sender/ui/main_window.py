@@ -162,10 +162,10 @@ class MainWindow(QMainWindow):
     def _init_pages(self):
         """初始化页面并绑定导航"""
         self.page_settings = SettingsPage(self.state)
-        self.page_sender = SenderPage(self.state)
+        self.page_sender = SenderPage(self.state, self.rt.history_manager)
         self.page_editor = EditorPage(self.state)
-        self.page_monitor = MonitorPage(self.state)
-        self.page_history = HistoryPage(self.state)
+        self.page_monitor = MonitorPage(self.state, self.rt.history_manager)
+        self.page_history = HistoryPage(self.state, self.rt.history_manager)
 
         # 定义页面列表
         pages = [
