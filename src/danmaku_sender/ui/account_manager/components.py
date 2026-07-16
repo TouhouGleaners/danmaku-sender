@@ -11,8 +11,8 @@ from danmaku_sender.types.models.account import AccountCredential
 from danmaku_sender.ui.framework.style_loader import get_svg_icon, get_assets_path
 
 
-# 等级图标缓存：{icon_name: QPixmap}，避免重复 SVG 解析
-_level_icon_cache: dict[str, QPixmap] = {}
+# 等级图标缓存：{(icon_name, dpr): QPixmap}，避免重复 SVG 解析
+_level_icon_cache: dict[tuple[str, float], QPixmap] = {}
 
 
 class AccountRow(QFrame):
@@ -63,11 +63,11 @@ class AccountRow(QFrame):
         # 等级图标
         level_icon_name = self._get_level_icon_name()
         if level_icon_name:
-            level_label = QLabel()
             pixmap = self._render_level_icon(level_icon_name)
             if not pixmap.isNull():
+                level_label = QLabel()
                 level_label.setPixmap(pixmap)
-            top_row.addWidget(level_label)
+                top_row.addWidget(level_label)
 
         self._status_icon = QLabel()
         self._status_text = QLabel()
@@ -149,8 +149,11 @@ class AccountRow(QFrame):
 
     def _render_level_icon(self, name: str) -> QPixmap:
         """渲染等级图标（带缓存），DPI 感知，保持原始宽高比，固定逻辑高度 12px"""
-        if name in _level_icon_cache:
-            return _level_icon_cache[name]
+        dpr = self.devicePixelRatioF()
+        cache_key = (name, dpr)
+
+        if cache_key in _level_icon_cache:
+            return _level_icon_cache[cache_key]
 
         logical_h = 12
         svg_path = get_assets_path() / "icons" / "account_levels" / name
@@ -162,7 +165,6 @@ class AccountRow(QFrame):
         aspect = vb.width() / vb.height() if vb.height() > 0 else 1.0
         logical_w = max(1, int(logical_h * aspect))
 
-        dpr = self.devicePixelRatioF()
         phys_w = max(1, int(logical_w * dpr))
         phys_h = max(1, int(logical_h * dpr))
 
@@ -174,7 +176,7 @@ class AccountRow(QFrame):
         painter.end()
         pixmap.setDevicePixelRatio(dpr)
 
-        _level_icon_cache[name] = pixmap
+        _level_icon_cache[cache_key] = pixmap
         return pixmap
 
     def _update_status(self, is_valid: bool | None):
