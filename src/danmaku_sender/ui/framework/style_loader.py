@@ -20,35 +20,46 @@ def get_app_icon() -> QIcon:
         return QIcon(str(icon_path))
     return QIcon()
 
+class SvgIcon:
+    """矢量图标加载器。
+
+    用法：SvgIcon("name.svg") → QIcon
+    """
+
+    def __new__(cls, name: str, color: str | None = None, subfolder: str | None = None) -> QIcon:
+        if subfolder:
+            icon_path = get_assets_path() / "icons" / subfolder / name
+        else:
+            icon_path = get_assets_path() / "icons" / name
+        if not icon_path.exists():
+            return QIcon()
+
+        try:
+            svg_content = icon_path.read_text(encoding="utf-8")
+            if color is None:
+                color = ThemeManager.instance().current().text_main
+
+            if color:
+                if 'fill=' in svg_content:
+                    svg_content = re.sub(r'fill=(["\']).*?\1', f'fill="{color}"', svg_content)
+                else:
+                    svg_content = svg_content.replace("<svg", f'<svg fill="{color}"', 1)
+
+            pixmap = QtImageProcessor.render_svg(svg_content.encode("utf-8"), 128, 1.0)
+
+            if not pixmap.isNull():
+                return QIcon(pixmap)
+            return QIcon(str(icon_path))
+
+        except Exception as e:
+            logger.error(f"动态渲染 SVG 图标失败 [{name}]: {e}", exc_info=True)
+            return QIcon(str(icon_path))
+
+
+# 兼容旧调用
 def get_svg_icon(name: str, color: str | None = None, subfolder: str | None = None) -> QIcon:
-    """加载矢量图标"""
-    if subfolder:
-        icon_path = get_assets_path() / "icons" / subfolder / name
-    else:
-        icon_path = get_assets_path() / "icons" / name
-    if not icon_path.exists():
-        return QIcon()
-
-    try:
-        svg_content = icon_path.read_text(encoding="utf-8")
-        if color is None:
-            color = ThemeManager.instance().current().text_main
-
-        if color:
-            if 'fill=' in svg_content:
-                svg_content = re.sub(r'fill=(["\']).*?\1', f'fill="{color}"', svg_content)
-            else:
-                svg_content = svg_content.replace("<svg", f'<svg fill="{color}"', 1)
-
-        pixmap = QtImageProcessor.render_svg(svg_content.encode("utf-8"), 128, 1.0)
-
-        if not pixmap.isNull():
-            return QIcon(pixmap)
-        return QIcon(str(icon_path))
-
-    except Exception as e:
-        logger.error(f"动态渲染 SVG 图标失败 [{name}]: {e}", exc_info=True)
-        return QIcon(str(icon_path))
+    """已废弃，请使用 SvgIcon()"""
+    return SvgIcon(name, color, subfolder)
 
 def load_stylesheet():
     """加载全局样式表"""

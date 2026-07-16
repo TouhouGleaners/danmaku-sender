@@ -8,7 +8,7 @@ from PySide6.QtGui import QAction, QCloseEvent, QDesktopServices
 from PySide6.QtCore import Qt, QUrl, QTimer, QSize, QEvent, Slot
 
 from .framework.image_processor import QtImageProcessor
-from .framework.style_loader import load_stylesheet, get_svg_icon, get_app_icon
+from .framework.style_loader import load_stylesheet, SvgIcon, get_app_icon
 from .sender_page import SenderPage
 from .settings_page import SettingsPage
 from .monitor_page import MonitorPage
@@ -175,7 +175,7 @@ class MainWindow(QMainWindow):
         ]
 
         for title, widget, icon_name in pages:
-            item = QListWidgetItem(get_svg_icon(icon_name), f"{title}")
+            item = QListWidgetItem(SvgIcon(icon_name), f"{title}")
             self.sidebar.addItem(item)
             self.content_stack.addWidget(widget)
 
@@ -347,7 +347,7 @@ class MainWindow(QMainWindow):
 
     def _refresh_default_avatar(self):
         """通用方法：渲染高清的默认头像"""
-        icon = get_svg_icon("default_avatar.svg")
+        icon = SvgIcon("default_avatar.svg")
         pixmap = icon.pixmap(36, 36)
         self.avatar_label.setPixmap(pixmap)
 

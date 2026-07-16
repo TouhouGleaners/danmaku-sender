@@ -8,7 +8,7 @@ from PySide6.QtWidgets import (
 )
 
 from danmaku_sender.types.models.account import AccountCredential
-from danmaku_sender.ui.framework.style_loader import get_svg_icon, get_assets_path
+from danmaku_sender.ui.framework.style_loader import SvgIcon, get_assets_path
 
 
 # 等级图标缓存：{(icon_name, dpr): QPixmap}，避免重复 SVG 解析
@@ -100,7 +100,7 @@ class AccountRow(QFrame):
         ]
         for icon_name, tooltip, signal in actions:
             btn = QPushButton()
-            btn.setIcon(get_svg_icon(icon_name))
+            btn.setIcon(SvgIcon(icon_name))
             btn.setIconSize(QSize(20, 20))
             btn.setToolTip(tooltip)
             btn.setCursor(Qt.CursorShape.PointingHandCursor)
@@ -181,15 +181,15 @@ class AccountRow(QFrame):
 
     def _update_status(self, is_valid: bool | None):
         if is_valid is True:
-            self._status_icon.setPixmap(get_svg_icon("check_circle.svg", "#4CAF50").pixmap(16, 16))
+            self._status_icon.setPixmap(SvgIcon("check_circle.svg", "#4CAF50").pixmap(16, 16))
             self._status_text.setText("有效")
             self._status_text.setProperty("status", "valid")
         elif is_valid is False:
-            self._status_icon.setPixmap(get_svg_icon("cancel.svg", "#E53935").pixmap(16, 16))
+            self._status_icon.setPixmap(SvgIcon("cancel.svg", "#E53935").pixmap(16, 16))
             self._status_text.setText("失效")
             self._status_text.setProperty("status", "invalid")
         else:
-            self._status_icon.setPixmap(get_svg_icon("help.svg", "#999").pixmap(16, 16))
+            self._status_icon.setPixmap(SvgIcon("help.svg", "#999").pixmap(16, 16))
             self._status_text.setText("未检测")
             self._status_text.setProperty("status", "unknown")
         self._status_text.style().unpolish(self._status_text)
