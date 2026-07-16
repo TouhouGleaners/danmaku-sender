@@ -1,13 +1,18 @@
 """账号管理子组件：账号卡片"""
-from PySide6.QtCore import QSize, Qt, QTimer, Signal
-from PySide6.QtGui import QMouseEvent
+from PySide6.QtCore import QSize, Qt, QTimer, Signal, QRectF
+from PySide6.QtGui import QMouseEvent, QPainter, QPixmap
+from PySide6.QtSvg import QSvgRenderer
 from PySide6.QtWidgets import (
     QFrame, QHBoxLayout, QVBoxLayout, QLabel,
     QPushButton, QWidget, QApplication
 )
 
 from danmaku_sender.types.models.account import AccountCredential
-from danmaku_sender.ui.framework.style_loader import get_svg_icon
+from danmaku_sender.ui.framework.style_loader import get_svg_icon, get_assets_path
+
+
+# 等级图标缓存：{(icon_name, dpr): QPixmap}，避免重复 SVG 解析
+_level_icon_cache: dict[tuple[str, float], QPixmap] = {}
 
 
 class AccountRow(QFrame):
@@ -47,13 +52,22 @@ class AccountRow(QFrame):
         right = QVBoxLayout()
         right.setSpacing(4)
 
-        # 第一行：昵称 + 状态
+        # 第一行：昵称 + 等级图标 + 状态
         top_row = QHBoxLayout()
         top_row.setSpacing(8)
 
         name_label = QLabel(self.account.name or "未知用户")
         name_label.setObjectName("accountName")
         top_row.addWidget(name_label)
+
+        # 等级图标
+        level_icon_name = self._get_level_icon_name()
+        if level_icon_name:
+            pixmap = self._render_level_icon(level_icon_name)
+            if not pixmap.isNull():
+                level_label = QLabel()
+                level_label.setPixmap(pixmap)
+                top_row.addWidget(level_label)
 
         self._status_icon = QLabel()
         self._status_text = QLabel()
@@ -123,6 +137,47 @@ class AccountRow(QFrame):
     def set_check_enabled(self, enabled: bool):
         if self._check_btn:
             self._check_btn.setEnabled(enabled)
+
+    def _get_level_icon_name(self) -> str | None:
+        """根据账号等级返回对应的图标文件名，未知等级返回 None"""
+        level = self.account.level
+        if level < 0 or level > 6:
+            return None
+        if level == 6 and self.account.is_senior_member:
+            return "LV6_Lightning.svg"
+        return f"LV{level}.svg"
+
+    def _render_level_icon(self, name: str) -> QPixmap:
+        """渲染等级图标（带缓存），DPI 感知，保持原始宽高比，固定逻辑高度 12px"""
+        dpr = self.devicePixelRatioF()
+        cache_key = (name, dpr)
+
+        if cache_key in _level_icon_cache:
+            return _level_icon_cache[cache_key]
+
+        logical_h = 12
+        svg_path = get_assets_path() / "icons" / "account_levels" / name
+        renderer = QSvgRenderer(str(svg_path))
+        if not renderer.isValid():
+            return QPixmap()
+
+        vb = renderer.viewBoxF()
+        aspect = vb.width() / vb.height() if vb.height() > 0 else 1.0
+        logical_w = max(1, int(logical_h * aspect))
+
+        phys_w = max(1, int(logical_w * dpr))
+        phys_h = max(1, int(logical_h * dpr))
+
+        pixmap = QPixmap(phys_w, phys_h)
+        pixmap.fill(Qt.GlobalColor.transparent)
+        painter = QPainter(pixmap)
+        painter.setRenderHint(QPainter.RenderHint.Antialiasing)
+        renderer.render(painter, QRectF(0, 0, phys_w, phys_h))
+        painter.end()
+        pixmap.setDevicePixelRatio(dpr)
+
+        _level_icon_cache[cache_key] = pixmap
+        return pixmap
 
     def _update_status(self, is_valid: bool | None):
         if is_valid is True:

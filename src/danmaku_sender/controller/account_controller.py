@@ -27,21 +27,17 @@ class AccountController(QObject):
 
     @staticmethod
     def save_credentials(state: AppState, profile: UserProfile | None, account_manager: AccountManager):
-        """同步 sessdata/bili_jct 到已保存账号列表并写盘"""
-        if not state.sessdata or not state.bili_jct:
-            return
-
-        for acc in state.saved_accounts:
-            if acc.sessdata == state.sessdata:
+        """同步当前凭据到已保存账号列表并写盘"""
+        if state.sessdata and state.bili_jct:
+            acc = next((a for a in state.saved_accounts if a.sessdata == state.sessdata), None)
+            if acc:
                 acc.bili_jct = state.bili_jct
-                if profile and profile.is_login:
-                    acc.name = profile.username
-                break
-        else:
-            acc = AccountCredential(sessdata=state.sessdata, bili_jct=state.bili_jct)
+            else:
+                acc = AccountCredential(sessdata=state.sessdata, bili_jct=state.bili_jct)
+                state.saved_accounts.append(acc)
+
             if profile and profile.is_login:
                 acc.name = profile.username
-            state.saved_accounts.append(acc)
 
         account_manager.save_accounts(state.saved_accounts)
         if state.saved_accounts:
