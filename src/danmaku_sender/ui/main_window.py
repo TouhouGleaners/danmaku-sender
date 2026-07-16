@@ -1,6 +1,4 @@
 import logging
-from pathlib import Path
-from platformdirs import user_data_dir
 
 from PySide6.QtWidgets import (
     QMainWindow, QWidget, QMessageBox, QHBoxLayout, QVBoxLayout, QFrame, QApplication,
@@ -9,9 +7,6 @@ from PySide6.QtWidgets import (
 from PySide6.QtGui import QAction, QCloseEvent, QDesktopServices
 from PySide6.QtCore import Qt, QUrl, QTimer, QSize, QEvent, Slot
 
-from danmaku_sender.controller.auth_controller import AuthController, UserProfile
-from danmaku_sender.controller.account_controller import AccountController
-from danmaku_sender.controller.system_controller import SystemController
 from .framework.image_processor import QtImageProcessor
 from .framework.style_loader import load_stylesheet, get_svg_icon, get_app_icon
 from .sender_page import SenderPage
@@ -21,13 +16,16 @@ from .editor import EditorPage
 from .dialogs import AboutDialog, HelpDialog, UpdateDialog
 from .account_manager import AccountDialog
 from .history import HistoryPage
-from danmaku_sender.runtime.theme_manager import ThemeManager
 
-from ..config.app_meta import AppInfo, UI
-from ..types.models.common import MonitorStats
-from ..types.models.user import UserProfile
-from ..runtime import Runtime
-from ..runtime.log_utils import GuiLoggingHandler
+from danmaku_sender.config.app_meta import AppInfo, UI
+from danmaku_sender.types.models.common import MonitorStats
+from danmaku_sender.types.models.user import UserProfile
+from danmaku_sender.runtime import Runtime
+from danmaku_sender.runtime.log_utils import GuiLoggingHandler
+from danmaku_sender.runtime.theme_manager import ThemeManager
+from danmaku_sender.controller.auth_controller import AuthController, UserProfile
+from danmaku_sender.controller.account_controller import AccountController
+from danmaku_sender.controller.system_controller import SystemController
 
 
 class MainWindow(QMainWindow):
@@ -383,7 +381,7 @@ class MainWindow(QMainWindow):
 
     @Slot()
     def _open_log_folder(self):
-        log_dir = Path(user_data_dir(AppInfo.NAME_EN, AppInfo.AUTHOR)) / AppInfo.LOG_DIR_NAME
+        log_dir = AppInfo.Paths.LOGS
         if not log_dir.exists():
             try:
                 log_dir.mkdir(parents=True, exist_ok=True)
