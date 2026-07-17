@@ -16,7 +16,7 @@ from danmaku_sender.repo.history_manager import HistoryManager
 
 from danmaku_sender.controller.monitor_controller import MonitorController
 from .framework.binder import UIBinder
-from .framework.style_loader import get_svg_icon
+from .framework.style_loader import SvgIcon
 
 
 class MonitorPage(QWidget):
@@ -32,8 +32,8 @@ class MonitorPage(QWidget):
         self._create_ui()
         self._connect_signals()
 
-        self._icon_start = get_svg_icon("start.svg")
-        self._icon_stop = get_svg_icon("stop.svg")
+        self._icon_start = SvgIcon("start.svg")
+        self._icon_stop = SvgIcon("stop.svg")
 
     def _create_ui(self):
         # 主布局 - 垂直布局
@@ -156,7 +156,7 @@ class MonitorPage(QWidget):
         self.status_label = QLabel("监视器：待命")
 
         self.start_btn = QPushButton("开始监视")
-        self.start_btn.setIcon(get_svg_icon("start.svg"))
+        self.start_btn.setIcon(SvgIcon("start.svg"))
         self.start_btn.setFixedWidth(100)
         self.start_btn.setCursor(Qt.CursorShape.PointingHandCursor)
         self.start_btn.setProperty("action", "true")

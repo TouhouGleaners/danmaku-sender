@@ -1,14 +1,15 @@
 """账号管理子组件：账号卡片"""
-from PySide6.QtCore import QSize, Qt, QTimer, Signal, QRectF
-from PySide6.QtGui import QMouseEvent, QPainter, QPixmap
-from PySide6.QtSvg import QSvgRenderer
+from PySide6.QtCore import QSize, Qt, QTimer, Signal
+from PySide6.QtGui import QMouseEvent, QPixmap
 from PySide6.QtWidgets import (
     QFrame, QHBoxLayout, QVBoxLayout, QLabel,
     QPushButton, QWidget, QApplication
 )
 
 from danmaku_sender.types.models.account import AccountCredential
-from danmaku_sender.ui.framework.style_loader import get_svg_icon, get_assets_path
+from danmaku_sender.config.app_meta import AppInfo
+from danmaku_sender.ui.framework.style_loader import SvgIcon
+from danmaku_sender.ui.framework.image_processor import QtImageProcessor
 
 
 # 等级图标缓存：{(icon_name, dpr): QPixmap}，避免重复 SVG 解析
@@ -100,7 +101,7 @@ class AccountRow(QFrame):
         ]
         for icon_name, tooltip, signal in actions:
             btn = QPushButton()
-            btn.setIcon(get_svg_icon(icon_name))
+            btn.setIcon(SvgIcon(icon_name))
             btn.setIconSize(QSize(20, 20))
             btn.setToolTip(tooltip)
             btn.setCursor(Qt.CursorShape.PointingHandCursor)
@@ -148,48 +149,45 @@ class AccountRow(QFrame):
         return f"LV{level}.svg"
 
     def _render_level_icon(self, name: str) -> QPixmap:
-        """渲染等级图标（带缓存），DPI 感知，保持原始宽高比，固定逻辑高度 12px"""
+        """渲染等级图标（带缓存），保持宽高比，固定逻辑高度 12px"""
         dpr = self.devicePixelRatioF()
         cache_key = (name, dpr)
 
         if cache_key in _level_icon_cache:
             return _level_icon_cache[cache_key]
 
-        logical_h = 12
-        svg_path = get_assets_path() / "icons" / "account_levels" / name
-        renderer = QSvgRenderer(str(svg_path))
-        if not renderer.isValid():
-            return QPixmap()
+        empty = QPixmap()
+        svg_path = AppInfo.Paths.ASSETS / "icons" / "account_levels" / name
 
-        vb = renderer.viewBoxF()
-        aspect = vb.width() / vb.height() if vb.height() > 0 else 1.0
-        logical_w = max(1, int(logical_h * aspect))
+        if not svg_path.exists():
+            _level_icon_cache[cache_key] = empty
+            return empty
 
-        phys_w = max(1, int(logical_w * dpr))
-        phys_h = max(1, int(logical_h * dpr))
+        try:
+            raw_bytes = svg_path.read_bytes()
+            pixmap = QtImageProcessor.render_svg(raw_bytes, logical_size=12, dpr=dpr, preserve_aspect=True)
+        except Exception:
+            _level_icon_cache[cache_key] = empty
+            return empty
 
-        pixmap = QPixmap(phys_w, phys_h)
-        pixmap.fill(Qt.GlobalColor.transparent)
-        painter = QPainter(pixmap)
-        painter.setRenderHint(QPainter.RenderHint.Antialiasing)
-        renderer.render(painter, QRectF(0, 0, phys_w, phys_h))
-        painter.end()
-        pixmap.setDevicePixelRatio(dpr)
+        if pixmap.isNull():
+            _level_icon_cache[cache_key] = empty
+            return empty
 
         _level_icon_cache[cache_key] = pixmap
         return pixmap
 
     def _update_status(self, is_valid: bool | None):
         if is_valid is True:
-            self._status_icon.setPixmap(get_svg_icon("check_circle.svg", "#4CAF50").pixmap(16, 16))
+            self._status_icon.setPixmap(SvgIcon("check_circle.svg", "#4CAF50").pixmap(16, 16))
             self._status_text.setText("有效")
             self._status_text.setProperty("status", "valid")
         elif is_valid is False:
-            self._status_icon.setPixmap(get_svg_icon("cancel.svg", "#E53935").pixmap(16, 16))
+            self._status_icon.setPixmap(SvgIcon("cancel.svg", "#E53935").pixmap(16, 16))
             self._status_text.setText("失效")
             self._status_text.setProperty("status", "invalid")
         else:
-            self._status_icon.setPixmap(get_svg_icon("help.svg", "#999").pixmap(16, 16))
+            self._status_icon.setPixmap(SvgIcon("help.svg", "#999").pixmap(16, 16))
             self._status_text.setText("未检测")
             self._status_text.setProperty("status", "unknown")
         self._status_text.style().unpolish(self._status_text)

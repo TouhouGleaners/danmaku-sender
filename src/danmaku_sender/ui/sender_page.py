@@ -11,7 +11,7 @@ from PySide6.QtGui import QTextCursor, QDragEnterEvent, QDropEvent
 from PySide6.QtCore import Qt, QDateTime, Signal, Slot
 
 from .framework.binder import UIBinder
-from .framework.style_loader import get_svg_icon
+from .framework.style_loader import SvgIcon
 from danmaku_sender.controller.video_controller import VideoController
 from danmaku_sender.controller.sender_controller import SenderController
 
@@ -39,8 +39,8 @@ class SenderPage(QWidget):
         self._create_ui()
         self._connect_signals()
 
-        self._icon_start = get_svg_icon("start.svg")
-        self._icon_stop = get_svg_icon("stop.svg")
+        self._icon_start = SvgIcon("start.svg")
+        self._icon_stop = SvgIcon("stop.svg")
 
         self.setAcceptDrops(True)  # 全局拖拽接收
 
@@ -78,7 +78,7 @@ class SenderPage(QWidget):
 
         # 按钮
         self.start_btn = QPushButton("开始发送")
-        self.start_btn.setIcon(get_svg_icon("start.svg"))
+        self.start_btn.setIcon(SvgIcon("start.svg"))
         self.start_btn.setFixedWidth(100)
         self.start_btn.setCursor(Qt.CursorShape.PointingHandCursor)
         self.start_btn.setProperty("action", "true")
