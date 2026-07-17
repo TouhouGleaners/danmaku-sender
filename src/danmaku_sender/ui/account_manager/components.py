@@ -156,12 +156,25 @@ class AccountRow(QFrame):
         if cache_key in _level_icon_cache:
             return _level_icon_cache[cache_key]
 
+        empty = QPixmap()
         svg_path = AppInfo.Paths.ASSETS / "icons" / "account_levels" / name
-        raw_bytes = svg_path.read_bytes()
-        pixmap = QtImageProcessor.render_svg(raw_bytes, logical_size=12, dpr=dpr, preserve_aspect=True)
 
-        if not pixmap.isNull():
-            _level_icon_cache[cache_key] = pixmap
+        if not svg_path.exists():
+            _level_icon_cache[cache_key] = empty
+            return empty
+
+        try:
+            raw_bytes = svg_path.read_bytes()
+            pixmap = QtImageProcessor.render_svg(raw_bytes, logical_size=12, dpr=dpr, preserve_aspect=True)
+        except Exception:
+            _level_icon_cache[cache_key] = empty
+            return empty
+
+        if pixmap.isNull():
+            _level_icon_cache[cache_key] = empty
+            return empty
+
+        _level_icon_cache[cache_key] = pixmap
         return pixmap
 
     def _update_status(self, is_valid: bool | None):
