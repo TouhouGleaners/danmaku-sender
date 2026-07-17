@@ -15,7 +15,7 @@ from danmaku_sender.controller.auth_controller import AuthController
 
 from ..types.models.common import AuthCookies
 from ..config.app_meta import AppInfo, Links
-from .framework.path_utils import get_assets_path
+from danmaku_sender.config.app_meta import AppInfo
 
 
 logger = logging.getLogger("App.System.UI.Dialog")
@@ -29,7 +29,7 @@ class MarkdownBrowser(QTextBrowser):
         self.setFrameShape(QTextBrowser.Shape.NoFrame)
         self.setStyleSheet("padding: 1px;")
 
-        md_path = get_assets_path() / "docs" / f"{doc_name}.md"
+        md_path = AppInfo.Paths.ASSETS / "docs" / f"{doc_name}.md"
         if md_path.exists():
             try:
                 with open(md_path, "r", encoding="utf-8") as f:

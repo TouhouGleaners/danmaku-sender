@@ -3,13 +3,13 @@ import platform
 import threading
 
 from danmaku_sender.config.app_meta import AppInfo
-from danmaku_sender.ui.framework.path_utils import get_assets_path
+from danmaku_sender.config.app_meta import AppInfo
 
 
 logger = logging.getLogger("App.System.Notify")
 
 
-ICON_PATH = get_assets_path() / 'icon.ico'
+ICON_PATH = AppInfo.Paths.ASSETS / 'icon.ico'
 
 if not ICON_PATH.is_file():
     logger.warning(f"图标文件未找到: {ICON_PATH}。通知将可能没有图标。")

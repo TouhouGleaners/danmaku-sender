@@ -7,7 +7,8 @@ from PySide6.QtWidgets import (
 )
 
 from danmaku_sender.types.models.account import AccountCredential
-from danmaku_sender.ui.framework.style_loader import SvgIcon, get_assets_path
+from danmaku_sender.config.app_meta import AppInfo
+from danmaku_sender.ui.framework.style_loader import SvgIcon
 from danmaku_sender.ui.framework.image_processor import QtImageProcessor
 
 
@@ -155,9 +156,9 @@ class AccountRow(QFrame):
         if cache_key in _level_icon_cache:
             return _level_icon_cache[cache_key]
 
-        svg_path = get_assets_path() / "icons" / "account_levels" / name
+        svg_path = AppInfo.Paths.ASSETS / "icons" / "account_levels" / name
         raw_bytes = svg_path.read_bytes()
-        pixmap = QtImageProcessor.render_svg_fitted(raw_bytes, logical_height=12, dpr=dpr)
+        pixmap = QtImageProcessor.render_svg(raw_bytes, logical_size=12, dpr=dpr, preserve_aspect=True)
 
         if not pixmap.isNull():
             _level_icon_cache[cache_key] = pixmap

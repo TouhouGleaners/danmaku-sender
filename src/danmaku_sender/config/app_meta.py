@@ -20,11 +20,15 @@ class AppInfo:
 
     class Paths:
         """所有应用路径的集中定义"""
+        # 用户数据目录（可写）
         DATA = _DATA_DIR
         HISTORY_DB = _DATA_DIR / "history.db"
         CONFIG = _DATA_DIR / "config.json"
         LOGS = _DATA_DIR / "logs"
         ACCOUNTS = _DATA_DIR / "accounts.json"
+
+        # 应用资源目录（只读）
+        ASSETS = Path(__file__).resolve().parents[3] / "assets"
 
 
 class UI:

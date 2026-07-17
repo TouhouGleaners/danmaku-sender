@@ -5,9 +5,9 @@ from PySide6.QtGui import QIcon
 from PySide6.QtWidgets import QApplication
 
 from .image_processor import QtImageProcessor
-from danmaku_sender.runtime.theme_manager import ThemeManager
 
-from .path_utils import get_assets_path
+from danmaku_sender.config.app_meta import AppInfo
+from danmaku_sender.runtime.theme_manager import ThemeManager
 
 
 logger = logging.getLogger("App.UI.StyleLoader")
@@ -15,7 +15,7 @@ logger = logging.getLogger("App.UI.StyleLoader")
 
 def get_app_icon() -> QIcon:
     """获取程序全局图标"""
-    icon_path = get_assets_path() / "icon.ico"
+    icon_path = AppInfo.Paths.ASSETS / "icon.ico"
     if icon_path.exists():
         return QIcon(str(icon_path))
     return QIcon()
@@ -28,9 +28,9 @@ class SvgIcon:
 
     def __new__(cls, name: str, color: str | None = None, subfolder: str | None = None) -> QIcon:
         if subfolder:
-            icon_path = get_assets_path() / "icons" / subfolder / name
+            icon_path = AppInfo.Paths.ASSETS / "icons" / subfolder / name
         else:
-            icon_path = get_assets_path() / "icons" / name
+            icon_path = AppInfo.Paths.ASSETS / "icons" / name
         if not icon_path.exists():
             return QIcon()
 
@@ -57,7 +57,7 @@ class SvgIcon:
 
 def load_stylesheet():
     """加载全局样式表"""
-    qss_path = get_assets_path() / "qss" / "style.qss"
+    qss_path = AppInfo.Paths.ASSETS / "qss" / "style.qss"
     if not qss_path.exists():
         return
 
