@@ -55,12 +55,6 @@ class SvgIcon:
             logger.error(f"动态渲染 SVG 图标失败 [{name}]: {e}", exc_info=True)
             return QIcon(str(icon_path))
 
-
-# 兼容旧调用
-def get_svg_icon(name: str, color: str | None = None, subfolder: str | None = None) -> QIcon:
-    """已废弃，请使用 SvgIcon()"""
-    return SvgIcon(name, color, subfolder)
-
 def load_stylesheet():
     """加载全局样式表"""
     qss_path = get_assets_path() / "qss" / "style.qss"
