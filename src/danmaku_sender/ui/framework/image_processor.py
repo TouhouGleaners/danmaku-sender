@@ -39,6 +39,36 @@ class QtImageProcessor:
         return pixmap
 
     @staticmethod
+    def render_svg_fitted(raw_bytes: bytes, logical_height: int, dpr: float = 1.0) -> QPixmap:
+        """
+        将 SVG 渲染为固定逻辑高度、保持宽高比的 Pixmap
+
+        logical_height: UI 设计中的逻辑高度（如 12）
+        dpr: 屏幕缩放比例 (devicePixelRatio)
+        """
+        renderer = QSvgRenderer(raw_bytes)
+        if not renderer.isValid():
+            return QPixmap()
+
+        vb = renderer.viewBoxF()
+        aspect = vb.width() / vb.height() if vb.height() > 0 else 1.0
+        logical_w = max(1, int(logical_height * aspect))
+
+        phys_w = max(1, int(logical_w * dpr))
+        phys_h = max(1, int(logical_height * dpr))
+
+        pixmap = QPixmap(phys_w, phys_h)
+        pixmap.fill(Qt.GlobalColor.transparent)
+
+        painter = QPainter(pixmap)
+        painter.setRenderHint(QPainter.RenderHint.Antialiasing)
+        renderer.render(painter, QRectF(0, 0, phys_w, phys_h))
+        painter.end()
+
+        pixmap.setDevicePixelRatio(dpr)
+        return pixmap
+
+    @staticmethod
     def make_circular_pixmap(raw_bytes: bytes, logical_size: int, device_pixel_ratio: float = 1.0) -> QPixmap:
         """
         DPI 感知的图像处理
