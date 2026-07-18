@@ -157,7 +157,7 @@ class SendTaskWorker(WorkerThread):
         ctx = None
         try:
             with KeepSystemAwake(self.strategy_config.prevent_sleep):
-                pipeline = SendPipeline(self.auth_config, self.strategy_config, self.history_manager)
+                pipeline = SendPipeline(self.auth_config, self.history_manager)
                 job = SendJob(
                     target=self.target,
                     danmakus=self.danmakus,

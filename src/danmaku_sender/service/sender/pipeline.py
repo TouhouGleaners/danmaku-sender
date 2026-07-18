@@ -39,11 +39,9 @@ class SendPipeline:
     def __init__(
         self,
         auth_config: ApiAuthConfig,
-        strategy_config: SenderConfig,
         history_manager: HistoryManager,
     ):
         self.auth_config = auth_config
-        self.strategy_config = strategy_config
         self.history_manager = history_manager
 
     def execute(

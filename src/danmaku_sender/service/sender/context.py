@@ -40,7 +40,6 @@ class SendingContext:
     流水线结束后，将作为最终的统计报告返回给外层调用方。
     """
     total: int                  # 任务总数
-    config: SenderConfig        # 运行配置快照
     target: VideoTarget         # 目标视频信息
 
     # 计数器
