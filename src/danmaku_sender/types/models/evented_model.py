@@ -33,7 +33,8 @@ class EventedModel(BaseModel):
         old_value = getattr(self, name, None)
         super().__setattr__(name, value)
 
-        if old_value != value and hasattr(self, '_callbacks'):
+        # 跳过私有属性，避免内部状态变更意外触发外部回调
+        if old_value != value and not name.startswith('_') and hasattr(self, '_callbacks'):
             for callback in self._callbacks.get(name, []):
                 callback(value)
 
