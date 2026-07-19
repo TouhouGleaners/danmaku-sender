@@ -98,7 +98,7 @@ class UIBinder:
 
         Args:
             widget: 目标 Qt 控件
-            model: 绑定的数据模型（若继承 ObservableModel 则自动支持反向同步）
+            model: 绑定的数据模型（若继承 EventedModel 则自动支持反向同步）
             field_name: 模型上的属性名称
             clear_old: 如果为 True，则清空该控件之前绑定的所有逻辑（默认行为）。设为 False 支持 1对N 绑定。
             realtime: 仅针对 QLineEdit，True 为按键实时更新，False 为失焦/回车更新。
@@ -167,6 +167,16 @@ class UIBinder:
 
         # Model → Widget 反向同步（自动检测：model 实现了 Subscribable 协议则启用）
         if isinstance(model, Subscribable):
+            # 重绑时清理旧订阅，防止旧 model 的回调继续推值
+            if clear_old:
+                prev = widget.property("_binder_subscription")
+                if prev is not None:
+                    old_model, old_field, old_cb = prev
+                    old_unsub = getattr(old_model, "unsubscribe", None)
+                    if callable(old_unsub):
+                        old_unsub(old_field, old_cb)
+                    widget.setProperty("_binder_subscription", None)
+
             # 用 weakref 持有 widget，防止 Model 生命周期 > Widget 时造成内存泄漏
             w_ref = weakref.ref(widget)
 
@@ -183,3 +193,5 @@ class UIBinder:
                         unsubscribe_fn(field_name, _on_model_changed)
 
             model.subscribe(field_name, _on_model_changed)
+            # 记录当前订阅信息，用于下次重绑时清理
+            widget.setProperty("_binder_subscription", (model, field_name, _on_model_changed))

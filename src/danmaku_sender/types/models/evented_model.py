@@ -47,3 +47,5 @@ class EventedModel(BaseModel):
         """注销特定属性的订阅"""
         if field_name in self._callbacks and callback in self._callbacks[field_name]:
             self._callbacks[field_name].remove(callback)
+            if not self._callbacks[field_name]:
+                del self._callbacks[field_name]
