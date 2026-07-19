@@ -7,26 +7,6 @@ class SenderConfig(BaseModel):
     """发送器的配置数据"""
     model_config = ConfigDict(validate_assignment=True)
 
-    # 字段变更通知
-    _watchers: dict[str, list[Callable]] = {}
-
-    def __setattr__(self, name: str, value) -> None:
-        super().__setattr__(name, value)
-        if name in type(self).model_fields:
-            for cb in self._watchers.get(name, []):
-                cb(value)
-
-    def watch(self, field: str, callback: Callable) -> None:
-        """注册字段变更回调"""
-        self._watchers.setdefault(field, []).append(callback)
-
-    def unwatch(self, field: str, callback: Callable) -> None:
-        """注销字段变更回调"""
-        try:
-            self._watchers[field].remove(callback)
-        except (KeyError, ValueError):
-            pass
-
     # 延迟设置
     min_delay: float = Field(default=8.0, ge=0.1)
     max_delay: float = Field(default=8.5, ge=0.1)
@@ -47,6 +27,9 @@ class SenderConfig(BaseModel):
     # 断点续传
     skip_sent: bool = True
 
+    # 字段变更通知（内部使用）
+    _watchers: dict[str, list[Callable]] = {}
+
     @model_validator(mode='after')
     def check_logic(self) -> 'SenderConfig':
         """业务逻辑级校验：最小不能大于最大"""
@@ -55,3 +38,20 @@ class SenderConfig(BaseModel):
         if self.burst_size > 1 and self.rest_min > self.rest_max:
             raise ValueError("爆发休息的最小值不能大于最大值")
         return self
+
+    def __setattr__(self, name: str, value) -> None:
+        super().__setattr__(name, value)
+        if name in type(self).model_fields:
+            for cb in self._watchers.get(name, []):
+                cb(value)
+
+    def watch(self, field: str, callback: Callable) -> None:
+        """注册字段变更回调"""
+        self._watchers.setdefault(field, []).append(callback)
+
+    def unwatch(self, field: str, callback: Callable) -> None:
+        """注销字段变更回调"""
+        try:
+            self._watchers[field].remove(callback)
+        except (KeyError, ValueError):
+            pass

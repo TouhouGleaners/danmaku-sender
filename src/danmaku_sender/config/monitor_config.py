@@ -7,7 +7,15 @@ class MonitorConfig(BaseModel):
     """监视器的配置数据"""
     model_config = ConfigDict(validate_assignment=True)
 
-    # 字段变更通知
+    refresh_interval: int = Field(default=60, ge=10)
+
+    # 复用全局设置
+    prevent_sleep: bool = True
+    use_system_proxy: bool = True
+
+    stats_baseline: float = Field(default=0.0, exclude=True)
+
+    # 字段变更通知（内部使用）
     _watchers: dict[str, list[Callable]] = {}
 
     def __setattr__(self, name: str, value) -> None:
@@ -26,11 +34,3 @@ class MonitorConfig(BaseModel):
             self._watchers[field].remove(callback)
         except (KeyError, ValueError):
             pass
-
-    refresh_interval: int = Field(default=60, ge=10)
-
-    # 复用全局设置
-    prevent_sleep: bool = True
-    use_system_proxy: bool = True
-
-    stats_baseline: float = Field(default=0.0, exclude=True)
