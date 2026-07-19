@@ -1,9 +1,8 @@
 import logging
 import weakref
-from typing import Any, Callable
+from typing import Any, Callable, Protocol
 
 from pydantic import ValidationError
-
 from PySide6.QtCore import SignalInstance
 from PySide6.QtWidgets import (
     QWidget, QCheckBox, QSpinBox, QDoubleSpinBox,
@@ -13,12 +12,26 @@ from PySide6.QtWidgets import (
 logger = logging.getLogger("App.System.Framework.Binder")
 
 
+class BindableModel(Protocol):
+    """UIBinder 可绑定的模型接口"""
+    model_fields: dict[str, Any]
+
+    def __setattr__(self, name: str, value: Any) -> None: ...
+
+    def watch(self, field: str, callback: Callable) -> None: ...
+
+    def unwatch(self, field: str, callback: Callable) -> None: ...
+
+
 class UIBinder:
     """
     轻量级 MVVM 双向绑定引擎
 
     职责:
-    1. 状态同步: 自动实现 Model (Pydantic/Object) 与 View (PySide6 Widget) 的数据双向同步。
+    1. 状态同步: 自动实现 Model 与 View (PySide6 Widget) 的数据双向同步。
+       - Widget → Model: 通过 Qt 信号自动回写，支持 Pydantic 验证与异常反馈。
+       - Model → Widget: 需要 Model 实现 BindableModel 协议（watch/unwatch）。
+         当 Model 的字段被外部修改时，已绑定的 Widget 会自动更新。
     2. 生命周期管理: 内部维护绑定注册表 (_active_bindings)，每次重绑时自动解除历史信号，防止内存泄漏与重复触发。
     3. 异常反馈: 拦截 Pydantic 的 ValidationError，并通过动态属性 (invalid) 与 QSS 联动实现非侵入式的 UI 异常反馈。
     """
@@ -77,7 +90,7 @@ class UIBinder:
             widget.blockSignals(False)
 
     @staticmethod
-    def bind(widget: QWidget, model: Any, field_name: str, clear_old: bool = True, realtime: bool = False) -> None:
+    def bind(widget: QWidget, model: BindableModel, field_name: str, clear_old: bool = True, realtime: bool = False) -> None:
         """
         执行双向绑定注册
 

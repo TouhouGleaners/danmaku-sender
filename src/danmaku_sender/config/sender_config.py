@@ -27,7 +27,10 @@ class SenderConfig(BaseModel):
     # 断点续传
     skip_sent: bool = True
 
-    # 字段变更通知（内部使用）
+    # 字段变更通知注册表
+    # 当某个字段值变更时，__setattr__ 会遍历并调用该字段下的所有回调。
+    # 由 UIBinder.bind() 自动注册，实现 model → widget 的反向同步。
+    # 结构: { field_name: [callback(value), ...] }
     _watchers: dict[str, list[Callable]] = {}
 
     @model_validator(mode='after')
