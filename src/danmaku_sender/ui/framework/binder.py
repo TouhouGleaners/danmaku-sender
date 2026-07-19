@@ -32,8 +32,8 @@ class UIBinder:
     职责:
     1. 状态同步: 自动实现 Model 与 View (PySide6 Widget) 的数据双向同步。
        - Widget → Model: 通过 Qt 信号自动回写，支持 Pydantic 验证与异常反馈。
-       - Model → Widget: 若 Model 继承了 ObservableModel，当字段被外部修改时，
-         已绑定的 Widget 会自动更新（通过 weakref 防止内存泄漏）。
+       - Model → Widget: 若 Model 继承了 EventedModel（实现了 Subscribable 协议），
+         当字段被外部修改时，已绑定的 Widget 会自动更新（通过 weakref 防止内存泄漏）。
     2. 生命周期管理: 内部维护绑定注册表 (_active_bindings)，每次重绑时自动解除历史信号，防止内存泄漏与重复触发。
     3. 异常反馈: 拦截 Pydantic 的 ValidationError，并通过动态属性 (invalid) 与 QSS 联动实现非侵入式的 UI 异常反馈。
     """
@@ -179,7 +179,7 @@ class UIBinder:
                     # 不使用 widget.destroyed 信号：PySide6 退出时解释器先于 Qt 引擎解体，
                     # destroyed 触发时 model 可能已是 None，会弹 AttributeError
                     unsubscribe_fn = getattr(model, "unsubscribe", None)
-                    if unsubscribe_fn:
+                    if callable(unsubscribe_fn):
                         unsubscribe_fn(field_name, _on_model_changed)
 
             model.subscribe(field_name, _on_model_changed)
