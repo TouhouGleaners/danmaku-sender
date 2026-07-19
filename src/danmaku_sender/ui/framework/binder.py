@@ -1,6 +1,6 @@
 import logging
 import weakref
-from typing import Any, Callable, Protocol
+from typing import Any, Callable, Protocol, runtime_checkable
 
 from pydantic import ValidationError
 from PySide6.QtCore import SignalInstance
@@ -12,15 +12,17 @@ from PySide6.QtWidgets import (
 logger = logging.getLogger("App.System.Framework.Binder")
 
 
-class BindableModel(Protocol):
-    """UIBinder 可绑定的模型接口"""
-    model_fields: dict[str, Any]
+@runtime_checkable
+class Subscribable(Protocol):
+    """可订阅字段变更的模型接口（鸭子类型契约）
 
-    def __setattr__(self, name: str, value: Any) -> None: ...
+    任何类只要实现了 subscribe/unsubscribe，即使没有显式继承此协议，
+    isinstance 检查也会通过，Pylance 会在 if 分支内自动收窄类型。
+    """
 
-    def watch(self, field: str, callback: Callable) -> None: ...
+    def subscribe(self, field_name: str, callback: Callable[[Any], None]) -> None: ...
 
-    def unwatch(self, field: str, callback: Callable) -> None: ...
+    def unsubscribe(self, field_name: str, callback: Callable[[Any], None]) -> None: ...
 
 
 class UIBinder:
@@ -30,8 +32,8 @@ class UIBinder:
     职责:
     1. 状态同步: 自动实现 Model 与 View (PySide6 Widget) 的数据双向同步。
        - Widget → Model: 通过 Qt 信号自动回写，支持 Pydantic 验证与异常反馈。
-       - Model → Widget: 需要 Model 实现 BindableModel 协议（watch/unwatch）。
-         当 Model 的字段被外部修改时，已绑定的 Widget 会自动更新。
+       - Model → Widget: 若 Model 继承了 ObservableModel，当字段被外部修改时，
+         已绑定的 Widget 会自动更新（通过 weakref 防止内存泄漏）。
     2. 生命周期管理: 内部维护绑定注册表 (_active_bindings)，每次重绑时自动解除历史信号，防止内存泄漏与重复触发。
     3. 异常反馈: 拦截 Pydantic 的 ValidationError，并通过动态属性 (invalid) 与 QSS 联动实现非侵入式的 UI 异常反馈。
     """
@@ -90,13 +92,13 @@ class UIBinder:
             widget.blockSignals(False)
 
     @staticmethod
-    def bind(widget: QWidget, model: BindableModel, field_name: str, clear_old: bool = True, realtime: bool = False) -> None:
+    def bind(widget: QWidget, model: Any, field_name: str, clear_old: bool = True, realtime: bool = False) -> None:
         """
         执行双向绑定注册
 
         Args:
             widget: 目标 Qt 控件
-            model: 绑定的数据模型
+            model: 绑定的数据模型（若继承 ObservableModel 则自动支持反向同步）
             field_name: 模型上的属性名称
             clear_old: 如果为 True，则清空该控件之前绑定的所有逻辑（默认行为）。设为 False 支持 1对N 绑定。
             realtime: 仅针对 QLineEdit，True 为按键实时更新，False 为失焦/回车更新。
@@ -163,6 +165,17 @@ class UIBinder:
             # 存入弱引用注册表，确保安全回收
             UIBinder._active_bindings[widget].append((signal_instance, _update_model_proxy))
 
-        # Model → Widget 监听（需要 model 支持 FieldWatcherMixin）
-        if hasattr(model, 'watch'):
-            model.watch(field_name, lambda v: UIBinder._set_widget_value(widget, v))
+        # Model → Widget 反向同步（自动检测：model 实现了 Subscribable 协议则启用）
+        if isinstance(model, Subscribable):
+            # 用 weakref 持有 widget，防止 Model 生命周期 > Widget 时造成内存泄漏
+            w_ref = weakref.ref(widget)
+
+            def _on_model_changed(new_val: Any):
+                w = w_ref()
+                if w is not None:
+                    UIBinder._set_widget_value(w, new_val)
+
+            model.subscribe(field_name, _on_model_changed)
+
+            # widget 销毁时自动取消订阅，清理 Model 中的死回调
+            widget.destroyed.connect(lambda _: model.unsubscribe(field_name, _on_model_changed))
