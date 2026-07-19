@@ -174,8 +174,12 @@ class UIBinder:
                 w = w_ref()
                 if w is not None:
                     UIBinder._set_widget_value(w, new_val)
+                else:
+                    # widget 已销毁，主动注销自身，防止死回调积压
+                    # 不使用 widget.destroyed 信号：PySide6 退出时解释器先于 Qt 引擎解体，
+                    # destroyed 触发时 model 可能已是 None，会弹 AttributeError
+                    unsubscribe_fn = getattr(model, "unsubscribe", None)
+                    if unsubscribe_fn:
+                        unsubscribe_fn(field_name, _on_model_changed)
 
             model.subscribe(field_name, _on_model_changed)
-
-            # widget 销毁时自动取消订阅，清理 Model 中的死回调
-            widget.destroyed.connect(lambda _: model.unsubscribe(field_name, _on_model_changed))

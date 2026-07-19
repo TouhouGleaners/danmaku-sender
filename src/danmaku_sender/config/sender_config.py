@@ -1,9 +1,9 @@
 from pydantic import ConfigDict, Field, model_validator
 
-from danmaku_sender.types.models.observable import ObservableModel
+from danmaku_sender.types.models.evented_model import EventedModel
 
 
-class SenderConfig(ObservableModel):
+class SenderConfig(EventedModel):
     """发送器的配置数据"""
     model_config = ConfigDict(validate_assignment=True)
 
