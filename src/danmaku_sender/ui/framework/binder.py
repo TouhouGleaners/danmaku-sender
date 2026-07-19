@@ -149,3 +149,7 @@ class UIBinder:
             signal_instance.connect(_update_model_proxy)
             # 存入弱引用注册表，确保安全回收
             UIBinder._active_bindings[widget].append((signal_instance, _update_model_proxy))
+
+        # Model → Widget 监听（需要 model 支持 FieldWatcherMixin）
+        if hasattr(model, 'watch'):
+            model.watch(field_name, lambda v: UIBinder._set_widget_value(widget, v))

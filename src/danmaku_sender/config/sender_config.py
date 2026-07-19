@@ -1,7 +1,9 @@
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 
+from .field_watcher import FieldWatcherMixin
 
-class SenderConfig(BaseModel):
+
+class SenderConfig(FieldWatcherMixin, BaseModel):
     """发送器的配置数据"""
     model_config = ConfigDict(validate_assignment=True)
 

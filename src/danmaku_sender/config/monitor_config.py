@@ -1,7 +1,9 @@
 from pydantic import BaseModel, ConfigDict, Field
 
+from .field_watcher import FieldWatcherMixin
 
-class MonitorConfig(BaseModel):
+
+class MonitorConfig(FieldWatcherMixin, BaseModel):
     """监视器的配置数据"""
     model_config = ConfigDict(validate_assignment=True)
 
