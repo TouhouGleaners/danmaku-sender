@@ -50,3 +50,9 @@ class EventedModel(BaseModel):
             self._callbacks[field_name].remove(callback)
             if not self._callbacks[field_name]:
                 del self._callbacks[field_name]
+
+    def model_copy(self, **kwargs) -> 'EventedModel':
+        """拷贝时隔离 _callbacks，防止拷贝与原始共享回调注册表"""
+        copy = super().model_copy(**kwargs)
+        copy._callbacks = {}
+        return copy
