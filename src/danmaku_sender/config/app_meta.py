@@ -3,6 +3,7 @@ from pathlib import Path
 from platformdirs import user_data_dir
 
 from danmaku_sender._version import __version__
+from danmaku_sender.utils.path_utils import find_assets_dir
 
 
 # 应用数据目录（import 时计算，运行时不变）
@@ -27,8 +28,8 @@ class AppInfo:
         LOGS = _DATA_DIR / "logs"
         ACCOUNTS = _DATA_DIR / "accounts.json"
 
-        # 应用资源目录（只读）
-        ASSETS = Path(__file__).resolve().parents[3] / "assets"
+        # 应用资源目录（只读，向上遍历查找，兼容开发和 Nuitka 打包）
+        ASSETS = find_assets_dir(__file__)
 
 
 class UI:
