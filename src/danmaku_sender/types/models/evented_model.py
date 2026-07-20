@@ -3,7 +3,7 @@
 配合 UIBinder 实现 Model → Widget 的反向同步。
 """
 
-from typing import Any, Callable
+from typing import Any, Callable, Self
 
 from pydantic import BaseModel, PrivateAttr
 
@@ -51,7 +51,7 @@ class EventedModel(BaseModel):
             if not self._callbacks[field_name]:
                 del self._callbacks[field_name]
 
-    def model_copy(self, **kwargs) -> 'EventedModel':
+    def model_copy(self, **kwargs) -> Self:
         """拷贝时隔离 _callbacks，防止拷贝与原始共享回调注册表"""
         copy = super().model_copy(**kwargs)
         copy._callbacks = {}
