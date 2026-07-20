@@ -1,7 +1,7 @@
 # B站弹幕发射器 (BiliDanmakuSender)
 
 <p align="center">
-  <img src="https://img.shields.io/github/v/tag/TouhouGleaners/danmaku-sender?label=Pre-Release&color=orange" alt="Pre-release">
+  <img src="https://img.shields.io/github/v/tag/TouhouGleaners/danmaku-sender?filter=v*&label=Pre-Release&color=orange" alt="Pre-release">
   <img src="https://img.shields.io/github/v/release/TouhouGleaners/danmaku-sender?label=Release&color=bright-green" alt="Release">
   <img src="https://img.shields.io/github/downloads/TouhouGleaners/danmaku-sender/total?label=Downloads" alt="Total Downloads">
   <img src="https://img.shields.io/badge/Python-3.12+-blue.svg" alt="Python 3.12+">
