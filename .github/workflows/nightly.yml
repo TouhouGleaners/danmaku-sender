@@ -13,6 +13,8 @@ jobs:
     steps:
     - name: Check out repository code
       uses: actions/checkout@v4
+      with:
+        fetch-depth: 0
 
     - name: Set up Python 3.12
       uses: actions/setup-python@v5
@@ -30,7 +32,7 @@ jobs:
       run: |
         # 从 _version.py 读取当前版本
         $versionFile = Get-Content "src/danmaku_sender/_version.py" -Raw
-        if ($versionFile -match '__version__\s*=\s*"([^"]+)"') {
+        if ($versionFile -match "__version__\s*=\s*['""]([^'""]+)['""]") {
             $version = $Matches[1]
         } else {
             $version = "0.0.0"
