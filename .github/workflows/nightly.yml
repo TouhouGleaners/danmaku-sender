@@ -1,0 +1,135 @@
+name: Nightly Build
+
+on:
+  schedule:
+    # 北京时间 2:00（UTC 18:00）
+    - cron: '0 18 * * *'
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: windows-latest
+    permissions:
+      contents: write
+    steps:
+    - name: Check out repository code
+      uses: actions/checkout@v4
+      with:
+        fetch-depth: 0
+
+    - name: Check for new commits
+      id: check
+      shell: pwsh
+      run: |
+        # 如果 Nightly-Build tag 指向的 commit 和 HEAD 相同，跳过构建
+        $tagSha = git rev-parse Nightly-Build 2>$null
+        $headSha = git rev-parse HEAD
+        if ($tagSha -eq $headSha) {
+            echo "skip=true" >> $env:GITHUB_OUTPUT
+            Write-Host "No new commits since last nightly build, skipping."
+        } else {
+            echo "skip=false" >> $env:GITHUB_OUTPUT
+        }
+
+    - name: Set up Python 3.12
+      if: steps.check.outputs.skip != 'true'
+      uses: actions/setup-python@v5
+      with:
+        python-version: '3.12'
+
+    - name: Install dependencies
+      if: steps.check.outputs.skip != 'true'
+      run: |
+        python -m pip install --upgrade pip
+        pip install .[build]
+
+    - name: Get version info
+      if: steps.check.outputs.skip != 'true'
+      id: version
+      shell: pwsh
+      run: |
+        # 从 _version.py 读取当前版本
+        $versionFile = Get-Content "src/danmaku_sender/_version.py" -Raw
+        if ($versionFile -match "__version__\s*=\s*['""]([^'""]+)['""]") {
+            $version = $Matches[1]
+        } else {
+            $version = "0.0.0"
+        }
+        $date = Get-Date -Format "yyyyMMdd"
+        $tag = "Nightly-Build"
+        $title = "v$version-nightlybuild+$date"
+        $shortSha = "${{ github.sha }}".Substring(0, 7)
+
+        echo "version=$version" >> $env:GITHUB_OUTPUT
+        echo "date=$date" >> $env:GITHUB_OUTPUT
+        echo "tag=$tag" >> $env:GITHUB_OUTPUT
+        echo "title=$title" >> $env:GITHUB_OUTPUT
+        echo "short_sha=$shortSha" >> $env:GITHUB_OUTPUT
+
+    - name: Build Standalone
+      if: steps.check.outputs.skip != 'true'
+      run: |
+        python -m nuitka --standalone `
+               --enable-plugin=pyside6 `
+               --assume-yes-for-downloads `
+               --windows-console-mode=disable `
+               --windows-icon-from-ico=assets/icon.ico `
+               --include-data-dir=assets=assets `
+               --output-dir=dist-standalone `
+               --output-filename=BiliDanmakuSender `
+               run.py
+
+    - name: Build Onefile
+      if: steps.check.outputs.skip != 'true'
+      run: |
+        python -m nuitka --onefile `
+               --enable-plugin=pyside6 `
+               --assume-yes-for-downloads `
+               --windows-console-mode=disable `
+               --windows-icon-from-ico=assets/icon.ico `
+               --include-data-dir=assets=assets `
+               --output-dir=dist-onefile `
+               --output-filename=BiliDanmakuSender `
+               run.py
+
+    - name: Package artifacts
+      if: steps.check.outputs.skip != 'true'
+      shell: pwsh
+      run: |
+        $suffix = "${{ steps.version.outputs.title }}"
+
+        if (Test-Path "dist-onefile/BiliDanmakuSender.exe") {
+            Move-Item -Path "dist-onefile/BiliDanmakuSender.exe" -Destination "BiliDanmakuSender-$suffix-onefile-x64.exe"
+        }
+
+        if (Test-Path "dist-standalone/run.dist") {
+            Move-Item -Path "dist-standalone/run.dist" -Destination "AppDist"
+            7z a -tzip -mx=9 "BiliDanmakuSender-$suffix-portable-x64.zip" "./AppDist/*"
+        }
+
+    - name: Update Nightly-Build tag
+      if: steps.check.outputs.skip != 'true'
+      run: |
+        git tag -f ${{ steps.version.outputs.tag }}
+        git push -f origin ${{ steps.version.outputs.tag }}
+
+    - name: Publish to GitHub Releases
+      if: steps.check.outputs.skip != 'true'
+      uses: softprops/action-gh-release@v2
+      with:
+        tag_name: ${{ steps.version.outputs.tag }}
+        name: "${{ steps.version.outputs.title }}"
+        prerelease: true
+        body: |
+          🌙 **Nightly Build** — 自动构建，仅供尝鲜测试
+
+          **版本**: v${{ steps.version.outputs.version }}
+          **提交**: ${{ steps.version.outputs.short_sha }}
+          **日期**: ${{ steps.version.outputs.date }}
+
+          > ⚠️ 此版本为开发预览版，可能存在不稳定因素。正式使用请下载 Release 版本。
+        files: |
+          BiliDanmakuSender-${{ steps.version.outputs.title }}-onefile-x64.exe
+          BiliDanmakuSender-${{ steps.version.outputs.title }}-portable-x64.zip
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
