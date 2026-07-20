@@ -183,14 +183,19 @@ class UIBinder:
             def _on_model_changed(new_val: Any):
                 w = w_ref()
                 if w is not None:
-                    UIBinder._set_widget_value(w, new_val)
+                    try:
+                        UIBinder._set_widget_value(w, new_val)
+                    except RuntimeError:
+                        # PySide6: Python 包装对象仍存在但底层 C++ 对象已销毁
+                        # 等同于 widget 已死，注销自身
+                        unsub = getattr(model, "unsubscribe", None)
+                        if callable(unsub):
+                            unsub(field_name, _on_model_changed)
                 else:
-                    # widget 已销毁，主动注销自身，防止死回调积压
-                    # 不使用 widget.destroyed 信号：PySide6 退出时解释器先于 Qt 引擎解体，
-                    # destroyed 触发时 model 可能已是 None，会弹 AttributeError
-                    unsubscribe_fn = getattr(model, "unsubscribe", None)
-                    if callable(unsubscribe_fn):
-                        unsubscribe_fn(field_name, _on_model_changed)
+                    # widget 已被 Python GC，主动注销自身，防止死回调积压
+                    unsub = getattr(model, "unsubscribe", None)
+                    if callable(unsub):
+                        unsub(field_name, _on_model_changed)
 
             model.subscribe(field_name, _on_model_changed)
             # 记录当前订阅信息，用于下次重绑时清理
