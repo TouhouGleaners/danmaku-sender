@@ -676,6 +676,9 @@ class PreSendDialog(QDialog):
     def __init__(self, state: AppState, parent=None):
         super().__init__(parent)
         self.state = state
+        # 使用临时拷贝，取消时不会污染全局配置
+        self._config_copy = state.sender_config.model_copy()
+
         self.setWindowTitle("发送确认")
         self.setMinimumWidth(420)
         self.setWindowFlags(
@@ -715,21 +718,26 @@ class PreSendDialog(QDialog):
         # 3. 当前账号
         account_group = QGroupBox("当前账号")
         account_layout = QHBoxLayout(account_group)
-        # 从 saved_accounts 中找当前 sessdata 对应的账号名
         account_name = "未知"
         for acc in state.saved_accounts:
             if acc.sessdata == state.sessdata:
                 account_name = acc.name or "未命名"
                 break
-        masked_sessdata = state.sessdata[:4] + "****" + state.sessdata[-4:] if len(state.sessdata) > 8 else "****"
-        account_layout.addWidget(QLabel(f"{account_name} (SESSDATA: {masked_sessdata})"))
+        sessdata = state.sessdata or ""
+        if len(sessdata) > 8:
+            masked = sessdata[:4] + "****" + sessdata[-4:]
+        elif sessdata:
+            masked = "****"
+        else:
+            masked = "(未登录)"
+        account_layout.addWidget(QLabel(f"{account_name} (SESSDATA: {masked})"))
         account_layout.addStretch()
         layout.addWidget(account_group)
 
-        # 4. 发送策略（可编辑，UIBinder 直接修改 state.sender_config）
+        # 4. 发送策略（绑定到临时拷贝，取消时自动丢弃）
         strategy_group = QGroupBox("发送策略")
         strategy_form = QFormLayout(strategy_group)
-        config = state.sender_config
+        config = self._config_copy
 
         # 延时
         delay_layout = QHBoxLayout()
@@ -788,7 +796,7 @@ class PreSendDialog(QDialog):
 
         layout.addWidget(strategy_group)
 
-        # 绑定（直接修改 state.sender_config）
+        # 绑定到临时拷贝
         UIBinder.bind(self.min_delay, config, "min_delay")
         UIBinder.bind(self.max_delay, config, "max_delay")
         UIBinder.bind(self.burst_size, config, "burst_size")
@@ -806,6 +814,12 @@ class PreSendDialog(QDialog):
         btn_layout.addWidget(cancel_btn)
         confirm_btn = QPushButton("确认发送")
         confirm_btn.setObjectName("primaryButton")
-        confirm_btn.clicked.connect(self.accept)
+        confirm_btn.clicked.connect(self._on_confirm)
         btn_layout.addWidget(confirm_btn)
         layout.addLayout(btn_layout)
+
+    def _on_confirm(self):
+        """确认时将临时拷贝写回全局配置"""
+        for field in self._config_copy.model_fields:
+            setattr(self.state.sender_config, field, getattr(self._config_copy, field))
+        self.accept()
