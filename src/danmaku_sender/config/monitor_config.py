@@ -1,7 +1,9 @@
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import ConfigDict, Field
+
+from danmaku_sender.types.models.evented_model import EventedModel
 
 
-class MonitorConfig(BaseModel):
+class MonitorConfig(EventedModel):
     """监视器的配置数据"""
     model_config = ConfigDict(validate_assignment=True)
 

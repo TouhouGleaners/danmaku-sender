@@ -1,9 +1,8 @@
 import logging
 import weakref
-from typing import Any, Callable
+from typing import Any, Callable, Protocol, runtime_checkable
 
 from pydantic import ValidationError
-
 from PySide6.QtCore import SignalInstance
 from PySide6.QtWidgets import (
     QWidget, QCheckBox, QSpinBox, QDoubleSpinBox,
@@ -13,12 +12,28 @@ from PySide6.QtWidgets import (
 logger = logging.getLogger("App.System.Framework.Binder")
 
 
+@runtime_checkable
+class Subscribable(Protocol):
+    """可订阅字段变更的模型接口（鸭子类型契约）
+
+    任何类只要实现了 subscribe/unsubscribe，即使没有显式继承此协议，
+    isinstance 检查也会通过，Pylance 会在 if 分支内自动收窄类型。
+    """
+
+    def subscribe(self, field_name: str, callback: Callable[[Any], None]) -> None: ...
+
+    def unsubscribe(self, field_name: str, callback: Callable[[Any], None]) -> None: ...
+
+
 class UIBinder:
     """
     轻量级 MVVM 双向绑定引擎
 
     职责:
-    1. 状态同步: 自动实现 Model (Pydantic/Object) 与 View (PySide6 Widget) 的数据双向同步。
+    1. 状态同步: 自动实现 Model 与 View (PySide6 Widget) 的数据双向同步。
+       - Widget → Model: 通过 Qt 信号自动回写，支持 Pydantic 验证与异常反馈。
+       - Model → Widget: 若 Model 继承了 EventedModel（实现了 Subscribable 协议），
+         当字段被外部修改时，已绑定的 Widget 会自动更新（通过 weakref 防止内存泄漏）。
     2. 生命周期管理: 内部维护绑定注册表 (_active_bindings)，每次重绑时自动解除历史信号，防止内存泄漏与重复触发。
     3. 异常反馈: 拦截 Pydantic 的 ValidationError，并通过动态属性 (invalid) 与 QSS 联动实现非侵入式的 UI 异常反馈。
     """
@@ -83,7 +98,7 @@ class UIBinder:
 
         Args:
             widget: 目标 Qt 控件
-            model: 绑定的数据模型
+            model: 绑定的数据模型（若继承 EventedModel 则自动支持反向同步）
             field_name: 模型上的属性名称
             clear_old: 如果为 True，则清空该控件之前绑定的所有逻辑（默认行为）。设为 False 支持 1对N 绑定。
             realtime: 仅针对 QLineEdit，True 为按键实时更新，False 为失焦/回车更新。
@@ -149,3 +164,34 @@ class UIBinder:
             signal_instance.connect(_update_model_proxy)
             # 存入弱引用注册表，确保安全回收
             UIBinder._active_bindings[widget].append((signal_instance, _update_model_proxy))
+
+        # Model → Widget 反向同步（自动检测：model 实现了 Subscribable 协议则启用）
+        if isinstance(model, Subscribable):
+            # 重绑时清理旧订阅，防止旧 model 的回调继续推值
+            if clear_old:
+                prev = widget.property("_binder_subscription")
+                if prev is not None:
+                    old_model, old_field, old_cb = prev
+                    old_unsub = getattr(old_model, "unsubscribe", None)
+                    if callable(old_unsub):
+                        old_unsub(old_field, old_cb)
+                    widget.setProperty("_binder_subscription", None)
+
+            # 用 weakref 持有 widget，防止 Model 生命周期 > Widget 时造成内存泄漏
+            w_ref = weakref.ref(widget)
+
+            def _on_model_changed(new_val: Any):
+                w = w_ref()
+                if w is not None:
+                    UIBinder._set_widget_value(w, new_val)
+                else:
+                    # widget 已销毁，主动注销自身，防止死回调积压
+                    # 不使用 widget.destroyed 信号：PySide6 退出时解释器先于 Qt 引擎解体，
+                    # destroyed 触发时 model 可能已是 None，会弹 AttributeError
+                    unsubscribe_fn = getattr(model, "unsubscribe", None)
+                    if callable(unsubscribe_fn):
+                        unsubscribe_fn(field_name, _on_model_changed)
+
+            model.subscribe(field_name, _on_model_changed)
+            # 记录当前订阅信息，用于下次重绑时清理
+            widget.setProperty("_binder_subscription", (model, field_name, _on_model_changed))
