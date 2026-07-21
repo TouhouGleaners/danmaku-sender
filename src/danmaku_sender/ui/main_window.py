@@ -4,7 +4,7 @@ from PySide6.QtWidgets import (
     QMainWindow, QWidget, QMessageBox, QHBoxLayout, QVBoxLayout, QFrame, QApplication,
     QListWidget, QListWidgetItem, QStackedWidget, QLabel, QSystemTrayIcon, QMenu
 )
-from PySide6.QtGui import QAction, QCloseEvent, QDesktopServices
+from PySide6.QtGui import QAction, QCloseEvent, QDesktopServices, QShortcut, QKeySequence
 from PySide6.QtCore import Qt, QUrl, QTimer, QSize, QEvent, Slot
 
 from .framework.image_processor import QtImageProcessor
@@ -55,6 +55,7 @@ class MainWindow(QMainWindow):
         # UI 初始化
         self._create_ui()
         self._init_pages()
+        self._init_shortcuts()
         self._create_menu_bar()
         self._init_system_tray()
 
@@ -185,6 +186,20 @@ class MainWindow(QMainWindow):
         # 用户页眉点击打开账号管理弹窗
         self.user_widget.setCursor(Qt.CursorShape.PointingHandCursor)
         self.user_widget.mousePressEvent = lambda e: self._open_account_dialog()
+
+    def _init_shortcuts(self):
+        """初始化全局快捷键"""
+        # Ctrl+O: 打开弹幕文件
+        self._sc_open = QShortcut(QKeySequence.StandardKey.Open, self)
+        self._sc_open.activated.connect(self.page_sender._select_file)
+
+        # Ctrl+Enter: 开始发送
+        self._sc_send = QShortcut(QKeySequence(Qt.Key.Key_Return | Qt.KeyboardModifier.ControlModifier), self)
+        self._sc_send.activated.connect(self.page_sender._toggle_task)
+
+        # Ctrl+,: 打开全局设置
+        self._sc_settings = QShortcut(QKeySequence(Qt.Key.Key_Comma | Qt.KeyboardModifier.ControlModifier), self)
+        self._sc_settings.activated.connect(lambda: self.sidebar.setCurrentRow(0))
 
     def _create_menu_bar(self):
         menu_bar = self.menuBar()
