@@ -190,27 +190,22 @@ class MainWindow(QMainWindow):
     def _init_shortcuts(self):
         """初始化全局快捷键"""
         # Ctrl+O: 打开弹幕文件
-        sc_open = QShortcut(QKeySequence.StandardKey.Open, self)
-        sc_open.activated.connect(self.page_sender._select_file)
+        self._sc_open = QShortcut(QKeySequence.StandardKey.Open, self)
+        self._sc_open.activated.connect(self.page_sender._select_file)
 
         # Ctrl+Enter: 开始发送
-        sc_send = QShortcut(QKeySequence(Qt.Key.Key_Return | Qt.KeyboardModifier.ControlModifier), self)
-        sc_send.activated.connect(self.page_sender._toggle_task)
+        self._sc_send = QShortcut(QKeySequence(Qt.Key.Key_Return | Qt.KeyboardModifier.ControlModifier), self)
+        self._sc_send.activated.connect(self.page_sender._toggle_task)
 
         # Ctrl+,: 打开全局设置
-        sc_settings = QShortcut(QKeySequence(Qt.Key.Key_Comma | Qt.KeyboardModifier.ControlModifier), self)
-        sc_settings.activated.connect(lambda: self.sidebar.setCurrentRow(0))
+        self._sc_settings = QShortcut(QKeySequence(Qt.Key.Key_Comma | Qt.KeyboardModifier.ControlModifier), self)
+        self._sc_settings.activated.connect(lambda: self.sidebar.setCurrentRow(0))
 
     def _create_menu_bar(self):
         menu_bar = self.menuBar()
 
         # --- 文件菜单 ---
         file_menu = menu_bar.addMenu("文件")
-
-        open_xml_action = QAction("打开弹幕文件", self)
-        open_xml_action.setShortcut(QKeySequence.StandardKey.Open)
-        open_xml_action.triggered.connect(self.page_sender._select_file)
-        file_menu.addAction(open_xml_action)
 
         open_log_action = QAction("打开日志文件夹", self)
         open_log_action.triggered.connect(self._open_log_folder)
