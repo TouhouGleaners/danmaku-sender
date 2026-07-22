@@ -120,10 +120,10 @@ class SenderPage(QWidget):
         self.state.video_state.subscribe("loaded_danmakus", self._on_loaded_danmakus_changed)
 
     def _on_loaded_danmakus_changed(self, value):
-        """编辑器提交弹幕后自动响应"""
+        """编辑器提交弹幕后自动刷新发射器 UI"""
         count = self.state.video_state.danmaku_count
         if count > 0:
-            self.logger.info(f"检测到弹幕数据变更，共 {count} 条。")
+            self.basic_group.file_input.setText(f"来自编辑器: {count} 条弹幕")
 
     def append_log(self, message: str):
         """外部调用的日志接口"""
