@@ -18,11 +18,10 @@ class VideoState(ObservableState):
     cid_parts_map: dict[int, str]
 
     def __init__(self):
-        self._initializing = True  # 防止 super().__init__ 后的赋值触发信号
         super().__init__()
-        self.loaded_danmakus = []
-        self.cid_parts_map = {}
-        self._initializing = False
+        with self.init_context():
+            self.loaded_danmakus = []
+            self.cid_parts_map = {}
 
     @property
     def is_ready_to_send(self) -> bool:

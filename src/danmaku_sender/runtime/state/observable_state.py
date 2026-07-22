@@ -1,37 +1,33 @@
+from contextlib import contextmanager
 from typing import Any, Callable
 
 from PySide6.QtCore import QObject, Signal, SignalInstance
 
 
 class ObservableState(QObject):
-    """可观察的状态容器。
+    """
+    属性赋值自动发射 changed(str) 信号的状态基类。
 
-    属性赋值时自动发射 changed 信号，无需手动 emit。
-    用于多个 UI 页面共享的运行时状态。
-
-    子类在 __init__ 中应设置 _initializing = True，
-    完成所有赋值后再设为 False，以抑制初始化期间的假信号。
-
-    用法:
-        class VideoState(ObservableState):
-            bvid: str = ""
-            selected_cid: int = 0
-
-            def __init__(self):
-                self._initializing = True
-                super().__init__()
-                self.loaded_danmakus = []
-                self._initializing = False
-
-        video = VideoState()
-        video.changed.connect(lambda field: print(f"{field} changed"))
-        video.bvid = "BV123"  # 自动触发信号
+    就地修改容器不触发信号，需调用 notify() 或重新赋值。
+    初始化时用 init_context() 抑制假信号。
     """
     changed = Signal(str)
 
-    def __init__(self):
-        # 不管理 _initializing，由子类控制
+    def __init__(self) -> None:
         super().__init__()
+
+    @contextmanager
+    def init_context(self):
+        """初始化上下文管理器，自动抑制信号。"""
+        self._initializing = True
+        try:
+            yield
+        finally:
+            self._initializing = False
+
+    def notify(self, field_name: str) -> None:
+        """手动发射某字段的变更信号，用于就地修改容器后。"""
+        self.changed.emit(field_name)
 
     def subscribe(self, field_name: str, callback: Callable[[Any], None]) -> None:
         """兼容 UIBinder 的 Subscribable 协议"""
@@ -52,12 +48,10 @@ class ObservableState(QObject):
                 self.changed.disconnect(wrapper)
 
     def __setattr__(self, name: str, value: Any) -> None:
-        # 初始化阶段直接写入
         if getattr(self, "_initializing", False):
             super().__setattr__(name, value)
             return
 
-        # 私有属性和 Signal 直接写入
         if name.startswith("_") or isinstance(value, (Signal, SignalInstance)):
             super().__setattr__(name, value)
             return
