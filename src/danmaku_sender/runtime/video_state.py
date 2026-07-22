@@ -2,7 +2,7 @@ from .observable_state import ObservableState
 from danmaku_sender.types.models.danmaku import Danmaku
 
 
-class VideoData(ObservableState):
+class VideoState(ObservableState):
     """视频相关的共享运行时状态。
 
     继承 ObservableState，属性变更时自动发射 changed 信号。

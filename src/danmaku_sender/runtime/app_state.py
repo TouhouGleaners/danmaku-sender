@@ -2,7 +2,7 @@ import time
 
 from PySide6.QtCore import QObject, Signal
 
-from .video_data import VideoData
+from .video_state import VideoState
 
 from danmaku_sender.config import ApiAuthConfig, SenderConfig, MonitorConfig, ValidationConfig
 from danmaku_sender.types.models.account import AccountCredential
@@ -34,7 +34,7 @@ class AppState(QObject):
         self.validation_config = ValidationConfig()
 
         # 运行时状态
-        self.video_state = VideoData()
+        self.video_state = VideoState()
 
         # 多账号
         self.saved_accounts: list[AccountCredential] = []
