@@ -116,6 +116,9 @@ class SenderPage(QWidget):
         self.basic_group.init_bindings()
         self.strategy_tabs.init_bindings()
 
+        # 监听共享数据变化（编辑器提交等场景）
+        self.state.video_state.changed.connect(self._on_video_state_changed)
+
     def append_log(self, message: str):
         """外部调用的日志接口"""
         self.log_output.append(message)
