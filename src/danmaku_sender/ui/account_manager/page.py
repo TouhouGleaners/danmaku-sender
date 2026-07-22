@@ -12,7 +12,7 @@ from .account_form import AccountFormDialog
 
 from danmaku_sender.types.models.account import AccountCredential
 from danmaku_sender.config import ApiAuthConfig
-from danmaku_sender.runtime.app_state import AppState
+from danmaku_sender.runtime.state.app_state import AppState
 from danmaku_sender.controller.account_controller import AccountController
 from danmaku_sender.ui.framework.style_loader import SvgIcon
 

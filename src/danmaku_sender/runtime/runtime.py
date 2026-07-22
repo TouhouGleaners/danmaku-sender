@@ -1,9 +1,9 @@
 import logging
 
-from .resources import AppResources
-from .app_state import AppState
-from .config_manager import ConfigManager
-from .account_manager import AccountManager
+from .infra.resources import AppResources
+from .state.app_state import AppState
+from .managers.config_manager import ConfigManager
+from .managers.account_manager import AccountManager
 
 from danmaku_sender.config.app_meta import AppInfo
 from danmaku_sender.repo.history_manager import HistoryManager

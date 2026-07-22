@@ -12,17 +12,17 @@ from PySide6.QtCore import Qt, QDateTime, Signal, Slot
 
 from .framework.binder import UIBinder
 from .framework.style_loader import SvgIcon
+
 from danmaku_sender.controller.video_controller import VideoController
 from danmaku_sender.controller.sender_controller import SenderController
-
-from danmaku_sender.service.sender import SendingContext
 from danmaku_sender.types.models.video import VideoInfo
 from danmaku_sender.types.models.common import VideoTarget, UnsentDanmakusRecord
-from danmaku_sender.runtime.app_state import AppState
 from danmaku_sender.repo.history_manager import HistoryManager
+from danmaku_sender.service.sender import SendingContext
+from danmaku_sender.runtime.state.app_state import AppState
+from danmaku_sender.ui.common.notification import send_windows_notification
 from danmaku_sender.utils.string_utils import parse_bilibili_link
 from danmaku_sender.utils.time_utils import format_duration
-from danmaku_sender.ui.common.notification import send_windows_notification
 
 
 class SenderPage(QWidget):

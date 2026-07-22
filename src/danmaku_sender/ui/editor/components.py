@@ -10,7 +10,7 @@ from PySide6.QtWidgets import (
 
 from danmaku_sender.ui.framework.binder import UIBinder
 from danmaku_sender.types.models.danmaku import Danmaku
-from danmaku_sender.runtime.app_state import AppState
+from danmaku_sender.runtime.state.app_state import AppState
 from danmaku_sender.types.models.editor_types import EditorField
 from danmaku_sender.utils.time_utils import format_duration
 

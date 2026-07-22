@@ -14,7 +14,7 @@ from danmaku_sender.types.models.danmaku import Danmaku
 from danmaku_sender.types.models.common import VideoTarget, UnsentDanmakusRecord
 from danmaku_sender.repo.history_manager import HistoryManager
 from danmaku_sender.config import ApiAuthConfig, SenderConfig
-from danmaku_sender.runtime.app_state import AppState
+from danmaku_sender.runtime.state.app_state import AppState
 
 
 logger = logging.getLogger("App.Controller.Sender")

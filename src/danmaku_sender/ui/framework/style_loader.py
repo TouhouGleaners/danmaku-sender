@@ -7,7 +7,7 @@ from PySide6.QtWidgets import QApplication
 from .image_processor import QtImageProcessor
 
 from danmaku_sender.config.app_meta import AppInfo
-from danmaku_sender.runtime.theme_manager import ThemeManager
+from danmaku_sender.runtime.managers.theme_manager import ThemeManager
 
 
 logger = logging.getLogger("App.UI.StyleLoader")

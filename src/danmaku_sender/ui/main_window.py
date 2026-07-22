@@ -21,8 +21,8 @@ from danmaku_sender.config.app_meta import AppInfo, UI
 from danmaku_sender.types.models.common import MonitorStats
 from danmaku_sender.types.models.user import UserProfile
 from danmaku_sender.runtime import Runtime
-from danmaku_sender.runtime.log_utils import GuiLoggingHandler
-from danmaku_sender.runtime.theme_manager import ThemeManager
+from danmaku_sender.runtime.infra.log_utils import GuiLoggingHandler
+from danmaku_sender.runtime.managers.theme_manager import ThemeManager
 from danmaku_sender.controller.auth_controller import AuthController, UserProfile
 from danmaku_sender.controller.account_controller import AccountController
 from danmaku_sender.controller.system_controller import SystemController

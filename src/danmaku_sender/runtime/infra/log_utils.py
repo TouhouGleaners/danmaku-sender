@@ -6,7 +6,7 @@ from datetime import datetime, timezone
 
 from PySide6.QtCore import SignalInstance
 
-from ..config.app_meta import AppInfo
+from danmaku_sender.config.app_meta import AppInfo
 
 
 class LogNamespace:

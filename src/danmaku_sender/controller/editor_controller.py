@@ -5,7 +5,7 @@ from PySide6.QtCore import QObject, Signal
 
 from .concurrency import PoolTask
 from danmaku_sender.service.editor_session import EditorSession
-from danmaku_sender.runtime.app_state import AppState
+from danmaku_sender.runtime.state.app_state import AppState
 from danmaku_sender.types.models.danmaku import Danmaku
 from danmaku_sender.types.models.editor_types import ViewItem, InsertPosition
 from danmaku_sender.service.danmaku_parser import DanmakuParser
