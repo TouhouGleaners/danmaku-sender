@@ -1,27 +1,17 @@
-from .observable_state import ObservableState, observed
+from danmaku_sender.types.models.evented_model import EventedModel
 from danmaku_sender.types.models.danmaku import Danmaku
 
 
-class VideoState(ObservableState):
-    """视频相关的共享运行时状态。属性变更时自动发射 changed 信号。"""
+class VideoState(EventedModel):
+    """视频相关的共享运行时状态。继承 EventedModel，属性变更时自动触发订阅回调。"""
 
-    bvid = observed()
-    video_title = observed()
-    selected_cid = observed()
-    selected_part_name = observed()
-    selected_part_duration_ms = observed()
-    loaded_danmakus = observed()
-    cid_parts_map = observed()
-
-    def __init__(self) -> None:
-        super().__init__()
-        self.bvid: str = ""
-        self.video_title: str = "（未获取到视频标题）"
-        self.selected_cid: int | None = None
-        self.selected_part_name: str = ""
-        self.selected_part_duration_ms: int = 0
-        self.loaded_danmakus: list[Danmaku] = []
-        self.cid_parts_map: dict[int, str] = {}
+    bvid: str = ""
+    video_title: str = "（未获取到视频标题）"
+    selected_cid: int | None = None
+    selected_part_name: str = ""
+    selected_part_duration_ms: int = 0
+    loaded_danmakus: list[Danmaku] = []
+    cid_parts_map: dict[int, str] = {}
 
     @property
     def is_ready_to_send(self) -> bool:
