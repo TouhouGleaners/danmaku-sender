@@ -124,6 +124,8 @@ class SenderPage(QWidget):
         count = self.state.video_state.danmaku_count
         if count > 0:
             self.basic_group.file_input.setText(f"来自编辑器: {count} 条弹幕")
+        else:
+            self.basic_group.file_input.clear()
 
     def append_log(self, message: str):
         """外部调用的日志接口"""

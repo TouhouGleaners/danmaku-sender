@@ -1,3 +1,5 @@
+from pydantic import Field
+
 from danmaku_sender.types.models.evented_model import EventedModel
 from danmaku_sender.types.models.danmaku import Danmaku
 
@@ -10,8 +12,8 @@ class VideoState(EventedModel):
     selected_cid: int | None = None
     selected_part_name: str = ""
     selected_part_duration_ms: int = 0
-    loaded_danmakus: list[Danmaku] = []
-    cid_parts_map: dict[int, str] = {}
+    loaded_danmakus: list[Danmaku] = Field(default_factory=list)
+    cid_parts_map: dict[int, str] = Field(default_factory=dict)
 
     @property
     def is_ready_to_send(self) -> bool:
