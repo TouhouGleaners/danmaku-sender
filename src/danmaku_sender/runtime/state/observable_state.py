@@ -1,4 +1,3 @@
-import logging
 from PySide6.QtCore import QObject, Signal
 
 
@@ -51,5 +50,5 @@ class ObservableState(QObject):
 
         old = getattr(self, name, None)
         super().__setattr__(name, value)
-        if old is not value:
+        if old != value:
             self.changed.emit(name)

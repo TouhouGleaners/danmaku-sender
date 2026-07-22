@@ -14,8 +14,8 @@ class VideoState(ObservableState):
     selected_cid: int | None = None
     selected_part_name: str = ""
     selected_part_duration_ms: int = 0
-    loaded_danmakus: list[Danmaku] = []
-    cid_parts_map: dict = {}
+    loaded_danmakus: list[Danmaku]
+    cid_parts_map: dict[int, str]
 
     def __init__(self):
         self._initializing = True  # 防止 super().__init__ 后的赋值触发信号
