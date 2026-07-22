@@ -14,6 +14,8 @@ class ObservableState(QObject):
     changed = Signal(str)
 
     def __init__(self) -> None:
+        self.__dict__["_initializing"] = False
+        self.__dict__["_subscriptions"] = {}
         super().__init__()
 
     @contextmanager
@@ -34,21 +36,18 @@ class ObservableState(QObject):
         def _wrapper(changed_field: str) -> None:
             if changed_field == field_name:
                 callback(getattr(self, field_name))
-        if not hasattr(self, "_subscriptions"):
-            self._subscriptions: dict[tuple[str, Callable], Callable] = {}
         self._subscriptions[(field_name, callback)] = _wrapper
         self.changed.connect(_wrapper)
 
     def unsubscribe(self, field_name: str, callback: Callable[[Any], None]) -> None:
         """兼容 UIBinder 的 Subscribable 协议"""
-        if hasattr(self, "_subscriptions"):
-            key = (field_name, callback)
-            if key in self._subscriptions:
-                wrapper = self._subscriptions.pop(key)
-                self.changed.disconnect(wrapper)
+        key = (field_name, callback)
+        if key in self._subscriptions:
+            wrapper = self._subscriptions.pop(key)
+            self.changed.disconnect(wrapper)
 
     def __setattr__(self, name: str, value: Any) -> None:
-        if getattr(self, "_initializing", False):
+        if self._initializing:
             super().__setattr__(name, value)
             return
 
