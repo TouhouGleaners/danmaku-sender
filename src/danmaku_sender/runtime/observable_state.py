@@ -2,14 +2,14 @@ import logging
 from PySide6.QtCore import QObject, Signal
 
 
-class SharedState(QObject):
+class ObservableState(QObject):
     """可观察的共享状态容器。
 
     属性赋值时自动发射 changed 信号，无需手动 emit。
     用于多个 UI 页面共享的运行时状态。
 
     用法:
-        class VideoData(SharedState):
+        class VideoData(ObservableState):
             bvid: str = ""
             selected_cid: int = 0
 

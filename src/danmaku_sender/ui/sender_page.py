@@ -119,6 +119,13 @@ class SenderPage(QWidget):
         # 监听共享数据变化（编辑器提交等场景）
         self.state.video_state.changed.connect(self._on_video_state_changed)
 
+    def _on_video_state_changed(self, field: str):
+        """响应 video_state 属性变更"""
+        if field == "loaded_danmakus":
+            count = self.state.video_state.danmaku_count
+            if count > 0:
+                self.logger.info(f"检测到弹幕数据变更，共 {count} 条。")
+
     def append_log(self, message: str):
         """外部调用的日志接口"""
         self.log_output.append(message)
