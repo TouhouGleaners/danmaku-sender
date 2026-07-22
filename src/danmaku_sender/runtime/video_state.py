@@ -1,12 +1,13 @@
 from .observable_state import ObservableState
+
 from danmaku_sender.types.models.danmaku import Danmaku
 
 
 class VideoState(ObservableState):
-    """视频相关的共享运行时状态。
+    """
+    视频相关的共享运行时状态
 
     继承 ObservableState，属性变更时自动发射 changed 信号。
-    替代原 types/models/video_state.py 中的 VideoState。
     """
     bvid: str = ""
     video_title: str = "（未获取到视频标题）"
