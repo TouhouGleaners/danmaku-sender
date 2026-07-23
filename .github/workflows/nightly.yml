@@ -55,7 +55,7 @@ jobs:
         } else {
             $version = "0.0.0"
         }
-        $date = [System.TimeZoneInfo]::ConvertTimeBySystemTimeZoneId([DateTime]::UtcTime, 'China Standard Time').ToString('yyyyMMdd')
+        $date = [System.TimeZoneInfo]::ConvertTimeBySystemTimeZoneId([DateTime]::UtcNow, 'China Standard Time').ToString('yyyyMMdd')
         $tag = "Nightly-Build"
         $title = "v$version-nightlybuild+$date"
         $shortSha = "${{ github.sha }}".Substring(0, 7)
@@ -118,6 +118,10 @@ jobs:
       shell: pwsh
       run: |
         $assets = gh api --paginate repos/${{ github.repository }}/releases/tags/Nightly-Build --jq '.assets[].id' 2>$null
+        if ($LASTEXITCODE -ne 0 -or -not $assets) {
+          Write-Host 'No existing nightly assets to clean.'
+          return
+        }
         foreach ($id in $assets) {
           gh api repos/${{ github.repository }}/releases/assets/$id -X DELETE
           Write-Host "Deleted asset $id"
