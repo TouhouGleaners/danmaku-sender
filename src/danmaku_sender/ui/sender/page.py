@@ -19,7 +19,6 @@ from danmaku_sender.repo.history_manager import HistoryManager
 from danmaku_sender.service.sender import SendingContext
 from danmaku_sender.runtime.state.app_state import AppState
 from danmaku_sender.ui.common.notification import send_windows_notification
-from danmaku_sender.utils.string_utils import parse_bilibili_link
 from danmaku_sender.utils.time_utils import format_duration
 
 
@@ -188,13 +187,12 @@ class SenderPage(QWidget):
             QMessageBox.warning(self, "输入错误", "请输入BV号或视频链接")
             return
 
-        bvid, _ = parse_bilibili_link(raw_input)
+        bvid = self.binding.fetch_video_info(raw_input)
         if not bvid:
             QMessageBox.warning(self, "格式错误", "未能识别有效的 BV 号。\n请检查输入内容是否正确。")
             return
 
         self.basic_group.bv_input.setText(bvid)
-        self.binding.fetch_video_info(raw_input)
 
     @Slot(int)
     def _on_part_selected(self, index: int):
@@ -388,7 +386,7 @@ class SenderPage(QWidget):
 
     def _update_ui_for_state(self, state: SenderState):
         """根据任务状态统一更新 UI"""
-        self.state.sender_is_active = (state == SenderState.RUNNING)
+        self.state.sender_is_active = state in (SenderState.RUNNING, SenderState.STOPPING)
 
         match state:
             case SenderState.READY:

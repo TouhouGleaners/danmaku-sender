@@ -29,9 +29,6 @@ class SenderDataBinding(QObject):
     videoFetched = Signal(str, object)    # bvid, VideoInfo
     videoFetchFailed = Signal(str, str)   # bvid, error_msg
 
-    # 分P选择
-    partSelected = Signal(int, int, str)  # cid, duration_ms, part_name
-
     def __init__(self, state: AppState, sender_controller: SenderController,
                  video_controller: VideoController, parent=None):
         super().__init__(parent)
@@ -61,17 +58,22 @@ class SenderDataBinding(QObject):
         logger.info(f"📥 正在解析文件: {Path(file_path).name}")
         self.sender_controller.load_xml_file(file_path)
 
-    def fetch_video_info(self, raw_input: str):
-        """解析 BV 号并获取视频信息"""
+    def fetch_video_info(self, raw_input: str) -> str | None:
+        """解析 BV 号并获取视频信息。
+
+        Returns:
+            解析出的 bvid，解析失败返回 None。
+        """
         if not raw_input:
-            return
+            return None
 
         bvid, p_index = parse_bilibili_link(raw_input)
         if not bvid:
-            return
+            return None
 
         self._pending_part_index = p_index
         self.video_controller.fetch_single_info(bvid, self.state.get_api_auth())
+        return bvid
 
     def select_part(self, index: int, combo_data: dict | None, part_name: str):
         """处理分P选择"""
@@ -101,7 +103,7 @@ class SenderDataBinding(QObject):
 
     @Slot(str, object)
     def _on_xml_parse_failed(self, file_path: str, err: Exception):
-        self.fileLoadFailed.emit(str(err), "")
+        self.fileLoadFailed.emit(Path(file_path).name, str(err))
 
     @Slot()
     def _on_fetch_started(self):
