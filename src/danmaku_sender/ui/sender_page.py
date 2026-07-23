@@ -119,7 +119,7 @@ class SenderPage(QWidget):
         # 监听共享数据变化（编辑器提交等场景）
         self.state.video_state.subscribe("loaded_danmakus", self._on_loaded_danmakus_changed)
 
-    def _on_loaded_danmakus_changed(self, value):
+    def _on_loaded_danmakus_changed(self, _value):
         """编辑器提交弹幕后自动刷新发射器 UI"""
         count = self.state.video_state.danmaku_count
         if count > 0:
