@@ -22,11 +22,18 @@ logger = logging.getLogger("App.Controller.Sender")
 
 
 class SenderStatus(Enum):
-    """发送任务状态"""
+    """发送校验状态"""
     READY = "ready"
     EDITOR_DIRTY = "editor_dirty"
     NOT_READY = "not_ready"
     NO_CREDENTIALS = "no_credentials"
+
+
+class SenderState(Enum):
+    """发送任务生命周期状态"""
+    READY = "ready"
+    RUNNING = "running"
+    STOPPING = "stopping"
 
 
 class SenderController(QObject):
@@ -96,6 +103,15 @@ class SenderController(QObject):
     def is_stopped_manually(self) -> bool:
         """检查任务是否被手动中断"""
         return self._stop_event.is_set()
+
+    @property
+    def sender_state(self) -> SenderState:
+        """当前任务生命周期状态"""
+        if self._stop_event.is_set():
+            return SenderState.STOPPING
+        if self.is_running():
+            return SenderState.RUNNING
+        return SenderState.READY
 
     def load_xml_file(self, file_path: str):
         """异步解析 XML 弹幕文件"""

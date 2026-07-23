@@ -13,7 +13,7 @@ from .framework.binder import UIBinder
 from .framework.style_loader import SvgIcon
 
 from danmaku_sender.controller.video_controller import VideoController
-from danmaku_sender.controller.sender_controller import SenderController, SenderStatus
+from danmaku_sender.controller.sender_controller import SenderController, SenderStatus, SenderState
 from danmaku_sender.ui.sender_data_binding import SenderDataBinding
 from danmaku_sender.types.models.video import VideoInfo
 from danmaku_sender.types.models.common import VideoTarget, UnsentDanmakusRecord
@@ -211,33 +211,32 @@ class SenderPage(QWidget):
         # 如果正在运行 -> 停止
         if self.sender_controller.is_running():
             self.sender_controller.stop_task()
-            self.start_btn.setEnabled(False)
-            self.start_btn.setText("停止中...")
+            self._update_ui_for_state(SenderState.STOPPING)
             self.logger.info("发送器：正在请求中止...")
-            self.progress_bar.setFormat("%p% (正在停止...)")
             return
 
         # 如果未运行 -> 开始
         # 校验
         status = self.sender_controller.send_status
-        if status == SenderStatus.EDITOR_DIRTY:
-            QMessageBox.warning(self, "存在未保存的修改",
-                "检测到【弹幕校验器】中有未应用的修改！\n\n请先返回校验器点击“应用所有修改”，\n否则发送的将是旧的、未修复的弹幕。")
-            return
-        elif status == SenderStatus.NOT_READY:
-            QMessageBox.warning(self, "条件不足", "请确保 BV号、分P、弹幕文件 均已就绪。")
-            return
-        elif status == SenderStatus.NO_CREDENTIALS:
-            QMessageBox.warning(self, "凭证缺失", "请先在【全局设置】页填入 SESSDATA 和 BILI_JCT。")
-            return
+        match status:
+            case SenderStatus.EDITOR_DIRTY:
+                QMessageBox.warning(self, "存在未保存的修改",
+                    "检测到【弹幕编辑器】中有未应用的修改！\n\n请先返回校验器点击“应用所有修改”，\n否则发送的将是旧的、未修复的弹幕。")
+                return
+            case SenderStatus.NOT_READY:
+                QMessageBox.warning(self, "条件不足", "请确保 BV号、分P、弹幕文件 均已就绪。")
+                return
+            case SenderStatus.NO_CREDENTIALS:
+                QMessageBox.warning(self, "凭证缺失", "请先在账号管理页登入账号或填入 SESSDATA 和 BILI_JCT。")
+                return
 
         # 确认对话框
         dialog = PreSendDialog(self.state, self)
         if dialog.exec() != QDialog.DialogCode.Accepted:
             return
 
-        # UI 锁定
-        self._set_ui_for_task_start()
+        # 锁定 UI
+        self._update_ui_for_state(SenderState.RUNNING)
 
         state = self.state
         target = VideoTarget(
@@ -318,8 +317,8 @@ class SenderPage(QWidget):
     @Slot(object)
     def _on_send_finished(self, ctx: SendingContext):
         """任务结束后的清理与保存逻辑"""
-        # 恢复 UI
-        self._reset_ui_after_task()
+        # 恢复 UI 状态
+        self._update_ui_for_state(SenderState.READY)
 
         if ctx and ctx.is_manually_stopped:
             self.status_label.setText("发送器：任务中止")
@@ -389,37 +388,30 @@ class SenderPage(QWidget):
 
     # region UI State Management
 
-    def _set_ui_for_task_start(self):
-        """任务开始时的 UI 状态设置"""
-        # 通知全局状态
-        self.state.sender_is_active = True
+    def _update_ui_for_state(self, state: SenderState):
+        """根据任务状态统一更新 UI"""
+        self.state.sender_is_active = (state == SenderState.RUNNING)
 
-        # 按钮变红
-        self.start_btn.setText("紧急停止")
-        self._update_btn_style(True)
+        match state:
+            case SenderState.READY:
+                self.start_btn.setText("开始发送")
+                self.start_btn.setEnabled(True)
+                self._update_btn_style(False)
+                self._set_inputs_locked(False)
+                self.progress_bar.setFormat("%p%")
 
-        # 锁定输入
-        self._set_inputs_locked(True)
+            case SenderState.RUNNING:
+                self.start_btn.setText("紧急停止")
+                self.start_btn.setEnabled(True)
+                self._update_btn_style(True)
+                self._set_inputs_locked(True)
+                self.log_output.clear()
+                self.progress_bar.setValue(0)
 
-        # 重置进度
-        self.log_output.clear()
-        self.progress_bar.setValue(0)
-
-    def _reset_ui_after_task(self):
-        """任务结束后的 UI 状态复位"""
-        # 通知全局状态
-        self.state.sender_is_active = False
-
-        # 恢复按钮状态
-        self.start_btn.setText("开始发送")
-        self.start_btn.setEnabled(True)
-        self._update_btn_style(False)
-
-        # 解锁所有输入控件
-        self._set_inputs_locked(False)
-
-        # 重置进度条格式
-        self.progress_bar.setFormat("%p%")
+            case SenderState.STOPPING:
+                self.start_btn.setText("停止中...")
+                self.start_btn.setEnabled(False)
+                self.progress_bar.setFormat("%p% (正在停止...)")
 
     # endregion
 

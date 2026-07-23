@@ -21,16 +21,16 @@ class SenderDataBinding(QObject):
     通过信号通知 UI 更新，不直接操作控件。
     """
     # 文件相关
-    fileLoaded = Signal(str, int)       # filename, count
-    fileLoadFailed = Signal(str, str)   # filename, error_msg
+    fileLoaded = Signal(str, int)         # filename, count
+    fileLoadFailed = Signal(str, str)     # filename, error_msg
 
     # 视频相关
     videoFetchStarted = Signal()
-    videoFetched = Signal(str, object)  # bvid, VideoInfo
-    videoFetchFailed = Signal(str, str) # bvid, error_msg
+    videoFetched = Signal(str, object)    # bvid, VideoInfo
+    videoFetchFailed = Signal(str, str)   # bvid, error_msg
 
     # 分P选择
-    partSelected = Signal(int, int, str) # cid, duration_ms, part_name
+    partSelected = Signal(int, int, str)  # cid, duration_ms, part_name
 
     def __init__(self, state: AppState, sender_controller: SenderController,
                  video_controller: VideoController, parent=None):
