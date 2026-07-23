@@ -117,7 +117,7 @@ jobs:
       if: steps.check.outputs.skip != 'true'
       shell: pwsh
       run: |
-        $assets = gh api --paginate repos/${{ github.repository }}/releases/tags/Nightly-Build --jq '.assets[].id' 2>$null
+        $assets = gh api --paginate repos/${{ github.repository }}/releases/tags/${{ steps.version.outputs.tag }} --jq '.assets[].id' 2>$null
         if ($LASTEXITCODE -ne 0 -or -not $assets) {
           Write-Host 'No existing nightly assets to clean.'
           return
