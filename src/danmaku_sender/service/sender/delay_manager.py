@@ -14,7 +14,7 @@ class DelayManager:
         normal_min: float,
         normal_max: float,
         burst_enabled: bool = False,
-        burst_size: int = 0,
+        burst_size: int = 3,
         rest_min: float = 0,
         rest_max: float = 0,
     ):
@@ -26,7 +26,6 @@ class DelayManager:
             burst_size (int): 爆发阈值，每发 N 条触发一次长休息。
             rest_min (float): 休息时间的随机下界（秒）
             rest_max (float): 休息时间的随机上界（秒）
-            burst_enabled (bool): 是否启用爆发模式。
         """
         self.logger = logging.getLogger("App.Sender.Delay")
 

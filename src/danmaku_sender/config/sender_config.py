@@ -13,7 +13,7 @@ class SenderConfig(EventedModel):
 
     # 爆发模式
     burst_enabled: bool = False
-    burst_size: int = Field(default=3, ge=0)
+    burst_size: int = Field(default=3, ge=2)
     rest_min: float = Field(default=40.0, ge=0.0)
     rest_max: float = Field(default=45.0, ge=0.0)
 
