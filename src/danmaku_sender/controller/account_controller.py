@@ -8,8 +8,8 @@ from .concurrency import PoolTask
 from danmaku_sender.types.models.account import AccountCredential
 from danmaku_sender.types.models.user import UserProfile
 from danmaku_sender.config import ApiAuthConfig
-from danmaku_sender.runtime.app_state import AppState
-from danmaku_sender.runtime.account_manager import AccountManager
+from danmaku_sender.runtime.state.app_state import AppState
+from danmaku_sender.runtime.managers.account_manager import AccountManager
 from danmaku_sender.service.auth_service import AuthService
 
 

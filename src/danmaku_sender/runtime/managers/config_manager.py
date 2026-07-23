@@ -3,7 +3,7 @@ import logging
 
 from pydantic import ValidationError, BaseModel
 
-from .app_state import AppState
+from ..state.app_state import AppState
 
 from danmaku_sender.config.app_meta import AppInfo
 from danmaku_sender.config import SenderConfig, MonitorConfig, ValidationConfig

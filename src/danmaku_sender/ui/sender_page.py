@@ -12,17 +12,17 @@ from PySide6.QtCore import Qt, QDateTime, Signal, Slot
 
 from .framework.binder import UIBinder
 from .framework.style_loader import SvgIcon
+
 from danmaku_sender.controller.video_controller import VideoController
 from danmaku_sender.controller.sender_controller import SenderController
-
-from danmaku_sender.service.sender import SendingContext
 from danmaku_sender.types.models.video import VideoInfo
 from danmaku_sender.types.models.common import VideoTarget, UnsentDanmakusRecord
-from danmaku_sender.runtime.app_state import AppState
 from danmaku_sender.repo.history_manager import HistoryManager
+from danmaku_sender.service.sender import SendingContext
+from danmaku_sender.runtime.state.app_state import AppState
+from danmaku_sender.ui.common.notification import send_windows_notification
 from danmaku_sender.utils.string_utils import parse_bilibili_link
 from danmaku_sender.utils.time_utils import format_duration
-from danmaku_sender.ui.common.notification import send_windows_notification
 
 
 class SenderPage(QWidget):
@@ -115,6 +115,17 @@ class SenderPage(QWidget):
         """将 UI 控件与 AppState 进行双向绑定"""
         self.basic_group.init_bindings()
         self.strategy_tabs.init_bindings()
+
+        # 监听共享数据变化（编辑器提交等场景）
+        self.state.video_state.subscribe("loaded_danmakus", self._on_loaded_danmakus_changed)
+
+    def _on_loaded_danmakus_changed(self, _value):
+        """编辑器提交弹幕后自动刷新发射器 UI"""
+        count = self.state.video_state.danmaku_count
+        if count > 0:
+            self.basic_group.file_input.setText(f"来自编辑器: {count} 条弹幕")
+        else:
+            self.basic_group.file_input.clear()
 
     def append_log(self, message: str):
         """外部调用的日志接口"""

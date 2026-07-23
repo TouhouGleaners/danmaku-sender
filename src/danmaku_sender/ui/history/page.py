@@ -12,7 +12,7 @@ from .dialogs import DanmakuDetailDialog
 
 from danmaku_sender.types.models.common import DanmakuStatus
 from danmaku_sender.types.models.video import VideoInfo
-from danmaku_sender.runtime.app_state import AppState
+from danmaku_sender.runtime.state.app_state import AppState
 from danmaku_sender.repo.history_manager import HistoryManager
 from danmaku_sender.controller.video_controller import VideoController
 from danmaku_sender.controller.history_controller import HistoryController

@@ -4,7 +4,7 @@ import ctypes
 from PySide6.QtWidgets import QApplication
 
 from danmaku_sender.config.app_meta import AppInfo
-from danmaku_sender.runtime.log_utils import init_app_logging
+from danmaku_sender.runtime.infra.log_utils import init_app_logging
 from danmaku_sender.ui.framework.style_loader import get_app_icon
 
 

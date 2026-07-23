@@ -15,7 +15,7 @@ from .dialogs import EditDanmakuDialog, TimeOffsetDialog, ArrayGeneratorDialog
 from danmaku_sender.ui.framework.style_loader import SvgIcon
 from danmaku_sender.controller.editor_controller import EditorController
 from danmaku_sender.types.models.editor_types import EditorField, InsertPosition
-from danmaku_sender.runtime.app_state import AppState
+from danmaku_sender.runtime.state.app_state import AppState
 
 
 class EditorPage(QWidget):

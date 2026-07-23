@@ -5,7 +5,7 @@ import keyring
 from pathlib import Path
 from cryptography.fernet import Fernet, InvalidToken
 
-from .app_state import AppState
+from ..state.app_state import AppState
 
 from danmaku_sender.config.app_meta import AppInfo
 from danmaku_sender.types.models.account import AccountCredential
