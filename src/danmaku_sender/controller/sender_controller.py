@@ -1,5 +1,6 @@
 import logging
 import threading
+from enum import Enum
 from typing import Callable
 
 from PySide6.QtCore import QObject, Signal, Slot
@@ -7,7 +8,7 @@ from PySide6.QtCore import QObject, Signal, Slot
 from .concurrency import WorkerThread, PoolTask
 from .system_utils import KeepSystemAwake
 
-from danmaku_sender.service.sender import SendPipeline, SendingContext, SendJob
+from danmaku_sender.service.sender import SendPipeline, SendJob
 from danmaku_sender.service.danmaku_parser import DanmakuParser
 from danmaku_sender.service.danmaku_exporter import create_xml_from_danmakus
 from danmaku_sender.types.models.danmaku import Danmaku
@@ -18,6 +19,21 @@ from danmaku_sender.runtime.state.app_state import AppState
 
 
 logger = logging.getLogger("App.Controller.Sender")
+
+
+class SenderStatus(Enum):
+    """发送校验状态"""
+    READY = "ready"
+    EDITOR_DIRTY = "editor_dirty"
+    NOT_READY = "not_ready"
+    NO_CREDENTIALS = "no_credentials"
+
+
+class SenderState(Enum):
+    """发送任务生命周期状态"""
+    READY = "ready"
+    RUNNING = "running"
+    STOPPING = "stopping"
 
 
 class SenderController(QObject):
@@ -33,6 +49,17 @@ class SenderController(QObject):
         self.history_manager = history_manager
         self._worker: SendTaskWorker | None = None
         self._stop_event = threading.Event()
+
+    @property
+    def send_status(self) -> SenderStatus:
+        """当前发送状态，READY 表示可以启动。"""
+        if self.state.editor_is_dirty:
+            return SenderStatus.EDITOR_DIRTY
+        if not self.state.video_state.is_ready_to_send:
+            return SenderStatus.NOT_READY
+        if not self.state.sessdata or not self.state.bili_jct:
+            return SenderStatus.NO_CREDENTIALS
+        return SenderStatus.READY
 
     def start_task(
         self,
@@ -76,6 +103,15 @@ class SenderController(QObject):
     def is_stopped_manually(self) -> bool:
         """检查任务是否被手动中断"""
         return self._stop_event.is_set()
+
+    @property
+    def sender_state(self) -> SenderState:
+        """当前任务生命周期状态"""
+        if self._stop_event.is_set():
+            return SenderState.STOPPING
+        if self.is_running():
+            return SenderState.RUNNING
+        return SenderState.READY
 
     def load_xml_file(self, file_path: str):
         """异步解析 XML 弹幕文件"""

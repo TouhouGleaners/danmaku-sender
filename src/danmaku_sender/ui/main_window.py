@@ -8,8 +8,8 @@ from PySide6.QtGui import QAction, QCloseEvent, QDesktopServices, QShortcut, QKe
 from PySide6.QtCore import Qt, QUrl, QTimer, QSize, QEvent, Slot
 
 from .framework.image_processor import QtImageProcessor
-from .framework.style_loader import load_stylesheet, SvgIcon, get_app_icon
-from .sender_page import SenderPage
+from .framework.style_loader import SvgIcon, load_stylesheet, get_app_icon
+from .sender import SenderPage
 from .settings_page import SettingsPage
 from .monitor_page import MonitorPage
 from .editor import EditorPage
