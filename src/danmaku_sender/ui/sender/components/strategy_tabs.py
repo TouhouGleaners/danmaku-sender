@@ -1,5 +1,5 @@
 from PySide6.QtWidgets import (
-    QWidget, QHBoxLayout, QLabel, QTabWidget,
+    QWidget, QHBoxLayout, QLabel, QTabWidget, QCheckBox,
     QSpinBox, QDoubleSpinBox, QFrame
 )
 
@@ -44,11 +44,16 @@ class StrategySettingsTabs(QTabWidget):
         delay_layout.addSpacing(15)
 
         # 爆发模式
-        delay_layout.addWidget(QLabel("爆发模式: 每"))
+        self.burst_enabled_cb = QCheckBox("爆发模式")
+        self.burst_enabled_cb.setToolTip("勾选启用爆发模式：每发 N 条后自动休息一段时间")
+        self.burst_enabled_cb.toggled.connect(self._on_burst_toggled)
+        delay_layout.addWidget(self.burst_enabled_cb)
+
+        delay_layout.addWidget(QLabel("每"))
 
         self.burst_size = QSpinBox()
-        self.burst_size.setRange(0, 100)
-        self.burst_size.setToolTip("0 或 1 表示关闭爆发模式")
+        self.burst_size.setRange(2, 100)
+        self.burst_size.setValue(3)
         delay_layout.addWidget(self.burst_size)
 
         delay_layout.addWidget(QLabel("条，休息"))
@@ -68,6 +73,10 @@ class StrategySettingsTabs(QTabWidget):
         delay_layout.addWidget(self.burst_rest_max)
 
         delay_layout.addWidget(QLabel("秒"))
+
+        self._burst_controls: list[QWidget] = [
+            self.burst_size, self.burst_rest_min, self.burst_rest_max
+        ]
 
         delay_layout.addStretch()
         self.addTab(delay_tab, "发送延迟")
@@ -103,6 +112,11 @@ class StrategySettingsTabs(QTabWidget):
 
         self.addTab(stop_tab, "自动终止")
 
+    def _on_burst_toggled(self, checked: bool):
+        """爆发模式开关切换时，启用/禁用相关控件"""
+        for ctrl in self._burst_controls:
+            ctrl.setEnabled(checked)
+
     def init_bindings(self):
         """将 UI 控件与 AppState 进行双向绑定"""
         config = self.state.sender_config
@@ -112,6 +126,7 @@ class StrategySettingsTabs(QTabWidget):
         UIBinder.bind(self.max_delay, config, "max_delay")
 
         # 爆发模式
+        UIBinder.bind(self.burst_enabled_cb, config, "burst_enabled")
         UIBinder.bind(self.burst_size, config, "burst_size")
         UIBinder.bind(self.burst_rest_min, config, "rest_min")
         UIBinder.bind(self.burst_rest_max, config, "rest_max")
@@ -120,14 +135,20 @@ class StrategySettingsTabs(QTabWidget):
         UIBinder.bind(self.stop_count, config, "stop_after_count")
         UIBinder.bind(self.stop_time, config, "stop_after_time")
 
+        # 初始化爆发控件状态
+        self._on_burst_toggled(self.burst_enabled_cb.isChecked())
+
     def set_inputs_locked(self, locked: bool):
         """供主控调用的防误触锁"""
         enabled = not locked
 
         self.min_delay.setEnabled(enabled)
         self.max_delay.setEnabled(enabled)
-        self.burst_size.setEnabled(enabled)
-        self.burst_rest_min.setEnabled(enabled)
-        self.burst_rest_max.setEnabled(enabled)
+        self.burst_enabled_cb.setEnabled(enabled)
+
+        burst_enabled = self.burst_enabled_cb.isChecked() and enabled
+        for ctrl in self._burst_controls:
+            ctrl.setEnabled(burst_enabled)
+
         self.stop_count.setEnabled(enabled)
         self.stop_time.setEnabled(enabled)

@@ -86,7 +86,8 @@ class DanmakuScheduler:
         # 初始化时钟管理器
         delay_manager = DelayManager(
             normal_min=job.config.min_delay, normal_max=job.config.max_delay,
-            burst_size=job.config.burst_size, rest_min=job.config.rest_min, rest_max=job.config.rest_max
+            burst_enabled=job.config.burst_enabled, burst_size=job.config.burst_size,
+            rest_min=job.config.rest_min, rest_max=job.config.rest_max,
         )
 
         if job.progress_callback:

@@ -12,6 +12,7 @@ class SenderConfig(EventedModel):
     max_delay: float = Field(default=8.5, ge=0.1)
 
     # 爆发模式
+    burst_enabled: bool = False
     burst_size: int = Field(default=3, ge=0)
     rest_min: float = Field(default=40.0, ge=0.0)
     rest_max: float = Field(default=45.0, ge=0.0)
@@ -32,6 +33,6 @@ class SenderConfig(EventedModel):
         """业务逻辑级校验：最小不能大于最大"""
         if self.min_delay > self.max_delay:
             raise ValueError("最小延迟不能大于最大延迟")
-        if self.burst_size > 1 and self.rest_min > self.rest_max:
+        if self.burst_enabled and self.rest_min > self.rest_max:
             raise ValueError("爆发休息的最小值不能大于最大值")
         return self

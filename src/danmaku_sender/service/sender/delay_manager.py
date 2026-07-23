@@ -13,17 +13,20 @@ class DelayManager:
         self,
         normal_min: float,
         normal_max: float,
+        burst_enabled: bool = False,
         burst_size: int = 0,
         rest_min: float = 0,
-        rest_max: float = 0
+        rest_max: float = 0,
     ):
         """
         Args:
             normal_min (float): 普通间隔的随机下界（秒）
             normal_max (float): 普通间隔的随机上界（秒）
-            burst_size (int): 爆发阈值，每发 N 条触发一次长休息。<=1 时表示禁用爆发模式。
+            burst_enabled (bool): 是否启用爆发模式。
+            burst_size (int): 爆发阈值，每发 N 条触发一次长休息。
             rest_min (float): 休息时间的随机下界（秒）
             rest_max (float): 休息时间的随机上界（秒）
+            burst_enabled (bool): 是否启用爆发模式。
         """
         self.logger = logging.getLogger("App.Sender.Delay")
 
@@ -32,6 +35,7 @@ class DelayManager:
         self.normal_max = normal_max
 
         # 爆发模式配置
+        self.burst_enabled = burst_enabled
         self.burst_size = burst_size
         self.rest_min = rest_min
         self.rest_max = rest_max
@@ -39,10 +43,10 @@ class DelayManager:
         # 内部计数器: 记录当前周期内已度过了多少次发送延时
         self._current_count = 0
 
-        if self.burst_size > 1:
+        if self.burst_enabled:
             self.logger.info(f"🚀 爆发模式已启用: 每 {self.burst_size} 条休息 {self.rest_min}-{self.rest_max} 秒")
         else:
-            self.logger.debug(f"爆发模式未启用 (阈值: {self.burst_size})")
+            self.logger.debug("爆发模式未启用")
 
     def wait_and_check_stop(self, stop_event: Event) -> bool:
         """
@@ -59,7 +63,7 @@ class DelayManager:
 
         # 判断本轮是短休还是长休
         is_long_rest = False
-        if self.burst_size > 1 and (self._current_count % self.burst_size == 0):
+        if self.burst_enabled and (self._current_count % self.burst_size == 0):
             is_long_rest = True
 
         # 计算
@@ -78,7 +82,7 @@ class DelayManager:
         return False
 
     @staticmethod
-    def calc_eta(attempted: int, total: int, burst_size: int, avg_normal: float, avg_rest: float) -> float:
+    def calc_eta(attempted: int, total: int, burst_enabled: bool, burst_size: int, avg_normal: float, avg_rest: float) -> float:
         """
         计算剩余等待时间 (O(1))。
 
@@ -87,8 +91,8 @@ class DelayManager:
         2. 延时的物理索引从 1 开始（第 k 条弹幕发完后的延时索引为 k）。
         3. 仅当延时索引能被 burst_size 整除时，触发大休息 (avg_rest)。
         """
-        # 防御性校验：避免除零及负数异常
-        if burst_size <= 0:
+        # 未启用爆发模式时，视为无爆发
+        if not burst_enabled:
             burst_size = 1
 
         # 统一处理 0 和 1 进度：

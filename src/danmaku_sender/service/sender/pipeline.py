@@ -107,6 +107,7 @@ class SendPipeline:
         return DelayManager.calc_eta(
             attempted=attempted,
             total=total,
+            burst_enabled=cfg.burst_enabled,
             burst_size=cfg.burst_size,
             avg_normal=avg_normal,
             avg_rest=avg_rest,
