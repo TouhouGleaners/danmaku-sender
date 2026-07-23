@@ -14,7 +14,7 @@ from .framework.binder import UIBinder
 from .framework.style_loader import SvgIcon
 
 from danmaku_sender.controller.video_controller import VideoController
-from danmaku_sender.controller.sender_controller import SenderController
+from danmaku_sender.controller.sender_controller import SenderController, SenderStatus
 from danmaku_sender.types.models.video import VideoInfo
 from danmaku_sender.types.models.common import VideoTarget, UnsentDanmakusRecord
 from danmaku_sender.repo.history_manager import HistoryManager
@@ -241,15 +241,15 @@ class SenderPage(QWidget):
 
         # 如果未运行 -> 开始
         # 校验
-        error = self.sender_controller.validate()
-        if error == "editor_dirty":
+        status = self.sender_controller.send_status
+        if status == SenderStatus.EDITOR_DIRTY:
             QMessageBox.warning(self, "存在未保存的修改",
                 "检测到【弹幕校验器】中有未应用的修改！\n\n请先返回校验器点击“应用所有修改”，\n否则发送的将是旧的、未修复的弹幕。")
             return
-        elif error == "not_ready":
+        elif status == SenderStatus.NOT_READY:
             QMessageBox.warning(self, "条件不足", "请确保 BV号、分P、弹幕文件 均已就绪。")
             return
-        elif error == "no_credentials":
+        elif status == SenderStatus.NO_CREDENTIALS:
             QMessageBox.warning(self, "凭证缺失", "请先在【全局设置】页填入 SESSDATA 和 BILI_JCT。")
             return
 

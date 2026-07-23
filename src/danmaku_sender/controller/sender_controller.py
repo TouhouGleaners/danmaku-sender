@@ -1,5 +1,6 @@
 import logging
 import threading
+from enum import Enum
 from typing import Callable
 
 from PySide6.QtCore import QObject, Signal, Slot
@@ -20,6 +21,14 @@ from danmaku_sender.runtime.state.app_state import AppState
 logger = logging.getLogger("App.Controller.Sender")
 
 
+class SenderStatus(Enum):
+    """发送任务状态"""
+    READY = "ready"
+    EDITOR_DIRTY = "editor_dirty"
+    NOT_READY = "not_ready"
+    NO_CREDENTIALS = "no_credentials"
+
+
 class SenderController(QObject):
     """发送任务业务控制器"""
     progressUpdated = Signal(int, int, float)
@@ -34,19 +43,16 @@ class SenderController(QObject):
         self._worker: SendTaskWorker | None = None
         self._stop_event = threading.Event()
 
-    def validate(self) -> str | None:
-        """验证是否可以启动发送任务。
-
-        Returns:
-            None 表示验证通过，否则返回错误码。
-        """
+    @property
+    def send_status(self) -> SenderStatus:
+        """当前发送状态，READY 表示可以启动。"""
         if self.state.editor_is_dirty:
-            return "editor_dirty"
+            return SenderStatus.EDITOR_DIRTY
         if not self.state.video_state.is_ready_to_send:
-            return "not_ready"
+            return SenderStatus.NOT_READY
         if not self.state.sessdata or not self.state.bili_jct:
-            return "no_credentials"
-        return None
+            return SenderStatus.NO_CREDENTIALS
+        return SenderStatus.READY
 
     def start_task(
         self,
