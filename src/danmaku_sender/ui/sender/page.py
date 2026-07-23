@@ -7,14 +7,12 @@ from PySide6.QtWidgets import (
 from PySide6.QtGui import QTextCursor, QDragEnterEvent, QDropEvent
 from PySide6.QtCore import Qt, QDateTime, Signal, Slot
 
-from .sender_basic_params import BasicParamsGroup
-from .sender_strategy_tabs import StrategySettingsTabs
-from .sender_dialogs import PreSendDialog
-from .framework.style_loader import SvgIcon
+from .components import StrategySettingsTabs, BasicParamsGroup, PreSendDialog
+from .data_binding import SenderDataBinding
 
+from danmaku_sender.ui.framework.style_loader import SvgIcon
 from danmaku_sender.controller.video_controller import VideoController
 from danmaku_sender.controller.sender_controller import SenderController, SenderStatus, SenderState
-from danmaku_sender.ui.sender_data_binding import SenderDataBinding
 from danmaku_sender.types.models.video import VideoInfo
 from danmaku_sender.types.models.common import VideoTarget, UnsentDanmakusRecord
 from danmaku_sender.repo.history_manager import HistoryManager

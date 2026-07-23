@@ -2,7 +2,7 @@ import logging
 from pathlib import Path
 
 from PySide6.QtCore import QObject, Signal, Slot
-from PySide6.QtWidgets import QFileDialog, QMessageBox
+from PySide6.QtWidgets import QFileDialog
 
 from danmaku_sender.controller.video_controller import VideoController
 from danmaku_sender.controller.sender_controller import SenderController

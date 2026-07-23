@@ -3,9 +3,8 @@ from PySide6.QtWidgets import (
     QLabel, QGroupBox, QCheckBox
 )
 
-from .framework.binder import UIBinder
-
 from danmaku_sender.runtime.state.app_state import AppState
+from danmaku_sender.ui.framework.binder import UIBinder
 
 
 class BasicParamsGroup(QGroupBox):

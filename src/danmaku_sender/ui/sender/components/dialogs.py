@@ -5,9 +5,8 @@ from PySide6.QtWidgets import (
 )
 from PySide6.QtCore import Qt
 
-from .framework.binder import UIBinder
-
 from danmaku_sender.runtime.state.app_state import AppState
+from danmaku_sender.ui.framework.binder import UIBinder
 
 
 class PreSendDialog(QDialog):
