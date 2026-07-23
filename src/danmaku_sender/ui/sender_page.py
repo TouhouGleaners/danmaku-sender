@@ -1,5 +1,4 @@
 import logging
-from pathlib import Path
 
 from PySide6.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout, QFormLayout, QLineEdit,
@@ -15,6 +14,7 @@ from .framework.style_loader import SvgIcon
 
 from danmaku_sender.controller.video_controller import VideoController
 from danmaku_sender.controller.sender_controller import SenderController, SenderStatus
+from danmaku_sender.ui.sender_data_binding import SenderDataBinding
 from danmaku_sender.types.models.video import VideoInfo
 from danmaku_sender.types.models.common import VideoTarget, UnsentDanmakusRecord
 from danmaku_sender.repo.history_manager import HistoryManager
@@ -32,9 +32,9 @@ class SenderPage(QWidget):
         super().__init__()
         self.state = state
         self.logger = logging.getLogger("App.Sender.UI")
-        self._pending_part_index: int | None = None
         self.video_controller = VideoController(self)
         self.sender_controller = SenderController(state, history_manager, self)
+        self.binding = SenderDataBinding(state, self.sender_controller, self.video_controller, self)
 
         self._create_ui()
         self._connect_signals()
@@ -124,17 +124,17 @@ class SenderPage(QWidget):
         # 本地信号
         self.start_btn.clicked.connect(self._toggle_task)
 
-        # VideoController
-        self.video_controller.fetchStarted.connect(self._on_fetch_started)
-        self.video_controller.fetchSucceeded.connect(self._on_fetch_succeeded)
-        self.video_controller.fetchFailed.connect(self._on_fetch_failed)
+        # DataBinding
+        self.binding.fileLoaded.connect(self._on_file_loaded)
+        self.binding.fileLoadFailed.connect(self._on_file_load_failed)
+        self.binding.videoFetchStarted.connect(self._on_fetch_started)
+        self.binding.videoFetched.connect(self._on_fetch_succeeded)
+        self.binding.videoFetchFailed.connect(self._on_fetch_failed)
 
         # SenderController
         self.sender_controller.progressUpdated.connect(self._on_send_progress)
         self.sender_controller.progressUpdated.connect(self.progressUpdated.emit)
         self.sender_controller.taskFinished.connect(self._on_send_finished)
-        self.sender_controller.xmlParsed.connect(self._on_xml_parsed)
-        self.sender_controller.xmlParseFailed.connect(self._on_xml_parse_failed)
 
     def init_bindings(self):
         """将 UI 控件与 AppState 进行双向绑定"""
@@ -157,27 +157,22 @@ class SenderPage(QWidget):
         self.log_output.append(message)
         self.log_output.moveCursor(QTextCursor.MoveOperation.End)
 
-    def _load_xml_file(self, file_path: str):
-        self.logger.info(f"📥 正在解析文件: {Path(file_path).name}")
-        self.basic_group.file_input.setEnabled(False)
-        self.sender_controller.load_xml_file(file_path)
-
     @Slot(str, int)
-    def _on_xml_parsed(self, file_path: str, count: int):
+    def _on_file_loaded(self, filename: str, count: int):
         self.basic_group.file_input.setEnabled(True)
         if count > 0:
-            self.basic_group.file_input.setText(Path(file_path).name)
+            self.basic_group.file_input.setText(filename)
             self.logger.info(f"✅ 文件解析成功，共 {count} 条弹幕。")
         else:
             self.basic_group.file_input.clear()
             self.logger.warning("⚠️ 文件解析完成但无有效弹幕。")
 
-    @Slot(str, object)
-    def _on_xml_parse_failed(self, file_path: str, err: Exception):
+    @Slot(str, str)
+    def _on_file_load_failed(self, error_msg: str, _extra: str):
         self.basic_group.file_input.setEnabled(True)
         self.basic_group.file_input.clear()
-        self.logger.error(f"❌ 解析失败: {str(err)}")
-        QMessageBox.critical(self, "解析失败", str(err))
+        self.logger.error(f"❌ 解析失败: {error_msg}")
+        QMessageBox.critical(self, "解析失败", error_msg)
 
 
     # region Slots
@@ -185,47 +180,30 @@ class SenderPage(QWidget):
     @Slot()
     def _select_file(self):
         """文件选择逻辑"""
-        file_path, _ = QFileDialog.getOpenFileName(self, "选择弹幕XML文件", "", "XML Files (*.xml);;All Files (*.*)")
-        if file_path:
-            self._load_xml_file(file_path)
+        self.binding.select_file()
 
     @Slot()
     def _fetch_video_info(self):
-        """UI 层: 负责获取参数，下发指令"""
+        """获取视频信息"""
         raw_input = self.basic_group.bv_input.text().strip()
         if not raw_input:
             QMessageBox.warning(self, "输入错误", "请输入BV号或视频链接")
             return
 
-        bvid, p_index = parse_bilibili_link(raw_input)
+        bvid, _ = parse_bilibili_link(raw_input)
         if not bvid:
             QMessageBox.warning(self, "格式错误", "未能识别有效的 BV 号。\n请检查输入内容是否正确。")
-            self._pending_part_index = None
             return
 
         self.basic_group.bv_input.setText(bvid)
-        self._pending_part_index = p_index
-
-        self.video_controller.fetch_single_info(bvid, self.state.get_api_auth())
+        self.binding.fetch_video_info(raw_input)
 
     @Slot(int)
     def _on_part_selected(self, index: int):
         """处理分P选择变化"""
-        if index < 0:
-            return
-
         data = self.basic_group.part_combo.itemData(index)
-        if not data or not isinstance(data, dict):
-            return
-
-        cid = data['cid']
-        duration = data['duration']
         part_name = self.basic_group.part_combo.currentText()
-
-        self.state.video_state.selected_cid = cid
-        self.state.video_state.selected_part_duration_ms = duration * 1000
-        self.state.video_state.selected_part_name = part_name
-        self.logger.info(f"已选择分P: {part_name} (CID: {cid})")
+        self.binding.select_part(index, data, part_name)
 
     @Slot()
     def _toggle_task(self):
@@ -280,51 +258,40 @@ class SenderPage(QWidget):
         self.basic_group.part_combo.clear()
         self.basic_group.part_combo.setEnabled(False)
 
-    @Slot(str, VideoInfo)
+    @Slot(str, object)
     def _on_fetch_succeeded(self, bvid: str, info: VideoInfo):
-        """获取成功: 解析分P并允许用户选择"""
+        """获取成功: 填充分P下拉框"""
         self.basic_group.fetch_btn.setEnabled(True)
         self.basic_group.fetch_btn.setText("获取分P")
         self.basic_group.part_combo.setEnabled(True)
 
-        self.state.video_state.video_title = info.title
-        self.state.video_state.cid_parts_map = {}
-
-        self.logger.info(f"获取成功: {info.title}, 共 {len(info.parts)} 个分P")
-
         for p in info.parts:
             if not p.cid:
                 continue
-
             part_name = f"P{p.page} - {p.title}"
-
             self.basic_group.part_combo.addItem(part_name, userData={'cid': p.cid, 'duration': p.duration})
             self.state.video_state.cid_parts_map[p.cid] = part_name
 
         if info.parts:
-            if (self._pending_part_index is not None and
-                0 <= self._pending_part_index < self.basic_group.part_combo.count()):
-
-                self.basic_group.part_combo.setCurrentIndex(self._pending_part_index)
-                self.logger.info(f"🔗 智能链接解析: 自动定位到第 {self._pending_part_index + 1} P")
+            pending = self.binding.pending_part_index
+            if pending is not None and 0 <= pending < self.basic_group.part_combo.count():
+                self.basic_group.part_combo.setCurrentIndex(pending)
+                self.logger.info(f"🔗 智能链接解析: 自动定位到第 {pending + 1} P")
             else:
                 self.basic_group.part_combo.setCurrentIndex(0)
+            self.binding.clear_pending_part_index()
 
-            self._pending_part_index = None
-
-    @Slot(str, object)
-    def _on_fetch_failed(self, bvid: str, err: Exception):
+    @Slot(str, str)
+    def _on_fetch_failed(self, bvid: str, error_msg: str):
         """获取失败: 恢复 UI 状态并弹窗提示"""
         self.basic_group.fetch_btn.setEnabled(True)
         self.basic_group.fetch_btn.setText("获取分P")
-        self._pending_part_index = None
 
         self.basic_group.part_combo.clear()
         self.basic_group.part_combo.addItem(f"获取失败，请重试")
         self.basic_group.part_combo.setEnabled(False)
 
-        self.logger.error(f"获取视频信息失败: {str(err)}")
-        QMessageBox.warning(self, "获取失败", f"无法获取视频信息:\n{str(err)}")
+        QMessageBox.warning(self, "获取失败", f"无法获取视频信息:\n{error_msg}")
 
     # endregion
     # region Slots SenderController
@@ -511,7 +478,7 @@ class SenderPage(QWidget):
 
             file_path = urls[0].toLocalFile()
             self.logger.info(f"📥 接收到拖拽文件: {file_path}")
-            self._load_xml_file(file_path)
+            self.binding.load_file(file_path)
             event.acceptProposedAction()
 
 
