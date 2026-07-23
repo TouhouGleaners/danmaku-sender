@@ -44,9 +44,6 @@ class SenderDataBinding(QObject):
         self.video_controller.fetchSucceeded.connect(self._on_fetch_succeeded)
         self.video_controller.fetchFailed.connect(self._on_fetch_failed)
 
-        # 监听编辑器数据同步
-        self.state.video_state.subscribe("loaded_danmakus", self._on_loaded_danmakus_changed)
-
     def select_file(self):
         """打开文件选择对话框"""
         file_path, _ = QFileDialog.getOpenFileName(None, "选择弹幕XML文件", "", "XML Files (*.xml);;All Files (*.*)")
@@ -121,9 +118,5 @@ class SenderDataBinding(QObject):
         self._pending_part_index = None
         logger.error(f"获取视频信息失败: {str(err)}")
         self.videoFetchFailed.emit(bvid, str(err))
-
-    def _on_loaded_danmakus_changed(self, _value):
-        """编辑器提交弹幕后通知 UI"""
-        pass  # UI 层通过信号自行处理
 
     # endregion
