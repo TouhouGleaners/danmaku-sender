@@ -90,6 +90,31 @@ class SenderPage(QWidget):
 
         main_layout.addLayout(action_layout)
 
+        # 拖放覆盖层
+        self._drop_overlay = QWidget(self)
+        self._drop_overlay.setStyleSheet("background-color: rgba(0, 0, 0, 0.4);")
+        overlay_layout = QVBoxLayout(self._drop_overlay)
+        overlay_layout.setContentsMargins(0, 0, 0, 0)
+        overlay_layout.setAlignment(Qt.AlignmentFlag.AlignCenter)
+
+        overlay_icon = QLabel()
+        overlay_icon.setPixmap(SvgIcon("file_open.svg").pixmap(48, 48))
+        overlay_icon.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        overlay_icon.setStyleSheet("background: transparent;")
+        overlay_layout.addWidget(overlay_icon)
+
+        overlay_title = QLabel("松开以导入文件")
+        overlay_title.setStyleSheet("color: white; font-size: 16px; font-weight: bold; background: transparent;")
+        overlay_title.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        overlay_layout.addWidget(overlay_title)
+
+        overlay_hint = QLabel("支持 .xml 格式的弹幕文件")
+        overlay_hint.setStyleSheet("color: rgba(255, 255, 255, 0.7); font-size: 12px; background: transparent;")
+        overlay_hint.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        overlay_layout.addWidget(overlay_hint)
+
+        self._drop_overlay.hide()
+
     def _connect_signals(self):
         # 子组件信号
         self.basic_group.file_btn.clicked.connect(self._select_file)
@@ -470,13 +495,21 @@ class SenderPage(QWidget):
             # 检查是否为本地文件且后缀为XML
             if urls[0].isLocalFile() and urls[0].toLocalFile().lower().endswith('.xml'):
                 event.acceptProposedAction()
+                self._drop_overlay.setGeometry(self.rect())
+                self._drop_overlay.show()
+                self._drop_overlay.raise_()
                 return
 
         # 拒绝其他类型文件输入
         event.ignore()
 
+    def dragLeaveEvent(self, event) -> None:
+        """鼠标拖离区域"""
+        self._drop_overlay.hide()
+
     def dropEvent(self, event: QDropEvent) -> None:
         """鼠标落下"""
+        self._drop_overlay.hide()
         # 如果当前正在发送弹幕则拒绝拖入
         if self.state.sender_is_active:
             event.ignore()
