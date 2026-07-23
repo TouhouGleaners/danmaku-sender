@@ -1,5 +1,5 @@
 from PySide6.QtWidgets import (
-    QVBoxLayout, QHBoxLayout, QFormLayout,
+    QVBoxLayout, QHBoxLayout, QFormLayout, QWidget,
     QPushButton, QLabel, QGroupBox, QCheckBox,
     QSpinBox, QDoubleSpinBox, QDialog
 )
@@ -115,9 +115,15 @@ class PreSendDialog(QDialog):
         form.addRow("随机间隔:", delay_layout)
 
         # 爆发模式
+        self.burst_enabled_cb = QCheckBox("启用爆发模式")
+        self.burst_enabled_cb.setToolTip("勾选后每发 N 条自动休息一段时间")
+        self.burst_enabled_cb.toggled.connect(self._on_burst_toggled)
+        form.addRow("", self.burst_enabled_cb)
+
         burst_layout = QHBoxLayout()
         self.burst_size = QSpinBox()
-        self.burst_size.setRange(0, 100)
+        self.burst_size.setRange(2, 100)
+        self.burst_size.setValue(3)
         burst_layout.addWidget(QLabel("每"))
         burst_layout.addWidget(self.burst_size)
         burst_layout.addWidget(QLabel("条，休息"))
@@ -132,7 +138,9 @@ class PreSendDialog(QDialog):
         burst_layout.addWidget(self.burst_rest_max)
         burst_layout.addWidget(QLabel("秒"))
         burst_layout.addStretch()
-        form.addRow("爆发模式:", burst_layout)
+        form.addRow("爆发参数:", burst_layout)
+
+        self._burst_controls: list[QWidget] = [self.burst_size, self.burst_rest_min, self.burst_rest_max]
 
         # 自动停止
         stop_layout = QHBoxLayout()
@@ -157,6 +165,7 @@ class PreSendDialog(QDialog):
         # 绑定到临时拷贝
         UIBinder.bind(self.min_delay, config, "min_delay")
         UIBinder.bind(self.max_delay, config, "max_delay")
+        UIBinder.bind(self.burst_enabled_cb, config, "burst_enabled")
         UIBinder.bind(self.burst_size, config, "burst_size")
         UIBinder.bind(self.burst_rest_min, config, "rest_min")
         UIBinder.bind(self.burst_rest_max, config, "rest_max")
@@ -164,7 +173,15 @@ class PreSendDialog(QDialog):
         UIBinder.bind(self.stop_time, config, "stop_after_time")
         UIBinder.bind(self.skip_sent_cb, config, "skip_sent")
 
+        # 初始化爆发控件状态
+        self._on_burst_toggled(config.burst_enabled)
+
         return group
+
+    def _on_burst_toggled(self, checked: bool):
+        """爆发模式开关切换时，启用/禁用相关控件"""
+        for ctrl in self._burst_controls:
+            ctrl.setEnabled(checked)
 
     def _create_buttons(self) -> QHBoxLayout:
         """底部确认/取消按钮"""
