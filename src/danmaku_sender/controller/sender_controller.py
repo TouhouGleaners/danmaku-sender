@@ -7,7 +7,7 @@ from PySide6.QtCore import QObject, Signal, Slot
 from .concurrency import WorkerThread, PoolTask
 from .system_utils import KeepSystemAwake
 
-from danmaku_sender.service.sender import SendPipeline, SendingContext, SendJob
+from danmaku_sender.service.sender import SendPipeline, SendJob
 from danmaku_sender.service.danmaku_parser import DanmakuParser
 from danmaku_sender.service.danmaku_exporter import create_xml_from_danmakus
 from danmaku_sender.types.models.danmaku import Danmaku
@@ -33,6 +33,20 @@ class SenderController(QObject):
         self.history_manager = history_manager
         self._worker: SendTaskWorker | None = None
         self._stop_event = threading.Event()
+
+    def validate(self) -> str | None:
+        """验证是否可以启动发送任务。
+
+        Returns:
+            None 表示验证通过，否则返回错误码。
+        """
+        if self.state.editor_is_dirty:
+            return "editor_dirty"
+        if not self.state.video_state.is_ready_to_send:
+            return "not_ready"
+        if not self.state.sessdata or not self.state.bili_jct:
+            return "no_credentials"
+        return None
 
     def start_task(
         self,

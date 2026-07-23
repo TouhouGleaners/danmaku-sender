@@ -241,43 +241,33 @@ class SenderPage(QWidget):
 
         # 如果未运行 -> 开始
         # 校验
-        state = self.state
-
-        if state.editor_is_dirty:
-            QMessageBox.warning(
-                self,
-                "存在未保存的修改",
-                "检测到【弹幕校验器】中有未应用的修改！\n\n请先返回校验器点击“应用所有修改”，\n否则发送的将是旧的、未修复的弹幕。"
-            )
+        error = self.sender_controller.validate()
+        if error == "editor_dirty":
+            QMessageBox.warning(self, "存在未保存的修改",
+                "检测到【弹幕校验器】中有未应用的修改！\n\n请先返回校验器点击“应用所有修改”，\n否则发送的将是旧的、未修复的弹幕。")
             return
-
-        if not state.video_state.is_ready_to_send:
+        elif error == "not_ready":
             QMessageBox.warning(self, "条件不足", "请确保 BV号、分P、弹幕文件 均已就绪。")
             return
-
-        if not state.sessdata or not state.bili_jct:
+        elif error == "no_credentials":
             QMessageBox.warning(self, "凭证缺失", "请先在【全局设置】页填入 SESSDATA 和 BILI_JCT。")
             return
 
-        # 弹出确认对话框
-        dialog = PreSendDialog(state, self)
+        # 确认对话框
+        dialog = PreSendDialog(self.state, self)
         if dialog.exec() != QDialog.DialogCode.Accepted:
             return
 
         # UI 锁定
         self._set_ui_for_task_start()
 
-        # 构造配置（对话框中的 UIBinder 已直接修改 state.sender_config）
+        state = self.state
         target = VideoTarget(
             bvid=state.video_state.bvid,
             cid=state.video_state.selected_cid,
             title=state.video_state.video_title
         )
-        auth_config = state.get_api_auth()
-        strategy_config = state.sender_config
-
-        # 启动线程
-        self.sender_controller.start_task(target, state.video_state.loaded_danmakus, auth_config, strategy_config)
+        self.sender_controller.start_task(target, state.video_state.loaded_danmakus, state.get_api_auth(), state.sender_config)
 
     # endregion
     # region Slots VideoController
