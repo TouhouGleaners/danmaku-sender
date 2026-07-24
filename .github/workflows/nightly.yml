@@ -55,7 +55,7 @@ jobs:
         } else {
             $version = "0.0.0"
         }
-        $date = Get-Date -Format "yyyyMMdd"
+        $date = [System.TimeZoneInfo]::ConvertTimeBySystemTimeZoneId([DateTime]::UtcNow, 'China Standard Time').ToString('yyyyMMdd')
         $tag = "Nightly-Build"
         $title = "v$version-nightlybuild+$date"
         $shortSha = "${{ github.sha }}".Substring(0, 7)
@@ -112,6 +112,22 @@ jobs:
       run: |
         git tag -f ${{ steps.version.outputs.tag }}
         git push -f origin ${{ steps.version.outputs.tag }}
+
+    - name: Clean old nightly assets
+      if: steps.check.outputs.skip != 'true'
+      shell: pwsh
+      run: |
+        $assets = gh api --paginate repos/${{ github.repository }}/releases/tags/${{ steps.version.outputs.tag }} --jq '.assets[].id' 2>$null
+        if ($LASTEXITCODE -ne 0 -or -not $assets) {
+          Write-Host 'No existing nightly assets to clean.'
+          return
+        }
+        foreach ($id in $assets) {
+          gh api repos/${{ github.repository }}/releases/assets/$id -X DELETE
+          Write-Host "Deleted asset $id"
+        }
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
     - name: Publish to GitHub Releases
       if: steps.check.outputs.skip != 'true'
