@@ -389,10 +389,9 @@ class MainWindow(QMainWindow):
     def _refresh_sidebar_badges(self):
         """动态刷新侧边栏项目的文字后缀"""
         if sender_item := self.sidebar.item(1):
-            sender_item.setText("弹幕发射器 ▶" if self.state.sender_is_active else "弹幕发射器")
-
+            sender_item.setIcon(SvgIcon("send.svg", color = "#c00") if self.state.sender_is_active else SvgIcon("send.svg"))
         if editor_item := self.sidebar.item(2):
-            editor_item.setText("弹幕编辑器 •" if self.state.editor_is_dirty else "弹幕编辑器")
+            editor_item.setIcon(SvgIcon("edit_document.svg", color = "#0c0") if self.state.editor_is_dirty else SvgIcon("edit_document.svg"))
 
     @Slot()
     def _open_log_folder(self):
