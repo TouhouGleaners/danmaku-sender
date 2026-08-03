@@ -3,7 +3,6 @@ from pydantic import Field
 from danmaku_sender.types.models.evented_model import EventedModel
 from danmaku_sender.types.models.danmaku import Danmaku
 
-
 class VideoState(EventedModel):
     """视频相关的共享运行时状态。继承 EventedModel，属性变更时自动触发订阅回调。"""
 
@@ -22,3 +21,4 @@ class VideoState(EventedModel):
     @property
     def danmaku_count(self) -> int:
         return len(self.loaded_danmakus) if self.loaded_danmakus else 0
+        

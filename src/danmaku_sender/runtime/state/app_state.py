@@ -6,6 +6,7 @@ from .video_state import VideoState
 
 from danmaku_sender.config import ApiAuthConfig, SenderConfig, MonitorConfig, ValidationConfig
 from danmaku_sender.types.models.account import AccountCredential
+from danmaku_sender.types.models.video_queue import VideoQueue
 
 
 class AppState(QObject):
@@ -33,8 +34,8 @@ class AppState(QObject):
         self.monitor_config = MonitorConfig()
         self.validation_config = ValidationConfig()
 
-        # 运行时状态
-        self.video_state = VideoState()
+        # 运行时状态-视频队列
+        self.video_queue = VideoQueue()
 
         # 多账号
         self.saved_accounts: list[AccountCredential] = []

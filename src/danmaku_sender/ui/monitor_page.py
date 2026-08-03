@@ -216,8 +216,8 @@ class MonitorPage(QWidget):
             self.anchor_display.setText(dt_str)
 
     def _refresh_info_labels(self):
-        video_state = self.state.video_state
-
+        video_state = self.state.video_queue.current_video
+        
         if video_state.selected_cid:
             info_parts = []
             if title := video_state.video_title:
@@ -261,9 +261,9 @@ class MonitorPage(QWidget):
             self.start_btn.setEnabled(False)
             return
 
-        cid = self.state.video_state.selected_cid
-        bvid = self.state.video_state.bvid
-        title = self.state.video_state.video_title
+        cid = self.state.video_queue.current_video.selected_cid
+        bvid = self.state.video_queue.current_video.bvid
+        title = self.state.video_queue.current_video.video_title
 
         if not cid:
             QMessageBox.warning(self, "无法启动", "请先在“发射器”页面获取视频信息并选择分P。\n(监视器需要 CID 来查询数据库)")

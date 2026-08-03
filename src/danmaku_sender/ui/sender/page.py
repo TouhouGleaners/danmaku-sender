@@ -1,3 +1,5 @@
+"""右侧页面的封装的和实现"""
+
 import logging
 
 from PySide6.QtWidgets import (
@@ -139,11 +141,11 @@ class SenderPage(QWidget):
         self.strategy_tabs.init_bindings()
 
         # 监听共享数据变化（编辑器提交等场景）
-        self.state.video_state.subscribe("loaded_danmakus", self._on_loaded_danmakus_changed)
+        self.state.video_queue.current_video.subscribe("loaded_danmakus", self._on_loaded_danmakus_changed)
 
     def _on_loaded_danmakus_changed(self, _value):
         """编辑器提交弹幕后自动刷新发射器 UI"""
-        count = self.state.video_state.danmaku_count
+        count = self.state.video_queue.current_video.danmaku_count
         if count > 0:
             self.basic_group.file_input.setText(f"来自编辑器: {count} 条弹幕")
         else:
@@ -236,11 +238,11 @@ class SenderPage(QWidget):
 
         state = self.state
         target = VideoTarget(
-            bvid=state.video_state.bvid,
-            cid=state.video_state.selected_cid,
-            title=state.video_state.video_title
+            bvid=state.video_queue.bvid,
+            cid=state.video_queue.current_video.selected_cid,
+            title=state.video_queue.current_video.video_title
         )
-        self.sender_controller.start_task(target, state.video_state.loaded_danmakus, state.get_api_auth(), state.sender_config)
+        self.sender_controller.start_task(target, state.video_queue.current_video.loaded_danmakus, state.get_api_auth(), state.sender_config)
 
     # endregion
     # region Slots VideoController
@@ -265,7 +267,7 @@ class SenderPage(QWidget):
                 continue
             part_name = f"P{p.page} - {p.title}"
             self.basic_group.part_combo.addItem(part_name, userData={'cid': p.cid, 'duration': p.duration})
-            self.state.video_state.cid_parts_map[p.cid] = part_name
+            self.state.video_queue.current_video.cid_parts_map[p.cid] = part_name
 
         if info.parts:
             pending = self.binding.pending_part_index

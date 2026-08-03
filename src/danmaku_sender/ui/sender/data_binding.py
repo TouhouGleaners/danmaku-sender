@@ -80,9 +80,9 @@ class SenderDataBinding(QObject):
         cid = combo_data['cid']
         duration = combo_data['duration']
 
-        self.state.video_state.selected_cid = cid
-        self.state.video_state.selected_part_duration_ms = duration * 1000
-        self.state.video_state.selected_part_name = part_name
+        self.state.video_queue.active_video.selected_cid = cid
+        self.state.video_queue.active_video.selected_part_duration_ms = duration * 1000
+        self.state.video_queue.active_video.selected_part_name = part_name
         logger.info(f"已选择分P: {part_name} (CID: {cid})")
 
     @property
@@ -108,8 +108,8 @@ class SenderDataBinding(QObject):
 
     @Slot(str, VideoInfo)
     def _on_fetch_succeeded(self, bvid: str, info: VideoInfo):
-        self.state.video_state.video_title = info.title
-        self.state.video_state.cid_parts_map = {}
+        self.state.video_queue.active_video.video_title = info.title
+        self.state.video_queue.active_video.cid_parts_map = {}
         logger.info(f"获取成功: {info.title}, 共 {len(info.parts)} 个分P")
         self.videoFetched.emit(bvid, info)
 

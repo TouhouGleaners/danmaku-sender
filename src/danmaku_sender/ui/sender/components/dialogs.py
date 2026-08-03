@@ -40,7 +40,7 @@ class PreSendDialog(QDialog):
         """目标视频信息"""
         group = QGroupBox("目标视频")
         form = QFormLayout(group)
-        vs = self.state.video_state
+        vs = self.state.video_queue.active_video
 
         form.addRow("BV号:", QLabel(vs.bvid))
         form.addRow("标题:", QLabel(vs.video_title))
@@ -53,7 +53,7 @@ class PreSendDialog(QDialog):
         """弹幕统计概览"""
         group = QGroupBox("弹幕信息")
         layout = QHBoxLayout(group)
-        vs = self.state.video_state
+        vs = self.state.video_queue.active_video
 
         total = len(vs.loaded_danmakus)
         valid = sum(1 for d in vs.loaded_danmakus if d.is_valid is not False)

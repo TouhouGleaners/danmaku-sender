@@ -23,9 +23,3 @@ class VideoInfo:
             if p.cid == cid:
                 return p
         return None
-
-@dataclass
-class DestVideoInfo:
-    """目标视频，用于构建待发送视频列表"""
-    video: VideoInfo
-    part: int

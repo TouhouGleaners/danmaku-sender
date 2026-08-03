@@ -55,7 +55,7 @@ class SenderController(QObject):
         """当前发送状态，READY 表示可以启动。"""
         if self.state.editor_is_dirty:
             return SenderStatus.EDITOR_DIRTY
-        if not self.state.video_state.is_ready_to_send:
+        if not self.state.video_queue.current_video.is_ready_to_send:
             return SenderStatus.NOT_READY
         if not self.state.sessdata or not self.state.bili_jct:
             return SenderStatus.NO_CREDENTIALS
@@ -115,7 +115,7 @@ class SenderController(QObject):
 
     def load_xml_file(self, file_path: str):
         """异步解析 XML 弹幕文件"""
-        self.state.video_state.loaded_danmakus = []
+        self.state.video_queue.active_video.loaded_danmakus = []
         parser = DanmakuParser()
         PoolTask.submit(
             parser.parse_xml_file,
@@ -156,7 +156,7 @@ class SenderController(QObject):
     @Slot(list, str)
     def _on_parse_success(self, parsed: list, file_path: str):
         if parsed:
-            self.state.video_state.loaded_danmakus = parsed
+            self.state.video_queue.active_video.loaded_danmakus = parsed
         self.xmlParsed.emit(file_path, len(parsed))
 
     @Slot(object, str)

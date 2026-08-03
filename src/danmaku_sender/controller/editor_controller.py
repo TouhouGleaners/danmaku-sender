@@ -36,12 +36,12 @@ class EditorController(QObject):
     @property
     def source_data_exists(self) -> bool:
         """全局状态中是否有待加载的源数据"""
-        return bool(self.state.video_state.loaded_danmakus)
+        return bool(self.state.video_queue.active_video.loaded_danmakus)
 
     @property
     def has_video_context(self) -> bool:
         """是否拥有关联的视频上下文（BVID/CID）"""
-        return bool(self.state.video_state.selected_cid)
+        return bool(self.state.video_queue.active_video.selected_cid)
 
     @property
     def is_dirty(self) -> bool:
@@ -63,12 +63,12 @@ class EditorController(QObject):
 
     def create_new_workspace(self):
         """新建空白工作区并清除视频上下文"""
-        self.state.video_state.loaded_danmakus =[
+        self.state.video_queue.active_video.loaded_danmakus =[
             Danmaku(msg="在这里输入你的第一条弹幕吧", progress=0)
         ]
-        self.state.video_state.bvid = ""
-        self.state.video_state.selected_cid = None
-        self.state.video_state.video_title = ""
+        self.state.video_queue.active_video.bvid = ""
+        self.state.video_queue.active_video.selected_cid = None
+        self.state.video_queue.active_video.video_title = ""
 
         self.load_from_state()
 
@@ -117,17 +117,17 @@ class EditorController(QObject):
         if not parsed_dms:
             return 0
 
-        self.state.video_state.loaded_danmakus = parsed_dms
-        self.state.video_state.bvid = ""
-        self.state.video_state.selected_cid = None
-        self.state.video_state.video_title = ""
+        self.state.video_queue.active_video.loaded_danmakus = parsed_dms
+        self.state.video_queue.active_video.bvid = ""
+        self.state.video_queue.active_video.selected_cid = None
+        self.state.video_queue.active_video.video_title = ""
 
         self.load_from_state()
         return len(parsed_dms)
 
     def load_from_state(self) -> bool:
         """从 AppState 检出数据到沙盒，并执行初次校验"""
-        source = self.state.video_state.loaded_danmakus
+        source = self.state.video_queue.active_video.loaded_danmakus
         if not source:
             return False
 
@@ -141,7 +141,7 @@ class EditorController(QObject):
     def commit_to_state(self) -> tuple[int, int, int]:
         """将修改结果提交回 AppState，清空沙盒"""
         final_list, fixed, removed = self.session.get_committed_data()
-        self.state.video_state.loaded_danmakus = final_list
+        self.state.video_queue.active_video.loaded_danmakus = final_list
 
         # 提交后重置沙盒
         self.session.load_data([])
@@ -162,7 +162,7 @@ class EditorController(QObject):
         """执行校验：自动向沙盒注入最新的校验参数"""
         duration = -1
         if self.has_video_context:
-            duration = self.state.video_state.selected_part_duration_ms
+            duration = self.state.video_queue.active_video.selected_part_duration_ms
 
         config = self.state.validation_config
         self.session.validate(duration_ms=duration, config=config)

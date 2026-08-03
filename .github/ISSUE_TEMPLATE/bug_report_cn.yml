@@ -55,6 +55,7 @@ body:
       label: "复现步骤 (Steps to Reproduce)"
       description: "请一步步告诉我们如何复现这个问题。"
       placeholder: |
+        例如：
         1. 打开 '弹幕发射器' 页面
         2. 输入 BV 号 'BV1xx...'
         3. 加载附件中的 'test.xml'
