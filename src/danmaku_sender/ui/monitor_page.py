@@ -25,7 +25,7 @@ class MonitorPage(QWidget):
     def __init__(self, state: AppState, history_manager: HistoryManager):
         super().__init__()
         self.state = state
-        self.logger = logging.getLogger("App.Monitor.UI")
+        self.logger = logging.getLogger(__name__)
 
         self.monitor_controller = MonitorController(history_manager, self)
 

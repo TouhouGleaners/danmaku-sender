@@ -15,7 +15,7 @@ class EditorSession:
     只负责暂存区的增删改查与撤销树维护，不主动干涉全局状态 (AppState)。
     """
     def __init__(self) -> None:
-        self.logger = logging.getLogger("App.System.Editor.Session")
+        self.logger = logging.getLogger(__name__)
         self.items: dict[str, EditorItem] = {}          # 核心存储：UUID 映射表
         self.item_order: list[str] = []                 # 顺序表：维护弹幕在视频中的物理播放顺序
         self.undo_stack: list[list[AtomicChange]] = []  # 操作栈：撤销功能

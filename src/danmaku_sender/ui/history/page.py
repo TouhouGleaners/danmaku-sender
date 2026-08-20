@@ -18,7 +18,7 @@ from danmaku_sender.controller.video_controller import VideoController
 from danmaku_sender.controller.history_controller import HistoryController
 
 
-logger = logging.getLogger("App.System.UI.History")
+logger = logging.getLogger(__name__)
 
 
 class HistoryPage(QWidget):

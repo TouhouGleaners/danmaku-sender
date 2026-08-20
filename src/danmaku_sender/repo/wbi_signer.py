@@ -8,7 +8,7 @@ from hashlib import md5
 import requests
 
 
-logger = logging.getLogger("App.System.Signer")
+logger = logging.getLogger(__name__)
 
 
 class WbiSigner:

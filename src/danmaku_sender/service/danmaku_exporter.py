@@ -6,7 +6,7 @@ from danmaku_sender.types.models.danmaku import Danmaku
 from danmaku_sender.types.models.common import UnsentDanmakusRecord
 
 
-logger = logging.getLogger("App.System.Exporter")
+logger = logging.getLogger(__name__)
 
 
 def create_xml_from_danmakus(danmakus: list[UnsentDanmakusRecord], filepath: str) -> None:

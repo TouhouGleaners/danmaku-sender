@@ -22,7 +22,7 @@ class EditorController(QObject):
 
     def __init__(self, state: AppState, parent=None):
         super().__init__(parent)
-        self.logger = logging.getLogger("App.Controller.Editor")
+        self.logger = logging.getLogger(__name__)
         self.state = state
         self.session = EditorSession()
 

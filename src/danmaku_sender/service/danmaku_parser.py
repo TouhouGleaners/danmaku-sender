@@ -11,7 +11,7 @@ class DanmakuParser:
     用于解析Bilibili XML格式的弹幕数据，支持本地文件和在线内容的解析。
     """
     def __init__(self):
-        self.logger = logging.getLogger("App.System.Parser")
+        self.logger = logging.getLogger(__name__)
 
     def parse_xml_file(self, xml_path: str) -> list[Danmaku]:
         """

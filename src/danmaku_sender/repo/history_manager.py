@@ -11,7 +11,7 @@ from danmaku_sender.types.models.danmaku import Danmaku
 from danmaku_sender.types.models.common import DanmakuStatus, VideoTarget
 
 
-logger = logging.getLogger("App.System.DB")
+logger = logging.getLogger(__name__)
 
 
 class HistoryManager:

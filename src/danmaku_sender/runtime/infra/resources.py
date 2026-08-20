@@ -11,5 +11,5 @@ class AppResources:
     """
 
     def __init__(self) -> None:
-        self.logger: logging.Logger = logging.getLogger("App")
+        self.logger: logging.Logger = logging.getLogger(__name__)
         self.theme: ThemeManager = ThemeManager.instance()

@@ -11,7 +11,7 @@ from danmaku_sender.runtime.state.app_state import AppState
 from danmaku_sender.utils.string_utils import parse_bilibili_link
 
 
-logger = logging.getLogger("App.Sender.DataBinding")
+logger = logging.getLogger(__name__)
 
 
 class SenderDataBinding(QObject):

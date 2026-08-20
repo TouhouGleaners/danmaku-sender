@@ -8,7 +8,7 @@ from danmaku_sender.service.video_fetcher import VideoFetcher
 from .concurrency import PoolTask
 
 
-logger = logging.getLogger("App.Controller.Video")
+logger = logging.getLogger(__name__)
 
 
 # 使用独立单线程后台线程池处理批量获取任务，避免过度并发。

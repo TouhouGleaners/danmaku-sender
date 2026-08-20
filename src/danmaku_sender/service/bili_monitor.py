@@ -25,7 +25,7 @@ class BiliDanmakuMonitor:
 
         self.danmaku_parser = DanmakuParser()
         self.history_manager = history_manager
-        self.logger = logging.getLogger("App.Monitor.Engine")
+        self.logger = logging.getLogger(__name__)
 
     @staticmethod
     @contextmanager

@@ -15,7 +15,7 @@ KEYRING_SERVICE_NAME = f"{AppInfo.NAME_EN}-CredentialsKey"
 KEYRING_USERNAME = "default_user"
 ACCOUNTS_PATH = AppInfo.Paths.ACCOUNTS
 
-logger = logging.getLogger("App.System.Auth")
+logger = logging.getLogger(__name__)
 
 
 class AccountManager:

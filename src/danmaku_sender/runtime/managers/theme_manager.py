@@ -5,7 +5,7 @@ from PySide6.QtGui import QGuiApplication
 from PySide6.QtCore import Qt, QObject, Signal, Slot
 
 
-logger = logging.getLogger("App.System.Theme")
+logger = logging.getLogger(__name__)
 
 
 @dataclass

@@ -43,7 +43,7 @@ class MainWindow(QMainWindow):
         # 控制器
         self.auth_controller = AuthController(self)
         self.system_controller = SystemController(self)
-        self.logger = logging.getLogger("App.System.UI.Main")
+        self.logger = logging.getLogger(__name__)
         self._log_signals_connected = False
         self._help_dialog = None  # 存储帮助窗口的引用，防止被垃圾回收
         self._current_profile: UserProfile | None = None

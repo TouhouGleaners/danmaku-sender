@@ -9,7 +9,7 @@ from PySide6.QtWidgets import (
     QLineEdit, QComboBox
 )
 
-logger = logging.getLogger("App.System.Framework.Binder")
+logger = logging.getLogger(__name__)
 
 
 @runtime_checkable

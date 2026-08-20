@@ -30,7 +30,7 @@ class BiliApiClient:
         self.sessdata = sessdata
         self.bili_jct = bili_jct
         self.use_system_proxy = use_system_proxy
-        self.logger = logger if logger else logging.getLogger("App.System.API")
+        self.logger = logger if logger else logging.getLogger(__name__)
         self.session = self._create_session()
 
         try:

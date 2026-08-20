@@ -18,7 +18,7 @@ from danmaku_sender.config import ApiAuthConfig, SenderConfig
 from danmaku_sender.runtime.state.app_state import AppState
 
 
-logger = logging.getLogger("App.Controller.Sender")
+logger = logging.getLogger(__name__)
 
 
 class SenderStatus(Enum):

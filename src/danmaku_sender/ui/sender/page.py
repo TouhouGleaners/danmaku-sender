@@ -28,7 +28,7 @@ class SenderPage(QWidget):
     def __init__(self, state: AppState, history_manager: HistoryManager):
         super().__init__()
         self.state = state
-        self.logger = logging.getLogger("App.Sender.UI")
+        self.logger = logging.getLogger(__name__)
         self.video_controller = VideoController(self)
         self.sender_controller = SenderController(state, history_manager, self)
         self.binding = SenderDataBinding(state, self.sender_controller, self.video_controller, self)

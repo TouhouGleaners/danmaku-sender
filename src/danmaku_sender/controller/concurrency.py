@@ -7,7 +7,7 @@ from abc import abstractmethod
 from PySide6.QtCore import QThread, QObject, Signal, QRunnable, Slot, QThreadPool
 
 
-logger = logging.getLogger("App.Controller.Concurrency")
+logger = logging.getLogger(__name__)
 
 
 class WorkerThread(QThread):
@@ -19,9 +19,19 @@ class WorkerThread(QThread):
     _keep_alive_registry = set()       # 静态注册表: 存放所有正在运行的任务，以防止被 GC
     _registry_lock = threading.Lock()  # 注册表线程锁
 
+    def __init_subclass__(cls, **kwargs):
+        super().__init_subclass__(**kwargs)
+        if 'run' in cls.__dict__:
+            cls._original_run = cls.run
+            cls.run = cls._named_run
+
+    def _named_run(self):
+        threading.current_thread().name = type(self).__name__
+        self._original_run()
+
     def __init__(self, parent=None):
         super().__init__(parent)
-        self.logger = logging.getLogger("App.Controller.Worker")
+        self.logger = logging.getLogger(__name__)
         self.finished.connect(self._unregister)  # 线程彻底结束时，将自己从保活注册表中移除
 
     def start(self, *args, **kwargs):
@@ -78,6 +88,7 @@ class PoolTask(QRunnable):
 
     def run(self):
         """重写 QRunnable.run(): 线程池调度入口"""
+        threading.current_thread().name = "PoolThread"
         try:
             # 执行传入的业务函数
             result = self.fn(*self.args, **self.kwargs)

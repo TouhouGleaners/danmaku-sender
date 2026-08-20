@@ -10,7 +10,7 @@ from danmaku_sender.config.app_meta import AppInfo
 from danmaku_sender.runtime.managers.theme_manager import ThemeManager
 
 
-logger = logging.getLogger("App.UI.StyleLoader")
+logger = logging.getLogger(__name__)
 
 
 def get_app_icon() -> QIcon:

@@ -18,7 +18,7 @@ class DanmakuScheduler:
     职责：遍历队列、断点续传（去重）、容错处理、时间控制与任务阻断。
     """
     def __init__(self, executor: DanmakuExecutor, history_manager: HistoryManager | None = None):
-        self.logger = logging.getLogger("App.Sender.Scheduler")
+        self.logger = logging.getLogger(__name__)
         self.executor = executor
         self.history_manager = history_manager
 

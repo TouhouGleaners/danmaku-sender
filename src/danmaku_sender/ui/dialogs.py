@@ -18,7 +18,7 @@ from ..config.app_meta import AppInfo, Links
 from danmaku_sender.config.app_meta import AppInfo
 
 
-logger = logging.getLogger("App.System.UI.Dialog")
+logger = logging.getLogger(__name__)
 
 
 class MarkdownBrowser(QTextBrowser):

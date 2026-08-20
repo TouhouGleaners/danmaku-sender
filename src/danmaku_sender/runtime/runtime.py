@@ -9,7 +9,7 @@ from danmaku_sender.config.app_meta import AppInfo
 from danmaku_sender.repo.history_manager import HistoryManager
 
 
-logger = logging.getLogger("App.Runtime")
+logger = logging.getLogger(__name__)
 
 
 class Runtime:

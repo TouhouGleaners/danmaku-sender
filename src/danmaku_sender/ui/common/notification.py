@@ -6,7 +6,7 @@ from danmaku_sender.config.app_meta import AppInfo
 from danmaku_sender.config.app_meta import AppInfo
 
 
-logger = logging.getLogger("App.System.Notify")
+logger = logging.getLogger(__name__)
 
 
 ICON_PATH = AppInfo.Paths.ASSETS / 'icon.ico'
@@ -46,6 +46,7 @@ def send_windows_notification(title: str, message: str):
     notification_thread = threading.Thread(
         target=_send_notification_wrapper,
         args=(title, message),
+        name="Notification",
         daemon=True
     )
     notification_thread.start()

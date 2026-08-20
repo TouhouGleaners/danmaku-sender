@@ -7,7 +7,7 @@ from danmaku_sender.repo.github_client import UpdateChecker, UpdateInfo
 from danmaku_sender.config.app_meta import AppInfo
 
 
-logger = logging.getLogger("App.Controller.Update")
+logger = logging.getLogger(__name__)
 
 
 def _check_update(use_proxy: bool):
