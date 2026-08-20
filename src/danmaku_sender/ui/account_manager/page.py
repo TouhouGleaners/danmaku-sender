@@ -16,7 +16,7 @@ from danmaku_sender.runtime.state.app_state import AppState
 from danmaku_sender.controller.account_controller import AccountController
 from danmaku_sender.ui.framework.style_loader import SvgIcon
 
-logger = logging.getLogger("App.System.Account")
+logger = logging.getLogger(__name__)
 
 
 class AccountDialog(QDialog):

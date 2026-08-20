@@ -27,7 +27,7 @@ class DelayManager:
             rest_min (float): 休息时间的随机下界（秒）
             rest_max (float): 休息时间的随机上界（秒）
         """
-        self.logger = logging.getLogger("App.Sender.Delay")
+        self.logger = logging.getLogger(__name__)
 
         # 基础随机延迟配置
         self.normal_min = normal_min

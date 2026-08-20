@@ -10,7 +10,7 @@ from danmaku_sender.types.models.user import UserProfile
 from danmaku_sender.service.auth_service import AuthService
 
 
-logger = logging.getLogger("App.Controller.Auth")
+logger = logging.getLogger(__name__)
 
 
 class AuthController(QObject):
@@ -92,7 +92,7 @@ class QRLoginWorker(WorkerThread):
         super().__init__(parent)
         self.use_system_proxy = use_system_proxy
         self.stop_event = stop_event  # Controller 传入
-        self.logger = logging.getLogger("App.Controller.Auth.QRWorker")
+        self.logger = logging.getLogger(__name__)
 
     def run(self):
         try:

@@ -22,7 +22,7 @@ from danmaku_sender.types.models.common import VideoTarget
 from danmaku_sender.config import ApiAuthConfig, SenderConfig
 
 
-logger = logging.getLogger("App.Sender.Pipeline")
+logger = logging.getLogger(__name__)
 
 
 class SendPipeline:

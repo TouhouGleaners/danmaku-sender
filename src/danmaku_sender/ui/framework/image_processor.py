@@ -5,7 +5,7 @@ from PySide6.QtGui import QPixmap, QImage, QPainter, QPainterPath
 from PySide6.QtSvg import QSvgRenderer
 
 
-logger = logging.getLogger("App.System.ImageProcessor")
+logger = logging.getLogger(__name__)
 
 
 class QtImageProcessor:

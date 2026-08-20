@@ -5,7 +5,7 @@ from packaging import version
 from ..config.app_meta import Links
 
 
-logger = logging.getLogger("App.System.Updater")
+logger = logging.getLogger(__name__)
 
 
 class UpdateInfo:

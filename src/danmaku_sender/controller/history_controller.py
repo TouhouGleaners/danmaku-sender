@@ -7,7 +7,7 @@ from .concurrency import PoolTask
 from danmaku_sender.repo.history_manager import HistoryManager
 
 
-logger = logging.getLogger("App.Controller.History")
+logger = logging.getLogger(__name__)
 
 
 class HistoryController(QObject):

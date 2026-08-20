@@ -12,7 +12,7 @@ from danmaku_sender.config import ApiAuthConfig, MonitorConfig
 from danmaku_sender.service.bili_monitor import BiliDanmakuMonitor
 
 
-logger = logging.getLogger("App.Controller.Monitor")
+logger = logging.getLogger(__name__)
 
 
 class MonitorController(QObject):
@@ -94,7 +94,7 @@ class MonitorTaskWorker(WorkerThread):
         parent=None
     ):
         super().__init__(parent)
-        self.logger = logging.getLogger("App.Controller.Monitor.Worker")
+        self.logger = logging.getLogger(__name__)
         self.target = target
         self.auth_config = auth_config
         self.monitor_config = monitor_config

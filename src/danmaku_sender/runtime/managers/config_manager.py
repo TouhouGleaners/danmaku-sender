@@ -9,7 +9,7 @@ from danmaku_sender.config.app_meta import AppInfo
 from danmaku_sender.config import SenderConfig, MonitorConfig, ValidationConfig
 
 
-logger = logging.getLogger("App.System.Config")
+logger = logging.getLogger(__name__)
 
 CONFIG_PATH = AppInfo.Paths.CONFIG
 

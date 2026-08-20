@@ -18,7 +18,7 @@ class DanmakuExecutor:
     """
     def __init__(self, api_client: BiliApiClient):
         self.api_client = api_client
-        self.logger = logging.getLogger("App.Sender.Executor")
+        self.logger = logging.getLogger(__name__)
 
     def execute(self, target: VideoTarget, danmaku: Danmaku, stop_event: Event) -> DanmakuSendResult:
         """

@@ -12,7 +12,7 @@ class VideoFetcher:
     """
     def __init__(self, api_client: BiliApiClient, logger: logging.Logger | None = None):
         self.client = api_client
-        self.logger = logger if logger else logging.getLogger("App.System.Fetcher")
+        self.logger = logger if logger else logging.getLogger(__name__)
 
     @classmethod
     def fetch_info_from_config(cls, bvid: str, auth_config: ApiAuthConfig) -> VideoInfo:

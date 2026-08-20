@@ -10,10 +10,9 @@ from danmaku_sender.config.app_meta import AppInfo
 
 
 class LogNamespace:
-    """日志命名空间契约"""
-    SENDER = "App.Sender"
-    MONITOR = "App.Monitor"
-    SYSTEM = "App.System"
+    """日志命名空间契约（基于模块路径）"""
+    SENDER_PREFIXES = ("danmaku_sender.service.sender", "danmaku_sender.ui.sender")
+    MONITOR_PREFIXES = ("danmaku_sender.service.bili_monitor", "danmaku_sender.ui.monitor_page", "danmaku_sender.controller.monitor_controller")
 
 
 class GuiLoggingHandler(logging.Handler):
@@ -57,22 +56,21 @@ class GuiLoggingHandler(logging.Handler):
         """
         发出一条日志记录。
 
-        该方法会处理日志记录，并根据日志器名称前缀，将其路由至对应的信号。
-        它针对不同组件的日志做分流处理:
-        来自 "App.Sender" 的日志，发送至 sender_signal
-        来自 "App.Monitor" 的日志，发送至 monitor_signal
-        来自 "App.System" 及其他来源的日志，将被忽略
+        该方法会处理日志记录，并根据模块路径前缀路由至对应的信号:
+        danmaku_sender.service.sender / danmaku_sender.ui.sender → sender_signal
+        danmaku_sender.service.bili_monitor / danmaku_sender.ui.monitor_page → monitor_signal
+        其他模块的日志将被忽略
 
         Args:
             record (logging.LogRecord)：待输出的日志记录对象。
         """
         try:
             text = self.format(record)
-            if record.name.startswith(LogNamespace.SENDER) and self._sender_signal:
+            if record.name.startswith(LogNamespace.SENDER_PREFIXES) and self._sender_signal:
                 self._sender_signal.emit(text)
-            elif record.name.startswith(LogNamespace.MONITOR) and self._monitor_signal:
+            elif record.name.startswith(LogNamespace.MONITOR_PREFIXES) and self._monitor_signal:
                 self._monitor_signal.emit(text)
-            # App.System 或其他开头的日志直接忽略
+            # 其他模块的日志直接忽略
         except Exception:
             self.handleError(record)
 
@@ -97,13 +95,13 @@ def init_app_logging(log_dir: Path):
     log_file_path = log_dir / AppInfo.LOG_FILE_NAME
 
     # --- 定义格式 ---
-    # 文件和控制台: 详细格式
+    # 文件和控制台: 详细格式 [时间] [线程/级别] [模块名]: 消息
     detailed_formatter = logging.Formatter(
-        '%(asctime)s [%(name)s] %(levelname)s - %(message)s',
+        '[%(asctime)s] [%(threadName)s/%(levelname)s] [%(name)s]: %(message)s',
         datefmt='%H:%M:%S'
     )
-    # GUI: 精简格式
-    gui_formatter = logging.Formatter('%(asctime)s %(message)s', datefmt='%H:%M:%S')
+    # GUI: 精简格式 [时间] [级别] 消息
+    gui_formatter = logging.Formatter('[%(asctime)s] [%(levelname)s] %(message)s', datefmt='%H:%M:%S')
 
     # --- 获取根 Logger 并重置环境 ---
     root_logger = logging.getLogger()

@@ -22,7 +22,7 @@ class EditorPage(QWidget):
     def __init__(self, state: AppState):
         super().__init__()
         self.controller = EditorController(state, self)
-        self.logger = logging.getLogger("App.System.UI.Editor")
+        self.logger = logging.getLogger(__name__)
 
         self.current_item_id: str | None = None
 

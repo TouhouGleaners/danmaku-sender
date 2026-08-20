@@ -13,7 +13,7 @@ from danmaku_sender.runtime.managers.account_manager import AccountManager
 from danmaku_sender.service.auth_service import AuthService
 
 
-logger = logging.getLogger("App.Controller.Account")
+logger = logging.getLogger(__name__)
 
 
 class AccountController(QObject):

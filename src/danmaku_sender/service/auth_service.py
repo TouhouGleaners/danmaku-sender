@@ -13,7 +13,7 @@ from danmaku_sender.types.models.user import UserProfile
 from danmaku_sender.config import ApiAuthConfig
 
 
-logger = logging.getLogger("App.Service.Auth")
+logger = logging.getLogger(__name__)
 
 
 class AuthService:
