@@ -28,6 +28,9 @@ class SenderConfig(EventedModel):
     # 断点续传
     skip_sent: bool = True
 
+    # 队列设置
+    delay_between_tasks: float = Field(default=30.0, ge=0.0)
+
     @model_validator(mode='after')
     def check_logic(self) -> 'SenderConfig':
         """业务逻辑级校验：最小不能大于最大"""
