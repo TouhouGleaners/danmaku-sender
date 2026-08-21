@@ -126,15 +126,24 @@ class SenderController(QObject):
 
     # region Queue
 
-    def start_queue(self, queue_state: QueueState, auth_config: ApiAuthConfig):
-        """启动队列发送"""
+    def start_queue(self, queue_state: QueueState, auth_config: ApiAuthConfig, reset_failed: bool = False):
+        """启动队列发送。
+
+        Args:
+            reset_failed: 是否重置之前失败/跳过的任务。默认 False，只重置残留的 RUNNING 状态。
+        """
         if self.is_running() or self.is_queue_running():
             logger.warning("任务已在运行中，无法启动队列。")
             return
 
-        # 先重置残留状态，再检查是否有待发送任务
+        # 重置残留状态
+        resettable = {TaskStatus.RUNNING}
+        if reset_failed:
+            resettable |= {TaskStatus.FAILED, TaskStatus.SKIPPED}
+
         for task in queue_state.tasks:
-            if task.status == TaskStatus.RUNNING:
+            if task.status in resettable:
+                task.error_msg = ""
                 queue_state.update_task_status(task.task_id, TaskStatus.PENDING)
         queue_state.current_index = -1
 
@@ -338,9 +347,11 @@ class QueueWorker(WorkerThread):
 
         # 跳过剩余所有 PENDING 任务
         if stopped_early:
+            reason = "用户手动停止" if self.stop_event.is_set() else "致命错误，队列中止"
             for task in tasks:
                 if task.status == TaskStatus.PENDING:
-                    self.queue_state.update_task_status(task.task_id, TaskStatus.SKIPPED)
+                    task.error_msg = reason
+                    self.queue_state.update_task_status(task.task_id, TaskStatus.SKIPPED, reason)
 
         self.queue_state.current_index = -1
         self.queueFinished.emit()
