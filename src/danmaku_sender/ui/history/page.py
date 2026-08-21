@@ -10,7 +10,7 @@ from PySide6.QtGui import QAction, QDesktopServices
 from .components import Col, HistoryTableModel
 from .dialogs import DanmakuDetailDialog
 
-from danmaku_sender.types.models.common import DanmakuStatus
+from danmaku_sender.types.models.common import DanmakuStatus, VerifyResult
 from danmaku_sender.types.models.video import VideoInfo
 from danmaku_sender.runtime.state.app_state import AppState
 from danmaku_sender.repo.history_manager import HistoryManager
@@ -187,14 +187,20 @@ class HistoryPage(QWidget):
 
     def _verify_records(self, record: dict):
         """触发单个分P的弹幕验证"""
-        cid = record['cid']
         auth_config = self.state.get_api_auth()
+        if not auth_config.sessdata:
+            logger.warning("未登录，无法验证弹幕。")
+            return
+        cid = record['cid']
         logger.info(f"开始验证 CID {cid} 的弹幕状态...")
         self.history_controller.verify_records(cid, auth_config)
 
     def _verify_all(self):
         """触发全部待验证弹幕的批量验证"""
         auth_config = self.state.get_api_auth()
+        if not auth_config.sessdata:
+            logger.warning("未登录，无法验证弹幕。")
+            return
         logger.info("开始批量验证所有待验证弹幕...")
         self.history_controller.verify_all(auth_config)
 
@@ -213,10 +219,10 @@ class HistoryPage(QWidget):
         self._reposition_empty_hint()
 
     @Slot(dict)
-    def _on_verify_completed(self, result: dict):
+    def _on_verify_completed(self, result: VerifyResult):
         """验证完成回调"""
-        verified = result.get('verified', 0)
-        lost = result.get('lost', 0)
+        verified = result["verified"]
+        lost = result['lost']
         logger.info(f"验证完成: 核销 {verified} 条，标记丢失 {lost} 条。")
         self._refresh_table()
 

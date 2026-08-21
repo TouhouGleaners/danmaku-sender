@@ -32,6 +32,13 @@ class MonitorStats(TypedDict):
     lost: int
 
 
+class VerifyResult(TypedDict):
+    """弹幕验证结果"""
+    verified: int
+    lost: int
+    total_checked: int
+
+
 class AuthCookies(TypedDict):
     """身份凭证 Cookie 结构"""
     SESSDATA: str

@@ -7,7 +7,7 @@ from danmaku_sender.repo.bili_api_client import BiliApiClient
 from danmaku_sender.types.exceptions.exceptions import BiliApiError, BiliNetworkError
 from danmaku_sender.repo.history_manager import HistoryManager
 from danmaku_sender.types.models.danmaku import Danmaku
-from danmaku_sender.types.models.common import VideoTarget, MonitorStats
+from danmaku_sender.types.models.common import VideoTarget, MonitorStats, VerifyResult
 from danmaku_sender.config import ApiAuthConfig
 
 
@@ -35,7 +35,7 @@ class BiliDanmakuMonitor:
             yield BiliDanmakuMonitor(api_client=client, target=target, history_manager=history_manager)
 
     @classmethod
-    def verify_by_cid(cls, cid: int, auth_config: ApiAuthConfig, history_manager: HistoryManager) -> dict:
+    def verify_by_cid(cls, cid: int, auth_config: ApiAuthConfig, history_manager: HistoryManager) -> VerifyResult:
         """
         轻量级单次验证：拉取指定 CID 的在线弹幕，核销存活并标记丢失。
 
@@ -73,19 +73,19 @@ class BiliDanmakuMonitor:
         }
 
     @classmethod
-    def verify_all_pending(cls, auth_config: ApiAuthConfig, history_manager: HistoryManager) -> dict:
+    def verify_all_pending(cls, auth_config: ApiAuthConfig, history_manager: HistoryManager) -> VerifyResult:
         """
         批量验证所有含有待验证弹幕的 CID。
 
         Returns:
-            dict: {'total_verified': int, 'total_lost': int, 'cids_checked': int}
+            dict: {'verified': int, 'lost': int, 'total_checked': int}
         """
         logger = logging.getLogger(__name__)
         pending_cids = history_manager.get_pending_cids()
 
         if not pending_cids:
             logger.info("没有待验证的弹幕记录。")
-            return {'total_verified': 0, 'total_lost': 0, 'cids_checked': 0}
+            return {'verified': 0, 'lost': 0, 'total_checked': 0}
 
         logger.info(f"开始批量验证，共 {len(pending_cids)} 个 CID 待检查。")
 
@@ -104,9 +104,9 @@ class BiliDanmakuMonitor:
         logger.info(f"批量验证完成: 共核销 {total_verified} 条，标记丢失 {total_lost} 条，检查 {len(pending_cids)} 个 CID。")
 
         return {
-            'total_verified': total_verified,
-            'total_lost': total_lost,
-            'cids_checked': len(pending_cids),
+            'verified': total_verified,
+            'lost': total_lost,
+            'total_checked': len(pending_cids),
         }
 
     def _fetch_online_danmakus(self) -> list[Danmaku]:
