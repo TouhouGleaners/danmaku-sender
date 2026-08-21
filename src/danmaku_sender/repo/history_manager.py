@@ -109,10 +109,13 @@ class HistoryManager:
             logger.error(f"批量验证状态失败: {e}", exc_info=True)
             return 0
 
-    def mark_as_lost(self, cid: int, verified_dmids: list[str]):
+    def mark_as_lost(self, cid: int, verified_dmids: list[str]) -> int:
         """
         [核销] 标记丢失。
         逻辑：在该 CID 下，所有状态为 PENDING 且 不在 verified_dmids 列表中的弹幕，标记为 LOST。
+
+        Returns:
+            int: 被标记为丢失的弹幕数量
         """
         try:
             condition = (SentDanmaku.cid == cid) & (SentDanmaku.status == DanmakuStatus.PENDING.value)
@@ -130,8 +133,11 @@ class HistoryManager:
             if rows_updated > 0:
                 logger.warning(f"标记了 {rows_updated} 条弹幕为'疑似丢失'。")
 
+            return rows_updated
+
         except Exception as e:
             logger.error(f"标记丢失状态失败: {e}", exc_info=True)
+            return 0
 
     def get_pending_cids(self) -> list[dict]:
         """获取所有含有待验证弹幕的 (bvid, cid) 列表"""
