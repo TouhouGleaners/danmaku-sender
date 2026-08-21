@@ -64,7 +64,7 @@ class BiliDanmakuMonitor:
         history_manager.mark_as_lost(cid, online_dmids)
         total, verified, lost = history_manager.get_stats(cid)
 
-        logger.info(f"验证完成: 核销 {verified_count} 条，标记丢失 {lost} 条，共检查 {len(online_dmids)} 条在线弹幕。")
+        logger.info(f"[CID:{cid}] 验证完成: 核销 {verified_count} 条，标记丢失 {lost} 条，共检查 {len(online_dmids)} 条在线弹幕。")
 
         return {
             'verified': verified_count,
