@@ -143,7 +143,6 @@ class SenderController(QObject):
 
         for task in queue_state.tasks:
             if task.status in resettable:
-                task.error_msg = ""
                 queue_state.update_task_status(task.task_id, TaskStatus.PENDING)
         queue_state.current_index = -1
 
@@ -322,39 +321,42 @@ class QueueWorker(WorkerThread):
         total = len(tasks)
         stopped_early = False
 
-        with KeepSystemAwake(True):
-            for idx, task in enumerate(tasks):
-                # 停止信号或致命错误：跳出循环，后续统一跳过
-                if self.stop_event.is_set():
-                    stopped_early = True
-                    break
+        try:
+            with KeepSystemAwake(True):
+                for idx, task in enumerate(tasks):
+                    # 停止信号或致命错误：跳出循环，后续统一跳过
+                    if self.stop_event.is_set():
+                        stopped_early = True
+                        break
 
-                if task.status != TaskStatus.PENDING:
-                    continue
+                    if task.status != TaskStatus.PENDING:
+                        continue
 
-                self.queue_state.current_index = idx
-                should_continue = self._execute_task(task, idx, total)
+                    self.queue_state.current_index = idx
+                    should_continue = self._execute_task(task, idx, total)
 
-                if not should_continue:
-                    stopped_early = True
-                    break
+                    if not should_continue:
+                        stopped_early = True
+                        break
 
-                # 任务间防风控间隔
-                if not self.stop_event.is_set() and idx < total - 1:
-                    delay = task.config_snapshot.delay_between_tasks
-                    if delay > 0:
-                        self.stop_event.wait(delay)
+                    # 任务间防风控间隔
+                    if not self.stop_event.is_set() and idx < total - 1:
+                        delay = task.config_snapshot.delay_between_tasks
+                        if delay > 0:
+                            self.stop_event.wait(delay)
 
-        # 跳过剩余所有 PENDING 任务
-        if stopped_early:
-            reason = "用户手动停止" if self.stop_event.is_set() else "致命错误，队列中止"
-            for task in tasks:
-                if task.status == TaskStatus.PENDING:
-                    task.error_msg = reason
-                    self.queue_state.update_task_status(task.task_id, TaskStatus.SKIPPED, reason)
+            # 跳过剩余所有 PENDING 任务
+            if stopped_early:
+                reason = "用户手动停止" if self.stop_event.is_set() else "致命错误，队列中止"
+                for task in tasks:
+                    if task.status == TaskStatus.PENDING:
+                        self.queue_state.update_task_status(task.task_id, TaskStatus.SKIPPED, reason)
 
-        self.queue_state.current_index = -1
-        self.queueFinished.emit()
+        except Exception as e:
+            logger.error(f"队列执行发生未预期异常: {e}", exc_info=True)
+        finally:
+            self.queue_state.current_index = -1
+            self.queueFinished.emit()
 
     def _execute_task(self, task: QueueTask, idx: int, total: int) -> bool:
         """执行单个队列任务。返回 True 表示继续，False 表示致命错误需中止队列。"""
