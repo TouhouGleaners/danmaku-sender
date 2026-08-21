@@ -16,7 +16,7 @@ from danmaku_sender.controller.video_controller import VideoController
 from danmaku_sender.controller.sender_controller import SenderController, SenderStatus, SenderState
 from danmaku_sender.types.models.video import VideoInfo
 from danmaku_sender.types.models.common import VideoTarget, UnsentDanmakusRecord
-from danmaku_sender.types.models.queue import QueueTask
+from danmaku_sender.types.models.queue import QueueTask, TaskStatus
 from danmaku_sender.repo.history_manager import HistoryManager
 from danmaku_sender.service.sender import SendingContext
 from danmaku_sender.runtime.state.app_state import AppState
@@ -464,7 +464,9 @@ class SenderPage(QWidget):
         self._queue_model.set_tasks(self.state.queue_state.tasks)
 
     def _on_queue_task_status_changed(self, task_id: str, status: int):
-        self._queue_model.refresh()
+        row = self._queue_model.get_row_by_id(task_id)
+        if row >= 0:
+            self._queue_model.refresh_row(row)
 
     @Slot(str)
     def _on_queue_task_started(self, task_id: str):
@@ -514,8 +516,8 @@ class SenderPage(QWidget):
 
     def _send_queue_notification(self):
         queue_state = self.state.queue_state
-        completed = sum(1 for t in queue_state.tasks if t.status.name == "COMPLETED")
-        failed = sum(1 for t in queue_state.tasks if t.status.name == "FAILED")
+        completed = sum(1 for t in queue_state.tasks if t.status == TaskStatus.COMPLETED)
+        failed = sum(1 for t in queue_state.tasks if t.status == TaskStatus.FAILED)
         total = len(queue_state.tasks)
         send_windows_notification("弹幕队列发送完毕", f"完成: {completed} / 失败: {failed} / 总计: {total}")
 

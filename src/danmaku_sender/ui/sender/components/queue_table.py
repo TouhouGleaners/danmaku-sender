@@ -26,9 +26,23 @@ class QueueTableModel(QAbstractTableModel):
         self._tasks = tasks
         self.endResetModel()
 
+    def refresh_row(self, row: int):
+        """通知视图单行数据已变更（状态更新等场景）"""
+        if 0 <= row < len(self._tasks):
+            left = self.index(row, 0)
+            right = self.index(row, len(self.HEADERS) - 1)
+            self.dataChanged.emit(left, right)
+
     def refresh(self):
-        """通知视图数据已变更（状态更新等场景）"""
+        """通知视图全量数据已变更"""
         self.layoutChanged.emit()
+
+    def get_row_by_id(self, task_id: str) -> int:
+        """按 task_id 查找行号，未找到返回 -1"""
+        for i, task in enumerate(self._tasks):
+            if task.task_id == task_id:
+                return i
+        return -1
 
     def get_task_at(self, row: int) -> QueueTask | None:
         if 0 <= row < len(self._tasks):
@@ -55,26 +69,28 @@ class QueueTableModel(QAbstractTableModel):
         task = self._tasks[index.row()]
         col = index.column()
 
-        if role == Qt.ItemDataRole.DisplayRole:
-            return self._get_display(task, col)
-        if role == Qt.ItemDataRole.ForegroundRole:
-            return self._get_color(task, col)
-        if role == Qt.ItemDataRole.ToolTipRole:
-            return self._get_tooltip(task, col)
+        match role:
+            case Qt.ItemDataRole.DisplayRole:
+                return self._get_display(task, col, index.row())
+            case Qt.ItemDataRole.ForegroundRole:
+                return self._get_color(task, col)
+            case Qt.ItemDataRole.ToolTipRole:
+                return self._get_tooltip(task, col)
 
         return None
 
-    def _get_display(self, task: QueueTask, col: int) -> str:
-        if col == QueueCol.INDEX:
-            return str(self._tasks.index(task) + 1)
-        if col == QueueCol.TITLE:
-            return task.target.title or task.target.bvid
-        if col == QueueCol.PART:
-            return f"CID: {task.target.cid}"
-        if col == QueueCol.COUNT:
-            return str(len(task.danmakus))
-        if col == QueueCol.STATUS:
-            return self._status_text(task.status)
+    def _get_display(self, task: QueueTask, col: int, row: int) -> str:
+        match col:
+            case QueueCol.INDEX:
+                return str(row + 1)
+            case QueueCol.TITLE:
+                return task.target.title or task.target.bvid
+            case QueueCol.PART:
+                return f"CID: {task.target.cid}"
+            case QueueCol.COUNT:
+                return str(len(task.danmakus))
+            case QueueCol.STATUS:
+                return self._status_text(task.status)
         return ""
 
     def _get_color(self, task: QueueTask, col: int):
