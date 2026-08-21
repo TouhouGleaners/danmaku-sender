@@ -42,34 +42,8 @@ class BiliDanmakuMonitor:
         Returns:
             VerifyResult: {'verified': int, 'lost': int, 'total_checked': int}
         """
-        logger = logging.getLogger(__name__)
         with BiliApiClient.from_config(auth_config) as client:
-            try:
-                xml_content = client.get_danmaku_list_xml(cid)
-                parser = DanmakuParser()
-                online_danmakus = parser.parse_xml_content(xml_content, is_online=True)
-            except (BiliApiError, BiliNetworkError) as e:
-                logger.warning(f"获取在线弹幕失败: {e}")
-                raise
-            except Exception as e:
-                logger.error(f"解析在线弹幕内容时发生错误: {e}")
-                raise
-
-        online_dmids = [dm.dmid for dm in online_danmakus if dm.dmid]
-
-        verified_count = 0
-        if online_dmids:
-            verified_count = history_manager.verify_dmids(online_dmids)
-
-        lost_count = history_manager.mark_as_lost(cid, online_dmids)
-
-        logger.info(f"[CID:{cid}] 验证完成: 核销 {verified_count} 条，标记丢失 {lost_count} 条，共检查 {len(online_dmids)} 条在线弹幕。")
-
-        return {
-            'verified': verified_count,
-            'lost': lost_count,
-            'total_checked': len(online_dmids),
-        }
+            return cls._verify_cid_with_client(cid, client, history_manager)
 
     @classmethod
     def verify_all_pending(cls, auth_config: ApiAuthConfig, history_manager: HistoryManager) -> VerifyResult:

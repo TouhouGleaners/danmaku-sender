@@ -49,3 +49,17 @@ class UnsentDanmakusRecord(TypedDict):
     """未发送弹幕记录"""
     dm: Danmaku
     reason: str
+
+
+class PendingCidRecord(TypedDict):
+    """待验证 CID 记录"""
+    bvid: str
+    cid: int
+
+
+class PendingDanmakuRecord(TypedDict):
+    """待验证弹幕记录"""
+    dmid: str
+    msg: str
+    progress: int
+    ctime: float

@@ -8,7 +8,7 @@ from playhouse.migrate import SqliteMigrator, migrate
 from .orm_models import db, SentDanmaku
 
 from danmaku_sender.types.models.danmaku import Danmaku
-from danmaku_sender.types.models.common import DanmakuStatus, VideoTarget
+from danmaku_sender.types.models.common import DanmakuStatus, VideoTarget, PendingCidRecord, PendingDanmakuRecord
 
 
 logger = logging.getLogger(__name__)
@@ -139,7 +139,7 @@ class HistoryManager:
             logger.error(f"标记丢失状态失败: {e}", exc_info=True)
             return 0
 
-    def get_pending_cids(self) -> list[dict]:
+    def get_pending_cids(self) -> list[PendingCidRecord]:
         """获取所有含有待验证弹幕的 (bvid, cid) 列表"""
         try:
             return list(
@@ -153,7 +153,7 @@ class HistoryManager:
             logger.error(f"查询待验证 CID 列表失败: {e}", exc_info=True)
             return []
 
-    def get_pending_records(self, cid: int) -> list[dict]:
+    def get_pending_records(self, cid: int) -> list[PendingDanmakuRecord]:
         """获取 Pending 弹幕"""
         try:
             return list(
