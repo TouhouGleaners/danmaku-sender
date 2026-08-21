@@ -46,11 +46,12 @@ class SenderController(QObject):
     xmlParseFailed = Signal(str, object)  # file_path, raw_exception
 
     # 队列信号
-    queueTaskStarted = Signal(str)                  # task_id
-    queueTaskCompleted = Signal(str, object)        # (task_id, SendingContext)
-    queueTaskFailed = Signal(str, str)              # (task_id, error_msg)
+    queueTaskStarted = Signal(str)                      # task_id
+    queueTaskCompleted = Signal(str, object)            # (task_id, SendingContext)
+    queueTaskFailed = Signal(str, str)                  # (task_id, error_msg)
     queueFinished = Signal()
-    queueProgressUpdated = Signal(int, int, float)  # (current_idx, total, eta)
+    queueProgressUpdated = Signal(int, int, float)      # (current_idx_0based, total, eta)
+    taskProgressUpdated = Signal(str, int, int, float)  # (task_id, attempted, task_total, eta)
 
     def __init__(self, state: AppState, history_manager: HistoryManager, parent=None):
         super().__init__(parent)
@@ -148,7 +149,8 @@ class SenderController(QObject):
         self._queue_worker.taskCompleted.connect(self.queueTaskCompleted.emit)
         self._queue_worker.taskFailed.connect(self.queueTaskFailed.emit)
         self._queue_worker.queueFinished.connect(self._on_queue_finished)
-        self._queue_worker.progressUpdated.connect(self.queueProgressUpdated.emit)
+        self._queue_worker.queueProgressUpdated.connect(self.queueProgressUpdated.emit)
+        self._queue_worker.taskProgressUpdated.connect(self._on_task_progress)
 
         self._queue_worker.finished.connect(self._on_queue_cleanup)
         self._queue_worker.finished.connect(self._queue_worker.deleteLater)
@@ -167,6 +169,11 @@ class SenderController(QObject):
     def _on_queue_finished(self):
         """队列执行完毕"""
         self.queueFinished.emit()
+
+    @Slot(str, int, int, float)
+    def _on_task_progress(self, task_id: str, attempted: int, task_total: int, eta: float):
+        """转发单任务粒度进度"""
+        self.taskProgressUpdated.emit(task_id, attempted, task_total, eta)
 
     @Slot()
     def _on_queue_cleanup(self):
@@ -273,11 +280,12 @@ class SendTaskWorker(WorkerThread):
 
 class QueueWorker(WorkerThread):
     """队列调度引擎：遍历 QueueState 中的待发送任务，逐个执行 SendPipeline。"""
-    taskStarted = Signal(str)                  # task_id
-    taskCompleted = Signal(str, object)        # (task_id, SendingContext)
-    taskFailed = Signal(str, str)              # (task_id, error_msg)
+    taskStarted = Signal(str)                           # task_id
+    taskCompleted = Signal(str, object)                 # (task_id, SendingContext)
+    taskFailed = Signal(str, str)                       # (task_id, error_msg)
     queueFinished = Signal()
-    progressUpdated = Signal(int, int, float)  # (current_idx, total, eta)
+    queueProgressUpdated = Signal(int, int, float)      # (current_idx_0based, total, eta)
+    taskProgressUpdated = Signal(str, int, int, float)  # (task_id, attempted, task_total, eta)
 
     def __init__(
         self,
@@ -335,7 +343,8 @@ class QueueWorker(WorkerThread):
         logger.info(f"[{idx + 1}/{total}] 开始发送: {task.target.display_string}")
 
         def progress_emitter(attempted: int, task_total: int, eta: float):
-            self.progressUpdated.emit(idx, total, eta)
+            self.queueProgressUpdated.emit(idx, total, eta)
+            self.taskProgressUpdated.emit(task.task_id, attempted, task_total, eta)
 
         try:
             pipeline = SendPipeline(self.auth_config, self.history_manager)
