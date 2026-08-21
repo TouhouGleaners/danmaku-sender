@@ -192,8 +192,10 @@ class SenderPage(QWidget):
         self.sender_controller.queueTaskCompleted.connect(self._on_queue_task_completed)
         self.sender_controller.queueTaskFailed.connect(self._on_queue_task_failed)
         self.sender_controller.queueFinished.connect(self._on_queue_finished)
+        self.sender_controller.queueReady.connect(lambda: self._update_queue_ui(running=False))
         self.sender_controller.queueProgressUpdated.connect(self._on_queue_progress)
         self.sender_controller.taskProgressUpdated.connect(self._on_task_progress)
+
 
         # QueueState
         self.state.queue_state.tasksChanged.connect(self._on_queue_changed)
@@ -348,7 +350,7 @@ class SenderPage(QWidget):
         if self.sender_controller.is_running() or self.sender_controller.is_queue_running():
             return
         auth_config = self.state.get_api_auth()
-        if not auth_config.sessdata:
+        if not auth_config.sessdata or not auth_config.bili_jct:
             QMessageBox.warning(self, "凭证缺失", "请先登入账号。")
             return
         if self.state.queue_state.pending_count == 0:
@@ -488,15 +490,15 @@ class SenderPage(QWidget):
 
     @Slot()
     def _on_queue_finished(self):
-        self._update_queue_ui(running=False)
         self.logger.info("队列执行完毕。")
         self._send_queue_notification()
+        # UI 解锁延迟到 _on_queue_cleanup，避免竞态
 
     @Slot(int, int, float)
     def _on_queue_progress(self, current_idx: int, total: int, eta: float):
         if total > 0:
             display_idx = current_idx + 1
-            val = int((current_idx / total) * 100)
+            val = int((display_idx / total) * 100)
             self.progress_bar.setValue(val)
             self.status_label.setText(f"队列进度: {display_idx}/{total}")
 
