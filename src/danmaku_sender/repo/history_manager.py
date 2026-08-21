@@ -8,7 +8,7 @@ from playhouse.migrate import SqliteMigrator, migrate
 from .orm_models import db, SentDanmaku
 
 from danmaku_sender.types.models.danmaku import Danmaku
-from danmaku_sender.types.models.common import DanmakuStatus, VideoTarget
+from danmaku_sender.types.models.common import DanmakuStatus, VideoTarget, PendingCidRecord, PendingDanmakuRecord
 
 
 logger = logging.getLogger(__name__)
@@ -65,19 +65,24 @@ class HistoryManager:
             return
 
         try:
-            SentDanmaku.insert(
-                dmid=str(dm.dmid),
-                cid=target.cid,
-                bvid=target.bvid,
-                msg=dm.msg,
-                progress=dm.progress,
-                mode=dm.mode,
-                fontsize=dm.fontsize,
-                color=dm.color,
-                ctime=time.time(),
-                is_visible=1 if is_visible_api else 0,
-                status=DanmakuStatus.PENDING.value
-            ).on_conflict_ignore().execute()
+            (
+                SentDanmaku
+                    .insert(
+                        dmid=str(dm.dmid),
+                        cid=target.cid,
+                        bvid=target.bvid,
+                        msg=dm.msg,
+                        progress=dm.progress,
+                        mode=dm.mode,
+                        fontsize=dm.fontsize,
+                        color=dm.color,
+                        ctime=time.time(),
+                        is_visible=1 if is_visible_api else 0,
+                        status=DanmakuStatus.PENDING.value,
+                    )
+                    .on_conflict_ignore()
+                    .execute()
+            )
         except Exception as e:
             logger.error(f"存证失败: {e}", exc_info=True)
 
@@ -90,9 +95,13 @@ class HistoryManager:
             return 0
 
         try:
-            query = SentDanmaku.update(status=DanmakuStatus.VERIFIED.value).where(
-                (SentDanmaku.dmid.in_(verified_dmids)) &
-                (SentDanmaku.status == DanmakuStatus.PENDING.value)
+            query = (
+                SentDanmaku
+                    .update(status=DanmakuStatus.VERIFIED.value)
+                    .where(
+                        (SentDanmaku.dmid.in_(verified_dmids)) &
+                        (SentDanmaku.status == DanmakuStatus.PENDING.value)
+                    )
             )
             return query.execute()
 
@@ -100,10 +109,13 @@ class HistoryManager:
             logger.error(f"批量验证状态失败: {e}", exc_info=True)
             return 0
 
-    def mark_as_lost(self, cid: int, verified_dmids: list[str]):
+    def mark_as_lost(self, cid: int, verified_dmids: list[str]) -> int:
         """
         [核销] 标记丢失。
         逻辑：在该 CID 下，所有状态为 PENDING 且 不在 verified_dmids 列表中的弹幕，标记为 LOST。
+
+        Returns:
+            int: 被标记为丢失的弹幕数量
         """
         try:
             condition = (SentDanmaku.cid == cid) & (SentDanmaku.status == DanmakuStatus.PENDING.value)
@@ -111,26 +123,48 @@ class HistoryManager:
             if verified_dmids:
                 condition &= SentDanmaku.dmid.not_in(verified_dmids)
 
-            query = SentDanmaku.update(status=DanmakuStatus.LOST.value).where(condition)
+            query = (
+                SentDanmaku
+                    .update(status=DanmakuStatus.LOST.value)
+                    .where(condition)
+            )
             rows_updated = query.execute()
 
             if rows_updated > 0:
                 logger.warning(f"标记了 {rows_updated} 条弹幕为'疑似丢失'。")
 
+            return rows_updated
+
         except Exception as e:
             logger.error(f"标记丢失状态失败: {e}", exc_info=True)
+            return 0
 
-    def get_pending_records(self, cid: int) -> list[dict]:
+    def get_pending_cids(self) -> list[PendingCidRecord]:
+        """获取所有含有待验证弹幕的 (bvid, cid) 列表"""
+        try:
+            return list(
+                SentDanmaku
+                    .select(SentDanmaku.bvid, SentDanmaku.cid)
+                    .where(SentDanmaku.status == DanmakuStatus.PENDING.value)
+                    .group_by(SentDanmaku.bvid, SentDanmaku.cid)
+                    .dicts()
+            )  # type: ignore[return-value]
+        except Exception as e:
+            logger.error(f"查询待验证 CID 列表失败: {e}", exc_info=True)
+            return []
+
+    def get_pending_records(self, cid: int) -> list[PendingDanmakuRecord]:
         """获取 Pending 弹幕"""
         try:
             return list(
-                SentDanmaku.select(
-                    SentDanmaku.dmid, SentDanmaku.msg, SentDanmaku.progress, SentDanmaku.ctime
-                ).where(
-                    (SentDanmaku.cid == cid) &
-                    (SentDanmaku.status == DanmakuStatus.PENDING.value)
-                ).dicts()
-            )
+                SentDanmaku
+                    .select(SentDanmaku.dmid, SentDanmaku.msg, SentDanmaku.progress, SentDanmaku.ctime)
+                    .where(
+                        (SentDanmaku.cid == cid) &
+                        (SentDanmaku.status == DanmakuStatus.PENDING.value)
+                    )
+                    .dicts()
+            )  # type: ignore[return-value]
 
         except Exception as e:
             logger.error(f"查询 Pending 记录失败: {e}", exc_info=True)
@@ -169,15 +203,20 @@ class HistoryManager:
         用于断点续传的计数对账
         """
         try:
-            return SentDanmaku.select().where(
-                (SentDanmaku.cid == target.cid) &
-                (SentDanmaku.msg == dm.msg) &
-                (SentDanmaku.mode == dm.mode) &
-                (SentDanmaku.color == dm.color) &
-                (SentDanmaku.fontsize == dm.fontsize) &
-                (SentDanmaku.progress == dm.progress) &
-                (SentDanmaku.status.in_([DanmakuStatus.PENDING.value, DanmakuStatus.VERIFIED.value]))
-            ).count()
+            return (
+                SentDanmaku
+                    .select()
+                    .where(
+                        (SentDanmaku.cid == target.cid) &
+                        (SentDanmaku.msg == dm.msg) &
+                        (SentDanmaku.mode == dm.mode) &
+                        (SentDanmaku.color == dm.color) &
+                        (SentDanmaku.fontsize == dm.fontsize) &
+                        (SentDanmaku.progress == dm.progress) &
+                        (SentDanmaku.status.in_([DanmakuStatus.PENDING.value, DanmakuStatus.VERIFIED.value]))
+                    )
+                    .count()
+            )
 
         except Exception as e:
             logger.error(f"查重失败: {e}", exc_info=True)
@@ -204,7 +243,7 @@ class HistoryManager:
 
             query = query.order_by(SentDanmaku.ctime.desc()).limit(limit)
 
-            return list(query.dicts())
+            return list(query.dicts())  # type: ignore[return-value]
 
         except Exception as e:
             logger.error(f"查询历史记录失败: {e}", exc_info=True)

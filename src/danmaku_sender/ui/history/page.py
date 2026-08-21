@@ -10,7 +10,7 @@ from PySide6.QtGui import QAction, QDesktopServices
 from .components import Col, HistoryTableModel
 from .dialogs import DanmakuDetailDialog
 
-from danmaku_sender.types.models.common import DanmakuStatus
+from danmaku_sender.types.models.common import DanmakuStatus, VerifyResult
 from danmaku_sender.types.models.video import VideoInfo
 from danmaku_sender.runtime.state.app_state import AppState
 from danmaku_sender.repo.history_manager import HistoryManager
@@ -51,11 +51,15 @@ class HistoryPage(QWidget):
         btn_refresh = QPushButton("刷新数据")
         btn_refresh.clicked.connect(self._refresh_table)
 
+        btn_verify_all = QPushButton("🔍 验证全部")
+        btn_verify_all.clicked.connect(self._verify_all)
+
         filter_layout.addWidget(QLabel("搜索:"))
         filter_layout.addWidget(self._search_input)
         filter_layout.addWidget(QLabel("状态:"))
         filter_layout.addWidget(self._status_combo)
         filter_layout.addWidget(btn_refresh)
+        filter_layout.addWidget(btn_verify_all)
 
         layout.addLayout(filter_layout)
 
@@ -83,6 +87,14 @@ class HistoryPage(QWidget):
 
         layout.addWidget(self._table_view)
 
+        # 空状态提示
+        self._empty_hint = QLabel("暂无数据", self._table_view.viewport())
+        self._empty_hint.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        self._empty_hint.setStyleSheet("color: #888; font-size: 14px;")
+        self._empty_hint.setVisible(False)
+
+        self._model.modelReset.connect(self._update_empty_hint)
+
     def _connect_signals(self):
         """信号连接"""
         # VideoController
@@ -92,6 +104,7 @@ class HistoryPage(QWidget):
         # HistoryController
         self.history_controller.historyFetched.connect(self._on_history_query_succeeded)
         self.history_controller.errorOccurred.connect(self._on_history_query_failed)
+        self.history_controller.verifyCompleted.connect(self._on_verify_completed)
 
     def init_bindings(self):
         self._refresh_table()
@@ -172,6 +185,47 @@ class HistoryPage(QWidget):
 
     # endregion
 
+    def _verify_records(self, record: dict):
+        """触发单个分P的弹幕验证"""
+        auth_config = self.state.get_api_auth()
+        if not auth_config.sessdata:
+            logger.warning("未登录，无法验证弹幕。")
+            return
+        cid = record['cid']
+        logger.info(f"开始验证 CID {cid} 的弹幕状态...")
+        self.history_controller.verify_records(cid, auth_config)
+
+    def _verify_all(self):
+        """触发全部待验证弹幕的批量验证"""
+        auth_config = self.state.get_api_auth()
+        if not auth_config.sessdata:
+            logger.warning("未登录，无法验证弹幕。")
+            return
+        logger.info("开始批量验证所有待验证弹幕...")
+        self.history_controller.verify_all(auth_config)
+
+    def _update_empty_hint(self):
+        """模型重置后根据数据量切换空状态提示"""
+        self._empty_hint.setVisible(self._model.rowCount() == 0)
+        self._reposition_empty_hint()
+
+    def _reposition_empty_hint(self):
+        """将提示文字居中到表格可视区域"""
+        rect = self._table_view.viewport().rect()
+        self._empty_hint.setGeometry(rect)
+
+    def resizeEvent(self, event):
+        super().resizeEvent(event)
+        self._reposition_empty_hint()
+
+    @Slot(dict)
+    def _on_verify_completed(self, result: VerifyResult):
+        """验证完成回调"""
+        verified = result["verified"]
+        lost = result['lost']
+        logger.info(f"验证完成: 核销 {verified} 条，标记丢失 {lost} 条。")
+        self._refresh_table()
+
     @Slot(QModelIndex)
     def _on_row_double_clicked(self, index: QModelIndex):
         if index.isValid():
@@ -208,6 +262,7 @@ class HistoryPage(QWidget):
         menu.addSeparator()
 
         menu.addAction("📋 查看完整详情", lambda: self._show_detail_dialog(record))
+        menu.addAction("🔍 验证该分P所有弹幕", lambda: self._verify_records(record))
         menu.addAction("复制 BVID", lambda: QApplication.clipboard().setText(record['bvid']))
         menu.addAction("复制 内容", lambda: QApplication.clipboard().setText(record['msg']))
 
