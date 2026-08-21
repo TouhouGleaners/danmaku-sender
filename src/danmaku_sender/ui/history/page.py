@@ -88,7 +88,7 @@ class HistoryPage(QWidget):
         layout.addWidget(self._table_view)
 
         # 空状态提示
-        self._empty_hint = QLabel("暂无数据", self._table_view)
+        self._empty_hint = QLabel("暂无数据", self._table_view.viewport())
         self._empty_hint.setAlignment(Qt.AlignmentFlag.AlignCenter)
         self._empty_hint.setStyleSheet("color: #888; font-size: 14px;")
         self._empty_hint.setVisible(False)
