@@ -13,9 +13,11 @@ from danmaku_sender.service.danmaku_parser import DanmakuParser
 from danmaku_sender.service.danmaku_exporter import create_xml_from_danmakus
 from danmaku_sender.types.models.danmaku import Danmaku
 from danmaku_sender.types.models.common import VideoTarget, UnsentDanmakusRecord
+from danmaku_sender.types.models.queue import QueueTask, TaskStatus
 from danmaku_sender.repo.history_manager import HistoryManager
 from danmaku_sender.config import ApiAuthConfig, SenderConfig
 from danmaku_sender.runtime.state.app_state import AppState
+from danmaku_sender.runtime.state.queue_state import QueueState
 
 
 logger = logging.getLogger(__name__)
@@ -43,11 +45,19 @@ class SenderController(QObject):
     xmlParsed = Signal(str, int)          # file_path, danmaku_count
     xmlParseFailed = Signal(str, object)  # file_path, raw_exception
 
+    # 队列信号
+    queueTaskStarted = Signal(str)                  # task_id
+    queueTaskCompleted = Signal(str, object)        # (task_id, SendingContext)
+    queueTaskFailed = Signal(str, str)              # (task_id, error_msg)
+    queueFinished = Signal()
+    queueProgressUpdated = Signal(int, int, float)  # (current_idx, total, eta)
+
     def __init__(self, state: AppState, history_manager: HistoryManager, parent=None):
         super().__init__(parent)
         self.state = state
         self.history_manager = history_manager
         self._worker: SendTaskWorker | None = None
+        self._queue_worker: QueueWorker | None = None
         self._stop_event = threading.Event()
 
     @property
@@ -112,6 +122,60 @@ class SenderController(QObject):
         if self.is_running():
             return SenderState.RUNNING
         return SenderState.READY
+
+    # region Queue
+
+    def start_queue(self, queue_state: QueueState, auth_config: ApiAuthConfig):
+        """启动队列发送"""
+        if self.is_running() or self.is_queue_running():
+            logger.warning("任务已在运行中，无法启动队列。")
+            return
+
+        if queue_state.pending_count == 0:
+            logger.warning("队列中没有待发送的任务。")
+            return
+
+        self._stop_event.clear()
+
+        self._queue_worker = QueueWorker(
+            queue_state=queue_state,
+            auth_config=auth_config,
+            history_manager=self.history_manager,
+            stop_event=self._stop_event,
+        )
+
+        self._queue_worker.taskStarted.connect(self.queueTaskStarted.emit)
+        self._queue_worker.taskCompleted.connect(self.queueTaskCompleted.emit)
+        self._queue_worker.taskFailed.connect(self.queueTaskFailed.emit)
+        self._queue_worker.queueFinished.connect(self._on_queue_finished)
+        self._queue_worker.progressUpdated.connect(self.queueProgressUpdated.emit)
+
+        self._queue_worker.finished.connect(self._on_queue_cleanup)
+        self._queue_worker.finished.connect(self._queue_worker.deleteLater)
+        self._queue_worker.start()
+
+    def stop_queue(self):
+        """停止队列发送"""
+        if self.is_queue_running():
+            self._stop_event.set()
+
+    def is_queue_running(self) -> bool:
+        """检查队列是否正在运行"""
+        return self._queue_worker is not None and self._queue_worker.isRunning()
+
+    @Slot()
+    def _on_queue_finished(self):
+        """队列执行完毕"""
+        self.queueFinished.emit()
+
+    @Slot()
+    def _on_queue_cleanup(self):
+        """队列 Worker 清理"""
+        if self._queue_worker is not None:
+            logger.debug("QueueWorker 线程生命周期结束，正在清理控制器引用。")
+            self._queue_worker = None
+
+    # endregion
 
     def load_xml_file(self, file_path: str):
         """异步解析 XML 弹幕文件"""
@@ -205,3 +269,97 @@ class SendTaskWorker(WorkerThread):
             self.report_error("任务发生严重错误", e)
         finally:
             self.taskFinished.emit(ctx)
+
+
+class QueueWorker(WorkerThread):
+    """队列调度引擎：遍历 QueueState 中的待发送任务，逐个执行 SendPipeline。"""
+    taskStarted = Signal(str)                  # task_id
+    taskCompleted = Signal(str, object)        # (task_id, SendingContext)
+    taskFailed = Signal(str, str)              # (task_id, error_msg)
+    queueFinished = Signal()
+    progressUpdated = Signal(int, int, float)  # (current_idx, total, eta)
+
+    def __init__(
+        self,
+        queue_state: QueueState,
+        auth_config: ApiAuthConfig,
+        history_manager: HistoryManager,
+        stop_event: threading.Event,
+        parent=None,
+    ):
+        super().__init__(parent)
+        self.queue_state = queue_state
+        self.auth_config = auth_config
+        self.history_manager = history_manager
+        self.stop_event = stop_event
+
+    def run(self):
+        tasks = self.queue_state.tasks
+        total = len(tasks)
+        aborted = False
+
+        with KeepSystemAwake(True):
+            for idx, task in enumerate(tasks):
+                if self.stop_event.is_set():
+                    self.queue_state.update_task_status(task.task_id, TaskStatus.SKIPPED)
+                    continue
+
+                if task.status != TaskStatus.PENDING:
+                    continue
+
+                self.queue_state.current_index = idx
+                should_continue = self._execute_task(task, idx, total)
+
+                if not should_continue:
+                    aborted = True
+                    break
+
+                # 任务间防风控间隔
+                if not self.stop_event.is_set() and idx < total - 1:
+                    delay = task.config_snapshot.delay_between_tasks
+                    if delay > 0:
+                        self.stop_event.wait(delay)
+
+        # 如果因致命错误中止，跳过剩余所有 PENDING 任务
+        if aborted:
+            for task in tasks:
+                if task.status == TaskStatus.PENDING:
+                    self.queue_state.update_task_status(task.task_id, TaskStatus.SKIPPED)
+
+        self.queueFinished.emit()
+
+    def _execute_task(self, task: QueueTask, idx: int, total: int) -> bool:
+        """执行单个队列任务。返回 True 表示继续，False 表示致命错误需中止队列。"""
+        self.taskStarted.emit(task.task_id)
+        self.queue_state.update_task_status(task.task_id, TaskStatus.RUNNING)
+        logger.info(f"[{idx + 1}/{total}] 开始发送: {task.target.display_string}")
+
+        def progress_emitter(attempted: int, task_total: int, eta: float):
+            self.progressUpdated.emit(idx, total, eta)
+
+        try:
+            pipeline = SendPipeline(self.auth_config, self.history_manager)
+            job = SendJob(
+                target=task.target,
+                danmakus=task.danmakus,
+                config=task.config_snapshot,
+                stop_event=self.stop_event,
+            )
+            ctx = pipeline.execute(job, progress_emitter=progress_emitter)
+
+            if ctx.fatal_error_occurred:
+                self.queue_state.update_task_status(task.task_id, TaskStatus.FAILED, "致命错误，队列中止")
+                self.taskFailed.emit(task.task_id, "致命错误，队列中止")
+                logger.error(f"致命错误，队列中止于: {task.target.display_string}")
+                return False
+
+            self.queue_state.update_task_status(task.task_id, TaskStatus.COMPLETED)
+            self.taskCompleted.emit(task.task_id, ctx)
+            logger.info(f"[{idx + 1}/{total}] 发送完成: {task.target.display_string}")
+            return True
+
+        except Exception as e:
+            self.queue_state.update_task_status(task.task_id, TaskStatus.FAILED, str(e))
+            self.taskFailed.emit(task.task_id, str(e))
+            logger.error(f"[{idx + 1}/{total}] 发送失败: {task.target.display_string} - {e}")
+            return True  # 单任务异常不阻断队列，继续下一个
