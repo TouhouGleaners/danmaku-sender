@@ -50,6 +50,7 @@ class SenderController(QObject):
     queueTaskCompleted = Signal(str, object)            # (task_id, SendingContext)
     queueTaskFailed = Signal(str, str)                  # (task_id, error_msg)
     queueFinished = Signal()
+    queueReady = Signal()                               # Worker 清理完毕，可重新启动
     queueProgressUpdated = Signal(int, int, float)      # (current_idx_0based, total, eta)
     taskProgressUpdated = Signal(str, int, int, float)  # (task_id, attempted, task_total, eta)
 
@@ -80,7 +81,7 @@ class SenderController(QObject):
         strategy_config: SenderConfig
     ):
         """启动发送任务"""
-        if self.is_running():
+        if self.is_running() or self.is_queue_running():
             logger.warning("任务已在运行中，无法重复启动。")
             return
 
@@ -191,10 +192,11 @@ class SenderController(QObject):
 
     @Slot()
     def _on_queue_cleanup(self):
-        """队列 Worker 清理"""
+        """队列 Worker 清理完毕，可安全重启"""
         if self._queue_worker is not None:
             logger.debug("QueueWorker 线程生命周期结束，正在清理控制器引用。")
             self._queue_worker = None
+        self.queueReady.emit()
 
     # endregion
 

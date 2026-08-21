@@ -2,12 +2,13 @@ import logging
 
 from PySide6.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout, QPushButton, QLabel, QDialog,
-    QGroupBox, QTextEdit, QProgressBar, QFileDialog, QMessageBox
+    QGroupBox, QTextEdit, QProgressBar, QFileDialog, QMessageBox,
+    QTableView, QHeaderView, QAbstractItemView
 )
 from PySide6.QtGui import QTextCursor, QDragEnterEvent, QDropEvent
 from PySide6.QtCore import Qt, QDateTime, Signal, Slot
 
-from .components import StrategySettingsTabs, BasicParamsGroup, PreSendDialog
+from .components import StrategySettingsTabs, BasicParamsGroup, PreSendDialog, QueueTableModel
 from .data_binding import SenderDataBinding
 
 from danmaku_sender.ui.framework.style_loader import SvgIcon
@@ -15,6 +16,7 @@ from danmaku_sender.controller.video_controller import VideoController
 from danmaku_sender.controller.sender_controller import SenderController, SenderStatus, SenderState
 from danmaku_sender.types.models.video import VideoInfo
 from danmaku_sender.types.models.common import VideoTarget, UnsentDanmakusRecord
+from danmaku_sender.types.models.queue import QueueTask, TaskStatus
 from danmaku_sender.repo.history_manager import HistoryManager
 from danmaku_sender.service.sender import SendingContext
 from danmaku_sender.runtime.state.app_state import AppState
@@ -53,6 +55,58 @@ class SenderPage(QWidget):
 
         main_layout.addWidget(self.basic_group)
         main_layout.addWidget(self.strategy_tabs)
+
+        # --- 队列区 ---
+        queue_group = QGroupBox("发送队列")
+        queue_layout = QVBoxLayout(queue_group)
+
+        self._queue_model = QueueTableModel()
+        self._queue_table = QTableView()
+        self._queue_table.setModel(self._queue_model)
+        self._queue_table.setSelectionBehavior(QAbstractItemView.SelectionBehavior.SelectRows)
+        self._queue_table.setSelectionMode(QAbstractItemView.SelectionMode.SingleSelection)
+        self._queue_table.setAlternatingRowColors(True)
+        self._queue_table.verticalHeader().setVisible(False)
+
+        header = self._queue_table.horizontalHeader()
+        header.setSectionResizeMode(0, QHeaderView.ResizeMode.ResizeToContents)
+        header.setSectionResizeMode(1, QHeaderView.ResizeMode.Stretch)
+        header.setSectionResizeMode(2, QHeaderView.ResizeMode.ResizeToContents)
+        header.setSectionResizeMode(3, QHeaderView.ResizeMode.ResizeToContents)
+        header.setSectionResizeMode(4, QHeaderView.ResizeMode.ResizeToContents)
+
+        queue_layout.addWidget(self._queue_table)
+
+        queue_btn_layout = QHBoxLayout()
+
+        self._btn_add_to_queue = QPushButton("添加到队列")
+        self._btn_add_to_queue.setIcon(SvgIcon("start.svg"))
+        self._btn_add_to_queue.setFixedWidth(120)
+        self._btn_add_to_queue.setCursor(Qt.CursorShape.PointingHandCursor)
+        self._btn_add_to_queue.setProperty("action", "true")
+        self._btn_add_to_queue.setProperty("state", "ready")
+
+        self._btn_start_queue = QPushButton("启动队列")
+        self._btn_start_queue.setFixedWidth(100)
+        self._btn_start_queue.setCursor(Qt.CursorShape.PointingHandCursor)
+
+        self._btn_stop_queue = QPushButton("停止队列")
+        self._btn_stop_queue.setFixedWidth(100)
+        self._btn_stop_queue.setCursor(Qt.CursorShape.PointingHandCursor)
+        self._btn_stop_queue.setEnabled(False)
+
+        self._btn_clear_completed = QPushButton("清除已完成")
+        self._btn_clear_completed.setFixedWidth(100)
+        self._btn_clear_completed.setCursor(Qt.CursorShape.PointingHandCursor)
+
+        queue_btn_layout.addWidget(self._btn_add_to_queue)
+        queue_btn_layout.addWidget(self._btn_start_queue)
+        queue_btn_layout.addWidget(self._btn_stop_queue)
+        queue_btn_layout.addWidget(self._btn_clear_completed)
+        queue_btn_layout.addStretch()
+
+        queue_layout.addLayout(queue_btn_layout)
+        main_layout.addWidget(queue_group)
 
         # --- 日志区 ---
         log_group = QGroupBox("运行日志")
@@ -128,10 +182,30 @@ class SenderPage(QWidget):
         self.binding.videoFetched.connect(self._on_fetch_succeeded)
         self.binding.videoFetchFailed.connect(self._on_fetch_failed)
 
-        # SenderController
+        # SenderController (单任务)
         self.sender_controller.progressUpdated.connect(self._on_send_progress)
         self.sender_controller.progressUpdated.connect(self.progressUpdated.emit)
         self.sender_controller.taskFinished.connect(self._on_send_finished)
+
+        # SenderController (队列)
+        self.sender_controller.queueTaskStarted.connect(self._on_queue_task_started)
+        self.sender_controller.queueTaskCompleted.connect(self._on_queue_task_completed)
+        self.sender_controller.queueTaskFailed.connect(self._on_queue_task_failed)
+        self.sender_controller.queueFinished.connect(self._on_queue_finished)
+        self.sender_controller.queueReady.connect(lambda: self._update_queue_ui(running=False))
+        self.sender_controller.queueProgressUpdated.connect(self._on_queue_progress)
+        self.sender_controller.taskProgressUpdated.connect(self._on_task_progress)
+
+
+        # QueueState
+        self.state.queue_state.tasksChanged.connect(self._on_queue_changed)
+        self.state.queue_state.taskStatusChanged.connect(self._on_queue_task_status_changed)
+
+        # 队列按钮
+        self._btn_add_to_queue.clicked.connect(self._add_to_queue)
+        self._btn_start_queue.clicked.connect(self._start_queue)
+        self._btn_stop_queue.clicked.connect(self._stop_queue)
+        self._btn_clear_completed.clicked.connect(self._clear_completed)
 
     def init_bindings(self):
         """将 UI 控件与 AppState 进行双向绑定"""
@@ -204,6 +278,8 @@ class SenderPage(QWidget):
     @Slot()
     def _toggle_task(self):
         """开始/停止 任务"""
+        if self.sender_controller.is_queue_running():
+            return
         # 如果正在运行 -> 停止
         if self.sender_controller.is_running():
             self.sender_controller.stop_task()
@@ -241,6 +317,61 @@ class SenderPage(QWidget):
             title=state.video_state.video_title
         )
         self.sender_controller.start_task(target, state.video_state.loaded_danmakus, state.get_api_auth(), state.sender_config)
+
+    @Slot()
+    def _add_to_queue(self):
+        """将当前配置添加到发送队列"""
+        status = self.sender_controller.send_status
+        if status == SenderStatus.NOT_READY:
+            QMessageBox.warning(self, "条件不足", "请确保 BV号、分P、弹幕文件 均已就绪。")
+            return
+        if status == SenderStatus.NO_CREDENTIALS:
+            QMessageBox.warning(self, "凭证缺失", "请先登入账号。")
+            return
+        if status == SenderStatus.EDITOR_DIRTY:
+            QMessageBox.warning(self, "存在未保存的修改", "请先在编辑器中应用修改。")
+            return
+
+        state = self.state
+        target = VideoTarget(
+            bvid=state.video_state.bvid,
+            cid=state.video_state.selected_cid,
+            title=state.video_state.video_title,
+        )
+        task = QueueTask(
+            target=target,
+            danmakus=list(state.video_state.loaded_danmakus),
+            config_snapshot=state.sender_config.model_copy(),
+        )
+        state.queue_state.add_task(task)
+        self.logger.info(f"已添加到队列: {target.display_string} ({len(task.danmakus)} 条弹幕)")
+
+    @Slot()
+    def _start_queue(self):
+        """启动队列发送"""
+        if self.sender_controller.is_running() or self.sender_controller.is_queue_running():
+            return
+        auth_config = self.state.get_api_auth()
+        if not auth_config.sessdata or not auth_config.bili_jct:
+            QMessageBox.warning(self, "凭证缺失", "请先登入账号。")
+            return
+        if self.state.queue_state.pending_count == 0:
+            QMessageBox.information(self, "队列为空", "没有待发送的任务。")
+            return
+        self._update_queue_ui(running=True)
+        self.sender_controller.start_queue(self.state.queue_state, auth_config)
+
+    @Slot()
+    def _stop_queue(self):
+        """停止队列发送"""
+        if self.sender_controller.is_queue_running():
+            self.sender_controller.stop_queue()
+            self.logger.info("队列: 正在请求中止...")
+
+    @Slot()
+    def _clear_completed(self):
+        """清除已完成的任务"""
+        self.state.queue_state.clear_completed()
 
     # endregion
     # region Slots VideoController
@@ -329,6 +460,93 @@ class SenderPage(QWidget):
             # 如果有未发出的弹幕，引导保存
             if ctx.unsent_records:
                 self._prompt_save_unsent_xml(ctx.unsent_records)
+
+    # endregion
+    # region Slots Queue
+
+    def _on_queue_changed(self):
+        self._queue_model.set_tasks(self.state.queue_state.tasks)
+
+    def _on_queue_task_status_changed(self, task_id: str, status: int):
+        row = self._queue_model.get_row_by_id(task_id)
+        if row >= 0:
+            self._queue_model.refresh_row(row)
+
+    @Slot(str)
+    def _on_queue_task_started(self, task_id: str):
+        task = self.state.queue_state.get_task_by_id(task_id)
+        if task:
+            self.logger.info(f"开始发送: {task.target.display_string}")
+
+    @Slot(str, object)
+    def _on_queue_task_completed(self, task_id: str, ctx: SendingContext):
+        task = self.state.queue_state.get_task_by_id(task_id)
+        if task:
+            self.logger.info(f"完成: {task.target.display_string} (成功 {ctx.success_count}/{ctx.total})")
+
+    @Slot(str, str)
+    def _on_queue_task_failed(self, task_id: str, error_msg: str):
+        task = self.state.queue_state.get_task_by_id(task_id)
+        if task:
+            self.logger.error(f"失败: {task.target.display_string} - {error_msg}")
+
+    @Slot()
+    def _on_queue_finished(self):
+        self.logger.info("队列执行完毕。")
+        self._send_queue_notification()
+        # UI 解锁延迟到 _on_queue_cleanup，避免竞态
+
+    @Slot(int, int, float)
+    def _on_queue_progress(self, current_idx: int, total: int, eta: float):
+        if total > 0:
+            display_idx = current_idx + 1
+            val = int((display_idx / total) * 100)
+            self.progress_bar.setValue(val)
+            self.status_label.setText(f"队列进度: {display_idx}/{total}")
+
+    @Slot(str, int, int, float)
+    def _on_task_progress(self, task_id: str, attempted: int, task_total: int, eta: float):
+        if task_total > 0:
+            val = int((attempted / task_total) * 100)
+            self.progress_bar.setValue(val)
+            remaining = task_total - attempted
+            if remaining > 0:
+                duration = format_duration(eta)
+                finish_time = QDateTime.currentDateTime().addSecs(int(eta)).toString("HH:mm:ss")
+                self.progress_bar.setFormat(f"%p% (剩余 {duration} | 预计 {finish_time} 结束)")
+                self.progress_bar.setAlignment(Qt.AlignmentFlag.AlignCenter)
+            else:
+                self.progress_bar.setFormat("%p%")
+            self.status_label.setText(f"发送中: {attempted}/{task_total}")
+
+    def _send_queue_notification(self):
+        queue_state = self.state.queue_state
+        completed = sum(1 for t in queue_state.tasks if t.status == TaskStatus.COMPLETED)
+        failed = sum(1 for t in queue_state.tasks if t.status == TaskStatus.FAILED)
+        skipped = sum(1 for t in queue_state.tasks if t.status == TaskStatus.SKIPPED)
+        total = len(queue_state.tasks)
+        summary = f"完成: {completed} / 失败: {failed} / 跳过: {skipped} / 总计: {total}"
+
+        if skipped > 0:
+            send_windows_notification("弹幕队列已中止", summary)
+        elif failed > 0:
+            send_windows_notification("弹幕队列发送完毕(有失败)", summary)
+        else:
+            send_windows_notification("弹幕队列发送完毕", summary)
+
+    def _update_queue_ui(self, running: bool):
+        self._btn_add_to_queue.setEnabled(not running)
+        self._btn_start_queue.setEnabled(not running)
+        self._btn_stop_queue.setEnabled(running)
+        self._btn_clear_completed.setEnabled(not running)
+        if running:
+            self._set_inputs_locked(True)
+            self.log_output.clear()
+            self.progress_bar.setValue(0)
+            self.progress_bar.setFormat("%p%")
+        else:
+            self._set_inputs_locked(False)
+            self.progress_bar.setFormat("%p%")
 
     # endregion
     # endregion
