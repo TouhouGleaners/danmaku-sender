@@ -345,7 +345,7 @@ class SenderPage(QWidget):
     @Slot()
     def _start_queue(self):
         """启动队列发送"""
-        if self.sender_controller.is_queue_running():
+        if self.sender_controller.is_running() or self.sender_controller.is_queue_running():
             return
         auth_config = self.state.get_api_auth()
         if not auth_config.sessdata:
@@ -495,9 +495,10 @@ class SenderPage(QWidget):
     @Slot(int, int, float)
     def _on_queue_progress(self, current_idx: int, total: int, eta: float):
         if total > 0:
+            display_idx = current_idx + 1
             val = int((current_idx / total) * 100)
             self.progress_bar.setValue(val)
-            self.status_label.setText(f"队列进度: {current_idx}/{total}")
+            self.status_label.setText(f"队列进度: {display_idx}/{total}")
 
     @Slot(str, int, int, float)
     def _on_task_progress(self, task_id: str, attempted: int, task_total: int, eta: float):
@@ -518,8 +519,16 @@ class SenderPage(QWidget):
         queue_state = self.state.queue_state
         completed = sum(1 for t in queue_state.tasks if t.status == TaskStatus.COMPLETED)
         failed = sum(1 for t in queue_state.tasks if t.status == TaskStatus.FAILED)
+        skipped = sum(1 for t in queue_state.tasks if t.status == TaskStatus.SKIPPED)
         total = len(queue_state.tasks)
-        send_windows_notification("弹幕队列发送完毕", f"完成: {completed} / 失败: {failed} / 总计: {total}")
+        summary = f"完成: {completed} / 失败: {failed} / 跳过: {skipped} / 总计: {total}"
+
+        if skipped > 0:
+            send_windows_notification("弹幕队列已中止", summary)
+        elif failed > 0:
+            send_windows_notification("弹幕队列发送完毕(有失败)", summary)
+        else:
+            send_windows_notification("弹幕队列发送完毕", summary)
 
     def _update_queue_ui(self, running: bool):
         self._btn_add_to_queue.setEnabled(not running)
