@@ -310,13 +310,14 @@ class QueueWorker(WorkerThread):
     def run(self):
         tasks = list(self.queue_state.tasks)  # 快照，避免运行期间被并发修改
         total = len(tasks)
-        aborted = False
+        stopped_early = False
 
         with KeepSystemAwake(True):
             for idx, task in enumerate(tasks):
+                # 停止信号或致命错误：跳出循环，后续统一跳过
                 if self.stop_event.is_set():
-                    self.queue_state.update_task_status(task.task_id, TaskStatus.SKIPPED)
-                    continue
+                    stopped_early = True
+                    break
 
                 if task.status != TaskStatus.PENDING:
                     continue
@@ -325,7 +326,7 @@ class QueueWorker(WorkerThread):
                 should_continue = self._execute_task(task, idx, total)
 
                 if not should_continue:
-                    aborted = True
+                    stopped_early = True
                     break
 
                 # 任务间防风控间隔
@@ -334,12 +335,13 @@ class QueueWorker(WorkerThread):
                     if delay > 0:
                         self.stop_event.wait(delay)
 
-        # 如果因致命错误中止，跳过剩余所有 PENDING 任务
-        if aborted:
+        # 跳过剩余所有 PENDING 任务
+        if stopped_early:
             for task in tasks:
                 if task.status == TaskStatus.PENDING:
                     self.queue_state.update_task_status(task.task_id, TaskStatus.SKIPPED)
 
+        self.queue_state.current_index = -1
         self.queueFinished.emit()
 
     def _execute_task(self, task: QueueTask, idx: int, total: int) -> bool:
