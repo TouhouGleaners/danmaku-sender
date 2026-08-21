@@ -81,7 +81,7 @@ class SenderController(QObject):
         strategy_config: SenderConfig
     ):
         """启动发送任务"""
-        if self.is_running():
+        if self.is_running() or self.is_queue_running():
             logger.warning("任务已在运行中，无法重复启动。")
             return
 

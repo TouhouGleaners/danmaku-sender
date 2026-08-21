@@ -278,6 +278,8 @@ class SenderPage(QWidget):
     @Slot()
     def _toggle_task(self):
         """开始/停止 任务"""
+        if self.sender_controller.is_queue_running():
+            return
         # 如果正在运行 -> 停止
         if self.sender_controller.is_running():
             self.sender_controller.stop_task()
