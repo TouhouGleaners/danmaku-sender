@@ -136,6 +136,12 @@ class SenderController(QObject):
             logger.warning("队列中没有待发送的任务。")
             return
 
+        # 重置状态：将上次运行残留的 RUNNING 任务恢复为 PENDING
+        for task in queue_state.tasks:
+            if task.status == TaskStatus.RUNNING:
+                queue_state.update_task_status(task.task_id, TaskStatus.PENDING)
+        queue_state.current_index = -1
+
         self._stop_event.clear()
 
         self._queue_worker = QueueWorker(
@@ -302,7 +308,7 @@ class QueueWorker(WorkerThread):
         self.stop_event = stop_event
 
     def run(self):
-        tasks = self.queue_state.tasks
+        tasks = list(self.queue_state.tasks)  # 快照，避免运行期间被并发修改
         total = len(tasks)
         aborted = False
 
