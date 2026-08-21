@@ -120,6 +120,20 @@ class HistoryManager:
         except Exception as e:
             logger.error(f"标记丢失状态失败: {e}", exc_info=True)
 
+    def get_pending_cids(self) -> list[dict]:
+        """获取所有含有待验证弹幕的 (bvid, cid) 列表"""
+        try:
+            return list(
+                SentDanmaku.select(
+                    SentDanmaku.bvid, SentDanmaku.cid
+                ).where(
+                    SentDanmaku.status == DanmakuStatus.PENDING.value
+                ).group_by(SentDanmaku.bvid, SentDanmaku.cid).dicts()
+            )
+        except Exception as e:
+            logger.error(f"查询待验证 CID 列表失败: {e}", exc_info=True)
+            return []
+
     def get_pending_records(self, cid: int) -> list[dict]:
         """获取 Pending 弹幕"""
         try:

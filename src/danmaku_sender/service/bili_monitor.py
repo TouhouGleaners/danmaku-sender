@@ -34,6 +34,81 @@ class BiliDanmakuMonitor:
         with BiliApiClient.from_config(auth_config) as client:
             yield BiliDanmakuMonitor(api_client=client, target=target, history_manager=history_manager)
 
+    @classmethod
+    def verify_by_cid(cls, cid: int, auth_config: ApiAuthConfig, history_manager: HistoryManager) -> dict:
+        """
+        轻量级单次验证：拉取指定 CID 的在线弹幕，核销存活并标记丢失。
+
+        Returns:
+            dict: {'verified': int, 'lost': int, 'total_checked': int}
+        """
+        logger = logging.getLogger(__name__)
+        with BiliApiClient.from_config(auth_config) as client:
+            try:
+                xml_content = client.get_danmaku_list_xml(cid)
+                parser = DanmakuParser()
+                online_danmakus = parser.parse_xml_content(xml_content, is_online=True)
+            except (BiliApiError, BiliNetworkError) as e:
+                logger.warning(f"获取在线弹幕失败: {e}")
+                raise
+            except Exception as e:
+                logger.error(f"解析在线弹幕内容时发生错误: {e}")
+                raise
+
+        online_dmids = [dm.dmid for dm in online_danmakus if dm.dmid]
+
+        verified_count = 0
+        if online_dmids:
+            verified_count = history_manager.verify_dmids(online_dmids)
+
+        history_manager.mark_as_lost(cid, online_dmids)
+        total, verified, lost = history_manager.get_stats(cid)
+
+        logger.info(f"验证完成: 核销 {verified_count} 条，标记丢失 {lost} 条，共检查 {len(online_dmids)} 条在线弹幕。")
+
+        return {
+            'verified': verified_count,
+            'lost': lost,
+            'total_checked': len(online_dmids),
+        }
+
+    @classmethod
+    def verify_all_pending(cls, auth_config: ApiAuthConfig, history_manager: HistoryManager) -> dict:
+        """
+        批量验证所有含有待验证弹幕的 CID。
+
+        Returns:
+            dict: {'total_verified': int, 'total_lost': int, 'cids_checked': int}
+        """
+        logger = logging.getLogger(__name__)
+        pending_cids = history_manager.get_pending_cids()
+
+        if not pending_cids:
+            logger.info("没有待验证的弹幕记录。")
+            return {'total_verified': 0, 'total_lost': 0, 'cids_checked': 0}
+
+        logger.info(f"开始批量验证，共 {len(pending_cids)} 个 CID 待检查。")
+
+        total_verified = 0
+        total_lost = 0
+
+        for entry in pending_cids:
+            cid = entry['cid']
+            try:
+                result = cls.verify_by_cid(cid, auth_config, history_manager)
+                total_verified += result['verified']
+                total_lost += result['lost']
+            except Exception as e:
+                logger.warning(f"CID {cid} 验证失败，跳过: {e}")
+
+        logger.info(f"批量验证完成: 共核销 {total_verified} 条，标记丢失 {total_lost} 条，检查 {len(pending_cids)} 个 CID。")
+
+        return {
+            'total_verified': total_verified,
+            'total_lost': total_lost,
+            'cids_checked': len(pending_cids),
+        }
+
     def _fetch_online_danmakus(self) -> list[Danmaku]:
         """获取在线弹幕列表"""
         try:
