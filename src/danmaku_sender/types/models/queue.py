@@ -5,6 +5,8 @@ from enum import IntEnum
 from .common import VideoTarget
 from .danmaku import Danmaku
 
+from danmaku_sender.config import SenderConfig
+
 
 class TaskStatus(IntEnum):
     """队列任务状态"""
@@ -23,6 +25,7 @@ class QueueTask:
     """
     target: VideoTarget
     danmakus: list[Danmaku]
+    config_snapshot: SenderConfig
     task_id: str = field(default_factory=lambda: uuid.uuid4().hex[:8])
     status: TaskStatus = TaskStatus.PENDING
     error_msg: str = ""
