@@ -6,7 +6,7 @@ from PySide6.QtWidgets import (
     QTableView, QHeaderView, QAbstractItemView, QMenu
 )
 from PySide6.QtGui import QTextCursor, QDragEnterEvent, QDropEvent, QShortcut, QKeySequence
-from PySide6.QtCore import Qt, QPoint, QDateTime, Signal, Slot
+from PySide6.QtCore import Qt, QPoint, QModelIndex, QDateTime, Signal, Slot
 
 from .components import StrategySettingsTabs, BasicParamsGroup, PreSendDialog, QueueTableModel
 from .components.queue_table import ProgressBarDelegate
@@ -93,6 +93,9 @@ class SenderPage(QWidget):
         # 右键菜单
         self._queue_table.setContextMenuPolicy(Qt.ContextMenuPolicy.CustomContextMenu)
         self._queue_table.customContextMenuRequested.connect(self._on_queue_context_menu)
+
+        # 双击查看详情
+        self._queue_table.doubleClicked.connect(self._on_queue_double_clicked)
 
         # 键盘删除
         QShortcut(QKeySequence.StandardKey.Delete, self._queue_table, self._delete_selected_task)
@@ -340,6 +343,12 @@ class SenderPage(QWidget):
         )
         self.sender_controller.start_task(target, state.video_state.loaded_danmakus, state.get_api_auth(), state.sender_config)
 
+    @Slot(QModelIndex)
+    def _on_queue_double_clicked(self, index: QModelIndex):
+        task = self._queue_model.get_task_at(index.row())
+        if task:
+            self._show_task_detail(task)
+
     @Slot(QPoint)
     def _on_queue_context_menu(self, pos: QPoint):
         index = self._queue_table.indexAt(pos)
@@ -352,12 +361,35 @@ class SenderPage(QWidget):
         menu = QMenu(self)
         is_pending = task.status == TaskStatus.PENDING
 
+        menu.addAction("查看详情", lambda: self._show_task_detail(task))
+        menu.addSeparator()
         menu.addAction("上移", lambda: self._move_task(task.task_id, -1)).setEnabled(is_pending)
         menu.addAction("下移", lambda: self._move_task(task.task_id, 1)).setEnabled(is_pending)
         menu.addSeparator()
         menu.addAction("删除", lambda: self._remove_task(task.task_id)).setEnabled(is_pending)
 
         menu.exec(self._queue_table.mapToGlobal(pos))
+
+    def _show_task_detail(self, task: QueueTask):
+        status_map = {
+            TaskStatus.PENDING: "等待中",
+            TaskStatus.RUNNING: "执行中",
+            TaskStatus.COMPLETED: "已完成",
+            TaskStatus.FAILED: "失败",
+            TaskStatus.SKIPPED: "已跳过",
+        }
+        info = (
+            f"任务ID: {task.task_id}\n"
+            f"视频: {task.target.title or task.target.bvid}\n"
+            f"BVID: {task.target.bvid}\n"
+            f"CID: {task.target.cid}\n"
+            f"弹幕数: {len(task.danmakus)}\n"
+            f"已发送: {task.attempted}/{task.total}\n"
+            f"状态: {status_map.get(task.status, '未知')}"
+        )
+        if task.error_msg:
+            info += f"\n错误: {task.error_msg}"
+        QMessageBox.information(self, "任务详情", info)
 
     def _move_task(self, task_id: str, direction: int):
         self.state.queue_state.move_task(task_id, direction)
