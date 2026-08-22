@@ -581,7 +581,7 @@ class SenderPage(QWidget):
     def _on_queue_changed(self):
         self._queue_model.set_tasks(self.state.queue_state.tasks)
 
-    def _on_queue_task_status_changed(self, task_id: str, status: int):
+    def _on_queue_task_status_changed(self, task_id: str, status: str):
         row = self._queue_model.get_row_by_id(task_id)
         if row >= 0:
             self._queue_model.refresh_row(row)
