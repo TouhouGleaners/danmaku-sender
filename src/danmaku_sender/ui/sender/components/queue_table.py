@@ -184,13 +184,13 @@ class QueueTableModel(QAbstractTableModel):
     def mimeData(self, indexes: list[QModelIndex]) -> QMimeData:
         rows = sorted(set(idx.row() for idx in indexes))
         mime = QMimeData()
-        mime.setData("application/x-queue-task-row", ",".join(str(r) for r in rows).encode())
+        mime.setText(",".join(str(r) for r in rows))
         return mime
 
     def dropMimeData(self, data: QMimeData, action: Qt.DropAction, row: int, col: int, parent: QModelIndex) -> bool:
         if action != Qt.DropAction.MoveAction:
             return False
-        raw = data.data("application/x-queue-task-row").data().decode()
+        raw = data.text()
         source_rows = [int(r) for r in raw.split(",")]
         if not source_rows:
             return False
