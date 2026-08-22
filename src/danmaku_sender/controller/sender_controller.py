@@ -139,7 +139,7 @@ class SenderController(QObject):
             return
 
         # 重置残留状态
-        resettable = {TaskStatus.RUNNING}
+        resettable = {TaskStatus.RUNNING, TaskStatus.PAUSED}
         if reset_failed:
             resettable |= {TaskStatus.FAILED, TaskStatus.SKIPPED}
 
@@ -348,12 +348,12 @@ class QueueWorker(WorkerThread):
                         if delay > 0:
                             self.stop_event.wait(delay)
 
-            # 跳过剩余所有 PENDING 任务
-            if stopped_early:
-                reason = "用户手动停止" if self.stop_event.is_set() else "致命错误，队列中止"
+            # 处理提前终止
+            if stopped_early and not self.stop_event.is_set():
+                # 致命错误：跳过所有 PENDING 任务
                 for task in tasks:
                     if task.status == TaskStatus.PENDING:
-                        self.queue_state.update_task_status(task.task_id, TaskStatus.SKIPPED, reason)
+                        self.queue_state.update_task_status(task.task_id, TaskStatus.SKIPPED, "致命错误，队列中止")
 
         except Exception as e:
             logger.error(f"队列执行发生未预期异常: {e}", exc_info=True)
@@ -391,7 +391,10 @@ class QueueWorker(WorkerThread):
                 logger.error(f"致命错误，队列中止于: {task.target.display_string}")
                 return False
 
-            self.queue_state.update_task_status(task.task_id, TaskStatus.COMPLETED)
+            if ctx.is_manually_stopped and not ctx.auto_stop_reason:
+                self.queue_state.update_task_status(task.task_id, TaskStatus.PAUSED, "用户手动暂停")
+            else:
+                self.queue_state.update_task_status(task.task_id, TaskStatus.COMPLETED)
             self.taskCompleted.emit(task.task_id, ctx)
             logger.info(f"[{idx + 1}/{total}] 发送完成: {task.target.display_string}")
             return True

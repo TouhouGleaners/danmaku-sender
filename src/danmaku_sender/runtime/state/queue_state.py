@@ -12,7 +12,7 @@ class QueueState(QObject):
     """发送任务队列状态管理"""
 
     tasksChanged = Signal()               # 队列列表变更
-    taskStatusChanged = Signal(str, int)  # (task_id, new_status)
+    taskStatusChanged = Signal(str, str)  # (task_id, new_status.value)
     currentTaskChanged = Signal(int)      # 当前执行索引变更
 
     def __init__(self, parent=None):
@@ -62,9 +62,9 @@ class QueueState(QObject):
         return False
 
     def clear_completed(self):
-        """清除已完成/失败/跳过的任务"""
+        """清除已完成/失败/跳过的任务（保留 PENDING 和 PAUSED）"""
         before = len(self._tasks)
-        self._tasks = [t for t in self._tasks if t.status == TaskStatus.PENDING]
+        self._tasks = [t for t in self._tasks if t.status in (TaskStatus.PENDING, TaskStatus.PAUSED)]
         removed = before - len(self._tasks)
         if removed > 0:
             self.tasksChanged.emit()
