@@ -67,6 +67,7 @@ class SenderPage(QWidget):
         queue_layout = QVBoxLayout(queue_group)
 
         self._queue_model = QueueTableModel()
+        self._queue_model.on_reorder = self._on_queue_reorder
         self._queue_table = QTableView()
         self._queue_table.setModel(self._queue_model)
         self._queue_table.setSelectionBehavior(QAbstractItemView.SelectionBehavior.SelectRows)
@@ -578,6 +579,11 @@ class SenderPage(QWidget):
 
     # endregion
     # region Slots Queue
+
+    def _on_queue_reorder(self, reordered_tasks):
+        """拖拽排序后同步 QueueState"""
+        self.state.queue_state._tasks = reordered_tasks
+        self.state.queue_state.tasksChanged.emit()
 
     def _on_queue_changed(self):
         self._queue_model.set_tasks(self.state.queue_state.tasks)

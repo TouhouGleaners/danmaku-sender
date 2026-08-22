@@ -1,4 +1,5 @@
 from enum import IntEnum
+from typing import Callable
 
 from PySide6.QtCore import Qt, QAbstractTableModel, QModelIndex, QSize, QMimeData
 from PySide6.QtGui import QBrush, QColor, QPainter
@@ -60,6 +61,7 @@ class QueueTableModel(QAbstractTableModel):
     def __init__(self, parent=None):
         super().__init__(parent)
         self._tasks: list[QueueTask] = []
+        self.on_reorder: Callable[[list[QueueTask]], None] | None = None
 
     def set_tasks(self, tasks: list[QueueTask]):
         self.beginResetModel()
@@ -190,8 +192,16 @@ class QueueTableModel(QAbstractTableModel):
     def dropMimeData(self, data: QMimeData, action: Qt.DropAction, row: int, col: int, parent: QModelIndex) -> bool:
         if action != Qt.DropAction.MoveAction:
             return False
+
         raw = data.text()
-        source_rows = [int(r) for r in raw.split(",")]
+        if not raw:
+            return False
+
+        try:
+            source_rows = [int(r) for r in raw.split(",")]
+        except ValueError:
+            return False
+
         if not source_rows:
             return False
 
@@ -211,12 +221,17 @@ class QueueTableModel(QAbstractTableModel):
         moved = [self._tasks[r] for r in source_rows]
         remaining = [t for i, t in enumerate(self._tasks) if i not in source_rows]
 
-        # 在目标位置插入（考虑删除后的偏移）
         offset = sum(1 for r in source_rows if r < dest_row)
         insert_at = dest_row - offset
 
-        self.beginResetModel()
-        self._tasks = remaining[:insert_at] + moved + remaining[insert_at:]
-        self.endResetModel()
+        reordered = remaining[:insert_at] + moved + remaining[insert_at:]
+
+        # 委托给上层同步 QueueState
+        if self.on_reorder:
+            self.on_reorder(reordered)
+        else:
+            self.beginResetModel()
+            self._tasks = reordered
+            self.endResetModel()
 
         return True
