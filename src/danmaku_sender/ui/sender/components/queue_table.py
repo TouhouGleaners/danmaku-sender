@@ -31,13 +31,13 @@ class ProgressBarDelegate(QStyledItemDelegate):
         bar.minimum = 0
         bar.maximum = 100
         bar.progress = progress
-        bar.text = f"{progress}%"
+        bar.text = f"{task.attempted}/{task.total}" if task.total > 0 else ""
         bar.textVisible = True
 
         match task.status:
             case TaskStatus.COMPLETED:
                 bar.progress = 100
-                bar.text = "100%"
+                bar.text = f"{task.total}/{task.total}"
             case TaskStatus.FAILED:
                 bar.text = "失败"
             case TaskStatus.SKIPPED:

@@ -38,6 +38,7 @@ class SenderPage(QWidget):
 
         self._queue_total = 0
         self._queue_current = 0
+        self._queue_total_dm: int = 0
 
         self._create_ui()
         self._connect_signals()
@@ -367,6 +368,7 @@ class SenderPage(QWidget):
         if self.state.queue_state.pending_count == 0:
             QMessageBox.information(self, "队列为空", "没有待发送的任务。")
             return
+        self._queue_total_dm = sum(len(t.danmakus) for t in self.state.queue_state.tasks)
         self._update_queue_ui(running=True)
         self.sender_controller.start_queue(self.state.queue_state, auth_config)
 
@@ -514,7 +516,11 @@ class SenderPage(QWidget):
 
     @Slot(str, int, int, float)
     def _on_task_progress(self, task_id: str, attempted: int, task_total: int, eta: float):
-        # 更新 task 数据
+        self._update_task_data(task_id, attempted, task_total)
+        self._update_bottom_bar(attempted, task_total, eta)
+
+    def _update_task_data(self, task_id: str, attempted: int, task_total: int):
+        """更新任务数据并刷新表格行"""
         task = self.state.queue_state.get_task_by_id(task_id)
         if task:
             task.attempted = attempted
@@ -523,20 +529,42 @@ class SenderPage(QWidget):
             if row >= 0:
                 self._queue_model.refresh_row(row)
 
-        # 底部进度条：任务级进度
-        if task_total > 0:
-            val = int((attempted / task_total) * 100)
-            self.progress_bar.setValue(val)
+    def _update_bottom_bar(self, attempted: int, task_total: int, eta: float):
+        """更新底部进度条（队列级 + 弹幕总数 + ETA）"""
+        total_dm = self._queue_total_dm
+        done_dm = self._calc_done_dm()
 
-            remaining = task_total - attempted
-            if remaining > 0 and eta > 0:
-                duration = format_duration(eta)
-                finish_time = QDateTime.currentDateTime().addSecs(int(eta)).toString("HH:mm:ss")
-                queue_info = f"队列 {self._queue_current}/{self._queue_total}" if self._queue_total > 0 else ""
-                self.progress_bar.setFormat(f"{queue_info}  发送 {attempted}/{task_total}  剩余 {duration}  预计 {finish_time} 结束")
-                self.progress_bar.setAlignment(Qt.AlignmentFlag.AlignCenter)
-            else:
-                self.progress_bar.setFormat("%p%")
+        if total_dm > 0:
+            self.progress_bar.setValue(int((done_dm / total_dm) * 100))
+
+        if task_total <= 0:
+            return
+
+        pct = int((done_dm / total_dm) * 100) if total_dm > 0 else 0
+
+        remaining = task_total - attempted
+        if remaining <= 0 or eta <= 0:
+            self.progress_bar.setFormat("%p%")
+            return
+
+        duration = format_duration(eta)
+        finish_time = QDateTime.currentDateTime().addSecs(int(eta)).toString("HH:mm:ss")
+        self.progress_bar.setFormat(
+            f"[队列 {self._queue_current}/{self._queue_total}] "
+            f"[弹幕 {done_dm}/{total_dm}] "
+            f"{pct}% (剩余 {duration} | 预计 {finish_time} 结束)"
+        )
+        self.progress_bar.setAlignment(Qt.AlignmentFlag.AlignCenter)
+
+    def _calc_done_dm(self) -> int:
+        """计算全队列已完成弹幕数"""
+        done = 0
+        for t in self.state.queue_state.tasks:
+            if t.status == TaskStatus.COMPLETED:
+                done += len(t.danmakus)
+            elif t.status == TaskStatus.RUNNING:
+                done += t.attempted
+        return done
 
     def _send_queue_notification(self):
         queue_state = self.state.queue_state
