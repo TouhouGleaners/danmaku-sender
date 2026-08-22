@@ -432,7 +432,7 @@ class QueueWorker(WorkerThread):
             queue_eta += current_config.delay_between_tasks
         for i, t in enumerate(pending_future):
             queue_eta += _task_eta(0, t.total, t.config_snapshot)
-            # 每个 PENDING 任务之后如果有更多 PENDING，加延迟
-            if i < len(pending_future) - 1:
+            # 每个 PENDING 任务之后，只要不是原始队列最后一项，就加延迟
+            if future_tasks and t is not future_tasks[-1]:
                 queue_eta += t.config_snapshot.delay_between_tasks
         return queue_eta
