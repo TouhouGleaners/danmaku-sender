@@ -685,6 +685,7 @@ class SenderPage(QWidget):
         self._btn_start_queue.setEnabled(not running)
         self._btn_stop_queue.setEnabled(running)
         self._btn_clear_completed.setEnabled(not running)
+        self._queue_model.queue_running = running
         if running:
             self._set_inputs_locked(True)
             self.log_output.clear()
