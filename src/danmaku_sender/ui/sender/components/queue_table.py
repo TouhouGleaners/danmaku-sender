@@ -1,7 +1,8 @@
 from enum import IntEnum
 
-from PySide6.QtCore import Qt, QAbstractTableModel, QModelIndex
-from PySide6.QtGui import QBrush, QColor
+from PySide6.QtCore import Qt, QAbstractTableModel, QModelIndex, QSize
+from PySide6.QtGui import QBrush, QColor, QPainter
+from PySide6.QtWidgets import QStyledItemDelegate, QStyleOptionProgressBar, QStyleOptionViewItem, QStyle, QApplication
 
 from danmaku_sender.types.models.queue import QueueTask, TaskStatus
 
@@ -12,10 +13,46 @@ class QueueCol(IntEnum):
     PART = 2
     COUNT = 3
     STATUS = 4
+    PROGRESS = 5
+
+
+class ProgressBarDelegate(QStyledItemDelegate):
+    """在表格单元格中绘制进度条"""
+
+    def paint(self, painter: QPainter, option: QStyleOptionViewItem, index: QModelIndex):
+        task: QueueTask | None = index.data(Qt.ItemDataRole.UserRole)
+        if task is None:
+            return super().paint(painter, option, index)
+
+        progress = int((task.attempted / task.total) * 100) if task.total > 0 else 0
+
+        bar = QStyleOptionProgressBar()
+        bar.rect = option.rect
+        bar.minimum = 0
+        bar.maximum = 100
+        bar.progress = progress
+        bar.text = f"{progress}%"
+        bar.textVisible = True
+
+        match task.status:
+            case TaskStatus.COMPLETED:
+                bar.progress = 100
+                bar.text = "100%"
+            case TaskStatus.FAILED:
+                bar.text = "失败"
+            case TaskStatus.SKIPPED:
+                bar.text = "跳过"
+            case TaskStatus.PENDING:
+                bar.text = "等待"
+
+        QApplication.style().drawControl(QStyle.ControlElement.CE_ProgressBar, bar, painter)
+
+    def sizeHint(self, option: QStyleOptionViewItem, index: QModelIndex) -> QSize:
+        return QSize(120, 24)
 
 
 class QueueTableModel(QAbstractTableModel):
-    HEADERS = ["序号", "视频标题", "分P", "弹幕数", "状态"]
+    HEADERS = ["序号", "视频标题", "分P", "弹幕数", "状态", "进度"]
 
     def __init__(self, parent=None):
         super().__init__(parent)
@@ -71,11 +108,16 @@ class QueueTableModel(QAbstractTableModel):
 
         match role:
             case Qt.ItemDataRole.DisplayRole:
+                if col == QueueCol.PROGRESS:
+                    return None  # Delegate 接管绘制
                 return self._get_display(task, col, index.row())
             case Qt.ItemDataRole.ForegroundRole:
                 return self._get_color(task, col)
             case Qt.ItemDataRole.ToolTipRole:
                 return self._get_tooltip(task, col)
+            case Qt.ItemDataRole.UserRole:
+                if col == QueueCol.PROGRESS:
+                    return task  # 传递完整 task 给 Delegate
 
         return None
 

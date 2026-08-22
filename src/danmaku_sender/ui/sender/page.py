@@ -9,6 +9,7 @@ from PySide6.QtGui import QTextCursor, QDragEnterEvent, QDropEvent
 from PySide6.QtCore import Qt, QDateTime, Signal, Slot
 
 from .components import StrategySettingsTabs, BasicParamsGroup, PreSendDialog, QueueTableModel
+from .components.queue_table import ProgressBarDelegate
 from .data_binding import SenderDataBinding
 
 from danmaku_sender.ui.framework.style_loader import SvgIcon
@@ -34,6 +35,9 @@ class SenderPage(QWidget):
         self.video_controller = VideoController(self)
         self.sender_controller = SenderController(state, history_manager, self)
         self.binding = SenderDataBinding(state, self.sender_controller, self.video_controller, self)
+
+        self._queue_total = 0
+        self._queue_current = 0
 
         self._create_ui()
         self._connect_signals()
@@ -74,6 +78,11 @@ class SenderPage(QWidget):
         header.setSectionResizeMode(2, QHeaderView.ResizeMode.ResizeToContents)
         header.setSectionResizeMode(3, QHeaderView.ResizeMode.ResizeToContents)
         header.setSectionResizeMode(4, QHeaderView.ResizeMode.ResizeToContents)
+        header.setSectionResizeMode(5, QHeaderView.ResizeMode.Fixed)
+        header.resizeSection(5, 120)
+
+        self._progress_delegate = ProgressBarDelegate(self._queue_table)
+        self._queue_table.setItemDelegateForColumn(5, self._progress_delegate)
 
         queue_layout.addWidget(self._queue_table)
 
@@ -476,6 +485,8 @@ class SenderPage(QWidget):
     def _on_queue_task_started(self, task_id: str):
         task = self.state.queue_state.get_task_by_id(task_id)
         if task:
+            task.total = len(task.danmakus)
+            task.attempted = 0
             self.logger.info(f"开始发送: {task.target.display_string}")
 
     @Slot(str, object)
@@ -498,26 +509,34 @@ class SenderPage(QWidget):
 
     @Slot(int, int, float)
     def _on_queue_progress(self, current_idx: int, total: int, eta: float):
-        if total > 0:
-            display_idx = current_idx + 1
-            val = int((display_idx / total) * 100)
-            self.progress_bar.setValue(val)
-            self.status_label.setText(f"队列进度: {display_idx}/{total}")
+        self._queue_total = total
+        self._queue_current = current_idx + 1
 
     @Slot(str, int, int, float)
     def _on_task_progress(self, task_id: str, attempted: int, task_total: int, eta: float):
+        # 更新 task 数据
+        task = self.state.queue_state.get_task_by_id(task_id)
+        if task:
+            task.attempted = attempted
+            task.total = task_total
+            row = self._queue_model.get_row_by_id(task_id)
+            if row >= 0:
+                self._queue_model.refresh_row(row)
+
+        # 底部进度条：任务级进度
         if task_total > 0:
             val = int((attempted / task_total) * 100)
             self.progress_bar.setValue(val)
+
             remaining = task_total - attempted
-            if remaining > 0:
+            if remaining > 0 and eta > 0:
                 duration = format_duration(eta)
                 finish_time = QDateTime.currentDateTime().addSecs(int(eta)).toString("HH:mm:ss")
-                self.progress_bar.setFormat(f"%p% (剩余 {duration} | 预计 {finish_time} 结束)")
+                queue_info = f"队列 {self._queue_current}/{self._queue_total}" if self._queue_total > 0 else ""
+                self.progress_bar.setFormat(f"{queue_info}  发送 {attempted}/{task_total}  剩余 {duration}  预计 {finish_time} 结束")
                 self.progress_bar.setAlignment(Qt.AlignmentFlag.AlignCenter)
             else:
                 self.progress_bar.setFormat("%p%")
-            self.status_label.setText(f"发送中: {attempted}/{task_total}")
 
     def _send_queue_notification(self):
         queue_state = self.state.queue_state
