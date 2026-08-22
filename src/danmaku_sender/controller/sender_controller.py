@@ -9,6 +9,7 @@ from .concurrency import WorkerThread, PoolTask
 from .system_utils import KeepSystemAwake
 
 from danmaku_sender.service.sender import SendPipeline, SendJob
+from danmaku_sender.service.sender.delay_manager import DelayManager
 from danmaku_sender.service.danmaku_parser import DanmakuParser
 from danmaku_sender.service.danmaku_exporter import create_xml_from_danmakus
 from danmaku_sender.types.models.danmaku import Danmaku
@@ -366,8 +367,12 @@ class QueueWorker(WorkerThread):
         self.queue_state.update_task_status(task.task_id, TaskStatus.RUNNING)
         logger.info(f"[{idx + 1}/{total}] 开始发送: {task.target.display_string}")
 
+        tasks = list(self.queue_state.tasks)
+        future_tasks = tasks[idx + 1:]
+
         def progress_emitter(attempted: int, task_total: int, eta: float):
-            self.queueProgressUpdated.emit(idx, total, eta)
+            queue_eta = self._calc_queue_eta(attempted, task_total, task.config_snapshot, future_tasks)
+            self.queueProgressUpdated.emit(idx, total, queue_eta)
             self.taskProgressUpdated.emit(task.task_id, attempted, task_total, eta)
 
         try:
@@ -396,3 +401,32 @@ class QueueWorker(WorkerThread):
             self.taskFailed.emit(task.task_id, str(e))
             logger.error(f"[{idx + 1}/{total}] 发送失败: {task.target.display_string} - {e}")
             return True  # 单任务异常不阻断队列，继续下一个
+
+    @staticmethod
+    def _calc_queue_eta(
+        current_attempted: int,
+        current_total: int,
+        current_config: SenderConfig,
+        future_tasks: list[QueueTask],
+    ) -> float:
+        """计算整个队列的剩余 ETA（秒）。
+
+        = 当前任务剩余 ETA + 所有未来任务的 ETA
+        """
+        def _task_eta(attempted: int, total: int, config: SenderConfig) -> float:
+            avg_normal = (config.min_delay + config.max_delay) / 2
+            avg_rest = (config.rest_min + config.rest_max) / 2
+            return DelayManager.calc_eta(
+                attempted=attempted,
+                total=total,
+                burst_enabled=config.burst_enabled,
+                burst_size=config.burst_size,
+                avg_normal=avg_normal,
+                avg_rest=avg_rest,
+            )
+
+        queue_eta = _task_eta(current_attempted, current_total, current_config)
+        for t in future_tasks:
+            if t.status == TaskStatus.PENDING:
+                queue_eta += _task_eta(0, t.total, t.config_snapshot)
+        return queue_eta

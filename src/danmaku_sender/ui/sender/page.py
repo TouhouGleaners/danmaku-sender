@@ -39,6 +39,7 @@ class SenderPage(QWidget):
         self._queue_total = 0
         self._queue_current = 0
         self._queue_total_dm: int = 0
+        self._queue_eta: float = 0.0
 
         self._create_ui()
         self._connect_signals()
@@ -513,11 +514,12 @@ class SenderPage(QWidget):
     def _on_queue_progress(self, current_idx: int, total: int, eta: float):
         self._queue_total = total
         self._queue_current = current_idx + 1
+        self._queue_eta = eta
 
     @Slot(str, int, int, float)
     def _on_task_progress(self, task_id: str, attempted: int, task_total: int, eta: float):
         self._update_task_data(task_id, attempted, task_total)
-        self._update_bottom_bar(attempted, task_total, eta)
+        self._update_bottom_bar(attempted, task_total)
 
     def _update_task_data(self, task_id: str, attempted: int, task_total: int):
         """更新任务数据并刷新表格行"""
@@ -529,7 +531,7 @@ class SenderPage(QWidget):
             if row >= 0:
                 self._queue_model.refresh_row(row)
 
-    def _update_bottom_bar(self, attempted: int, task_total: int, eta: float):
+    def _update_bottom_bar(self, attempted: int, task_total: int):
         """更新底部进度条（队列级 + 弹幕总数 + ETA）"""
         total_dm = self._queue_total_dm
         done_dm = self._calc_done_dm()
@@ -542,8 +544,8 @@ class SenderPage(QWidget):
 
         pct = int((done_dm / total_dm) * 100) if total_dm > 0 else 0
 
-        remaining = task_total - attempted
-        if remaining <= 0 or eta <= 0:
+        eta = self._queue_eta
+        if eta <= 0:
             self.progress_bar.setFormat("%p%")
             return
 

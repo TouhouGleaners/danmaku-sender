@@ -30,4 +30,7 @@ class QueueTask:
     status: TaskStatus = TaskStatus.PENDING
     error_msg: str = ""
     attempted: int = 0
-    total: int = 0
+    total: int = field(init=False)
+
+    def __post_init__(self):
+        self.total = len(self.danmakus)
