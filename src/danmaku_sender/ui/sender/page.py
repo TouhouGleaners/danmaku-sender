@@ -3,10 +3,10 @@ import logging
 from PySide6.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout, QPushButton, QLabel, QDialog,
     QGroupBox, QTextEdit, QProgressBar, QFileDialog, QMessageBox,
-    QTableView, QHeaderView, QAbstractItemView
+    QTableView, QHeaderView, QAbstractItemView, QMenu
 )
-from PySide6.QtGui import QTextCursor, QDragEnterEvent, QDropEvent
-from PySide6.QtCore import Qt, QDateTime, Signal, Slot
+from PySide6.QtGui import QTextCursor, QDragEnterEvent, QDropEvent, QShortcut, QKeySequence
+from PySide6.QtCore import Qt, QPoint, QModelIndex, QDateTime, Signal, Slot
 
 from .components import StrategySettingsTabs, BasicParamsGroup, PreSendDialog, QueueTableModel
 from .components.queue_table import ProgressBarDelegate
@@ -67,6 +67,7 @@ class SenderPage(QWidget):
         queue_layout = QVBoxLayout(queue_group)
 
         self._queue_model = QueueTableModel()
+        self._queue_model.on_reorder = self._on_queue_reorder
         self._queue_table = QTableView()
         self._queue_table.setModel(self._queue_model)
         self._queue_table.setSelectionBehavior(QAbstractItemView.SelectionBehavior.SelectRows)
@@ -85,6 +86,20 @@ class SenderPage(QWidget):
 
         self._progress_delegate = ProgressBarDelegate(self._queue_table)
         self._queue_table.setItemDelegateForColumn(5, self._progress_delegate)
+
+        # 拖拽排序
+        self._queue_table.setDragDropMode(QAbstractItemView.DragDropMode.InternalMove)
+        self._queue_table.setDragDropOverwriteMode(False)
+
+        # 右键菜单
+        self._queue_table.setContextMenuPolicy(Qt.ContextMenuPolicy.CustomContextMenu)
+        self._queue_table.customContextMenuRequested.connect(self._on_queue_context_menu)
+
+        # 双击查看详情
+        self._queue_table.doubleClicked.connect(self._on_queue_double_clicked)
+
+        # 键盘删除
+        QShortcut(QKeySequence.StandardKey.Delete, self._queue_table, self._delete_selected_task)
 
         queue_layout.addWidget(self._queue_table)
 
@@ -329,6 +344,94 @@ class SenderPage(QWidget):
         )
         self.sender_controller.start_task(target, state.video_state.loaded_danmakus, state.get_api_auth(), state.sender_config)
 
+    @Slot(QModelIndex)
+    def _on_queue_double_clicked(self, index: QModelIndex):
+        task = self._queue_model.get_task_at(index.row())
+        if task:
+            self._show_task_detail(task)
+
+    @Slot(QPoint)
+    def _on_queue_context_menu(self, pos: QPoint):
+        index = self._queue_table.indexAt(pos)
+        if not index.isValid():
+            return
+        task = self._queue_model.get_task_at(index.row())
+        if not task:
+            return
+
+        menu = QMenu(self)
+        is_pending = task.status == TaskStatus.PENDING
+
+        menu.addAction("查看详情", lambda: self._show_task_detail(task))
+        menu.addSeparator()
+        menu.addAction("上移", lambda: self._move_task(task.task_id, -1)).setEnabled(is_pending)
+        menu.addAction("下移", lambda: self._move_task(task.task_id, 1)).setEnabled(is_pending)
+        menu.addSeparator()
+        menu.addAction("删除", lambda: self._remove_task(task.task_id)).setEnabled(is_pending)
+
+        menu.exec(self._queue_table.mapToGlobal(pos))
+
+    def _show_task_detail(self, task: QueueTask):
+        status_map = {
+            TaskStatus.PENDING: "等待中",
+            TaskStatus.RUNNING: "执行中",
+            TaskStatus.COMPLETED: "已完成",
+            TaskStatus.FAILED: "失败",
+            TaskStatus.SKIPPED: "已跳过",
+        }
+        cfg = task.config_snapshot
+        burst_info = f"爆发模式: {cfg.burst_size}条/组, 休息{cfg.rest_min}-{cfg.rest_max}秒" if cfg.burst_enabled else "爆发模式: 关闭"
+        dm_preview = "\n".join(f"  {i+1}. {dm.msg}" for i, dm in enumerate(task.danmakus[:10]))
+        if len(task.danmakus) > 10:
+            dm_preview += f"\n  ... 共 {len(task.danmakus)} 条"
+
+        part_label = f" ({task.part_name})" if task.part_name else ""
+        url = f"https://www.bilibili.com/video/{task.target.bvid}"
+        if task.part_name:
+            # 从 "P1 - 22-1" 中提取页码
+            try:
+                page = int(task.part_name.split(" ")[0][1:])
+                url += f"?p={page}"
+            except (ValueError, IndexError):
+                pass
+        info = (
+            f"任务ID: {task.task_id}\n"
+            f"视频: {task.target.title or task.target.bvid}\n"
+            f"BVID: {task.target.bvid}\n"
+            f"CID: {task.target.cid}{part_label}\n"
+            f"链接: {url}\n"
+            f"\n"
+            f"状态: {status_map.get(task.status, '未知')}\n"
+            f"已发送: {task.attempted}/{task.total}\n"
+        )
+        if task.error_msg:
+            info += f"错误: {task.error_msg}\n"
+        info += (
+            f"\n"
+            f"发送配置:\n"
+            f"  延迟: {cfg.min_delay}-{cfg.max_delay}秒\n"
+            f"  {burst_info}\n"
+            f"  任务间隔: {cfg.delay_between_tasks}秒\n"
+            f"  跳过已发送: {'是' if cfg.skip_sent else '否'}\n"
+            f"\n"
+            f"弹幕列表:\n{dm_preview}"
+        )
+        QMessageBox.information(self, "任务详情", info)
+
+    def _move_task(self, task_id: str, direction: int):
+        self.state.queue_state.move_task(task_id, direction)
+
+    def _remove_task(self, task_id: str):
+        self.state.queue_state.remove_task(task_id)
+
+    def _delete_selected_task(self):
+        indexes = self._queue_table.selectedIndexes()
+        if not indexes:
+            return
+        task = self._queue_model.get_task_at(indexes[0].row())
+        if task and task.status == TaskStatus.PENDING:
+            self._remove_task(task.task_id)
+
     @Slot()
     def _add_to_queue(self):
         """将当前配置添加到发送队列"""
@@ -353,6 +456,7 @@ class SenderPage(QWidget):
             target=target,
             danmakus=list(state.video_state.loaded_danmakus),
             config_snapshot=state.sender_config.model_copy(),
+            part_name=state.video_state.selected_part_name,
         )
         state.queue_state.add_task(task)
         self.logger.info(f"已添加到队列: {target.display_string} ({len(task.danmakus)} 条弹幕)")
@@ -476,6 +580,11 @@ class SenderPage(QWidget):
     # endregion
     # region Slots Queue
 
+    def _on_queue_reorder(self, reordered_tasks):
+        """拖拽排序后同步 QueueState"""
+        self.state.queue_state._tasks = reordered_tasks
+        self.state.queue_state.tasksChanged.emit()
+
     def _on_queue_changed(self):
         self._queue_model.set_tasks(self.state.queue_state.tasks)
 
@@ -576,6 +685,7 @@ class SenderPage(QWidget):
         self._btn_start_queue.setEnabled(not running)
         self._btn_stop_queue.setEnabled(running)
         self._btn_clear_completed.setEnabled(not running)
+        self._queue_model.queue_running = running
         if running:
             self._set_inputs_locked(True)
             self.log_output.clear()

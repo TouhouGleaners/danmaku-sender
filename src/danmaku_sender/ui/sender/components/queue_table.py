@@ -1,6 +1,7 @@
 from enum import IntEnum
+from typing import Callable
 
-from PySide6.QtCore import Qt, QAbstractTableModel, QModelIndex, QSize
+from PySide6.QtCore import Qt, QAbstractTableModel, QModelIndex, QSize, QMimeData
 from PySide6.QtGui import QBrush, QColor, QPainter
 from PySide6.QtWidgets import QStyledItemDelegate, QStyleOptionProgressBar, QStyleOptionViewItem, QStyle, QApplication
 
@@ -60,6 +61,8 @@ class QueueTableModel(QAbstractTableModel):
     def __init__(self, parent=None):
         super().__init__(parent)
         self._tasks: list[QueueTask] = []
+        self.on_reorder: Callable[[list[QueueTask]], None] | None = None
+        self.queue_running: bool = False
 
     def set_tasks(self, tasks: list[QueueTask]):
         self.beginResetModel()
@@ -163,3 +166,81 @@ class QueueTableModel(QAbstractTableModel):
             TaskStatus.FAILED: "失败",
             TaskStatus.SKIPPED: "已跳过",
         }.get(status, "未知")
+
+    # --- 拖拽排序 ---
+
+    def supportedDropActions(self) -> Qt.DropAction:
+        return Qt.DropAction.MoveAction
+
+    def flags(self, index: QModelIndex) -> Qt.ItemFlag:
+        if not index.isValid():
+            return Qt.ItemFlag.ItemIsDropEnabled if not self.queue_running else Qt.NoItemFlags
+        default = super().flags(index)
+        if self.queue_running:
+            return default
+        task = self._tasks[index.row()]
+        if task.status == TaskStatus.PENDING:
+            return default | Qt.ItemFlag.ItemIsDragEnabled
+        return default
+
+    def mimeTypes(self) -> list[str]:
+        return ["application/x-queue-task-row"]
+
+    def mimeData(self, indexes: list[QModelIndex]) -> QMimeData:
+        rows = sorted(set(idx.row() for idx in indexes))
+        mime = QMimeData()
+        mime.setText(",".join(str(r) for r in rows))
+        return mime
+
+    def dropMimeData(self, data: QMimeData, action: Qt.DropAction, row: int, col: int, parent: QModelIndex) -> bool:
+        if action != Qt.DropAction.MoveAction:
+            return False
+
+        raw = data.text()
+        if not raw:
+            return False
+
+        try:
+            source_rows = [int(r) for r in raw.split(",")]
+        except ValueError:
+            return False
+
+        if not source_rows:
+            return False
+
+        # 校验行号范围和唯一性
+        if any(r < 0 or r >= len(self._tasks) for r in source_rows):
+            return False
+        if len(source_rows) != len(set(source_rows)):
+            return False
+
+        # 只允许拖动 PENDING 任务
+        for r in source_rows:
+            if self._tasks[r].status != TaskStatus.PENDING:
+                return False
+
+        dest_row = row if row >= 0 else parent.row()
+        if dest_row < 0:
+            dest_row = len(self._tasks)
+
+        # 只能插入到 PENDING 区域或队列末尾
+        if dest_row < len(self._tasks) and self._tasks[dest_row].status != TaskStatus.PENDING:
+            return False
+
+        moved = [self._tasks[r] for r in source_rows]
+        remaining = [t for i, t in enumerate(self._tasks) if i not in source_rows]
+
+        offset = sum(1 for r in source_rows if r < dest_row)
+        insert_at = dest_row - offset
+
+        reordered = remaining[:insert_at] + moved + remaining[insert_at:]
+
+        # 委托给上层同步 QueueState
+        if self.on_reorder:
+            self.on_reorder(reordered)
+        else:
+            self.beginResetModel()
+            self._tasks = reordered
+            self.endResetModel()
+
+        return True
