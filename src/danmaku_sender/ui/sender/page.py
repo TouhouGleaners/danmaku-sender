@@ -378,17 +378,43 @@ class SenderPage(QWidget):
             TaskStatus.FAILED: "失败",
             TaskStatus.SKIPPED: "已跳过",
         }
+        cfg = task.config_snapshot
+        burst_info = f"爆发模式: {cfg.burst_size}条/组, 休息{cfg.rest_min}-{cfg.rest_max}秒" if cfg.burst_enabled else "爆发模式: 关闭"
+        dm_preview = "\n".join(f"  {i+1}. {dm.msg}" for i, dm in enumerate(task.danmakus[:10]))
+        if len(task.danmakus) > 10:
+            dm_preview += f"\n  ... 共 {len(task.danmakus)} 条"
+
+        part_label = f" ({task.part_name})" if task.part_name else ""
+        url = f"https://www.bilibili.com/video/{task.target.bvid}"
+        if task.part_name:
+            # 从 "P1 - 22-1" 中提取页码
+            try:
+                page = int(task.part_name.split(" ")[0][1:])
+                url += f"?p={page}"
+            except (ValueError, IndexError):
+                pass
         info = (
             f"任务ID: {task.task_id}\n"
             f"视频: {task.target.title or task.target.bvid}\n"
             f"BVID: {task.target.bvid}\n"
-            f"CID: {task.target.cid}\n"
-            f"弹幕数: {len(task.danmakus)}\n"
+            f"CID: {task.target.cid}{part_label}\n"
+            f"链接: {url}\n"
+            f"\n"
+            f"状态: {status_map.get(task.status, '未知')}\n"
             f"已发送: {task.attempted}/{task.total}\n"
-            f"状态: {status_map.get(task.status, '未知')}"
         )
         if task.error_msg:
-            info += f"\n错误: {task.error_msg}"
+            info += f"错误: {task.error_msg}\n"
+        info += (
+            f"\n"
+            f"发送配置:\n"
+            f"  延迟: {cfg.min_delay}-{cfg.max_delay}秒\n"
+            f"  {burst_info}\n"
+            f"  任务间隔: {cfg.delay_between_tasks}秒\n"
+            f"  跳过已发送: {'是' if cfg.skip_sent else '否'}\n"
+            f"\n"
+            f"弹幕列表:\n{dm_preview}"
+        )
         QMessageBox.information(self, "任务详情", info)
 
     def _move_task(self, task_id: str, direction: int):
@@ -429,6 +455,7 @@ class SenderPage(QWidget):
             target=target,
             danmakus=list(state.video_state.loaded_danmakus),
             config_snapshot=state.sender_config.model_copy(),
+            part_name=state.video_state.selected_part_name,
         )
         state.queue_state.add_task(task)
         self.logger.info(f"已添加到队列: {target.display_string} ({len(task.danmakus)} 条弹幕)")
