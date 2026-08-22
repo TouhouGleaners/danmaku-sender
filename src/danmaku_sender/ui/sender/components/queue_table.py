@@ -46,6 +46,8 @@ class ProgressBarDelegate(QStyledItemDelegate):
                 bar.text = "失败"
             case TaskStatus.SKIPPED:
                 bar.text = "跳过"
+            case TaskStatus.PAUSED:
+                bar.text = "暂停"
             case TaskStatus.PENDING:
                 bar.text = "等待"
 
@@ -138,7 +140,7 @@ class QueueTableModel(QAbstractTableModel):
             case QueueCol.COUNT:
                 return str(len(task.danmakus))
             case QueueCol.STATUS:
-                return self._status_text(task.status)
+                return task.status.value
         return ""
 
     def _get_color(self, task: QueueTask, col: int):
@@ -149,6 +151,7 @@ class QueueTableModel(QAbstractTableModel):
                 TaskStatus.COMPLETED: QColor("#27ae60"),
                 TaskStatus.FAILED: QColor("#c0392b"),
                 TaskStatus.SKIPPED: QColor("#95a5a6"),
+                TaskStatus.PAUSED: QColor("#9b59b6"),
             }.get(task.status, QColor("#f39c12")))
         return None
 
@@ -157,15 +160,6 @@ class QueueTableModel(QAbstractTableModel):
             return task.error_msg
         return None
 
-    @staticmethod
-    def _status_text(status: TaskStatus) -> str:
-        return {
-            TaskStatus.PENDING: "等待中",
-            TaskStatus.RUNNING: "执行中",
-            TaskStatus.COMPLETED: "已完成",
-            TaskStatus.FAILED: "失败",
-            TaskStatus.SKIPPED: "已跳过",
-        }.get(status, "未知")
 
     # --- 拖拽排序 ---
 
@@ -174,7 +168,7 @@ class QueueTableModel(QAbstractTableModel):
 
     def flags(self, index: QModelIndex) -> Qt.ItemFlag:
         if not index.isValid():
-            return Qt.ItemFlag.ItemIsDropEnabled if not self.queue_running else Qt.NoItemFlags
+            return Qt.ItemFlag.ItemIsDropEnabled if not self.queue_running else Qt.ItemFlag.NoItemFlags
         default = super().flags(index)
         if self.queue_running:
             return default
@@ -189,14 +183,14 @@ class QueueTableModel(QAbstractTableModel):
     def mimeData(self, indexes: list[QModelIndex]) -> QMimeData:
         rows = sorted(set(idx.row() for idx in indexes))
         mime = QMimeData()
-        mime.setText(",".join(str(r) for r in rows))
+        mime.setData("application/x-queue-task-row", ",".join(str(r) for r in rows).encode())
         return mime
 
     def dropMimeData(self, data: QMimeData, action: Qt.DropAction, row: int, col: int, parent: QModelIndex) -> bool:
         if action != Qt.DropAction.MoveAction:
             return False
 
-        raw = data.text()
+        raw = bytes(data.data("application/x-queue-task-row")).decode()  # type: ignore[arg-type]
         if not raw:
             return False
 

@@ -372,13 +372,6 @@ class SenderPage(QWidget):
         menu.exec(self._queue_table.mapToGlobal(pos))
 
     def _show_task_detail(self, task: QueueTask):
-        status_map = {
-            TaskStatus.PENDING: "等待中",
-            TaskStatus.RUNNING: "执行中",
-            TaskStatus.COMPLETED: "已完成",
-            TaskStatus.FAILED: "失败",
-            TaskStatus.SKIPPED: "已跳过",
-        }
         cfg = task.config_snapshot
         burst_info = f"爆发模式: {cfg.burst_size}条/组, 休息{cfg.rest_min}-{cfg.rest_max}秒" if cfg.burst_enabled else "爆发模式: 关闭"
         dm_preview = "\n".join(f"  {i+1}. {dm.msg}" for i, dm in enumerate(task.danmakus[:10]))
@@ -401,7 +394,7 @@ class SenderPage(QWidget):
             f"CID: {task.target.cid}{part_label}\n"
             f"链接: {url}\n"
             f"\n"
-            f"状态: {status_map.get(task.status, '未知')}\n"
+            f"状态: {task.status.value}\n"
             f"已发送: {task.attempted}/{task.total}\n"
         )
         if task.error_msg:
@@ -662,18 +655,21 @@ class SenderPage(QWidget):
         self.progress_bar.setAlignment(Qt.AlignmentFlag.AlignCenter)
 
     def _calc_done_dm(self) -> int:
-        """计算全队列已处理弹幕数"""
-        return sum(t.attempted for t in self.state.queue_state.tasks if t.status != TaskStatus.PENDING)
+        """计算全队列已处理弹幕数（不含 PENDING 和 PAUSED）"""
+        return sum(t.attempted for t in self.state.queue_state.tasks if t.status not in (TaskStatus.PENDING, TaskStatus.PAUSED))
 
     def _send_queue_notification(self):
         queue_state = self.state.queue_state
         completed = sum(1 for t in queue_state.tasks if t.status == TaskStatus.COMPLETED)
         failed = sum(1 for t in queue_state.tasks if t.status == TaskStatus.FAILED)
+        paused = sum(1 for t in queue_state.tasks if t.status == TaskStatus.PAUSED)
         skipped = sum(1 for t in queue_state.tasks if t.status == TaskStatus.SKIPPED)
         total = len(queue_state.tasks)
         summary = f"完成: {completed} / 失败: {failed} / 跳过: {skipped} / 总计: {total}"
 
-        if skipped > 0:
+        if paused > 0:
+            send_windows_notification("弹幕队列已暂停", f"{summary}\n暂停的任务可重新启动继续发送。")
+        elif skipped > 0:
             send_windows_notification("弹幕队列已中止", summary)
         elif failed > 0:
             send_windows_notification("弹幕队列发送完毕(有失败)", summary)

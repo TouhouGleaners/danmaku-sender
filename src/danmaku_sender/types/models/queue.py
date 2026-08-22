@@ -1,6 +1,6 @@
 import uuid
 from dataclasses import dataclass, field
-from enum import IntEnum
+from enum import Enum
 
 from .common import VideoTarget
 from .danmaku import Danmaku
@@ -8,13 +8,14 @@ from .danmaku import Danmaku
 from danmaku_sender.config import SenderConfig
 
 
-class TaskStatus(IntEnum):
+class TaskStatus(Enum):
     """队列任务状态"""
-    PENDING = 0     # 等待中
-    RUNNING = 1     # 执行中
-    COMPLETED = 2   # 已完成
-    FAILED = 3      # 失败
-    SKIPPED = 4     # 已跳过
+    PENDING = "等待中"
+    RUNNING = "发送中"
+    PAUSED = "已暂停"
+    COMPLETED = "已完成"
+    FAILED = "失败"
+    SKIPPED = "已跳过"
 
 
 @dataclass
