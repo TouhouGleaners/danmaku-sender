@@ -559,8 +559,8 @@ class SenderPage(QWidget):
         self.progress_bar.setAlignment(Qt.AlignmentFlag.AlignCenter)
 
     def _calc_done_dm(self) -> int:
-        """计算全队列已处理弹幕数（COMPLETED/RUNNING 均用 attempted）"""
-        return sum(t.attempted for t in self.state.queue_state.tasks if t.status in (TaskStatus.COMPLETED, TaskStatus.RUNNING))
+        """计算全队列已处理弹幕数"""
+        return sum(t.attempted for t in self.state.queue_state.tasks if t.status != TaskStatus.PENDING)
 
     def _send_queue_notification(self):
         queue_state = self.state.queue_state
