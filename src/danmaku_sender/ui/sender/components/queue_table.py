@@ -190,13 +190,13 @@ class QueueTableModel(QAbstractTableModel):
         if action != Qt.DropAction.MoveAction:
             return False
 
-        raw = bytes(data.data("application/x-queue-task-row")).decode()  # type: ignore[arg-type]
-        if not raw:
+        try:
+            raw = bytes(data.data("application/x-queue-task-row")).decode()  # type: ignore[arg-type]
+            source_rows = [int(r) for r in raw.split(",")]
+        except (ValueError, UnicodeDecodeError):
             return False
 
-        try:
-            source_rows = [int(r) for r in raw.split(",")]
-        except ValueError:
+        if not raw:
             return False
 
         if not source_rows:
