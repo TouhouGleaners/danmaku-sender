@@ -391,7 +391,7 @@ class QueueWorker(WorkerThread):
                 logger.error(f"致命错误，队列中止于: {task.target.display_string}")
                 return False
 
-            if ctx.is_manually_stopped:
+            if ctx.is_manually_stopped and not ctx.auto_stop_reason:
                 self.queue_state.update_task_status(task.task_id, TaskStatus.PAUSED, "用户手动暂停")
             else:
                 self.queue_state.update_task_status(task.task_id, TaskStatus.COMPLETED)

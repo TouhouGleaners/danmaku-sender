@@ -665,7 +665,7 @@ class SenderPage(QWidget):
         paused = sum(1 for t in queue_state.tasks if t.status == TaskStatus.PAUSED)
         skipped = sum(1 for t in queue_state.tasks if t.status == TaskStatus.SKIPPED)
         total = len(queue_state.tasks)
-        summary = f"完成: {completed} / 失败: {failed} / 跳过: {skipped} / 总计: {total}"
+        summary = f"完成: {completed} / 失败: {failed} / 暂停: {paused} / 跳过: {skipped} / 总计: {total}"
 
         if paused > 0:
             send_windows_notification("弹幕队列已暂停", f"{summary}\n暂停的任务可重新启动继续发送。")
