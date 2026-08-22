@@ -29,3 +29,8 @@ class QueueTask:
     task_id: str = field(default_factory=lambda: uuid.uuid4().hex[:8])
     status: TaskStatus = TaskStatus.PENDING
     error_msg: str = ""
+    attempted: int = 0
+    total: int = field(init=False)
+
+    def __post_init__(self):
+        self.total = len(self.danmakus)
