@@ -3,10 +3,10 @@ import logging
 from PySide6.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout, QPushButton, QLabel, QDialog,
     QGroupBox, QTextEdit, QProgressBar, QFileDialog, QMessageBox,
-    QTableView, QHeaderView, QAbstractItemView
+    QTableView, QHeaderView, QAbstractItemView, QMenu
 )
-from PySide6.QtGui import QTextCursor, QDragEnterEvent, QDropEvent
-from PySide6.QtCore import Qt, QDateTime, Signal, Slot
+from PySide6.QtGui import QTextCursor, QDragEnterEvent, QDropEvent, QShortcut, QKeySequence
+from PySide6.QtCore import Qt, QPoint, QDateTime, Signal, Slot
 
 from .components import StrategySettingsTabs, BasicParamsGroup, PreSendDialog, QueueTableModel
 from .components.queue_table import ProgressBarDelegate
@@ -85,6 +85,17 @@ class SenderPage(QWidget):
 
         self._progress_delegate = ProgressBarDelegate(self._queue_table)
         self._queue_table.setItemDelegateForColumn(5, self._progress_delegate)
+
+        # 拖拽排序
+        self._queue_table.setDragDropMode(QAbstractItemView.DragDropMode.InternalMove)
+        self._queue_table.setDragDropOverwriteMode(False)
+
+        # 右键菜单
+        self._queue_table.setContextMenuPolicy(Qt.ContextMenuPolicy.CustomContextMenu)
+        self._queue_table.customContextMenuRequested.connect(self._on_queue_context_menu)
+
+        # 键盘删除
+        QShortcut(QKeySequence.StandardKey.Delete, self._queue_table, self._delete_selected_task)
 
         queue_layout.addWidget(self._queue_table)
 
@@ -328,6 +339,39 @@ class SenderPage(QWidget):
             title=state.video_state.video_title
         )
         self.sender_controller.start_task(target, state.video_state.loaded_danmakus, state.get_api_auth(), state.sender_config)
+
+    @Slot(QPoint)
+    def _on_queue_context_menu(self, pos: QPoint):
+        index = self._queue_table.indexAt(pos)
+        if not index.isValid():
+            return
+        task = self._queue_model.get_task_at(index.row())
+        if not task:
+            return
+
+        menu = QMenu(self)
+        is_pending = task.status == TaskStatus.PENDING
+
+        menu.addAction("上移", lambda: self._move_task(task.task_id, -1)).setEnabled(is_pending)
+        menu.addAction("下移", lambda: self._move_task(task.task_id, 1)).setEnabled(is_pending)
+        menu.addSeparator()
+        menu.addAction("删除", lambda: self._remove_task(task.task_id)).setEnabled(is_pending)
+
+        menu.exec(self._queue_table.mapToGlobal(pos))
+
+    def _move_task(self, task_id: str, direction: int):
+        self.state.queue_state.move_task(task_id, direction)
+
+    def _remove_task(self, task_id: str):
+        self.state.queue_state.remove_task(task_id)
+
+    def _delete_selected_task(self):
+        indexes = self._queue_table.selectedIndexes()
+        if not indexes:
+            return
+        task = self._queue_model.get_task_at(indexes[0].row())
+        if task and task.status == TaskStatus.PENDING:
+            self._remove_task(task.task_id)
 
     @Slot()
     def _add_to_queue(self):

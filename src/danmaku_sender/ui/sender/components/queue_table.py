@@ -1,6 +1,6 @@
 from enum import IntEnum
 
-from PySide6.QtCore import Qt, QAbstractTableModel, QModelIndex, QSize
+from PySide6.QtCore import Qt, QAbstractTableModel, QModelIndex, QSize, QMimeData
 from PySide6.QtGui import QBrush, QColor, QPainter
 from PySide6.QtWidgets import QStyledItemDelegate, QStyleOptionProgressBar, QStyleOptionViewItem, QStyle, QApplication
 
@@ -163,3 +163,60 @@ class QueueTableModel(QAbstractTableModel):
             TaskStatus.FAILED: "失败",
             TaskStatus.SKIPPED: "已跳过",
         }.get(status, "未知")
+
+    # --- 拖拽排序 ---
+
+    def supportedDropActions(self) -> Qt.DropAction:
+        return Qt.DropAction.MoveAction
+
+    def flags(self, index: QModelIndex) -> Qt.ItemFlag:
+        if not index.isValid():
+            return Qt.ItemFlag.ItemIsDropEnabled
+        default = super().flags(index)
+        task = self._tasks[index.row()]
+        if task.status == TaskStatus.PENDING:
+            return default | Qt.ItemFlag.ItemIsDragEnabled
+        return default
+
+    def mimeTypes(self) -> list[str]:
+        return ["application/x-queue-task-row"]
+
+    def mimeData(self, indexes: list[QModelIndex]) -> QMimeData:
+        rows = sorted(set(idx.row() for idx in indexes))
+        mime = QMimeData()
+        mime.setData("application/x-queue-task-row", ",".join(str(r) for r in rows).encode())
+        return mime
+
+    def dropMimeData(self, data: QMimeData, action: Qt.DropAction, row: int, col: int, parent: QModelIndex) -> bool:
+        if action != Qt.DropAction.MoveAction:
+            return False
+        raw = data.data("application/x-queue-task-row").data().decode()
+        source_rows = [int(r) for r in raw.split(",")]
+        if not source_rows:
+            return False
+
+        # 只允许拖动 PENDING 任务
+        for r in source_rows:
+            if r >= len(self._tasks) or self._tasks[r].status != TaskStatus.PENDING:
+                return False
+
+        dest_row = row if row >= 0 else parent.row()
+        if dest_row < 0:
+            dest_row = len(self._tasks)
+
+        # 只能插入到 PENDING 区域或队列末尾
+        if dest_row < len(self._tasks) and self._tasks[dest_row].status != TaskStatus.PENDING:
+            return False
+
+        moved = [self._tasks[r] for r in source_rows]
+        remaining = [t for i, t in enumerate(self._tasks) if i not in source_rows]
+
+        # 在目标位置插入（考虑删除后的偏移）
+        offset = sum(1 for r in source_rows if r < dest_row)
+        insert_at = dest_row - offset
+
+        self.beginResetModel()
+        self._tasks = remaining[:insert_at] + moved + remaining[insert_at:]
+        self.endResetModel()
+
+        return True
