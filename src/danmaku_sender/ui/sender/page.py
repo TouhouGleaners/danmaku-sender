@@ -535,27 +535,21 @@ class SenderPage(QWidget):
         """更新底部进度条（队列级 + 弹幕总数 + ETA）"""
         total_dm = self._queue_total_dm
         done_dm = self._calc_done_dm()
-
-        if total_dm > 0:
-            self.progress_bar.setValue(int((done_dm / total_dm) * 100))
-
-        if task_total <= 0:
-            return
-
         pct = int((done_dm / total_dm) * 100) if total_dm > 0 else 0
 
-        eta = self._queue_eta
-        if eta <= 0:
-            self.progress_bar.setFormat("%p%")
-            return
+        if total_dm > 0:
+            self.progress_bar.setValue(pct)
 
-        duration = format_duration(eta)
-        finish_time = QDateTime.currentDateTime().addSecs(int(eta)).toString("HH:mm:ss")
-        self.progress_bar.setFormat(
-            f"[队列 {self._queue_current}/{self._queue_total}] "
-            f"[弹幕 {done_dm}/{total_dm}] "
-            f"{pct}% (剩余 {duration} | 预计 {finish_time} 结束)"
-        )
+        base = f"[队列 {self._queue_current}/{self._queue_total}] [弹幕 {done_dm}/{total_dm}] {pct}%"
+
+        eta = self._queue_eta
+        if eta > 0:
+            duration = format_duration(eta)
+            finish_time = QDateTime.currentDateTime().addSecs(int(eta)).toString("HH:mm:ss")
+            self.progress_bar.setFormat(f"{base} (剩余 {duration} | 预计 {finish_time} 结束)")
+        else:
+            self.progress_bar.setFormat(base)
+
         self.progress_bar.setAlignment(Qt.AlignmentFlag.AlignCenter)
 
     def _calc_done_dm(self) -> int:
