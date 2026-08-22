@@ -426,7 +426,10 @@ class QueueWorker(WorkerThread):
             )
 
         queue_eta = _task_eta(current_attempted, current_total, current_config)
-        for t in future_tasks:
-            if t.status == TaskStatus.PENDING:
-                queue_eta += _task_eta(0, t.total, t.config_snapshot)
+        pending_future = [t for t in future_tasks if t.status == TaskStatus.PENDING]
+        for t in pending_future:
+            queue_eta += _task_eta(0, t.total, t.config_snapshot)
+        # 任务间防风控间隔（最后一个任务之后不需要等待）
+        if pending_future:
+            queue_eta += len(pending_future) * current_config.delay_between_tasks
         return queue_eta
