@@ -193,9 +193,9 @@ class MainWindow(QMainWindow):
         self._sc_open = QShortcut(QKeySequence.StandardKey.Open, self)
         self._sc_open.activated.connect(self.page_sender._select_file)
 
-        # Ctrl+Enter: 开始发送
+        # Ctrl+Enter: 启动队列
         self._sc_send = QShortcut(QKeySequence(Qt.Key.Key_Return | Qt.KeyboardModifier.ControlModifier), self)
-        self._sc_send.activated.connect(self.page_sender._toggle_task)
+        self._sc_send.activated.connect(self.page_sender._start_queue)
 
         # Ctrl+,: 打开全局设置
         self._sc_settings = QShortcut(QKeySequence(Qt.Key.Key_Comma | Qt.KeyboardModifier.ControlModifier), self)

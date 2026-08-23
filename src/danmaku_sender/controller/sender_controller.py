@@ -157,6 +157,7 @@ class SenderController(QObject):
         self._queue_worker = QueueWorker(
             queue_state=queue_state,
             auth_config=auth_config,
+            sender_config=self.state.sender_config,
             history_manager=self.history_manager,
             stop_event=self._stop_event,
         )
@@ -308,6 +309,7 @@ class QueueWorker(WorkerThread):
         self,
         queue_state: QueueState,
         auth_config: ApiAuthConfig,
+        sender_config: SenderConfig,
         history_manager: HistoryManager,
         stop_event: threading.Event,
         parent=None,
@@ -315,6 +317,7 @@ class QueueWorker(WorkerThread):
         super().__init__(parent)
         self.queue_state = queue_state
         self.auth_config = auth_config
+        self.sender_config = sender_config
         self.history_manager = history_manager
         self.stop_event = stop_event
 
@@ -377,10 +380,12 @@ class QueueWorker(WorkerThread):
 
         try:
             pipeline = SendPipeline(self.auth_config, self.history_manager)
+            config = task.config_snapshot.model_copy()
+            config.skip_sent = self.sender_config.skip_sent  # 全局策略，不走快照
             job = SendJob(
                 target=task.target,
                 danmakus=task.danmakus,
-                config=task.config_snapshot,
+                config=config,
                 stop_event=self.stop_event,
             )
             ctx = pipeline.execute(job, progress_emitter=progress_emitter)
