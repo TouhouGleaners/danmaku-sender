@@ -138,6 +138,8 @@ class QueueTableModel(QAbstractTableModel):
             case QueueCol.TITLE:
                 return task.target.title or task.target.bvid
             case QueueCol.PART:
+                if task.p_title:
+                    return f"P{task.p_index} - {task.p_title}"
                 return f"P{task.p_index}"
             case QueueCol.COUNT:
                 return str(len(task.danmakus))
