@@ -344,52 +344,68 @@ class SenderPage(QWidget):
         return super().eventFilter(obj, event)
 
     @staticmethod
-    def _is_xml_drag(event: QDragEnterEvent | QDragMoveEvent | QDropEvent) -> bool:
-        if urls := event.mimeData().urls():
-            return urls[0].isLocalFile() and urls[0].toLocalFile().lower().endswith('.xml')
-        return False
+    def _get_xml_files(event: QDragEnterEvent | QDragMoveEvent | QDropEvent) -> list[str]:
+        """从拖放事件中提取所有本地 XML 文件路径"""
+        result = []
+        for url in event.mimeData().urls():
+            if url.isLocalFile() and url.toLocalFile().lower().endswith('.xml'):
+                result.append(url.toLocalFile())
+        return result
 
     def _on_table_drag_enter(self, event: QDragEnterEvent | QDragMoveEvent | QDropEvent) -> bool:
-        if self._is_xml_drag(event):
+        if self.state.sender_is_active:
+            return False
+        if self._get_xml_files(event):
             event.acceptProposedAction()
             return True
         return False
 
     def _on_table_drag_move(self, event: QDragEnterEvent | QDragMoveEvent | QDropEvent) -> bool:
-        if not self._is_xml_drag(event):
+        if self.state.sender_is_active or not self._get_xml_files(event):
             return False
         viewport_pos = self._queue_table.viewport().mapFrom(self._queue_table, event.pos())
         index = self._queue_table.indexAt(viewport_pos)
         task = self._queue_model.get_task_at(index.row()) if index.isValid() else None
         if task and task.status in (TaskStatus.UNCONFIGURED, TaskStatus.PENDING):
             self._queue_table.selectRow(index.row())
+            event.acceptProposedAction()
         else:
             self._queue_table.clearSelection()
+            event.ignore()
         return True
 
     def _on_table_drop(self, event: QDragEnterEvent | QDragMoveEvent | QDropEvent) -> bool:
         self._queue_table.clearSelection()
-        if not self._is_xml_drag(event):
+        self._queue_table.unsetCursor()
+        xml_files = self._get_xml_files(event)
+        if not xml_files:
             return False
-        file_path = event.mimeData().urls()[0].toLocalFile()
+
         viewport_pos = self._queue_table.viewport().mapFrom(self._queue_table, event.pos())
         index = self._queue_table.indexAt(viewport_pos)
         task = self._queue_model.get_task_at(index.row()) if index.isValid() else None
-        if task and task.status in (TaskStatus.UNCONFIGURED, TaskStatus.PENDING):
-            self._assign_file_to_task(task, file_path)
-            event.accept()
-            return True
-        self._assign_file_to_first_pending(file_path)
+
+        if not task or task.status not in (TaskStatus.UNCONFIGURED, TaskStatus.PENDING):
+            return False
+
+        if len(xml_files) == 1:
+            self._assign_file_to_task(task, xml_files[0])
+        else:
+            self._assign_files_to_pending(xml_files, index.row())
         event.accept()
         return True
 
-    def _assign_file_to_first_pending(self, file_path: str):
-        """将 XML 文件分配给第一个 UNCONFIGURED 或 PENDING 任务"""
-        for task in self.state.queue_state.tasks:
-            if task.status in (TaskStatus.UNCONFIGURED, TaskStatus.PENDING):
-                self._assign_file_to_task(task, file_path)
-                return
-        self.logger.warning("没有未配置的任务，无法分配弹幕文件。")
+    def _assign_files_to_pending(self, file_paths: list[str], start_row: int = 0):
+        """将多个 XML 文件从指定行开始按顺序分配给可配置的任务"""
+        tasks = self.state.queue_state.tasks
+        pending_from_start = [
+            t for t in tasks[start_row:]
+            if t.status in (TaskStatus.UNCONFIGURED, TaskStatus.PENDING)
+        ]
+        for i, file_path in enumerate(file_paths):
+            if i >= len(pending_from_start):
+                break
+            self._assign_file_to_task(pending_from_start[i], file_path)
 
     def _assign_file_to_task(self, task: QueueTask, file_path: str):
         """解析 XML 并分配弹幕给指定任务"""
