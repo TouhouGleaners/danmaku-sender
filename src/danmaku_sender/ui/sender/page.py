@@ -5,8 +5,8 @@ from PySide6.QtWidgets import (
     QGroupBox, QTextEdit, QProgressBar, QMessageBox,
     QTableView, QHeaderView, QAbstractItemView, QMenu
 )
-from PySide6.QtGui import QTextCursor, QDragEnterEvent, QDropEvent, QShortcut, QKeySequence
-from PySide6.QtCore import Qt, QPoint, QModelIndex, QDateTime, QTimer, Signal, Slot
+from PySide6.QtGui import QTextCursor, QShortcut, QKeySequence, QDragEnterEvent, QDragMoveEvent, QDropEvent
+from PySide6.QtCore import Qt, QPoint, QModelIndex, QDateTime, QEvent, QTimer, Signal, Slot
 
 from .components import QueueTableModel
 from .components.queue_table import ProgressBarDelegate
@@ -16,6 +16,7 @@ from .data_binding import SenderDataBinding
 from danmaku_sender.ui.framework.style_loader import SvgIcon
 from danmaku_sender.controller.video_controller import VideoController
 from danmaku_sender.controller.sender_controller import SenderController, SenderStatus
+from danmaku_sender.service.danmaku_parser import DanmakuParser
 from danmaku_sender.types.models.video import VideoInfo
 from danmaku_sender.types.models.common import VideoTarget
 from danmaku_sender.types.models.queue import QueueTask, TaskStatus
@@ -48,7 +49,6 @@ class SenderPage(QWidget):
         self._icon_start = SvgIcon("start.svg")
         self._icon_stop = SvgIcon("stop.svg")
 
-        self.setAcceptDrops(True)  # 全局拖拽接收
 
     def _create_ui(self):
         # 主布局 - 垂直布局
@@ -88,6 +88,11 @@ class SenderPage(QWidget):
         # 右键菜单
         self._queue_table.setContextMenuPolicy(Qt.ContextMenuPolicy.CustomContextMenu)
         self._queue_table.customContextMenuRequested.connect(self._on_queue_context_menu)
+
+        # 拖放外部文件到表格行
+        self._queue_table.setAcceptDrops(True)
+        self._queue_table.setStyleSheet("QTableView::item:selected { background: #3daee9; color: white; }")
+        self._queue_table.installEventFilter(self)
 
         # 双击查看详情
         self._queue_table.doubleClicked.connect(self._on_queue_double_clicked)
@@ -165,31 +170,6 @@ class SenderPage(QWidget):
         action_layout.addWidget(self._btn_stop_queue)
 
         main_layout.addLayout(action_layout)
-
-        # 拖放覆盖层
-        self._drop_overlay = QWidget(self)
-        self._drop_overlay.setStyleSheet("background-color: rgba(0, 0, 0, 0.4);")
-        overlay_layout = QVBoxLayout(self._drop_overlay)
-        overlay_layout.setContentsMargins(0, 0, 0, 0)
-        overlay_layout.setAlignment(Qt.AlignmentFlag.AlignCenter)
-
-        overlay_icon = QLabel()
-        overlay_icon.setPixmap(SvgIcon("file_open.svg").pixmap(48, 48))
-        overlay_icon.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        overlay_icon.setStyleSheet("background: transparent;")
-        overlay_layout.addWidget(overlay_icon)
-
-        overlay_title = QLabel("松开以导入文件")
-        overlay_title.setStyleSheet("color: white; font-size: 16px; font-weight: bold; background: transparent;")
-        overlay_title.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        overlay_layout.addWidget(overlay_title)
-
-        overlay_hint = QLabel("支持 .xml 格式的弹幕文件")
-        overlay_hint.setStyleSheet("color: rgba(255, 255, 255, 0.7); font-size: 12px; background: transparent;")
-        overlay_hint.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        overlay_layout.addWidget(overlay_hint)
-
-        self._drop_overlay.hide()
 
     def _connect_signals(self):
         # 队列按钮
@@ -341,18 +321,107 @@ class SenderPage(QWidget):
         self.state.queue_state.clear_completed()
 
     # endregion
-    # region Slots VideoController
-
-    # endregion
-    # region Slots SenderController
-
-    # endregion
     # region Slots Queue
 
     def _on_queue_reorder(self, reordered_tasks):
         """拖拽排序后同步 QueueState"""
         self.state.queue_state._tasks = reordered_tasks
         self.state.queue_state.tasksChanged.emit()
+
+    def eventFilter(self, obj, event: QDragEnterEvent | QDragMoveEvent | QDropEvent) -> bool:
+        """处理拖放到队列表格上的外部 XML 文件"""
+        if obj is not self._queue_table:
+            return super().eventFilter(obj, event)
+
+        match event.type():
+            case QEvent.Type.DragEnter:
+                return self._on_table_drag_enter(event)
+            case QEvent.Type.DragMove:
+                return self._on_table_drag_move(event)
+            case QEvent.Type.Drop:
+                return self._on_table_drop(event)
+
+        return super().eventFilter(obj, event)
+
+    @staticmethod
+    def _get_xml_files(event: QDragEnterEvent | QDragMoveEvent | QDropEvent) -> list[str]:
+        """从拖放事件中提取所有本地 XML 文件路径"""
+        result = []
+        for url in event.mimeData().urls():
+            if url.isLocalFile() and url.toLocalFile().lower().endswith('.xml'):
+                result.append(url.toLocalFile())
+        return result
+
+    def _on_table_drag_enter(self, event: QDragEnterEvent | QDragMoveEvent | QDropEvent) -> bool:
+        if self.state.sender_is_active:
+            return False
+        if self._get_xml_files(event):
+            event.acceptProposedAction()
+            return True
+        return False
+
+    def _on_table_drag_move(self, event: QDragEnterEvent | QDragMoveEvent | QDropEvent) -> bool:
+        if self.state.sender_is_active or not self._get_xml_files(event):
+            return False
+        viewport_pos = self._queue_table.viewport().mapFrom(self._queue_table, event.pos())
+        index = self._queue_table.indexAt(viewport_pos)
+        task = self._queue_model.get_task_at(index.row()) if index.isValid() else None
+        if task and task.status in (TaskStatus.UNCONFIGURED, TaskStatus.PENDING):
+            self._queue_table.selectRow(index.row())
+            event.acceptProposedAction()
+        else:
+            self._queue_table.clearSelection()
+            event.ignore()
+        return True
+
+    def _on_table_drop(self, event: QDragEnterEvent | QDragMoveEvent | QDropEvent) -> bool:
+        self._queue_table.clearSelection()
+        self._queue_table.unsetCursor()
+        xml_files = self._get_xml_files(event)
+        if not xml_files:
+            return False
+
+        viewport_pos = self._queue_table.viewport().mapFrom(self._queue_table, event.pos())
+        index = self._queue_table.indexAt(viewport_pos)
+        task = self._queue_model.get_task_at(index.row()) if index.isValid() else None
+
+        if not task or task.status not in (TaskStatus.UNCONFIGURED, TaskStatus.PENDING):
+            return False
+
+        if len(xml_files) == 1:
+            self._assign_file_to_task(task, xml_files[0])
+        else:
+            self._assign_files_to_pending(xml_files, index.row())
+        event.accept()
+        return True
+
+    def _assign_files_to_pending(self, file_paths: list[str], start_row: int = 0):
+        """将多个 XML 文件从指定行开始按顺序分配给可配置的任务"""
+        tasks = self.state.queue_state.tasks
+        pending_from_start = [
+            t for t in tasks[start_row:]
+            if t.status in (TaskStatus.UNCONFIGURED, TaskStatus.PENDING)
+        ]
+        for i, file_path in enumerate(file_paths):
+            if i >= len(pending_from_start):
+                break
+            self._assign_file_to_task(pending_from_start[i], file_path)
+
+    def _assign_file_to_task(self, task: QueueTask, file_path: str):
+        """解析 XML 并分配弹幕给指定任务"""
+        parser = DanmakuParser()
+        try:
+            danmakus = parser.parse_xml_file(file_path)
+        except Exception as e:
+            self.logger.error(f"弹幕文件解析失败: {e}")
+            return
+        if not danmakus:
+            self.logger.warning("弹幕文件为空。")
+            return
+        task.danmakus = danmakus
+        task.total = len(danmakus)
+        self.state.queue_state.update_task_status(task.task_id, TaskStatus.PENDING)
+        self.logger.info(f"已分配弹幕: {task.target.display_string} ({len(danmakus)} 条)")
 
     def _update_empty_hint(self):
         self._empty_hint.setVisible(self._queue_model.rowCount() == 0)
@@ -481,42 +550,3 @@ class SenderPage(QWidget):
     # endregion
     # endregion
 
-    def dragEnterEvent(self, event: QDragEnterEvent) -> None:
-        """鼠标拖拽文件进入页面区域"""
-        # 如果当前正在发送弹幕则拒绝拖入
-        if self.state.sender_is_active:
-            event.ignore()
-            return
-
-        if urls := event.mimeData().urls():
-            # 检查是否为本地文件且后缀为XML
-            if urls[0].isLocalFile() and urls[0].toLocalFile().lower().endswith('.xml'):
-                event.acceptProposedAction()
-                self._drop_overlay.setGeometry(self.rect())
-                self._drop_overlay.show()
-                self._drop_overlay.raise_()
-                return
-
-        # 拒绝其他类型文件输入
-        event.ignore()
-
-    def dragLeaveEvent(self, event) -> None:
-        """鼠标拖离区域"""
-        self._drop_overlay.hide()
-
-    def dropEvent(self, event: QDropEvent) -> None:
-        """鼠标落下"""
-        self._drop_overlay.hide()
-        # 如果当前正在发送弹幕则拒绝拖入
-        if self.state.sender_is_active:
-            event.ignore()
-            return
-
-        if urls := event.mimeData().urls():
-            if len(urls) > 1:
-                self.logger.info(f"检测到拖入 {len(urls)} 个文件，仅处理第一个。")
-
-            file_path = urls[0].toLocalFile()
-            self.logger.info(f"📥 接收到拖拽文件: {file_path}")
-            self.binding.load_file(file_path)
-            event.acceptProposedAction()
