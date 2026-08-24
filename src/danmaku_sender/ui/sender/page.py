@@ -10,6 +10,7 @@ from PySide6.QtCore import Qt, QPoint, QModelIndex, QDateTime, Signal, Slot
 
 from .components import BasicParamsGroup, QueueTableModel
 from .components.queue_table import ProgressBarDelegate
+from .components.task_builder_dialog import TaskBuilderDialog
 from .data_binding import SenderDataBinding
 
 from danmaku_sender.ui.framework.style_loader import SvgIcon
@@ -102,7 +103,7 @@ class SenderPage(QWidget):
 
         queue_btn_layout = QHBoxLayout()
 
-        self._btn_add_to_queue = QPushButton("添加到队列")
+        self._btn_add_to_queue = QPushButton("新建任务")
         self._btn_add_to_queue.setIcon(SvgIcon("start.svg"))
         self._btn_add_to_queue.setFixedWidth(120)
         self._btn_add_to_queue.setCursor(Qt.CursorShape.PointingHandCursor)
@@ -299,7 +300,7 @@ class SenderPage(QWidget):
             return
 
         menu = QMenu(self)
-        is_pending = task.status == TaskStatus.PENDING
+        is_pending = task.status in (TaskStatus.PENDING, TaskStatus.UNCONFIGURED)
 
         menu.addAction("查看详情", lambda: self._show_task_detail(task))
         menu.addSeparator()
@@ -361,37 +362,19 @@ class SenderPage(QWidget):
         if not indexes:
             return
         task = self._queue_model.get_task_at(indexes[0].row())
-        if task and task.status == TaskStatus.PENDING:
+        if task and task.status in (TaskStatus.PENDING, TaskStatus.UNCONFIGURED):
             self._remove_task(task.task_id)
 
     @Slot()
     def _add_to_queue(self):
-        """将当前配置添加到发送队列"""
-        status = self.sender_controller.send_status
-        if status == SenderStatus.NOT_READY:
-            QMessageBox.warning(self, "条件不足", "请确保 BV号、分P、弹幕文件 均已就绪。")
-            return
-        if status == SenderStatus.NO_CREDENTIALS:
-            QMessageBox.warning(self, "凭证缺失", "请先登入账号。")
-            return
-        if status == SenderStatus.EDITOR_DIRTY:
-            QMessageBox.warning(self, "存在未保存的修改", "请先在编辑器中应用修改。")
-            return
+        """打开任务构建弹窗"""
+        dialog = TaskBuilderDialog(self.state, self)
+        dialog.taskCreated.connect(self._on_task_created)
+        dialog.exec()
 
-        state = self.state
-        target = VideoTarget(
-            bvid=state.video_state.bvid,
-            cid=state.video_state.selected_cid,
-            title=state.video_state.video_title,
-        )
-        task = QueueTask(
-            target=target,
-            danmakus=list(state.video_state.loaded_danmakus),
-            config_snapshot=state.sender_config.model_copy(),
-            part_name=state.video_state.selected_part_name,
-        )
-        state.queue_state.add_task(task)
-        self.logger.info(f"已添加到队列: {target.display_string} ({len(task.danmakus)} 条弹幕)")
+    def _on_task_created(self, task: QueueTask):
+        """弹窗创建任务后的回调"""
+        self.state.queue_state.add_task(task)
 
     @Slot()
     def _start_queue(self):

@@ -10,6 +10,7 @@ from danmaku_sender.config import SenderConfig
 
 class TaskStatus(Enum):
     """队列任务状态"""
+    UNCONFIGURED = "未配置"
     PENDING = "等待中"
     RUNNING = "发送中"
     PAUSED = "已暂停"
