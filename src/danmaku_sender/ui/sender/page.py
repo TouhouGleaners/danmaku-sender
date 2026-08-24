@@ -6,10 +6,11 @@ from PySide6.QtWidgets import (
     QTableView, QHeaderView, QAbstractItemView, QMenu
 )
 from PySide6.QtGui import QTextCursor, QDragEnterEvent, QDropEvent, QShortcut, QKeySequence
-from PySide6.QtCore import Qt, QPoint, QModelIndex, QDateTime, Signal, Slot
+from PySide6.QtCore import Qt, QPoint, QModelIndex, QDateTime, QTimer, Signal, Slot
 
-from .components import BasicParamsGroup, QueueTableModel
+from .components import QueueTableModel
 from .components.queue_table import ProgressBarDelegate
+from .components.task_builder_dialog import TaskBuilderDialog
 from .data_binding import SenderDataBinding
 
 from danmaku_sender.ui.framework.style_loader import SvgIcon
@@ -55,10 +56,6 @@ class SenderPage(QWidget):
         main_layout.setSpacing(10)
         main_layout.setContentsMargins(10, 10, 10, 10)
 
-        # --- 基础参数区 ---
-        self.basic_group = BasicParamsGroup(self.state)
-        main_layout.addWidget(self.basic_group)
-
         # --- 队列区 ---
         queue_group = QGroupBox("发送队列")
         queue_layout = QVBoxLayout(queue_group)
@@ -100,9 +97,19 @@ class SenderPage(QWidget):
 
         queue_layout.addWidget(self._queue_table)
 
+        # 空状态引导
+        self._empty_hint = QLabel("队列为空  点击「新建任务」添加发送任务", self._queue_table.viewport())
+        self._empty_hint.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        self._empty_hint.setStyleSheet("color: #888; font-size: 14px;")
+        self._empty_hint.setVisible(False)
+        self._queue_model.modelReset.connect(self._update_empty_hint)
+
+        # 布局完成后再定位，避免 viewport geometry 为零
+        QTimer.singleShot(0, self._update_empty_hint)
+
         queue_btn_layout = QHBoxLayout()
 
-        self._btn_add_to_queue = QPushButton("添加到队列")
+        self._btn_add_to_queue = QPushButton("新建任务")
         self._btn_add_to_queue.setIcon(SvgIcon("start.svg"))
         self._btn_add_to_queue.setFixedWidth(120)
         self._btn_add_to_queue.setCursor(Qt.CursorShape.PointingHandCursor)
@@ -185,23 +192,11 @@ class SenderPage(QWidget):
         self._drop_overlay.hide()
 
     def _connect_signals(self):
-        # 子组件信号
-        self.basic_group.file_btn.clicked.connect(self._select_file)
-        self.basic_group.fetch_btn.clicked.connect(self._fetch_video_info)
-        self.basic_group.part_combo.currentIndexChanged.connect(self._on_part_selected)
-
         # 队列按钮
         self._btn_add_to_queue.clicked.connect(self._add_to_queue)
         self._btn_clear_completed.clicked.connect(self._clear_completed)
         self._btn_start_queue.clicked.connect(self._start_queue)
         self._btn_stop_queue.clicked.connect(self._stop_queue)
-
-        # DataBinding
-        self.binding.fileLoaded.connect(self._on_file_loaded)
-        self.binding.fileLoadFailed.connect(self._on_file_load_failed)
-        self.binding.videoFetchStarted.connect(self._on_fetch_started)
-        self.binding.videoFetched.connect(self._on_fetch_succeeded)
-        self.binding.videoFetchFailed.connect(self._on_fetch_failed)
 
         # SenderController (队列)
         self.sender_controller.queueTaskStarted.connect(self._on_queue_task_started)
@@ -218,70 +213,12 @@ class SenderPage(QWidget):
 
     def init_bindings(self):
         """将 UI 控件与 AppState 进行双向绑定"""
-        self.basic_group.init_bindings()
-
-        # 监听共享数据变化（编辑器提交等场景）
-        self.state.video_state.subscribe("loaded_danmakus", self._on_loaded_danmakus_changed)
-
-    def _on_loaded_danmakus_changed(self, _value):
-        """编辑器提交弹幕后自动刷新发射器 UI"""
-        count = self.state.video_state.danmaku_count
-        if count > 0:
-            self.basic_group.file_input.setText(f"来自编辑器: {count} 条弹幕")
-        else:
-            self.basic_group.file_input.clear()
+        pass
 
     def append_log(self, message: str):
         """外部调用的日志接口"""
         self.log_output.append(message)
         self.log_output.moveCursor(QTextCursor.MoveOperation.End)
-
-    @Slot(str, int)
-    def _on_file_loaded(self, filename: str, count: int):
-        self.basic_group.file_input.setEnabled(True)
-        if count > 0:
-            self.basic_group.file_input.setText(filename)
-            self.logger.info(f"✅ 文件解析成功，共 {count} 条弹幕。")
-        else:
-            self.basic_group.file_input.clear()
-            self.logger.warning("⚠️ 文件解析完成但无有效弹幕。")
-
-    @Slot(str, str)
-    def _on_file_load_failed(self, error_msg: str, _extra: str):
-        self.basic_group.file_input.setEnabled(True)
-        self.basic_group.file_input.clear()
-        self.logger.error(f"❌ 解析失败: {error_msg}")
-        QMessageBox.critical(self, "解析失败", error_msg)
-
-
-    # region Slots
-    # region Slots Internal
-    @Slot()
-    def _select_file(self):
-        """文件选择逻辑"""
-        self.binding.select_file()
-
-    @Slot()
-    def _fetch_video_info(self):
-        """获取视频信息"""
-        raw_input = self.basic_group.bv_input.text().strip()
-        if not raw_input:
-            QMessageBox.warning(self, "输入错误", "请输入BV号或视频链接")
-            return
-
-        bvid = self.binding.fetch_video_info(raw_input)
-        if not bvid:
-            QMessageBox.warning(self, "格式错误", "未能识别有效的 BV 号。\n请检查输入内容是否正确。")
-            return
-
-        self.basic_group.bv_input.setText(bvid)
-
-    @Slot(int)
-    def _on_part_selected(self, index: int):
-        """处理分P选择变化"""
-        data = self.basic_group.part_combo.itemData(index)
-        part_name = self.basic_group.part_combo.currentText()
-        self.binding.select_part(index, data, part_name)
 
     @Slot(QModelIndex)
     def _on_queue_double_clicked(self, index: QModelIndex):
@@ -299,7 +236,7 @@ class SenderPage(QWidget):
             return
 
         menu = QMenu(self)
-        is_pending = task.status == TaskStatus.PENDING
+        is_pending = task.status in (TaskStatus.PENDING, TaskStatus.UNCONFIGURED)
 
         menu.addAction("查看详情", lambda: self._show_task_detail(task))
         menu.addSeparator()
@@ -361,37 +298,19 @@ class SenderPage(QWidget):
         if not indexes:
             return
         task = self._queue_model.get_task_at(indexes[0].row())
-        if task and task.status == TaskStatus.PENDING:
+        if task and task.status in (TaskStatus.PENDING, TaskStatus.UNCONFIGURED):
             self._remove_task(task.task_id)
 
     @Slot()
     def _add_to_queue(self):
-        """将当前配置添加到发送队列"""
-        status = self.sender_controller.send_status
-        if status == SenderStatus.NOT_READY:
-            QMessageBox.warning(self, "条件不足", "请确保 BV号、分P、弹幕文件 均已就绪。")
-            return
-        if status == SenderStatus.NO_CREDENTIALS:
-            QMessageBox.warning(self, "凭证缺失", "请先登入账号。")
-            return
-        if status == SenderStatus.EDITOR_DIRTY:
-            QMessageBox.warning(self, "存在未保存的修改", "请先在编辑器中应用修改。")
-            return
+        """打开任务构建弹窗"""
+        dialog = TaskBuilderDialog(self.state, self)
+        dialog.taskCreated.connect(self._on_task_created)
+        dialog.exec()
 
-        state = self.state
-        target = VideoTarget(
-            bvid=state.video_state.bvid,
-            cid=state.video_state.selected_cid,
-            title=state.video_state.video_title,
-        )
-        task = QueueTask(
-            target=target,
-            danmakus=list(state.video_state.loaded_danmakus),
-            config_snapshot=state.sender_config.model_copy(),
-            part_name=state.video_state.selected_part_name,
-        )
-        state.queue_state.add_task(task)
-        self.logger.info(f"已添加到队列: {target.display_string} ({len(task.danmakus)} 条弹幕)")
+    def _on_task_created(self, task: QueueTask):
+        """弹窗创建任务后的回调"""
+        self.state.queue_state.add_task(task)
 
     @Slot()
     def _start_queue(self):
@@ -424,49 +343,6 @@ class SenderPage(QWidget):
     # endregion
     # region Slots VideoController
 
-    @Slot()
-    def _on_fetch_started(self):
-        """UI 层: 响应加载中状态"""
-        self.basic_group.fetch_btn.setEnabled(False)
-        self.basic_group.fetch_btn.setText("获取中")
-        self.basic_group.part_combo.clear()
-        self.basic_group.part_combo.setEnabled(False)
-
-    @Slot(str, object)
-    def _on_fetch_succeeded(self, bvid: str, info: VideoInfo):
-        """获取成功: 填充分P下拉框"""
-        self.basic_group.fetch_btn.setEnabled(True)
-        self.basic_group.fetch_btn.setText("获取分P")
-        self.basic_group.part_combo.setEnabled(True)
-
-        for p in info.parts:
-            if not p.cid:
-                continue
-            part_name = f"P{p.page} - {p.title}"
-            self.basic_group.part_combo.addItem(part_name, userData={'cid': p.cid, 'duration': p.duration})
-            self.state.video_state.cid_parts_map[p.cid] = part_name
-
-        if info.parts:
-            pending = self.binding.pending_part_index
-            if pending is not None and 0 <= pending < self.basic_group.part_combo.count():
-                self.basic_group.part_combo.setCurrentIndex(pending)
-                self.logger.info(f"🔗 智能链接解析: 自动定位到第 {pending + 1} P")
-            else:
-                self.basic_group.part_combo.setCurrentIndex(0)
-            self.binding.clear_pending_part_index()
-
-    @Slot(str, str)
-    def _on_fetch_failed(self, bvid: str, error_msg: str):
-        """获取失败: 恢复 UI 状态并弹窗提示"""
-        self.basic_group.fetch_btn.setEnabled(True)
-        self.basic_group.fetch_btn.setText("获取分P")
-
-        self.basic_group.part_combo.clear()
-        self.basic_group.part_combo.addItem(f"获取失败，请重试")
-        self.basic_group.part_combo.setEnabled(False)
-
-        QMessageBox.warning(self, "获取失败", f"无法获取视频信息:\n{error_msg}")
-
     # endregion
     # region Slots SenderController
 
@@ -477,6 +353,17 @@ class SenderPage(QWidget):
         """拖拽排序后同步 QueueState"""
         self.state.queue_state._tasks = reordered_tasks
         self.state.queue_state.tasksChanged.emit()
+
+    def _update_empty_hint(self):
+        self._empty_hint.setVisible(self._queue_model.rowCount() == 0)
+        self._reposition_empty_hint()
+
+    def _reposition_empty_hint(self):
+        self._empty_hint.setGeometry(self._queue_table.viewport().rect())
+
+    def resizeEvent(self, event):
+        super().resizeEvent(event)
+        self._reposition_empty_hint()
 
     def _on_queue_changed(self):
         self._queue_model.set_tasks(self.state.queue_state.tasks)
@@ -586,20 +473,13 @@ class SenderPage(QWidget):
         self._btn_stop_queue.setVisible(running)
 
         if running:
-            self._set_inputs_locked(True)
             self.log_output.clear()
             self.progress_bar.setValue(0)
             self.progress_bar.setFormat("%p%")
-        else:
-            self._set_inputs_locked(False)
             self.progress_bar.setFormat("%p%")
 
     # endregion
     # endregion
-
-    def _set_inputs_locked(self, locked: bool):
-        """设置输入控件的锁定状态"""
-        self.basic_group.set_inputs_locked(locked)
 
     def dragEnterEvent(self, event: QDragEnterEvent) -> None:
         """鼠标拖拽文件进入页面区域"""

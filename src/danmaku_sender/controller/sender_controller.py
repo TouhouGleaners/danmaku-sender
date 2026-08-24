@@ -335,7 +335,11 @@ class QueueWorker(WorkerThread):
                         stopped_early = True
                         break
 
-                    if task.status != TaskStatus.PENDING:
+                    if task.status not in (TaskStatus.PENDING, TaskStatus.UNCONFIGURED):
+                        continue
+
+                    if task.status == TaskStatus.UNCONFIGURED:
+                        self.queue_state.update_task_status(task.task_id, TaskStatus.SKIPPED, "未配置弹幕")
                         continue
 
                     self.queue_state.current_index = idx
@@ -360,6 +364,7 @@ class QueueWorker(WorkerThread):
 
         except Exception as e:
             logger.error(f"队列执行发生未预期异常: {e}", exc_info=True)
+
         finally:
             self.queue_state.current_index = -1
             self.queueFinished.emit()

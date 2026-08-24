@@ -189,9 +189,9 @@ class MainWindow(QMainWindow):
 
     def _init_shortcuts(self):
         """初始化全局快捷键"""
-        # Ctrl+O: 打开弹幕文件
-        self._sc_open = QShortcut(QKeySequence.StandardKey.Open, self)
-        self._sc_open.activated.connect(self.page_sender._select_file)
+        # Ctrl+N: 新建任务
+        self._sc_new = QShortcut(QKeySequence.StandardKey.New, self)
+        self._sc_new.activated.connect(self.page_sender._add_to_queue)
 
         # Ctrl+Enter: 启动队列
         self._sc_send = QShortcut(QKeySequence(Qt.Key.Key_Return | Qt.KeyboardModifier.ControlModifier), self)

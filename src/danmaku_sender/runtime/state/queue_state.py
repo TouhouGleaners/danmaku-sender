@@ -41,9 +41,9 @@ class QueueState(QObject):
         logger.info(f"任务已加入队列: [{task.task_id}] {task.target.display_string} ({len(task.danmakus)} 条弹幕)")
 
     def remove_task(self, task_id: str) -> bool:
-        """移除指定任务（仅 PENDING 状态可移除）"""
+        """移除指定任务（仅 PENDING/UNCONFIGURED 状态可移除）"""
         for i, task in enumerate(self._tasks):
-            if task.task_id == task_id and task.status == TaskStatus.PENDING:
+            if task.task_id == task_id and task.status in (TaskStatus.PENDING, TaskStatus.UNCONFIGURED):
                 self._tasks.pop(i)
                 self.tasksChanged.emit()
                 logger.info(f"任务已从队列移除: [{task_id}]")
@@ -52,19 +52,21 @@ class QueueState(QObject):
 
     def move_task(self, task_id: str, direction: int) -> bool:
         """移动任务位置（direction: -1 上移, +1 下移）"""
+        movable = (TaskStatus.PENDING, TaskStatus.UNCONFIGURED)
         for i, task in enumerate(self._tasks):
-            if task.task_id == task_id and task.status == TaskStatus.PENDING:
+            if task.task_id == task_id and task.status in movable:
                 new_index = i + direction
-                if 0 <= new_index < len(self._tasks) and self._tasks[new_index].status == TaskStatus.PENDING:
+                if 0 <= new_index < len(self._tasks) and self._tasks[new_index].status in movable:
                     self._tasks[i], self._tasks[new_index] = self._tasks[new_index], self._tasks[i]
                     self.tasksChanged.emit()
                     return True
+
         return False
 
     def clear_completed(self):
-        """清除已完成/失败/跳过的任务（保留 PENDING 和 PAUSED）"""
+        """清除已完成/失败/跳过的任务（保留 PENDING、PAUSED、UNCONFIGURED）"""
         before = len(self._tasks)
-        self._tasks = [t for t in self._tasks if t.status in (TaskStatus.PENDING, TaskStatus.PAUSED)]
+        self._tasks = [t for t in self._tasks if t.status in (TaskStatus.PENDING, TaskStatus.PAUSED, TaskStatus.UNCONFIGURED)]
         removed = before - len(self._tasks)
         if removed > 0:
             self.tasksChanged.emit()

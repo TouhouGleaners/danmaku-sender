@@ -48,6 +48,8 @@ class ProgressBarDelegate(QStyledItemDelegate):
                 bar.text = "跳过"
             case TaskStatus.PAUSED:
                 bar.text = "暂停"
+            case TaskStatus.UNCONFIGURED:
+                bar.text = "未配置"
             case TaskStatus.PENDING:
                 bar.text = "等待"
 
@@ -152,6 +154,7 @@ class QueueTableModel(QAbstractTableModel):
                 TaskStatus.FAILED: QColor("#c0392b"),
                 TaskStatus.SKIPPED: QColor("#95a5a6"),
                 TaskStatus.PAUSED: QColor("#9b59b6"),
+                TaskStatus.UNCONFIGURED: QColor("#7f8c8d"),
             }.get(task.status, QColor("#f39c12")))
         return None
 
@@ -173,7 +176,7 @@ class QueueTableModel(QAbstractTableModel):
         if self.queue_running:
             return default
         task = self._tasks[index.row()]
-        if task.status == TaskStatus.PENDING:
+        if task.status in (TaskStatus.PENDING, TaskStatus.UNCONFIGURED):
             return default | Qt.ItemFlag.ItemIsDragEnabled
         return default
 
