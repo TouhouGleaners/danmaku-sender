@@ -230,6 +230,9 @@ class SenderPage(QWidget):
         dialog = TaskDetailDialog(task, auth_config, self)
         if dialog.exec() == QDialog.DialogCode.Accepted:
             task.config_snapshot = dialog.get_config()
+            row = self._queue_model.get_row_by_id(task.task_id)
+            if row >= 0:
+                self._queue_model.refresh_row(row)
             self.logger.info(f"已更新任务: {task.target.display_string}")
 
     def _move_task(self, task_id: str, direction: int):
@@ -396,6 +399,7 @@ class SenderPage(QWidget):
             return
         task.danmakus = danmakus
         task.total = len(danmakus)
+        task.xml_path = file_path
         self.state.queue_state.update_task_status(task.task_id, TaskStatus.PENDING)
         self.logger.info(f"已分配弹幕: {task.target.display_string} ({len(danmakus)} 条)")
 

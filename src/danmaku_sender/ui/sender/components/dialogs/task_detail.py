@@ -3,7 +3,8 @@ import logging
 from PySide6.QtWidgets import (
     QDialog, QVBoxLayout, QHBoxLayout, QFormLayout, QLabel,
     QCheckBox, QSpinBox, QDoubleSpinBox, QPushButton, QGroupBox,
-    QTextEdit, QTabWidget, QWidget, QLineEdit, QComboBox, QFileDialog
+    QTextEdit, QTabWidget, QWidget, QLineEdit, QComboBox, QFileDialog,
+    QMessageBox
 )
 from PySide6.QtCore import Qt, Signal, Slot
 
@@ -277,6 +278,13 @@ class TaskDetailDialog(QDialog):
                         task.status = TaskStatus.PENDING
             except Exception as e:
                 logger.error(f"弹幕文件解析失败: {e}")
+
+        # 校验配置合法性
+        try:
+            self.get_config()
+        except Exception as e:
+            QMessageBox.warning(self, "配置错误", str(e))
+            return
 
         self.accept()
 
