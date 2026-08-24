@@ -140,6 +140,17 @@ class SettingsPage(QWidget):
         stop_group.setLayout(stop_layout)
         main_layout.addWidget(stop_group)
 
+        # --- 断点续传 ---
+        resume_group = QGroupBox("断点续传")
+        resume_layout = QFormLayout()
+
+        self.skip_sent_cb = QCheckBox("跳过已发送的弹幕（基于历史记录去重）")
+        self.skip_sent_cb.setToolTip("启用后，发送前会查询历史记录，自动跳过已成功发送过的弹幕。")
+
+        resume_layout.addRow(self.skip_sent_cb)
+        resume_group.setLayout(resume_layout)
+        main_layout.addWidget(resume_group)
+
         main_layout.addStretch()
 
         info_label = QLabel("💡 账号管理请点击左上角头像区域。")
@@ -172,6 +183,9 @@ class SettingsPage(QWidget):
         # 自动终止规则
         UIBinder.bind(self.stop_count, config, "stop_after_count")
         UIBinder.bind(self.stop_time, config, "stop_after_time")
+
+        # 断点续传
+        UIBinder.bind(self.skip_sent_cb, config, "skip_sent")
 
         # 初始化爆发控件状态
         self._on_burst_toggled(self.burst_enabled_cb.isChecked())

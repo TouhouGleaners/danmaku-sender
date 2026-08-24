@@ -8,7 +8,7 @@ from PySide6.QtWidgets import (
 from PySide6.QtGui import QTextCursor, QDragEnterEvent, QDropEvent, QShortcut, QKeySequence
 from PySide6.QtCore import Qt, QPoint, QModelIndex, QDateTime, Signal, Slot
 
-from .components import BasicParamsGroup, QueueTableModel
+from .components import QueueTableModel
 from .components.queue_table import ProgressBarDelegate
 from .components.task_builder_dialog import TaskBuilderDialog
 from .data_binding import SenderDataBinding
@@ -55,10 +55,6 @@ class SenderPage(QWidget):
         main_layout = QVBoxLayout(self)
         main_layout.setSpacing(10)
         main_layout.setContentsMargins(10, 10, 10, 10)
-
-        # --- 基础参数区 ---
-        self.basic_group = BasicParamsGroup(self.state)
-        main_layout.addWidget(self.basic_group)
 
         # --- 队列区 ---
         queue_group = QGroupBox("发送队列")
@@ -186,23 +182,11 @@ class SenderPage(QWidget):
         self._drop_overlay.hide()
 
     def _connect_signals(self):
-        # 子组件信号
-        self.basic_group.file_btn.clicked.connect(self._select_file)
-        self.basic_group.fetch_btn.clicked.connect(self._fetch_video_info)
-        self.basic_group.part_combo.currentIndexChanged.connect(self._on_part_selected)
-
         # 队列按钮
         self._btn_add_to_queue.clicked.connect(self._add_to_queue)
         self._btn_clear_completed.clicked.connect(self._clear_completed)
         self._btn_start_queue.clicked.connect(self._start_queue)
         self._btn_stop_queue.clicked.connect(self._stop_queue)
-
-        # DataBinding
-        self.binding.fileLoaded.connect(self._on_file_loaded)
-        self.binding.fileLoadFailed.connect(self._on_file_load_failed)
-        self.binding.videoFetchStarted.connect(self._on_fetch_started)
-        self.binding.videoFetched.connect(self._on_fetch_succeeded)
-        self.binding.videoFetchFailed.connect(self._on_fetch_failed)
 
         # SenderController (队列)
         self.sender_controller.queueTaskStarted.connect(self._on_queue_task_started)
@@ -219,70 +203,12 @@ class SenderPage(QWidget):
 
     def init_bindings(self):
         """将 UI 控件与 AppState 进行双向绑定"""
-        self.basic_group.init_bindings()
-
-        # 监听共享数据变化（编辑器提交等场景）
-        self.state.video_state.subscribe("loaded_danmakus", self._on_loaded_danmakus_changed)
-
-    def _on_loaded_danmakus_changed(self, _value):
-        """编辑器提交弹幕后自动刷新发射器 UI"""
-        count = self.state.video_state.danmaku_count
-        if count > 0:
-            self.basic_group.file_input.setText(f"来自编辑器: {count} 条弹幕")
-        else:
-            self.basic_group.file_input.clear()
+        pass
 
     def append_log(self, message: str):
         """外部调用的日志接口"""
         self.log_output.append(message)
         self.log_output.moveCursor(QTextCursor.MoveOperation.End)
-
-    @Slot(str, int)
-    def _on_file_loaded(self, filename: str, count: int):
-        self.basic_group.file_input.setEnabled(True)
-        if count > 0:
-            self.basic_group.file_input.setText(filename)
-            self.logger.info(f"✅ 文件解析成功，共 {count} 条弹幕。")
-        else:
-            self.basic_group.file_input.clear()
-            self.logger.warning("⚠️ 文件解析完成但无有效弹幕。")
-
-    @Slot(str, str)
-    def _on_file_load_failed(self, error_msg: str, _extra: str):
-        self.basic_group.file_input.setEnabled(True)
-        self.basic_group.file_input.clear()
-        self.logger.error(f"❌ 解析失败: {error_msg}")
-        QMessageBox.critical(self, "解析失败", error_msg)
-
-
-    # region Slots
-    # region Slots Internal
-    @Slot()
-    def _select_file(self):
-        """文件选择逻辑"""
-        self.binding.select_file()
-
-    @Slot()
-    def _fetch_video_info(self):
-        """获取视频信息"""
-        raw_input = self.basic_group.bv_input.text().strip()
-        if not raw_input:
-            QMessageBox.warning(self, "输入错误", "请输入BV号或视频链接")
-            return
-
-        bvid = self.binding.fetch_video_info(raw_input)
-        if not bvid:
-            QMessageBox.warning(self, "格式错误", "未能识别有效的 BV 号。\n请检查输入内容是否正确。")
-            return
-
-        self.basic_group.bv_input.setText(bvid)
-
-    @Slot(int)
-    def _on_part_selected(self, index: int):
-        """处理分P选择变化"""
-        data = self.basic_group.part_combo.itemData(index)
-        part_name = self.basic_group.part_combo.currentText()
-        self.binding.select_part(index, data, part_name)
 
     @Slot(QModelIndex)
     def _on_queue_double_clicked(self, index: QModelIndex):
@@ -406,49 +332,6 @@ class SenderPage(QWidget):
 
     # endregion
     # region Slots VideoController
-
-    @Slot()
-    def _on_fetch_started(self):
-        """UI 层: 响应加载中状态"""
-        self.basic_group.fetch_btn.setEnabled(False)
-        self.basic_group.fetch_btn.setText("获取中")
-        self.basic_group.part_combo.clear()
-        self.basic_group.part_combo.setEnabled(False)
-
-    @Slot(str, object)
-    def _on_fetch_succeeded(self, bvid: str, info: VideoInfo):
-        """获取成功: 填充分P下拉框"""
-        self.basic_group.fetch_btn.setEnabled(True)
-        self.basic_group.fetch_btn.setText("获取分P")
-        self.basic_group.part_combo.setEnabled(True)
-
-        for p in info.parts:
-            if not p.cid:
-                continue
-            part_name = f"P{p.page} - {p.title}"
-            self.basic_group.part_combo.addItem(part_name, userData={'cid': p.cid, 'duration': p.duration})
-            self.state.video_state.cid_parts_map[p.cid] = part_name
-
-        if info.parts:
-            pending = self.binding.pending_part_index
-            if pending is not None and 0 <= pending < self.basic_group.part_combo.count():
-                self.basic_group.part_combo.setCurrentIndex(pending)
-                self.logger.info(f"🔗 智能链接解析: 自动定位到第 {pending + 1} P")
-            else:
-                self.basic_group.part_combo.setCurrentIndex(0)
-            self.binding.clear_pending_part_index()
-
-    @Slot(str, str)
-    def _on_fetch_failed(self, bvid: str, error_msg: str):
-        """获取失败: 恢复 UI 状态并弹窗提示"""
-        self.basic_group.fetch_btn.setEnabled(True)
-        self.basic_group.fetch_btn.setText("获取分P")
-
-        self.basic_group.part_combo.clear()
-        self.basic_group.part_combo.addItem(f"获取失败，请重试")
-        self.basic_group.part_combo.setEnabled(False)
-
-        QMessageBox.warning(self, "获取失败", f"无法获取视频信息:\n{error_msg}")
 
     # endregion
     # region Slots SenderController
