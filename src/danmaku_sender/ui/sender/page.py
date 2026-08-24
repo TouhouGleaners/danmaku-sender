@@ -1,7 +1,7 @@
 import logging
 
 from PySide6.QtWidgets import (
-    QWidget, QVBoxLayout, QHBoxLayout, QPushButton, QLabel,
+    QWidget, QVBoxLayout, QHBoxLayout, QPushButton, QLabel, QDialog,
     QGroupBox, QTextEdit, QProgressBar, QMessageBox,
     QTableView, QHeaderView, QAbstractItemView, QMenu
 )
@@ -11,6 +11,7 @@ from PySide6.QtCore import Qt, QPoint, QModelIndex, QDateTime, QEvent, QTimer, S
 from .components import QueueTableModel
 from .components.queue_table import ProgressBarDelegate
 from .components.task_builder_dialog import TaskBuilderDialog
+from .components.config_editor_dialog import ConfigEditorDialog
 from .data_binding import SenderDataBinding
 
 from danmaku_sender.ui.framework.style_loader import SvgIcon
@@ -219,6 +220,7 @@ class SenderPage(QWidget):
         is_pending = task.status in (TaskStatus.PENDING, TaskStatus.UNCONFIGURED)
 
         menu.addAction("查看详情", lambda: self._show_task_detail(task))
+        menu.addAction("编辑配置", lambda: self._edit_task_config(task)).setEnabled(is_pending)
         menu.addSeparator()
         menu.addAction("上移", lambda: self._move_task(task.task_id, -1)).setEnabled(is_pending)
         menu.addAction("下移", lambda: self._move_task(task.task_id, 1)).setEnabled(is_pending)
@@ -226,6 +228,13 @@ class SenderPage(QWidget):
         menu.addAction("删除", lambda: self._remove_task(task.task_id)).setEnabled(is_pending)
 
         menu.exec(self._queue_table.mapToGlobal(pos))
+
+    def _edit_task_config(self, task: QueueTask):
+        """编辑单个任务的发送配置"""
+        dialog = ConfigEditorDialog(task.config_snapshot, self)
+        if dialog.exec() == QDialog.DialogCode.Accepted:
+            task.config_snapshot = dialog.get_config()
+            self.logger.info(f"已更新任务配置: {task.target.display_string}")
 
     def _show_task_detail(self, task: QueueTask):
         cfg = task.config_snapshot
