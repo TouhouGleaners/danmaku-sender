@@ -9,8 +9,8 @@ from PySide6.QtGui import QTextCursor, QShortcut, QKeySequence, QDragEnterEvent,
 from PySide6.QtCore import Qt, QPoint, QModelIndex, QDateTime, QEvent, QTimer, Signal, Slot
 
 from .components.queue_table import ProgressBarDelegate, QueueTableModel
-from .components.task_builder_dialog import TaskBuilderDialog
-from .components.task_detail_dialog import TaskDetailDialog
+from .components.dialogs.task_builder import TaskBuilderDialog
+from .components.dialogs.task_detail import TaskDetailDialog
 
 from danmaku_sender.ui.framework.style_loader import SvgIcon
 from danmaku_sender.controller.sender_controller import SenderController, SenderStatus
