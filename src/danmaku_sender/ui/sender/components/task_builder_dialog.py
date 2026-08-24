@@ -199,8 +199,8 @@ class TaskBuilderDialog(QDialog):
             target=target,
             danmakus=danmakus,
             config_snapshot=self.state.sender_config.model_copy(),
-            part_page=page,
-            part_title=part_title,
+            p_index=page,
+            p_title=part_title,
         )
 
         # 如果没有弹幕，标记为未配置
