@@ -186,11 +186,13 @@ class TaskBuilderDialog(QDialog):
 
         # 解析弹幕文件（如果选了的话）
         danmakus = []
+        xml_path = ""
         if self._selected_files:
             parser = DanmakuParser()
             file_idx = min(self._part_combo.currentIndex(), len(self._selected_files) - 1)
+            xml_path = self._selected_files[file_idx]
             try:
-                danmakus = parser.parse_xml_file(self._selected_files[file_idx])
+                danmakus = parser.parse_xml_file(xml_path)
             except Exception as e:
                 QMessageBox.warning(self, "解析失败", f"弹幕文件解析失败:\n{e}")
                 return
@@ -201,6 +203,7 @@ class TaskBuilderDialog(QDialog):
             config_snapshot=self.state.sender_config.model_copy(),
             p_index=page,
             p_title=part_title,
+            xml_path=xml_path,
         )
 
         # 如果没有弹幕，标记为未配置

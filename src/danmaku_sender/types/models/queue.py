@@ -31,6 +31,7 @@ class QueueTask:
     task_id: str = field(default_factory=lambda: uuid.uuid4().hex[:8])
     p_index: int = 0
     p_title: str = ""
+    xml_path: str = ""
     status: TaskStatus = TaskStatus.PENDING
     error_msg: str = ""
     attempted: int = 0

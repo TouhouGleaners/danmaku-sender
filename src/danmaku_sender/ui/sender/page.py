@@ -225,11 +225,12 @@ class SenderPage(QWidget):
         menu.exec(self._queue_table.mapToGlobal(pos))
 
     def _show_task_detail(self, task: QueueTask):
-        """查看任务详情并可编辑配置"""
-        dialog = TaskDetailDialog(task, self)
+        """查看/编辑任务详情和配置"""
+        auth_config = self.state.get_api_auth()
+        dialog = TaskDetailDialog(task, auth_config, self)
         if dialog.exec() == QDialog.DialogCode.Accepted:
             task.config_snapshot = dialog.get_config()
-            self.logger.info(f"已更新任务配置: {task.target.display_string}")
+            self.logger.info(f"已更新任务: {task.target.display_string}")
 
     def _move_task(self, task_id: str, direction: int):
         self.state.queue_state.move_task(task_id, direction)
