@@ -138,7 +138,9 @@ class QueueTableModel(QAbstractTableModel):
             case QueueCol.TITLE:
                 return task.target.title or task.target.bvid
             case QueueCol.PART:
-                return f"CID: {task.target.cid}"
+                if task.part_title:
+                    return f"P{task.part_page} - {task.part_title}"
+                return f"P{task.part_page}"
             case QueueCol.COUNT:
                 return str(len(task.danmakus))
             case QueueCol.STATUS:

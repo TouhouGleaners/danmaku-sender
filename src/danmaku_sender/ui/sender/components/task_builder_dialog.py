@@ -171,7 +171,12 @@ class TaskBuilderDialog(QDialog):
 
         cid = data['cid']
         page = data['page']
-        part_name = self._part_combo.currentText()
+        part_title = ""
+        if self._video_info:
+            for p in self._video_info.parts:
+                if p.cid == cid:
+                    part_title = p.title
+                    break
 
         target = VideoTarget(
             bvid=self._video_info.bvid,
@@ -194,7 +199,8 @@ class TaskBuilderDialog(QDialog):
             target=target,
             danmakus=danmakus,
             config_snapshot=self.state.sender_config.model_copy(),
-            part_name=part_name,
+            part_page=page,
+            part_title=part_title,
         )
 
         # 如果没有弹幕，标记为未配置

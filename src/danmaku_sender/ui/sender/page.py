@@ -11,7 +11,7 @@ from PySide6.QtCore import Qt, QPoint, QModelIndex, QDateTime, QEvent, QTimer, S
 from .components import QueueTableModel
 from .components.queue_table import ProgressBarDelegate
 from .components.task_builder_dialog import TaskBuilderDialog
-from .components.config_editor_dialog import ConfigEditorDialog
+from .components.task_detail_dialog import TaskDetailDialog
 from .data_binding import SenderDataBinding
 
 from danmaku_sender.ui.framework.style_loader import SvgIcon
@@ -219,8 +219,7 @@ class SenderPage(QWidget):
         menu = QMenu(self)
         is_pending = task.status in (TaskStatus.PENDING, TaskStatus.UNCONFIGURED)
 
-        menu.addAction("查看详情", lambda: self._show_task_detail(task))
-        menu.addAction("编辑配置", lambda: self._edit_task_config(task)).setEnabled(is_pending)
+        menu.addAction("查看详情/编辑配置", lambda: self._show_task_detail(task))
         menu.addSeparator()
         menu.addAction("上移", lambda: self._move_task(task.task_id, -1)).setEnabled(is_pending)
         menu.addAction("下移", lambda: self._move_task(task.task_id, 1)).setEnabled(is_pending)
@@ -229,52 +228,12 @@ class SenderPage(QWidget):
 
         menu.exec(self._queue_table.mapToGlobal(pos))
 
-    def _edit_task_config(self, task: QueueTask):
-        """编辑单个任务的发送配置"""
-        dialog = ConfigEditorDialog(task.config_snapshot, self)
+    def _show_task_detail(self, task: QueueTask):
+        """查看任务详情并可编辑配置"""
+        dialog = TaskDetailDialog(task, self)
         if dialog.exec() == QDialog.DialogCode.Accepted:
             task.config_snapshot = dialog.get_config()
             self.logger.info(f"已更新任务配置: {task.target.display_string}")
-
-    def _show_task_detail(self, task: QueueTask):
-        cfg = task.config_snapshot
-        burst_info = f"爆发模式: {cfg.burst_size}条/组, 休息{cfg.rest_min}-{cfg.rest_max}秒" if cfg.burst_enabled else "爆发模式: 关闭"
-        dm_preview = "\n".join(f"  {i+1}. {dm.msg}" for i, dm in enumerate(task.danmakus[:10]))
-        if len(task.danmakus) > 10:
-            dm_preview += f"\n  ... 共 {len(task.danmakus)} 条"
-
-        part_label = f" ({task.part_name})" if task.part_name else ""
-        url = f"https://www.bilibili.com/video/{task.target.bvid}"
-        if task.part_name:
-            # 从 "P1 - 22-1" 中提取页码
-            try:
-                page = int(task.part_name.split(" ")[0][1:])
-                url += f"?p={page}"
-            except (ValueError, IndexError):
-                pass
-        info = (
-            f"任务ID: {task.task_id}\n"
-            f"视频: {task.target.title or task.target.bvid}\n"
-            f"BVID: {task.target.bvid}\n"
-            f"CID: {task.target.cid}{part_label}\n"
-            f"链接: {url}\n"
-            f"\n"
-            f"状态: {task.status.value}\n"
-            f"已发送: {task.attempted}/{task.total}\n"
-        )
-        if task.error_msg:
-            info += f"错误: {task.error_msg}\n"
-        info += (
-            f"\n"
-            f"发送配置:\n"
-            f"  延迟: {cfg.min_delay}-{cfg.max_delay}秒\n"
-            f"  {burst_info}\n"
-            f"  任务间隔: {cfg.delay_between_tasks}秒\n"
-            f"  跳过已发送: {'是' if cfg.skip_sent else '否'}\n"
-            f"\n"
-            f"弹幕列表:\n{dm_preview}"
-        )
-        QMessageBox.information(self, "任务详情", info)
 
     def _move_task(self, task_id: str, direction: int):
         self.state.queue_state.move_task(task_id, direction)
@@ -306,13 +265,16 @@ class SenderPage(QWidget):
         """启动队列发送"""
         if self.sender_controller.is_running() or self.sender_controller.is_queue_running():
             return
+
         auth_config = self.state.get_api_auth()
         if not auth_config.sessdata or not auth_config.bili_jct:
             QMessageBox.warning(self, "凭证缺失", "请先登入账号。")
             return
+
         if self.state.queue_state.pending_count == 0:
             QMessageBox.information(self, "队列为空", "没有待发送的任务。")
             return
+
         self._queue_total_dm = sum(len(t.danmakus) for t in self.state.queue_state.tasks)
         self._update_queue_ui(running=True)
         self.sender_controller.start_queue(self.state.queue_state, auth_config)
@@ -359,28 +321,34 @@ class SenderPage(QWidget):
         for url in event.mimeData().urls():
             if url.isLocalFile() and url.toLocalFile().lower().endswith('.xml'):
                 result.append(url.toLocalFile())
+
         return result
 
     def _on_table_drag_enter(self, event: QDragEnterEvent | QDragMoveEvent | QDropEvent) -> bool:
         if self.state.sender_is_active:
             return False
+
         if self._get_xml_files(event):
             event.acceptProposedAction()
             return True
+
         return False
 
     def _on_table_drag_move(self, event: QDragEnterEvent | QDragMoveEvent | QDropEvent) -> bool:
         if self.state.sender_is_active or not self._get_xml_files(event):
             return False
+
         viewport_pos = self._queue_table.viewport().mapFrom(self._queue_table, event.pos())
         index = self._queue_table.indexAt(viewport_pos)
         task = self._queue_model.get_task_at(index.row()) if index.isValid() else None
+
         if task and task.status in (TaskStatus.UNCONFIGURED, TaskStatus.PENDING):
             self._queue_table.selectRow(index.row())
             event.acceptProposedAction()
         else:
             self._queue_table.clearSelection()
             event.ignore()
+
         return True
 
     def _on_table_drop(self, event: QDragEnterEvent | QDragMoveEvent | QDropEvent) -> bool:
@@ -402,6 +370,7 @@ class SenderPage(QWidget):
         else:
             self._assign_files_to_pending(xml_files, index.row())
         event.accept()
+
         return True
 
     def _assign_files_to_pending(self, file_paths: list[str], start_row: int = 0):
@@ -424,6 +393,7 @@ class SenderPage(QWidget):
         except Exception as e:
             self.logger.error(f"弹幕文件解析失败: {e}")
             return
+
         if not danmakus:
             self.logger.warning("弹幕文件为空。")
             return
@@ -554,8 +524,6 @@ class SenderPage(QWidget):
             self.log_output.clear()
             self.progress_bar.setValue(0)
             self.progress_bar.setFormat("%p%")
-            self.progress_bar.setFormat("%p%")
 
     # endregion
     # endregion
-

@@ -29,7 +29,8 @@ class QueueTask:
     danmakus: list[Danmaku]
     config_snapshot: SenderConfig
     task_id: str = field(default_factory=lambda: uuid.uuid4().hex[:8])
-    part_name: str = ""
+    part_page: int = 0
+    part_title: str = ""
     status: TaskStatus = TaskStatus.PENDING
     error_msg: str = ""
     attempted: int = 0
