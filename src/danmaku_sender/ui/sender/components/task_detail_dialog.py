@@ -130,7 +130,7 @@ class TaskDetailDialog(QDialog):
         burst_row.addStretch()
         delay_form.addRow(burst_row)
 
-        self._burst_controls = [self._burst_size, self._rest_min, self._rest_max]
+        self._burst_controls: list[QWidget] = [self._burst_size, self._rest_min, self._rest_max]
         layout.addWidget(delay_group)
 
         # --- 自动终止 ---

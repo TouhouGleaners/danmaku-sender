@@ -8,14 +8,11 @@ from PySide6.QtWidgets import (
 from PySide6.QtGui import QTextCursor, QShortcut, QKeySequence, QDragEnterEvent, QDragMoveEvent, QDropEvent
 from PySide6.QtCore import Qt, QPoint, QModelIndex, QDateTime, QEvent, QTimer, Signal, Slot
 
-from .components import QueueTableModel
-from .components.queue_table import ProgressBarDelegate
+from .components.queue_table import ProgressBarDelegate, QueueTableModel
 from .components.task_builder_dialog import TaskBuilderDialog
 from .components.task_detail_dialog import TaskDetailDialog
-from .data_binding import SenderDataBinding
 
 from danmaku_sender.ui.framework.style_loader import SvgIcon
-from danmaku_sender.controller.video_controller import VideoController
 from danmaku_sender.controller.sender_controller import SenderController, SenderStatus
 from danmaku_sender.service.danmaku_parser import DanmakuParser
 from danmaku_sender.types.models.video import VideoInfo
@@ -35,9 +32,7 @@ class SenderPage(QWidget):
         super().__init__()
         self.state = state
         self.logger = logging.getLogger(__name__)
-        self.video_controller = VideoController(self)
         self.sender_controller = SenderController(state, history_manager, self)
-        self.binding = SenderDataBinding(state, self.sender_controller, self.video_controller, self)
 
         self._queue_total = 0
         self._queue_current = 0
