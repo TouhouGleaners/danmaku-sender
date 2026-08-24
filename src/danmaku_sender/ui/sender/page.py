@@ -6,7 +6,7 @@ from PySide6.QtWidgets import (
     QTableView, QHeaderView, QAbstractItemView, QMenu
 )
 from PySide6.QtGui import QTextCursor, QDragEnterEvent, QDropEvent, QShortcut, QKeySequence
-from PySide6.QtCore import Qt, QPoint, QModelIndex, QDateTime, Signal, Slot
+from PySide6.QtCore import Qt, QPoint, QModelIndex, QDateTime, QTimer, Signal, Slot
 
 from .components import QueueTableModel
 from .components.queue_table import ProgressBarDelegate
@@ -96,6 +96,16 @@ class SenderPage(QWidget):
         QShortcut(QKeySequence.StandardKey.Delete, self._queue_table, self._delete_selected_task)
 
         queue_layout.addWidget(self._queue_table)
+
+        # 空状态引导
+        self._empty_hint = QLabel("队列为空  点击「新建任务」添加发送任务", self._queue_table.viewport())
+        self._empty_hint.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        self._empty_hint.setStyleSheet("color: #888; font-size: 14px;")
+        self._empty_hint.setVisible(False)
+        self._queue_model.modelReset.connect(self._update_empty_hint)
+
+        # 布局完成后再定位，避免 viewport geometry 为零
+        QTimer.singleShot(0, self._update_empty_hint)
 
         queue_btn_layout = QHBoxLayout()
 
@@ -344,6 +354,17 @@ class SenderPage(QWidget):
         self.state.queue_state._tasks = reordered_tasks
         self.state.queue_state.tasksChanged.emit()
 
+    def _update_empty_hint(self):
+        self._empty_hint.setVisible(self._queue_model.rowCount() == 0)
+        self._reposition_empty_hint()
+
+    def _reposition_empty_hint(self):
+        self._empty_hint.setGeometry(self._queue_table.viewport().rect())
+
+    def resizeEvent(self, event):
+        super().resizeEvent(event)
+        self._reposition_empty_hint()
+
     def _on_queue_changed(self):
         self._queue_model.set_tasks(self.state.queue_state.tasks)
 
@@ -452,20 +473,13 @@ class SenderPage(QWidget):
         self._btn_stop_queue.setVisible(running)
 
         if running:
-            self._set_inputs_locked(True)
             self.log_output.clear()
             self.progress_bar.setValue(0)
             self.progress_bar.setFormat("%p%")
-        else:
-            self._set_inputs_locked(False)
             self.progress_bar.setFormat("%p%")
 
     # endregion
     # endregion
-
-    def _set_inputs_locked(self, locked: bool):
-        """设置输入控件的锁定状态"""
-        self.basic_group.set_inputs_locked(locked)
 
     def dragEnterEvent(self, event: QDragEnterEvent) -> None:
         """鼠标拖拽文件进入页面区域"""
