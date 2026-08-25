@@ -32,7 +32,7 @@ class TaskDetailDialog(QDialog):
     - 取消时丢弃 editing，不做任何修改
     """
 
-    def __init__(self, task: QueueTask, api_auth, parent=None):
+    def __init__(self, task: QueueTask, api_auth, queue_active: bool = False, parent=None):
         super().__init__(parent)
         self.origin = task                  # 原始引用（只读）
         self.editing = deepcopy(task)       # 编辑副本（工作区）
@@ -41,12 +41,20 @@ class TaskDetailDialog(QDialog):
         self._pending_part_index: int | None = None
         self._selected_file: str | None = None
         self._video_controller = VideoController(self)
+        self._is_editable = (
+            not queue_active
+            and task.status in (TaskStatus.PENDING, TaskStatus.UNCONFIGURED)
+        )
 
         self.setWindowTitle(f"编辑任务 — {task.target.display_string}")
         self.setMinimumSize(500, 500)
         self._create_ui()
         self._connect_signals()
         self._load_task_info()
+
+        # 非可编辑状态时禁用所有编辑控件
+        if not self._is_editable:
+            self._set_readonly_mode()
 
     def _create_ui(self):
         layout = QVBoxLayout(self)
@@ -174,8 +182,8 @@ class TaskDetailDialog(QDialog):
             return
         self._bv_input.setText(bvid)
         self._pending_part_index = None
-        # 只有 BV 号变化且链接带 ?p= 时才用 p_index 定位
-        if bvid != self.origin.target.bvid and p_index is not None:
+        # 只要链接带 ?p= 就用 p_index 定位（不论 BVID 是否变化）
+        if p_index is not None:
             self._pending_part_index = p_index
         self._fetch_btn.setEnabled(False)
         self._fetch_btn.setText("获取中...")
@@ -340,9 +348,6 @@ class TaskDetailDialog(QDialog):
                 # tooltip 格式: "⚠️ 输入无效:\n{error_msg}"
                 tooltip = widget.toolTip()
                 error_msg = tooltip.split("\n", 1)[-1] if "\n" in tooltip else "配置值无效"
-                # 去掉 Pydantic 的 "Value Error, " 前缀
-                if error_msg.startswith("Value Error, "):
-                    error_msg = error_msg[len("Value Error, "):]
                 QMessageBox.warning(self, "配置错误", error_msg)
                 return False
         return True
@@ -459,3 +464,25 @@ class TaskDetailDialog(QDialog):
     def _on_burst_toggled(self, checked: bool):
         for ctrl in self._burst_controls:
             ctrl.setEnabled(checked)
+
+    def _set_readonly_mode(self):
+        """非可编辑状态时禁用所有编辑控件，只保留查看功能"""
+        # 禁用视频目标编辑
+        self._bv_input.setReadOnly(True)
+        self._fetch_btn.setEnabled(False)
+        self._part_combo.setEnabled(False)
+        self._file_btn.setEnabled(False)
+
+        # 禁用配置编辑
+        config_widgets: list[QWidget] = [
+            self._min_delay, self._max_delay,
+            self._burst_cb, self._burst_size,
+            self._rest_min, self._rest_max,
+            self._stop_count, self._stop_time,
+            self._delay_between,
+        ]
+        for widget in config_widgets:
+            widget.setEnabled(False)
+
+        # 隐藏保存按钮
+        self._btn_save.setVisible(False)

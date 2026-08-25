@@ -213,21 +213,24 @@ class SenderPage(QWidget):
             return
 
         menu = QMenu(self)
-        is_pending = task.status in (TaskStatus.PENDING, TaskStatus.UNCONFIGURED)
+        is_editable = (
+            not self.state.sender_is_active
+            and task.status in (TaskStatus.PENDING, TaskStatus.UNCONFIGURED)
+        )
 
-        menu.addAction("查看详情/编辑配置", lambda: self._show_task_detail(task))
+        menu.addAction("查看详情/编辑配置", lambda: self._show_task_detail(task))  # 所有状态都能查看
         menu.addSeparator()
-        menu.addAction("上移", lambda: self._move_task(task.task_id, -1)).setEnabled(is_pending)
-        menu.addAction("下移", lambda: self._move_task(task.task_id, 1)).setEnabled(is_pending)
+        menu.addAction("上移", lambda: self._move_task(task.task_id, -1)).setEnabled(is_editable)
+        menu.addAction("下移", lambda: self._move_task(task.task_id, 1)).setEnabled(is_editable)
         menu.addSeparator()
-        menu.addAction("删除", lambda: self._remove_task(task.task_id)).setEnabled(is_pending)
+        menu.addAction("删除", lambda: self._remove_task(task.task_id)).setEnabled(is_editable)
 
         menu.exec(self._queue_table.mapToGlobal(pos))
 
     def _show_task_detail(self, task: QueueTask):
         """查看/编辑任务详情和配置"""
         auth_config = self.state.get_api_auth()
-        dialog = TaskDetailDialog(task, auth_config, self)
+        dialog = TaskDetailDialog(task, auth_config, self.state.sender_is_active, self)
         if dialog.exec() == QDialog.DialogCode.Accepted:
             # apply_edit 已在 dialog 内部调用，origin 已更新
             row = self._queue_model.get_row_by_id(task.task_id)

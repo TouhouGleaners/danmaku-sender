@@ -218,17 +218,17 @@ class QueueTableModel(QAbstractTableModel):
         if len(source_rows) != len(set(source_rows)):
             return False
 
-        # 只允许拖动 PENDING 任务
+        # 只允许拖动 PENDING 或 UNCONFIGURED 任务
         for r in source_rows:
-            if self._tasks[r].status != TaskStatus.PENDING:
+            if self._tasks[r].status not in (TaskStatus.PENDING, TaskStatus.UNCONFIGURED):
                 return False
 
         dest_row = row if row >= 0 else parent.row()
         if dest_row < 0:
             dest_row = len(self._tasks)
 
-        # 只能插入到 PENDING 区域或队列末尾
-        if dest_row < len(self._tasks) and self._tasks[dest_row].status != TaskStatus.PENDING:
+        # 只能插入到 PENDING 或 UNCONFIGURED 区域或队列末尾
+        if dest_row < len(self._tasks) and self._tasks[dest_row].status not in (TaskStatus.PENDING, TaskStatus.UNCONFIGURED):
             return False
 
         moved = [self._tasks[r] for r in source_rows]
