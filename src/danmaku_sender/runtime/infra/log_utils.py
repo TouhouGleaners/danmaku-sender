@@ -11,7 +11,7 @@ from danmaku_sender.config.app_meta import AppInfo
 
 class LogNamespace:
     """日志命名空间契约（基于模块路径）"""
-    SENDER_PREFIXES = ("danmaku_sender.service.sender", "danmaku_sender.ui.sender")
+    SENDER_PREFIXES = ("danmaku_sender.service.sender", "danmaku_sender.ui.sender", "danmaku_sender.controller.sender_controller")
     MONITOR_PREFIXES = ("danmaku_sender.service.bili_monitor", "danmaku_sender.ui.monitor_page", "danmaku_sender.controller.monitor_controller")
 
 
@@ -137,5 +137,7 @@ def init_app_logging(log_dir: Path):
     logging.getLogger("requests").setLevel(logging.WARNING)
     logging.getLogger("urllib3").setLevel(logging.WARNING)
     logging.getLogger("peewee").setLevel(logging.WARNING)
+    logging.getLogger("keyring").setLevel(logging.WARNING)
+    logging.getLogger("win32ctypes").setLevel(logging.WARNING)
 
     logging.info(f"日志系统初始化完成。日志路径: {log_file_path}")
