@@ -327,7 +327,7 @@ class TaskDetailDialog(QDialog):
         """校验配置合法性，失败则弹出警告
 
         UIBinder 已实时更新到 editing.config_snapshot，如果有 Pydantic 验证错误，
-        控件已经变红。这里检查是否有 invalid 状态的控件。
+        控件已经变红并设置了 tooltip。这里提取第一个错误信息显示给用户。
         """
         config_widgets: list[QWidget] = [
             self._min_delay, self._max_delay,
@@ -335,9 +335,16 @@ class TaskDetailDialog(QDialog):
             self._stop_count, self._stop_time,
             self._delay_between,
         ]
-        if any(w.property("invalid") for w in config_widgets):
-            QMessageBox.warning(self, "配置错误", "请检查标红的配置项")
-            return False
+        for widget in config_widgets:
+            if widget.property("invalid"):
+                # tooltip 格式: "⚠️ 输入无效:\n{error_msg}"
+                tooltip = widget.toolTip()
+                error_msg = tooltip.split("\n", 1)[-1] if "\n" in tooltip else "配置值无效"
+                # 去掉 Pydantic 的 "Value Error, " 前缀
+                if error_msg.startswith("Value Error, "):
+                    error_msg = error_msg[len("Value Error, "):]
+                QMessageBox.warning(self, "配置错误", error_msg)
+                return False
         return True
 
     # --- 配置编辑 ---
