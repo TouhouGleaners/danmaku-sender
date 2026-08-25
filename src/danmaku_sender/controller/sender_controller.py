@@ -173,6 +173,9 @@ class SenderController(QObject):
         self._queue_worker.finished.connect(self._queue_worker.deleteLater)
         self._queue_worker.start()
 
+        # 标记队列运行状态
+        self.state.sender_is_active = True
+
     def stop_queue(self):
         """停止队列发送"""
         if self.is_queue_running():
@@ -198,6 +201,7 @@ class SenderController(QObject):
         if self._queue_worker is not None:
             logger.debug("QueueWorker 线程生命周期结束，正在清理控制器引用。")
             self._queue_worker = None
+        self.state.sender_is_active = False
         self.queueReady.emit()
 
     # endregion

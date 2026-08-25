@@ -32,16 +32,21 @@ class ProgressBarDelegate(QStyledItemDelegate):
         bar.minimum = 0
         bar.maximum = 100
         bar.progress = progress
-        bar.text = f"{task.attempted}/{task.total}" if task.total > 0 else ""
+        if task.total > 0:
+            pct = int((task.attempted / task.total) * 100)
+            bar.text = f"{task.attempted}/{task.total} {pct}%"
+        else:
+            bar.text = ""
         bar.textVisible = True
 
         match task.status:
             case TaskStatus.COMPLETED:
                 if task.attempted >= task.total:
                     bar.progress = 100
-                    bar.text = f"{task.total}/{task.total}"
+                    bar.text = f"{task.total}/{task.total} 100%"
                 else:
-                    bar.text = f"{task.attempted}/{task.total}"
+                    pct = int((task.attempted / task.total) * 100) if task.total > 0 else 0
+                    bar.text = f"{task.attempted}/{task.total} {pct}%"
             case TaskStatus.FAILED:
                 bar.text = "失败"
             case TaskStatus.SKIPPED:
@@ -138,7 +143,9 @@ class QueueTableModel(QAbstractTableModel):
             case QueueCol.TITLE:
                 return task.target.title or task.target.bvid
             case QueueCol.PART:
-                return f"CID: {task.target.cid}"
+                if task.p_title:
+                    return f"P{task.p_index} - {task.p_title}"
+                return f"P{task.p_index}"
             case QueueCol.COUNT:
                 return str(len(task.danmakus))
             case QueueCol.STATUS:
@@ -211,17 +218,17 @@ class QueueTableModel(QAbstractTableModel):
         if len(source_rows) != len(set(source_rows)):
             return False
 
-        # 只允许拖动 PENDING 任务
+        # 只允许拖动 PENDING 或 UNCONFIGURED 任务
         for r in source_rows:
-            if self._tasks[r].status != TaskStatus.PENDING:
+            if self._tasks[r].status not in (TaskStatus.PENDING, TaskStatus.UNCONFIGURED):
                 return False
 
         dest_row = row if row >= 0 else parent.row()
         if dest_row < 0:
             dest_row = len(self._tasks)
 
-        # 只能插入到 PENDING 区域或队列末尾
-        if dest_row < len(self._tasks) and self._tasks[dest_row].status != TaskStatus.PENDING:
+        # 只能插入到 PENDING 或 UNCONFIGURED 区域或队列末尾
+        if dest_row < len(self._tasks) and self._tasks[dest_row].status not in (TaskStatus.PENDING, TaskStatus.UNCONFIGURED):
             return False
 
         moved = [self._tasks[r] for r in source_rows]
