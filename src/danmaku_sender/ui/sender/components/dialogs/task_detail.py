@@ -1,4 +1,5 @@
 import logging
+from copy import deepcopy
 
 from PySide6.QtWidgets import (
     QDialog, QVBoxLayout, QHBoxLayout, QFormLayout, QLabel,
@@ -15,17 +16,26 @@ from danmaku_sender.config import SenderConfig
 from danmaku_sender.controller.video_controller import VideoController
 from danmaku_sender.service.danmaku_parser import DanmakuParser
 from danmaku_sender.utils.string_utils import parse_bilibili_link
+from danmaku_sender.ui.framework.binder import UIBinder
 
 
 logger = logging.getLogger(__name__)
 
 
 class TaskDetailDialog(QDialog):
-    """任务详情与配置编辑弹窗"""
+    """任务详情与配置编辑弹窗
+
+    编辑沙盒模式:
+    - origin: 原始任务（只读引用，保存时才写入）
+    - editing: 编辑副本（所有修改在这里进行）
+    - 配置区通过 UIBinder 绑定到 editing.config_snapshot，实时验证 + 自动变红
+    - 取消时丢弃 editing，不做任何修改
+    """
 
     def __init__(self, task: QueueTask, api_auth, parent=None):
         super().__init__(parent)
-        self.task = task
+        self.origin = task                  # 原始引用（只读）
+        self.editing = deepcopy(task)       # 编辑副本（工作区）
         self._api_auth = api_auth
         self._video_info: VideoInfo | None = None
         self._pending_part_index: int | None = None
@@ -82,7 +92,7 @@ class TaskDetailDialog(QDialog):
         bv_row = QHBoxLayout()
         self._bv_input = QLineEdit()
         self._bv_input.setPlaceholderText("输入BV号或视频链接")
-        self._bv_input.setText(self.task.target.bvid)
+        self._bv_input.setText(self.origin.target.bvid)
         self._fetch_btn = QPushButton("获取视频信息")
         self._fetch_btn.setFixedWidth(100)
         bv_row.addWidget(self._bv_input)
@@ -96,10 +106,10 @@ class TaskDetailDialog(QDialog):
         file_row = QHBoxLayout()
         self._file_input = QLineEdit()
         self._file_input.setReadOnly(True)
-        if self.task.xml_path:
-            self._file_input.setText(self.task.xml_path)
-        elif self.task.danmakus:
-            self._file_input.setText(f"已加载 {len(self.task.danmakus)} 条弹幕")
+        if self.origin.xml_path:
+            self._file_input.setText(self.origin.xml_path)
+        elif self.origin.danmakus:
+            self._file_input.setText(f"已加载 {len(self.origin.danmakus)} 条弹幕")
         self._file_btn = QPushButton("选择文件")
         self._file_btn.setFixedWidth(80)
         file_row.addWidget(self._file_input, stretch=1)
@@ -112,7 +122,7 @@ class TaskDetailDialog(QDialog):
         detail_group = QGroupBox("当前信息")
         detail_form = QFormLayout(detail_group)
 
-        task = self.task
+        task = self.origin
         url = f"https://www.bilibili.com/video/{task.target.bvid}"
         if task.p_index > 0:
             url += f"?p={task.p_index}"
@@ -148,7 +158,7 @@ class TaskDetailDialog(QDialog):
 
     def _load_task_info(self):
         """预填当前任务的分P信息"""
-        task = self.task
+        task = self.origin
         if task.p_index > 0:
             label = f"P{task.p_index} - {task.p_title}" if task.p_title else f"P{task.p_index}"
             self._part_combo.addItem(label, userData=task.p_index)
@@ -165,7 +175,7 @@ class TaskDetailDialog(QDialog):
         self._bv_input.setText(bvid)
         self._pending_part_index = None
         # 只有 BV 号变化且链接带 ?p= 时才用 p_index 定位
-        if bvid != self.task.target.bvid and p_index is not None:
+        if bvid != self.origin.target.bvid and p_index is not None:
             self._pending_part_index = p_index
         self._fetch_btn.setEnabled(False)
         self._fetch_btn.setText("获取中...")
@@ -202,7 +212,7 @@ class TaskDetailDialog(QDialog):
         else:
             target_index = next(
                 (i for i in range(self._part_combo.count())
-                 if self._part_combo.itemData(i) == self.task.p_index),
+                 if self._part_combo.itemData(i) == self.origin.p_index),
                 0
             )
             self._part_combo.setCurrentIndex(target_index)
@@ -243,9 +253,9 @@ class TaskDetailDialog(QDialog):
         # 从 video_info 中查找对应的 part
         part = next((p for p in self._video_info.parts if p.page == page), None) if self._video_info else None
 
-        cid = part.cid if part else self.task.target.cid
-        title = self._video_info.title if self._video_info else self.task.target.title
-        bvid = self._video_info.bvid if self._video_info else self.task.target.bvid
+        cid = part.cid if part else self.origin.target.cid
+        title = self._video_info.title if self._video_info else self.origin.target.title
+        bvid = self._video_info.bvid if self._video_info else self.origin.target.bvid
         part_text = self._part_combo.currentText()
 
         self._detail_title.setText(title or bvid)
@@ -255,13 +265,25 @@ class TaskDetailDialog(QDialog):
         self._detail_url.setText(f"https://www.bilibili.com/video/{bvid}?p={page}")
 
     def _on_save(self):
-        """保存编辑结果"""
+        """保存编辑结果
+
+        流程: 收集UI数据到 editing → 验证 editing → 通过后写回 origin
+        """
         self._apply_target_changes()
         self._apply_danmaku_changes()
 
+        # 验证任务数据
+        error = self.editing.validate()
+        if error:
+            QMessageBox.warning(self, "任务错误", error)
+            return
+
+        # 验证配置数据
         if not self._validate_config():
             return
 
+        # 全部验证通过，写回原始对象
+        self.origin.apply_edit(self.editing)
         self.accept()
 
     def _apply_target_changes(self):
@@ -274,13 +296,13 @@ class TaskDetailDialog(QDialog):
         if not part or not part.cid:
             return
 
-        self.task.target = VideoTarget(
+        self.editing.target = VideoTarget(
             bvid=self._video_info.bvid,
             cid=part.cid,
             title=self._video_info.title,
         )
-        self.task.p_index = part.page
-        self.task.p_title = part.title
+        self.editing.p_index = part.page
+        self.editing.p_title = part.title
 
     def _apply_danmaku_changes(self):
         """应用弹幕文件变更（如果有新选择）"""
@@ -293,45 +315,38 @@ class TaskDetailDialog(QDialog):
             if not danmakus:
                 return
 
-            self.task.danmakus = danmakus
-            self.task.total = len(danmakus)
-            self.task.xml_path = self._selected_file
-            if self.task.status == TaskStatus.UNCONFIGURED:
-                self.task.status = TaskStatus.PENDING
+            self.editing.danmakus = danmakus
+            self.editing.total = len(danmakus)
+            self.editing.xml_path = self._selected_file
+            if self.editing.status == TaskStatus.UNCONFIGURED:
+                self.editing.status = TaskStatus.PENDING
         except Exception as e:
             logger.error(f"弹幕文件解析失败: {e}")
 
     def _validate_config(self) -> bool:
-        """校验配置合法性，失败则弹出警告"""
-        try:
-            self.get_config()
-            return True
-        except Exception as e:
-            QMessageBox.warning(self, "配置错误", str(e))
-            return False
+        """校验配置合法性，失败则弹出警告
 
-    def get_config(self) -> SenderConfig:
-        """返回编辑后的配置"""
-        return SenderConfig(
-            min_delay=self._min_delay.value(),
-            max_delay=self._max_delay.value(),
-            burst_enabled=self._burst_cb.isChecked(),
-            burst_size=self._burst_size.value(),
-            rest_min=self._rest_min.value(),
-            rest_max=self._rest_max.value(),
-            stop_after_count=self._stop_count.value(),
-            stop_after_time=self._stop_time.value(),
-            delay_between_tasks=self._delay_between.value(),
-            prevent_sleep=self.task.config_snapshot.prevent_sleep,
-            use_system_proxy=self.task.config_snapshot.use_system_proxy,
-            skip_sent=self.task.config_snapshot.skip_sent,
-        )
+        UIBinder 已实时更新到 editing.config_snapshot，如果有 Pydantic 验证错误，
+        控件已经变红。这里检查是否有 invalid 状态的控件。
+        """
+        config_widgets: list[QWidget] = [
+            self._min_delay, self._max_delay,
+            self._burst_size, self._rest_min, self._rest_max,
+            self._stop_count, self._stop_time,
+            self._delay_between,
+        ]
+        if any(w.property("invalid") for w in config_widgets):
+            QMessageBox.warning(self, "配置错误", "请检查标红的配置项")
+            return False
+        return True
 
     # --- 配置编辑 ---
 
     def _create_config_section(self) -> QWidget:
         group = QGroupBox("发送配置")
         layout = QVBoxLayout(group)
+
+        config = self.editing.config_snapshot
 
         # --- 发送延迟 ---
         delay_group = QGroupBox("发送延迟")
@@ -343,12 +358,14 @@ class TaskDetailDialog(QDialog):
         self._min_delay.setRange(0.1, 60.0)
         self._min_delay.setSingleStep(0.5)
         self._min_delay.setFixedWidth(70)
+        UIBinder.bind(self._min_delay, config, "min_delay")
         delay_row.addWidget(self._min_delay)
         delay_row.addWidget(QLabel("-"))
         self._max_delay = QDoubleSpinBox()
         self._max_delay.setRange(0.1, 60.0)
         self._max_delay.setSingleStep(0.5)
         self._max_delay.setFixedWidth(70)
+        UIBinder.bind(self._max_delay, config, "max_delay")
         delay_row.addWidget(self._max_delay)
         delay_row.addWidget(QLabel("秒"))
         delay_row.addStretch()
@@ -358,21 +375,25 @@ class TaskDetailDialog(QDialog):
         burst_row.setSpacing(2)
         self._burst_cb = QCheckBox("爆发模式")
         self._burst_cb.toggled.connect(self._on_burst_toggled)
+        UIBinder.bind(self._burst_cb, config, "burst_enabled")
         burst_row.addWidget(self._burst_cb)
         burst_row.addWidget(QLabel("每"))
         self._burst_size = QSpinBox()
         self._burst_size.setRange(2, 100)
         self._burst_size.setFixedWidth(70)
+        UIBinder.bind(self._burst_size, config, "burst_size")
         burst_row.addWidget(self._burst_size)
         burst_row.addWidget(QLabel("条，休息"))
         self._rest_min = QDoubleSpinBox()
         self._rest_min.setRange(0.0, 300.0)
         self._rest_min.setFixedWidth(60)
+        UIBinder.bind(self._rest_min, config, "rest_min")
         burst_row.addWidget(self._rest_min)
         burst_row.addWidget(QLabel("-"))
         self._rest_max = QDoubleSpinBox()
         self._rest_max.setRange(0.0, 300.0)
         self._rest_max.setFixedWidth(60)
+        UIBinder.bind(self._rest_max, config, "rest_max")
         burst_row.addWidget(self._rest_max)
         burst_row.addWidget(QLabel("秒"))
         burst_row.addStretch()
@@ -390,6 +411,7 @@ class TaskDetailDialog(QDialog):
         self._stop_count = QSpinBox()
         self._stop_count.setRange(0, 99999)
         self._stop_count.setFixedWidth(70)
+        UIBinder.bind(self._stop_count, config, "stop_after_count")
         stop_count_row.addWidget(self._stop_count)
         stop_count_row.addWidget(QLabel("条"))
         stop_count_row.addWidget(QLabel("(0为不限制)"))
@@ -401,6 +423,7 @@ class TaskDetailDialog(QDialog):
         self._stop_time = QSpinBox()
         self._stop_time.setRange(0, 99999)
         self._stop_time.setFixedWidth(70)
+        UIBinder.bind(self._stop_time, config, "stop_after_time")
         stop_time_row.addWidget(self._stop_time)
         stop_time_row.addWidget(QLabel("分钟"))
         stop_time_row.addWidget(QLabel("(0为不限制)"))
@@ -416,26 +439,15 @@ class TaskDetailDialog(QDialog):
         self._delay_between = QDoubleSpinBox()
         self._delay_between.setRange(0.0, 300.0)
         self._delay_between.setSingleStep(5.0)
+        UIBinder.bind(self._delay_between, config, "delay_between_tasks")
         queue_form.addRow("任务间隔:", self._delay_between)
 
         layout.addWidget(queue_group)
 
-        self._load_config_values()
+        # 初始化爆发控件状态
+        self._on_burst_toggled(config.burst_enabled)
 
         return group
-
-    def _load_config_values(self):
-        cfg = self.task.config_snapshot
-        self._min_delay.setValue(cfg.min_delay)
-        self._max_delay.setValue(cfg.max_delay)
-        self._burst_cb.setChecked(cfg.burst_enabled)
-        self._burst_size.setValue(cfg.burst_size)
-        self._rest_min.setValue(cfg.rest_min)
-        self._rest_max.setValue(cfg.rest_max)
-        self._stop_count.setValue(cfg.stop_after_count)
-        self._stop_time.setValue(cfg.stop_after_time)
-        self._delay_between.setValue(cfg.delay_between_tasks)
-        self._on_burst_toggled(cfg.burst_enabled)
 
     def _on_burst_toggled(self, checked: bool):
         for ctrl in self._burst_controls:

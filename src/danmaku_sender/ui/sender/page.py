@@ -229,7 +229,7 @@ class SenderPage(QWidget):
         auth_config = self.state.get_api_auth()
         dialog = TaskDetailDialog(task, auth_config, self)
         if dialog.exec() == QDialog.DialogCode.Accepted:
-            task.config_snapshot = dialog.get_config()
+            # apply_edit 已在 dialog 内部调用，origin 已更新
             row = self._queue_model.get_row_by_id(task.task_id)
             if row >= 0:
                 self._queue_model.refresh_row(row)
