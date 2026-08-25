@@ -215,8 +215,15 @@ class TaskDetailDialog(QDialog):
         if self._part_combo.count() == 0:
             return
 
-        if self._pending_part_index is not None and 0 <= self._pending_part_index < self._part_combo.count():
-            self._part_combo.setCurrentIndex(self._pending_part_index)
+        if self._pending_part_index is not None:
+            # 用 page 编号匹配 combo 的 itemData（而不是直接用作索引）
+            target_index = next(
+                (i for i in range(self._part_combo.count())
+                 if self._part_combo.itemData(i) == self._pending_part_index),
+                -1
+            )
+            if target_index >= 0:
+                self._part_combo.setCurrentIndex(target_index)
         else:
             target_index = next(
                 (i for i in range(self._part_combo.count())
