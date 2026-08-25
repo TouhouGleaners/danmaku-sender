@@ -151,7 +151,7 @@ class TaskDetailDialog(QDialog):
         task = self.task
         if task.p_index > 0:
             label = f"P{task.p_index} - {task.p_title}" if task.p_title else f"P{task.p_index}"
-            self._part_combo.addItem(label, userData={'cid': task.target.cid, 'page': task.p_index})
+            self._part_combo.addItem(label, userData=task.p_index)
             self._part_combo.setCurrentIndex(0)
 
     @Slot()
@@ -180,26 +180,34 @@ class TaskDetailDialog(QDialog):
         self._fetch_btn.setText("获取视频信息")
         self._part_combo.setEnabled(True)
 
+        self._populate_part_combo(info)
+        self._select_default_part()
+
+    def _populate_part_combo(self, info: VideoInfo):
+        """用视频信息填充分P下拉框"""
         self._part_combo.currentIndexChanged.disconnect(self._on_part_changed)
         self._part_combo.clear()
         for p in info.parts:
             if p.cid:
-                self._part_combo.addItem(f"P{p.page} - {p.title}", userData={'cid': p.cid, 'page': p.page})
+                self._part_combo.addItem(f"P{p.page} - {p.title}", userData=p.page)
         self._part_combo.currentIndexChanged.connect(self._on_part_changed)
 
-        if self._part_combo.count() > 0:
-            if self._pending_part_index is not None and 0 <= self._pending_part_index < self._part_combo.count():
-                self._part_combo.setCurrentIndex(self._pending_part_index)
-            else:
-                # 默认选中当前任务的分P
-                for i in range(self._part_combo.count()):
-                    data = self._part_combo.itemData(i)
-                    if data and data['cid'] == self.task.target.cid:
-                        self._part_combo.setCurrentIndex(i)
-                        break
-                else:
-                    self._part_combo.setCurrentIndex(0)
-            self._pending_part_index = None
+    def _select_default_part(self):
+        """选择默认的分P（优先用 pending，否则匹配当前任务）"""
+        if self._part_combo.count() == 0:
+            return
+
+        if self._pending_part_index is not None and 0 <= self._pending_part_index < self._part_combo.count():
+            self._part_combo.setCurrentIndex(self._pending_part_index)
+        else:
+            target_index = next(
+                (i for i in range(self._part_combo.count())
+                 if self._part_combo.itemData(i) == self.task.p_index),
+                0
+            )
+            self._part_combo.setCurrentIndex(target_index)
+
+        self._pending_part_index = None
 
     @Slot(str, str)
     def _on_fetch_failed(self, bvid: str, error_msg: str):
@@ -222,18 +230,20 @@ class TaskDetailDialog(QDialog):
 
     @Slot(int)
     def _on_part_changed(self, index: int):
-        data = self._part_combo.itemData(index)
-        if not data:
+        page = self._part_combo.itemData(index)
+        if page is None:
             return
         if self._video_info:
-            self._pending_part_index = data.get('page')
+            self._pending_part_index = page
         # 刷新底部详情
-        self._update_detail_display(data)
+        self._update_detail_display(page)
 
-    def _update_detail_display(self, data: dict):
+    def _update_detail_display(self, page: int):
         """根据选中的分P刷新底部信息"""
-        cid = data['cid']
-        page = data['page']
+        # 从 video_info 中查找对应的 part
+        part = next((p for p in self._video_info.parts if p.page == page), None) if self._video_info else None
+
+        cid = part.cid if part else self.task.target.cid
         title = self._video_info.title if self._video_info else self.task.target.title
         bvid = self._video_info.bvid if self._video_info else self.task.target.bvid
         part_text = self._part_combo.currentText()
@@ -242,51 +252,63 @@ class TaskDetailDialog(QDialog):
         self._detail_bvid.setText(bvid)
         self._detail_part.setText(part_text)
         self._detail_cid.setText(str(cid))
-        url = f"https://www.bilibili.com/video/{bvid}?p={page}"
-        self._detail_url.setText(url)
+        self._detail_url.setText(f"https://www.bilibili.com/video/{bvid}?p={page}")
 
     def _on_save(self):
         """保存编辑结果"""
-        task = self.task
+        self._apply_target_changes()
+        self._apply_danmaku_changes()
 
-        # 更新视频目标（如果有新选择）
-        data = self._part_combo.currentData()
-        if data and self._video_info:
-            task.target = VideoTarget(
-                bvid=self._video_info.bvid,
-                cid=data['cid'],
-                title=self._video_info.title,
-            )
-            task.p_index = data['page']
-            # 从 combo 文本中提取分P标题
-            combo_text = self._part_combo.currentText()
-            if " - " in combo_text:
-                task.p_title = combo_text.split(" - ", 1)[1]
-            else:
-                task.p_title = ""
-
-        # 更新弹幕文件（如果有新选择）
-        if self._selected_file:
-            parser = DanmakuParser()
-            try:
-                danmakus = parser.parse_xml_file(self._selected_file)
-                if danmakus:
-                    task.danmakus = danmakus
-                    task.total = len(danmakus)
-                    task.xml_path = self._selected_file
-                    if task.status == TaskStatus.UNCONFIGURED:
-                        task.status = TaskStatus.PENDING
-            except Exception as e:
-                logger.error(f"弹幕文件解析失败: {e}")
-
-        # 校验配置合法性
-        try:
-            self.get_config()
-        except Exception as e:
-            QMessageBox.warning(self, "配置错误", str(e))
+        if not self._validate_config():
             return
 
         self.accept()
+
+    def _apply_target_changes(self):
+        """应用视频目标变更（如果有新选择）"""
+        page = self._part_combo.currentData()
+        if page is None or not self._video_info:
+            return
+
+        part = next((p for p in self._video_info.parts if p.page == page), None)
+        if not part or not part.cid:
+            return
+
+        self.task.target = VideoTarget(
+            bvid=self._video_info.bvid,
+            cid=part.cid,
+            title=self._video_info.title,
+        )
+        self.task.p_index = part.page
+        self.task.p_title = part.title
+
+    def _apply_danmaku_changes(self):
+        """应用弹幕文件变更（如果有新选择）"""
+        if not self._selected_file:
+            return
+
+        parser = DanmakuParser()
+        try:
+            danmakus = parser.parse_xml_file(self._selected_file)
+            if not danmakus:
+                return
+
+            self.task.danmakus = danmakus
+            self.task.total = len(danmakus)
+            self.task.xml_path = self._selected_file
+            if self.task.status == TaskStatus.UNCONFIGURED:
+                self.task.status = TaskStatus.PENDING
+        except Exception as e:
+            logger.error(f"弹幕文件解析失败: {e}")
+
+    def _validate_config(self) -> bool:
+        """校验配置合法性，失败则弹出警告"""
+        try:
+            self.get_config()
+            return True
+        except Exception as e:
+            QMessageBox.warning(self, "配置错误", str(e))
+            return False
 
     def get_config(self) -> SenderConfig:
         """返回编辑后的配置"""
