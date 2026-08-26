@@ -32,6 +32,7 @@ class QueueTask:
     p_index: int = 0
     p_title: str = ""
     xml_path: str = ""
+    duration_ms: int = 0  # 视频时长（毫秒），用于弹幕时间越界校验
     status: TaskStatus = TaskStatus.PENDING
     error_msg: str = ""
     attempted: int = 0
@@ -58,5 +59,6 @@ class QueueTask:
         self.danmakus = source.danmakus
         self.total = source.total
         self.xml_path = source.xml_path
+        self.duration_ms = source.duration_ms
         self.status = source.status
         self.config_snapshot = source.config_snapshot

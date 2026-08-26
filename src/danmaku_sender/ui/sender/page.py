@@ -12,11 +12,10 @@ from .components.queue_table import ProgressBarDelegate, QueueTableModel
 from .components.dialogs.task_builder import TaskBuilderDialog
 from .components.dialogs.task_detail import TaskDetailDialog
 
+from danmaku_sender.ui.editor import EditorDialog
 from danmaku_sender.ui.framework.style_loader import SvgIcon
-from danmaku_sender.controller.sender_controller import SenderController, SenderStatus
+from danmaku_sender.controller.sender_controller import SenderController
 from danmaku_sender.service.danmaku_parser import DanmakuParser
-from danmaku_sender.types.models.video import VideoInfo
-from danmaku_sender.types.models.common import VideoTarget
 from danmaku_sender.types.models.queue import QueueTask, TaskStatus
 from danmaku_sender.repo.history_manager import HistoryManager
 from danmaku_sender.service.sender import SendingContext
@@ -219,6 +218,7 @@ class SenderPage(QWidget):
         )
 
         menu.addAction("查看详情/编辑配置", lambda: self._show_task_detail(task))  # 所有状态都能查看
+        menu.addAction("编辑弹幕", lambda: self._edit_danmakus(task)).setEnabled(is_editable)
         menu.addSeparator()
         menu.addAction("上移", lambda: self._move_task(task.task_id, -1)).setEnabled(is_editable)
         menu.addAction("下移", lambda: self._move_task(task.task_id, 1)).setEnabled(is_editable)
@@ -237,6 +237,16 @@ class SenderPage(QWidget):
             if row >= 0:
                 self._queue_model.refresh_row(row)
             self.logger.info(f"已更新任务: {task.target.display_string}")
+
+    def _edit_danmakus(self, task: QueueTask):
+        """编辑任务的弹幕数据（打开编辑器弹窗）"""
+        dialog = EditorDialog(task, self.state, self)
+        if dialog.exec() == QDialog.DialogCode.Accepted:
+            # 编辑完成后，刷新表格显示
+            row = self._queue_model.get_row_by_id(task.task_id)
+            if row >= 0:
+                self._queue_model.refresh_row(row)
+            self.logger.info(f"已编辑弹幕: {task.target.display_string} ({task.total} 条)")
 
     def _move_task(self, task_id: str, direction: int):
         self.state.queue_state.move_task(task_id, direction)

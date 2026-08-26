@@ -184,6 +184,13 @@ class TaskBuilderDialog(QDialog):
             title=self._video_info.title,
         )
 
+        # 获取视频时长（毫秒）
+        duration_ms = 0
+        for p in self._video_info.parts:
+            if p.cid == cid:
+                duration_ms = p.duration * 1000  # 秒转毫秒
+                break
+
         # 解析弹幕文件（如果选了的话）
         danmakus = []
         xml_path = ""
@@ -204,6 +211,7 @@ class TaskBuilderDialog(QDialog):
             p_index=page,
             p_title=part_title,
             xml_path=xml_path,
+            duration_ms=duration_ms,
         )
 
         # 如果没有弹幕，标记为未配置
