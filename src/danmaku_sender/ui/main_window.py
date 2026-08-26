@@ -12,7 +12,6 @@ from .framework.style_loader import SvgIcon, load_stylesheet, get_app_icon
 from .sender import SenderPage
 from .settings_page import SettingsPage
 from .monitor_page import MonitorPage
-from .editor import EditorPage
 from .dialogs import AboutDialog, HelpDialog, UpdateDialog
 from .account_manager import AccountDialog
 from .history import HistoryPage
@@ -162,7 +161,6 @@ class MainWindow(QMainWindow):
         """初始化页面并绑定导航"""
         self.page_settings = SettingsPage(self.state)
         self.page_sender = SenderPage(self.state, self.rt.history_manager)
-        self.page_editor = EditorPage(self.state)
         self.page_monitor = MonitorPage(self.state, self.rt.history_manager)
         self.page_history = HistoryPage(self.state, self.rt.history_manager)
 
@@ -170,7 +168,6 @@ class MainWindow(QMainWindow):
         pages = [
             ("全局设置", self.page_settings, "settings.svg"),
             ("弹幕发射器", self.page_sender, "send.svg"),
-            ("弹幕编辑器", self.page_editor, "edit_document.svg"),
             ("弹幕监视器", self.page_monitor, "monitor.svg"),
             ("弹幕历史记录", self.page_history, "history.svg"),
         ]
@@ -279,7 +276,6 @@ class MainWindow(QMainWindow):
         # 页面数据绑定
         self.page_settings.init_bindings()
         self.page_sender.init_bindings()
-        self.page_editor.init_bindings()
         self.page_monitor.init_bindings()
         self.page_history.init_bindings()
 

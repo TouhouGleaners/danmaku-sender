@@ -4,7 +4,7 @@ from typing import Any
 
 from PySide6.QtCore import Qt, QModelIndex, QPoint, Slot
 from PySide6.QtWidgets import (
-    QWidget, QVBoxLayout, QHBoxLayout, QPushButton, QLabel,
+    QDialog, QVBoxLayout, QHBoxLayout, QPushButton, QLabel,
     QTableView, QHeaderView, QAbstractItemView, QMessageBox,
     QMenu, QFrame, QCheckBox, QSplitter, QFileDialog
 )
@@ -15,19 +15,41 @@ from .dialogs import EditDanmakuDialog, TimeOffsetDialog, ArrayGeneratorDialog
 from danmaku_sender.ui.framework.style_loader import SvgIcon
 from danmaku_sender.controller.editor_controller import EditorController
 from danmaku_sender.types.models.editor_types import EditorField, InsertPosition
+from danmaku_sender.types.models.queue import QueueTask
 from danmaku_sender.runtime.state.app_state import AppState
 
 
-class EditorPage(QWidget):
-    def __init__(self, state: AppState):
-        super().__init__()
+class EditorPage(QDialog):
+    """编辑器弹窗 - 用于编辑单个任务的弹幕数据"""
+
+    def __init__(self, task: QueueTask, state: AppState, parent=None):
+        super().__init__(parent)
+        self.task = task
         self.controller = EditorController(state, self)
         self.logger = logging.getLogger(__name__)
 
         self.current_item_id: str | None = None
 
+        self.setWindowTitle(f"编辑弹幕 — {task.target.display_string}")
+        self.setMinimumSize(900, 600)
+        self.setWindowFlags(
+            Qt.WindowType.Dialog
+            | Qt.WindowType.WindowTitleHint
+            | Qt.WindowType.WindowCloseButtonHint
+            | Qt.WindowType.WindowMinMaxButtonsHint
+        )
+
         self._create_ui()
         self.controller.dataChanged.connect(self._refresh_table)
+
+        # 加载任务的弹幕数据
+        self._load_task_danmakus()
+
+    def _load_task_danmakus(self):
+        """加载任务的弹幕数据到编辑器"""
+        if self.task.danmakus:
+            self.controller.load_from_danmakus(self.task.danmakus)
+            self._refresh_table()
 
     # region UI Setup & Data Binding
     def _create_ui(self):
@@ -41,9 +63,6 @@ class EditorPage(QWidget):
         toolbar_layout.setSpacing(8)
 
         # A: 文件级操作
-        self.btn_new = QPushButton(SvgIcon("note_add.svg"), "新建")
-        self.btn_new.clicked.connect(self._create_new_file)
-
         self.btn_import = QPushButton(SvgIcon("file_open.svg"), "导入 XML")
         self.btn_import.clicked.connect(self._import_xml)
 
@@ -51,7 +70,6 @@ class EditorPage(QWidget):
         self.btn_export.setEnabled(False)
         self.btn_export.clicked.connect(self._export_xml)
 
-        toolbar_layout.addWidget(self.btn_new)
         toolbar_layout.addWidget(self.btn_import)
         toolbar_layout.addWidget(self.btn_export)
 
@@ -149,7 +167,7 @@ class EditorPage(QWidget):
         # --- 底部按钮与状态区 ---
         bottom_layout = QHBoxLayout()
 
-        self.status_label = QLabel("提示: 请先在“发射器”页面加载文件并选择分P。")
+        self.status_label = QLabel('提示: 请先在"发射器"页面加载文件并选择分P。')
         self.status_label.setStyleSheet("color: #7f8c8d;")
         self.status_label.setAlignment(Qt.AlignmentFlag.AlignRight | Qt.AlignmentFlag.AlignVCenter)
 
@@ -188,7 +206,6 @@ class EditorPage(QWidget):
         """统一状态机控制"""
         ctrl = self.controller
 
-        self.btn_new.setEnabled(True)
         self.btn_import.setEnabled(True)
         self.run_btn.setEnabled(ctrl.source_data_exists)
         self.btn_batch.setEnabled(ctrl.has_data)
@@ -199,7 +216,7 @@ class EditorPage(QWidget):
         # 更新状态提示文本和样式
         # 脏数据
         if ctrl.is_dirty:
-            self.status_label.setText("⚠️ 有未应用的修改！请点击“应用所有修改”按钮。")
+            self.status_label.setText('⚠️ 有未保存的修改！请点击"保存到任务"按钮。')
             self.status_label.setStyleSheet("color: #d35400;")
 
         # 已校验数据
@@ -208,20 +225,19 @@ class EditorPage(QWidget):
             if ctrl.active_error_count > 0:
                 self.status_label.setText(f"❌ 发现 {ctrl.active_error_count} 条问题弹幕，请处理。")
                 self.status_label.setStyleSheet("color: red;")
-            # 没有错误，根据是否有视频上下文显示不同的提示
+            # 没有错误
             else:
-                mode = "(深度校验)" if ctrl.has_video_context else "(无视频关联，跳过时间检查)"
-                self.status_label.setText(f"✅ 验证通过，当前无问题 {mode}。")
+                self.status_label.setText("✅ 验证通过，当前无问题。")
                 self.status_label.setStyleSheet("color: green;")
 
         # 有源数据，待校验
         elif ctrl.source_data_exists:
-            self.status_label.setText("提示: 点击”开始校验”以加载并检查弹幕。")
+            self.status_label.setText('提示: 点击"开始校验"以检查弹幕。')
             self.status_label.setStyleSheet("color: #7f8c8d;")
 
         # 未加载任何数据
         else:
-            self.status_label.setText("提示: 请先在”发射器”页面加载文件，或点击新建。")
+            self.status_label.setText('提示: 请先在"发射器"页面加载文件，或点击新建。')
             self.status_label.setStyleSheet("color: #7f8c8d;")
 
     @Slot()
@@ -250,19 +266,6 @@ class EditorPage(QWidget):
 
     # endregion
     # region Core Workflow (File & Validation)
-
-    @Slot()
-    def _create_new_file(self):
-        if self.controller.is_dirty:
-            reply = QMessageBox.question(self, "放弃修改?", "当前有未应用的修改，新建将丢失这些数据。\n是否继续？", QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No)
-            if reply == QMessageBox.StandardButton.No:
-                return
-
-        self.controller.create_new_workspace()
-        self.preview_mode_cb.setChecked(True)
-        self.current_item_id = None
-        self.inspector_group.reset_inspector()
-        QMessageBox.information(self, "新建成功", "已创建空白工作区，你可以开始创作了！")
 
     @Slot()
     def _import_xml(self):
@@ -349,7 +352,7 @@ class EditorPage(QWidget):
         """运行验证逻辑"""
         # 校验前置条件
         if not self.controller.source_data_exists:
-            QMessageBox.warning(self, "无法验证", "当前工作区为空，请先新建或加载弹幕。")
+            QMessageBox.warning(self, "无法验证", "当前工作区为空，请先导入弹幕。")
             return
 
         # 检查未保存修改
@@ -357,18 +360,11 @@ class EditorPage(QWidget):
             reply = QMessageBox.question(
                 self,
                 "确认",
-                "当前有未应用的修改，重新验证将丢弃这些修改。\n是否继续？",
-                buttons=QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No
+                "当前有未保存的修改，重新验证将丢弃这些修改。\n是否继续？",
+                buttons=QMessageBox.StandardButton.No | QMessageBox.StandardButton.Yes
             )
             if reply == QMessageBox.StandardButton.No:
                 return
-
-        if not self.controller.has_video_context:
-            QMessageBox.information(
-                self,
-                "降级校验模式",
-                "当前未关联目标视频（无 BVID/分P 信息）。\n\n系统将以【降级模式】执行校验：\n✔️ 检查文本长度、换行符、屏蔽词\n⏭️ 跳过弹幕发送时间是否超出视频总时长的检查"
-            )
 
         # 执行验证
         self.status_label.setText("正在验证...")
@@ -383,18 +379,25 @@ class EditorPage(QWidget):
 
     @Slot()
     def _apply_changes(self):
-        """应用修改"""
+        """保存修改到任务"""
         self.current_item_id = None
         self.inspector_group.reset_inspector()
 
-        total, fixed, deleted = self.controller.commit_to_state()
+        # 获取编辑后的弹幕数据
+        final_list = self.controller.get_working_danmakus()
 
-        self.logger.info(f"修改已应用: 修复 {fixed}, 删除 {deleted}")
+        # 更新任务的弹幕数据
+        self.task.danmakus = final_list
+        self.task.total = len(final_list)
+
+        self.logger.info(f"已保存 {len(final_list)} 条弹幕到任务")
         QMessageBox.information(
             self,
-            "应用成功",
-            f"发送队列已更新！\n\n修复: {fixed} 条\n移除: {deleted} 条\n剩余总数: {total} 条"
+            "保存成功",
+            f"已保存 {len(final_list)} 条弹幕到任务！"
         )
+
+        self.accept()
 
     # endregion
     # region Item Operations (Row Level & Dialogs)
@@ -581,9 +584,11 @@ class EditorPage(QWidget):
     def showEvent(self, event):
         super().showEvent(event)
 
-        # 如果全局状态里有数据 (比如刚在发射器加载了)，但编辑器是空的
-        if self.controller.source_data_exists and not self.controller.has_data:
-            self.logger.info("检测到外部加载了新数据，自动检出到编辑器沙盒并执行基础校验。")
-            self.controller.load_from_state()
+        # 弹窗模式下数据已在 __init__ 中加载，跳过自动检出
+        if not self.controller._is_dialog_mode:
+            # 如果全局状态里有数据 (比如刚在发射器加载了)，但编辑器是空的
+            if self.controller.source_data_exists and not self.controller.has_data:
+                self.logger.info("检测到外部加载了新数据，自动检出到编辑器沙盒并执行基础校验。")
+                self.controller.load_from_state()
 
         self._update_ui_state()

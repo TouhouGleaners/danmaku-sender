@@ -25,6 +25,7 @@ class EditorController(QObject):
         self.logger = logging.getLogger(__name__)
         self.state = state
         self.session = EditorSession()
+        self._is_dialog_mode = False  # 是否为弹窗模式（直接编辑任务的弹幕数据）
 
     # region Computed Properties for UI
 
@@ -36,6 +37,9 @@ class EditorController(QObject):
     @property
     def source_data_exists(self) -> bool:
         """全局状态中是否有待加载的源数据"""
+        # 弹窗模式下，数据已经在 session 里了
+        if self._is_dialog_mode:
+            return self.has_data
         return bool(self.state.video_state.loaded_danmakus)
 
     @property
@@ -138,6 +142,28 @@ class EditorController(QObject):
         self.dataChanged.emit()
         return self.active_error_count > 0
 
+    def load_from_danmakus(self, danmakus: list[Danmaku]) -> bool:
+        """从弹幕列表加载数据到沙盒，并执行初次校验
+
+        用于编辑器弹窗直接编辑 QueueTask 的弹幕数据。
+
+        Args:
+            danmakus: 弹幕列表
+
+        Returns:
+            是否有问题弹幕
+        """
+        if not danmakus:
+            return False
+
+        self._is_dialog_mode = True
+        self.session.load_data(danmakus)
+        self.run_validation()
+        self.session.mark_head_errors()  # 锁定初始错误快照
+        self.session.set_dirty(False)
+        self.dataChanged.emit()
+        return self.active_error_count > 0
+
     def commit_to_state(self) -> tuple[int, int, int]:
         """将修改结果提交回 AppState，清空沙盒"""
         final_list, fixed, removed = self.session.get_committed_data()
@@ -161,7 +187,8 @@ class EditorController(QObject):
     def run_validation(self):
         """执行校验：自动向沙盒注入最新的校验参数"""
         duration = -1
-        if self.has_video_context:
+        # 弹窗模式下不检查 video_context，直接使用 -1（跳过时间检查）
+        if not self._is_dialog_mode and self.has_video_context:
             duration = self.state.video_state.selected_part_duration_ms
 
         config = self.state.validation_config
