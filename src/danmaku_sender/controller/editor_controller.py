@@ -141,13 +141,9 @@ class EditorController(QObject):
         """执行校验：自动向沙盒注入最新的校验参数
 
         如果任务有关联的视频上下文，使用视频时长进行时间越界检查；
-        否则跳过时间检查（duration=-1）。
+        否则跳过时间检查。
         """
-        duration = -1
-        if self.has_video_context:
-            # 使用任务关联的视频时长（从 task.target 获取，可能需要从 API 查询）
-            # 当前先使用 -1 跳过，后续可接入视频时长查询
-            duration = -1
+        duration = self.task.duration_ms if self.task.duration_ms > 0 else -1
 
         config = self.state.validation_config
         self.session.validate(duration_ms=duration, config=config)

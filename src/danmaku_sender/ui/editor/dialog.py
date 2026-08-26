@@ -295,10 +295,6 @@ class EditorDialog(QDialog):
             self.preview_mode_cb.setChecked(True)
             self.current_item_id = None
             self.inspector_group.reset_inspector()
-            QMessageBox.information(
-                self, "导入成功",
-                f"成功导入 {count} 条弹幕！\n(当前为无视频上下文模式，已跳过时间越界检查)"
-            )
         else:
             QMessageBox.warning(self, "导入失败", "未从文件中解析出有效的弹幕。")
 

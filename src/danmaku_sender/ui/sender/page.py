@@ -12,12 +12,10 @@ from .components.queue_table import ProgressBarDelegate, QueueTableModel
 from .components.dialogs.task_builder import TaskBuilderDialog
 from .components.dialogs.task_detail import TaskDetailDialog
 
-from danmaku_sender.ui.editor.dialog import EditorDialog
+from danmaku_sender.ui.editor import EditorDialog
 from danmaku_sender.ui.framework.style_loader import SvgIcon
-from danmaku_sender.controller.sender_controller import SenderController, SenderStatus
+from danmaku_sender.controller.sender_controller import SenderController
 from danmaku_sender.service.danmaku_parser import DanmakuParser
-from danmaku_sender.types.models.video import VideoInfo
-from danmaku_sender.types.models.common import VideoTarget
 from danmaku_sender.types.models.queue import QueueTask, TaskStatus
 from danmaku_sender.repo.history_manager import HistoryManager
 from danmaku_sender.service.sender import SendingContext
