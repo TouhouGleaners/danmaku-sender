@@ -19,13 +19,13 @@ from danmaku_sender.types.models.queue import QueueTask
 from danmaku_sender.runtime.state.app_state import AppState
 
 
-class EditorPage(QDialog):
+class EditorDialog(QDialog):
     """编辑器弹窗 - 用于编辑单个任务的弹幕数据"""
 
     def __init__(self, task: QueueTask, state: AppState, parent=None):
         super().__init__(parent)
         self.task = task
-        self.controller = EditorController(state, self)
+        self.controller = EditorController(task, state, self)
         self.logger = logging.getLogger(__name__)
 
         self.current_item_id: str | None = None
@@ -47,8 +47,7 @@ class EditorPage(QDialog):
 
     def _load_task_danmakus(self):
         """加载任务的弹幕数据到编辑器"""
-        if self.task.danmakus:
-            self.controller.load_from_danmakus(self.task.danmakus)
+        if self.controller.load_from_task():
             self._refresh_table()
 
     # region UI Setup & Data Binding
@@ -373,7 +372,8 @@ class EditorPage(QDialog):
         self.current_item_id = None
         self.inspector_group.reset_inspector()
 
-        has_issues = self.controller.load_from_state()
+        # 重新从任务加载弹幕数据并验证
+        has_issues = self.controller.load_from_task()
         if not has_issues:
             QMessageBox.information(self, "验证通过", "所有弹幕均符合当前规范！")
 
@@ -584,11 +584,5 @@ class EditorPage(QDialog):
     def showEvent(self, event):
         super().showEvent(event)
 
-        # 弹窗模式下数据已在 __init__ 中加载，跳过自动检出
-        if not self.controller._is_dialog_mode:
-            # 如果全局状态里有数据 (比如刚在发射器加载了)，但编辑器是空的
-            if self.controller.source_data_exists and not self.controller.has_data:
-                self.logger.info("检测到外部加载了新数据，自动检出到编辑器沙盒并执行基础校验。")
-                self.controller.load_from_state()
-
+        # 数据已在 __init__ 中加载，仅刷新 UI 状态
         self._update_ui_state()

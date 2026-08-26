@@ -1,4 +1,4 @@
-from .page import EditorPage
+from .dialog import EditorDialog
 
 
-__all__ = ["EditorPage"]
+__all__ = ["EditorDialog"]

@@ -12,7 +12,7 @@ from .components.queue_table import ProgressBarDelegate, QueueTableModel
 from .components.dialogs.task_builder import TaskBuilderDialog
 from .components.dialogs.task_detail import TaskDetailDialog
 
-from danmaku_sender.ui.editor.page import EditorPage
+from danmaku_sender.ui.editor.dialog import EditorDialog
 from danmaku_sender.ui.framework.style_loader import SvgIcon
 from danmaku_sender.controller.sender_controller import SenderController, SenderStatus
 from danmaku_sender.service.danmaku_parser import DanmakuParser
@@ -242,7 +242,7 @@ class SenderPage(QWidget):
 
     def _edit_danmakus(self, task: QueueTask):
         """编辑任务的弹幕数据（打开编辑器弹窗）"""
-        dialog = EditorPage(task, self.state, self)
+        dialog = EditorDialog(task, self.state, self)
         if dialog.exec() == QDialog.DialogCode.Accepted:
             # 编辑完成后，刷新表格显示
             row = self._queue_model.get_row_by_id(task.task_id)

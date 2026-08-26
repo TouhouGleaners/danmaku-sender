@@ -8,6 +8,7 @@ from danmaku_sender.service.editor_session import EditorSession
 from danmaku_sender.runtime.state.app_state import AppState
 from danmaku_sender.types.models.danmaku import Danmaku
 from danmaku_sender.types.models.editor_types import ViewItem, InsertPosition
+from danmaku_sender.types.models.queue import QueueTask
 from danmaku_sender.service.danmaku_parser import DanmakuParser
 from danmaku_sender.service.danmaku_exporter import export_danmakus_to_xml
 
@@ -16,16 +17,17 @@ class EditorController(QObject):
     """
     编辑器业务控制器 (Mediator / ViewModel)
 
-    负责桥接 UI、AppState 与 EditorSession。
+    负责桥接 UI、QueueTask 与 EditorSession。
+    编辑器作为发射器的附属弹窗，直接编辑 QueueTask 的弹幕数据。
     """
     dataChanged = Signal()
 
-    def __init__(self, state: AppState, parent=None):
+    def __init__(self, task: QueueTask, state: AppState, parent=None):
         super().__init__(parent)
         self.logger = logging.getLogger(__name__)
+        self.task = task
         self.state = state
         self.session = EditorSession()
-        self._is_dialog_mode = False  # 是否为弹窗模式（直接编辑任务的弹幕数据）
 
     # region Computed Properties for UI
 
@@ -36,16 +38,13 @@ class EditorController(QObject):
 
     @property
     def source_data_exists(self) -> bool:
-        """全局状态中是否有待加载的源数据"""
-        # 弹窗模式下，数据已经在 session 里了
-        if self._is_dialog_mode:
-            return self.has_data
-        return bool(self.state.video_state.loaded_danmakus)
+        """是否有待加载的源数据（任务的弹幕数据）"""
+        return bool(self.task.danmakus)
 
     @property
     def has_video_context(self) -> bool:
         """是否拥有关联的视频上下文（BVID/CID）"""
-        return bool(self.state.video_state.selected_cid)
+        return bool(self.task.target.bvid) and bool(self.task.target.cid)
 
     @property
     def is_dirty(self) -> bool:
@@ -65,23 +64,23 @@ class EditorController(QObject):
     # endregion
     # region Workflow Actions
 
-    def create_new_workspace(self):
-        """新建空白工作区并清除视频上下文"""
-        self.state.video_state.loaded_danmakus =[
-            Danmaku(msg="在这里输入你的第一条弹幕吧", progress=0)
-        ]
-        self.state.video_state.bvid = ""
-        self.state.video_state.selected_cid = None
-        self.state.video_state.video_title = ""
+    def load_from_task(self) -> bool:
+        """从任务加载弹幕数据到沙盒，并执行初次校验"""
+        if not self.task.danmakus:
+            return False
 
-        self.load_from_state()
+        self.session.load_data(self.task.danmakus)
+        self.run_validation()
+        self.session.mark_head_errors()  # 锁定初始错误快照
+        self.session.set_dirty(False)
+        self.dataChanged.emit()
+        return self.active_error_count > 0
 
     def import_xml_to_workspace(self, file_path: str, on_success: Callable[[int], None], on_error: Callable[[str], None]):
         """
         异步导入 XML 文件到工作区：解析在后台线程执行，状态更新在 UI 线程回调。
 
-        注意: on_success / on_error 回调由 Qt 信号机制保证在主线程执行，
-        因此回调内可安全操作 UI 状态。
+        注意: 导入弹幕会替换当前工作区的内容，但保留任务的视频上下文。
 
         Args:
             file_path: XML 文件路径
@@ -95,6 +94,23 @@ class EditorController(QObject):
             lambda err: on_error(str(err)),
             file_path,
         )
+
+    def _apply_parsed_to_workspace(self, parsed_dms: list[Danmaku] | None) -> int:
+        """
+        将已解析的弹幕列表写入工作区（不清除视频上下文）。
+
+        Returns:
+            int: 成功解析的弹幕数量
+        """
+        if not parsed_dms:
+            return 0
+
+        self.session.load_data(parsed_dms)
+        self.run_validation()
+        self.session.mark_head_errors()
+        self.session.set_dirty(False)
+        self.dataChanged.emit()
+        return len(parsed_dms)
 
     def export_to_xml(
         self,
@@ -111,69 +127,6 @@ class EditorController(QObject):
             danmakus, file_path,
         )
 
-    def _apply_parsed_to_workspace(self, parsed_dms: list[Danmaku] | None) -> int:
-        """
-        将已解析的弹幕列表写入工作区，清除视频上下文，拉入编辑器沙盒。
-
-        Returns:
-            int: 成功解析的弹幕数量
-        """
-        if not parsed_dms:
-            return 0
-
-        self.state.video_state.loaded_danmakus = parsed_dms
-        self.state.video_state.bvid = ""
-        self.state.video_state.selected_cid = None
-        self.state.video_state.video_title = ""
-
-        self.load_from_state()
-        return len(parsed_dms)
-
-    def load_from_state(self) -> bool:
-        """从 AppState 检出数据到沙盒，并执行初次校验"""
-        source = self.state.video_state.loaded_danmakus
-        if not source:
-            return False
-
-        self.session.load_data(source)
-        self.run_validation()
-        self.session.mark_head_errors()  # 锁定初始错误快照
-        self.session.set_dirty(False)
-        self.dataChanged.emit()
-        return self.active_error_count > 0
-
-    def load_from_danmakus(self, danmakus: list[Danmaku]) -> bool:
-        """从弹幕列表加载数据到沙盒，并执行初次校验
-
-        用于编辑器弹窗直接编辑 QueueTask 的弹幕数据。
-
-        Args:
-            danmakus: 弹幕列表
-
-        Returns:
-            是否有问题弹幕
-        """
-        if not danmakus:
-            return False
-
-        self._is_dialog_mode = True
-        self.session.load_data(danmakus)
-        self.run_validation()
-        self.session.mark_head_errors()  # 锁定初始错误快照
-        self.session.set_dirty(False)
-        self.dataChanged.emit()
-        return self.active_error_count > 0
-
-    def commit_to_state(self) -> tuple[int, int, int]:
-        """将修改结果提交回 AppState，清空沙盒"""
-        final_list, fixed, removed = self.session.get_committed_data()
-        self.state.video_state.loaded_danmakus = final_list
-
-        # 提交后重置沙盒
-        self.session.load_data([])
-        self.dataChanged.emit()
-        return len(final_list), fixed, removed
-
     def get_working_danmakus(self) -> list[Danmaku]:
         """提取当前工作区中所有未删除的弹幕 (供导出 XML 用)"""
         if not self.session.has_active_session:
@@ -185,11 +138,16 @@ class EditorController(QObject):
         ]
 
     def run_validation(self):
-        """执行校验：自动向沙盒注入最新的校验参数"""
+        """执行校验：自动向沙盒注入最新的校验参数
+
+        如果任务有关联的视频上下文，使用视频时长进行时间越界检查；
+        否则跳过时间检查（duration=-1）。
+        """
         duration = -1
-        # 弹窗模式下不检查 video_context，直接使用 -1（跳过时间检查）
-        if not self._is_dialog_mode and self.has_video_context:
-            duration = self.state.video_state.selected_part_duration_ms
+        if self.has_video_context:
+            # 使用任务关联的视频时长（从 task.target 获取，可能需要从 API 查询）
+            # 当前先使用 -1 跳过，后续可接入视频时长查询
+            duration = -1
 
         config = self.state.validation_config
         self.session.validate(duration_ms=duration, config=config)
