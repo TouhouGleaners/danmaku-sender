@@ -236,7 +236,7 @@ class EditorDialog(QDialog):
 
         # 未加载任何数据
         else:
-            self.status_label.setText('提示: 请先在"发射器"页面加载文件，或点击新建。')
+            self.status_label.setText('提示: 请先加载文件。')
             self.status_label.setStyleSheet("color: #7f8c8d;")
 
     @Slot()
