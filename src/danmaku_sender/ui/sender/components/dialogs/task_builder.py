@@ -7,6 +7,7 @@ from PySide6.QtWidgets import (
 from PySide6.QtCore import Qt, Signal, Slot
 
 from danmaku_sender.controller.video_controller import VideoController
+from danmaku_sender.types.models.danmaku import Danmaku
 from danmaku_sender.types.models.video import VideoInfo
 from danmaku_sender.types.models.queue import QueueTask, TaskStatus
 from danmaku_sender.types.models.common import VideoTarget
@@ -14,6 +15,7 @@ from danmaku_sender.config import ApiAuthConfig, SenderConfig
 from danmaku_sender.runtime.state.app_state import AppState
 from danmaku_sender.service.danmaku_parser import DanmakuParser
 from danmaku_sender.utils.string_utils import parse_bilibili_link
+
 
 
 logger = logging.getLogger(__name__)
@@ -216,6 +218,9 @@ class TaskBuilderDialog(QDialog):
 
         # 如果没有弹幕，标记为未配置
         if not danmakus:
+            danmakus.append(Danmaku(msg="未选择弹幕文件-示例弹幕", progress=0, mode=Danmaku.Mode.SCROLL))
+            task.total = len(task.danmakus)
+            logger.info(f"任务 {target.display_string} 没有弹幕文件，已添加示例弹幕。")
             task.status = TaskStatus.UNCONFIGURED
 
         self.taskCreated.emit(task)
