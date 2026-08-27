@@ -220,6 +220,7 @@ class TaskBuilderDialog(QDialog):
         if not danmakus:
             danmakus.append(Danmaku(msg="未选择弹幕文件-示例弹幕", progress=0, mode=Danmaku.Mode.SCROLL))
             task.total = len(task.danmakus)
+            logger.info(f"任务 {target.display_string} 没有弹幕文件，已添加示例弹幕。")
             task.status = TaskStatus.UNCONFIGURED
 
         self.taskCreated.emit(task)
