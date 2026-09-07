@@ -33,23 +33,24 @@ class BiliDanmakuMonitor:
         注意：监视过程中不标记丢失（mark_lost=False），因为发送队列可能还在进行中，
         B站弹幕分发有延迟，刚发送的弹幕可能还未进入弹幕池。丢失标记应由用户在历史记录页统一清算。
 
+        网络/解析异常会被捕获并记录日志，不会中断监视循环。
+
         Args:
             stats_baseline: 统计基线时间（秒），用于过滤历史数据
 
         Returns:
             MonitorStats: {'total': int, 'verified': int, 'pending': int, 'lost': int}
-
-        Raises:
-            BiliApiError: API 请求失败
-            BiliNetworkError: 网络连接失败
         """
         # 使用 verifier 执行核销（不标记丢失，避免误杀刚发送的弹幕）
-        verify_result = self.verifier.verify_cid(self.target.cid, mark_lost=False)
+        try:
+            verify_result = self.verifier.verify_cid(self.target.cid, mark_lost=False)
+            if verify_result['verified'] > 0:
+                logger.info(f"✨ 核销成功: 确认了 {verify_result['verified']} 条新存活弹幕。")
+        except Exception as e:
+            # 网络/解析异常不中断监视循环，仅记录日志
+            logger.warning(f"本轮核销失败，继续监视: {e}")
 
-        if verify_result['verified'] > 0:
-            logger.info(f"✨ 核销成功: 确认了 {verify_result['verified']} 条新存活弹幕。")
-
-        # 获取统计数据
+        # 获取统计数据（即使核销失败也要统计）
         total, verified, lost = self.history_manager.get_stats(self.target.cid, stats_baseline)
         pending = max(0, total - verified - lost)
 
