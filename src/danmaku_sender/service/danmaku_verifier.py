@@ -1,6 +1,7 @@
 """弹幕核验服务 - 负责查在线、对库、标状态"""
 
 import logging
+from contextlib import contextmanager
 from typing import Callable
 
 from .danmaku_parser import DanmakuParser
@@ -10,6 +11,7 @@ from danmaku_sender.types.exceptions.exceptions import BiliApiError, BiliNetwork
 from danmaku_sender.repo.history_manager import HistoryManager
 from danmaku_sender.types.models.danmaku import Danmaku
 from danmaku_sender.types.models.common import VerifyResult
+from danmaku_sender.config import ApiAuthConfig
 
 
 logger = logging.getLogger(__name__)
@@ -143,3 +145,48 @@ class DanmakuVerifier:
         except Exception as e:
             logger.error(f"[CID:{cid}] 解析在线弹幕内容时发生错误: {e}")
             raise
+
+    @classmethod
+    @contextmanager
+    def create(cls, auth_config: ApiAuthConfig, history_manager: HistoryManager):
+        """Context manager 工厂：自动管理 client 生命周期"""
+        with BiliApiClient.from_config(auth_config) as client:
+            yield cls(api_client=client, history_manager=history_manager)
+
+    @classmethod
+    def verify_by_cid(cls, cid: int, auth_config: ApiAuthConfig, history_manager: HistoryManager) -> VerifyResult:
+        """
+        轻量级单次验证：拉取指定 CID 的在线弹幕，核销存活并标记丢失。
+
+        Returns:
+            VerifyResult: {'verified': int, 'lost': int, 'total_checked': int}
+        """
+        with cls.create(auth_config, history_manager) as verifier:
+            return verifier.verify_cid(cid)
+
+    @classmethod
+    def verify_all_pending(
+        cls,
+        auth_config: ApiAuthConfig,
+        history_manager: HistoryManager,
+        on_progress: Callable[[int, int, VerifyResult], None] | None = None
+    ) -> VerifyResult:
+        """
+        批量验证所有含有待验证弹幕的 CID。
+
+        Args:
+            on_progress: 进度回调 (已处理数, 总数, 本次增量结果)
+
+        Returns:
+            VerifyResult: {'verified': int, 'lost': int, 'total_checked': int}
+        """
+        pending_cids = history_manager.get_pending_cids()
+
+        if not pending_cids:
+            logger.info("没有待验证的弹幕记录。")
+            return {'verified': 0, 'lost': 0, 'total_checked': 0}
+
+        cids = [entry['cid'] for entry in pending_cids]
+
+        with cls.create(auth_config, history_manager) as verifier:
+            return verifier.verify_batch(cids, on_progress=on_progress)

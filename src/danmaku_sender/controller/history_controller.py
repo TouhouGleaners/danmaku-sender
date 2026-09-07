@@ -5,7 +5,7 @@ from PySide6.QtCore import QObject, Signal
 from .concurrency import PoolTask
 
 from danmaku_sender.repo.history_manager import HistoryManager
-from danmaku_sender.service.bili_monitor import BiliDanmakuMonitor
+from danmaku_sender.service.danmaku_verifier import DanmakuVerifier
 from danmaku_sender.config import ApiAuthConfig
 
 
@@ -34,7 +34,7 @@ class HistoryController(QObject):
     def verify_records(self, cid: int, auth_config: ApiAuthConfig):
         """发起异步弹幕验证（单个分P）"""
         PoolTask.submit(
-            BiliDanmakuMonitor.verify_by_cid,
+            DanmakuVerifier.verify_by_cid,
             self.verifyCompleted.emit,
             self.errorOccurred.emit,
             cid, auth_config, self.history_manager,
@@ -43,7 +43,7 @@ class HistoryController(QObject):
     def verify_all(self, auth_config: ApiAuthConfig):
         """发起异步批量验证（所有待验证记录）"""
         PoolTask.submit(
-            BiliDanmakuMonitor.verify_all_pending,
+            DanmakuVerifier.verify_all_pending,
             self.verifyCompleted.emit,
             self.errorOccurred.emit,
             auth_config, self.history_manager,
