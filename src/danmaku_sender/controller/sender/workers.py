@@ -205,9 +205,15 @@ class QueueWorker(WorkerThread):
 
         queue_eta = _task_eta(current_attempted, current_total, current_config)
         pending_future = [t for t in future_tasks if t.status == TaskStatus.PENDING]
+
         # 当前任务之后有任务（不论状态），worker 会等待一个 delay
         if future_tasks:
             queue_eta += current_config.delay_between_tasks
-        for t in pending_future:
-            queue_eta += _task_eta(0, len(t.danmakus), t.config_snapshot)
+
+        for i, t in enumerate(pending_future):
+            queue_eta += _task_eta(0, t.total, t.config_snapshot)
+            # 每个 PENDING 任务之后，只要不是原始队列最后一项，就加延迟
+            if future_tasks and t is not future_tasks[-1]:
+                queue_eta += t.config_snapshot.delay_between_tasks
+
         return queue_eta
