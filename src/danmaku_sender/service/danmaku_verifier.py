@@ -106,9 +106,12 @@ class DanmakuVerifier:
                 logger.warning(f"CID {cid} 验证失败，跳过: {e}")
                 result: VerifyResult = {'verified': 0, 'lost': 0, 'total_checked': 0}
 
-            # 进度回调（无论成功失败都调用）
+            # 进度回调（无论成功失败都调用，回调异常不中断批处理）
             if on_progress:
-                on_progress(i + 1, len(cids), result)
+                try:
+                    on_progress(i + 1, len(cids), result)
+                except Exception as e:
+                    logger.warning(f"进度回调执行失败，继续处理: {e}")
 
         logger.info(f"批量验证完成: 共核销 {total_verified} 条，标记丢失 {total_lost} 条，检查 {len(cids)} 个 CID，{total_checked} 条在线弹幕。")
 
