@@ -2,12 +2,11 @@
 
 import logging
 from contextlib import contextmanager
+from typing import Callable
 
 from .danmaku_verifier import DanmakuVerifier
-from .danmaku_parser import DanmakuParser
 
 from danmaku_sender.repo.bili_api_client import BiliApiClient
-from danmaku_sender.types.exceptions.exceptions import BiliApiError, BiliNetworkError
 from danmaku_sender.repo.history_manager import HistoryManager
 from danmaku_sender.types.models.common import VideoTarget, MonitorStats, VerifyResult
 from danmaku_sender.config import ApiAuthConfig
@@ -41,6 +40,9 @@ class BiliDanmakuMonitor:
         """
         执行单次核销与统计。
 
+        注意：监视过程中不标记丢失（mark_lost=False），因为发送队列可能还在进行中，
+        B站弹幕分发有延迟，刚发送的弹幕可能还未进入弹幕池。丢失标记应由用户在历史记录页统一清算。
+
         Args:
             stats_baseline: 统计基线时间（秒），用于过滤历史数据
 
@@ -51,8 +53,8 @@ class BiliDanmakuMonitor:
             BiliApiError: API 请求失败
             BiliNetworkError: 网络连接失败
         """
-        # 使用 verifier 执行核销
-        verify_result = self.verifier.verify_cid(self.target.cid, mark_lost=True)
+        # 使用 verifier 执行核销（不标记丢失，避免误杀刚发送的弹幕）
+        verify_result = self.verifier.verify_cid(self.target.cid, mark_lost=False)
 
         if verify_result['verified'] > 0:
             logger.info(f"✨ 核销成功: 确认了 {verify_result['verified']} 条新存活弹幕。")
@@ -81,9 +83,17 @@ class BiliDanmakuMonitor:
             return verifier.verify_cid(cid)
 
     @classmethod
-    def verify_all_pending(cls, auth_config: ApiAuthConfig, history_manager: HistoryManager) -> VerifyResult:
+    def verify_all_pending(
+        cls,
+        auth_config: ApiAuthConfig,
+        history_manager: HistoryManager,
+        on_progress: Callable[[int, int, VerifyResult], None] | None = None
+    ) -> VerifyResult:
         """
         批量验证所有含有待验证弹幕的 CID。
+
+        Args:
+            on_progress: 进度回调 (已处理数, 总数, 本次增量结果)
 
         Returns:
             VerifyResult: {'verified': int, 'lost': int, 'total_checked': int}
@@ -98,4 +108,4 @@ class BiliDanmakuMonitor:
 
         with BiliApiClient.from_config(auth_config) as client:
             verifier = DanmakuVerifier(api_client=client, history_manager=history_manager)
-            return verifier.verify_batch(cids)
+            return verifier.verify_batch(cids, on_progress=on_progress)
