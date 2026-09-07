@@ -32,15 +32,16 @@ class DanmakuVerifier:
         验证单个 CID：拉取在线弹幕，核销存活并标记丢失。
 
         Args:
-            cid: 视频分P的 CID
+            cid: 视频分P 的 CID
             mark_lost: 是否标记丢失（默认 True）
 
         Returns:
             VerifyResult: {'verified': int, 'lost': int, 'total_checked': int}
 
         Raises:
-            BiliApiError: API 请求失败
+            BiliApiError: API 请求失败（业务错误）
             BiliNetworkError: 网络连接失败
+            Exception: XML 解析或其他意外错误
         """
         try:
             xml_content = self.api_client.get_danmaku_list_xml(cid)
@@ -126,14 +127,15 @@ class DanmakuVerifier:
         获取指定 CID 的在线弹幕 DMID 列表（不执行核销）。
 
         Args:
-            cid: 视频分P的 CID
+            cid: 视频分P 的 CID
 
         Returns:
             list[str]: 在线弹幕的 DMID 列表
 
         Raises:
-            BiliApiError: API 请求失败
+            BiliApiError: API 请求失败（业务错误）
             BiliNetworkError: 网络连接失败
+            Exception: XML 解析或其他意外错误
         """
         try:
             xml_content = self.api_client.get_danmaku_list_xml(cid)
