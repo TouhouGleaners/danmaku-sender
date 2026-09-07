@@ -7,6 +7,7 @@ from .concurrency import WorkerThread, PoolTask
 
 from danmaku_sender.config import ApiAuthConfig
 from danmaku_sender.types.models.user import UserProfile
+from danmaku_sender.repo.bili_api_client import BiliApiClient
 from danmaku_sender.service.auth_service import AuthService
 
 
@@ -34,11 +35,16 @@ class AuthController(QObject):
             return
 
         PoolTask.submit(
-            AuthService.fetch_user_profile,
+            self._task_fetch_profile,
             self.userProfileReady.emit,
             lambda _: self.userProfileReady.emit(UserProfile(False, "未登录")),
             auth_config,
         )
+
+    def _task_fetch_profile(self, auth_config: ApiAuthConfig) -> UserProfile:
+        """获取用户信息（后台线程执行）"""
+        with BiliApiClient.from_config(auth_config) as client:
+            return AuthService(client).fetch_user_profile()
 
     def start_qr_login(self, use_system_proxy: bool):
         """启动扫码登录后台任务"""
@@ -96,7 +102,17 @@ class QRLoginWorker(WorkerThread):
 
     def run(self):
         try:
-            with AuthService.qr_login_session(self.use_system_proxy) as (client, url, qrcode_key):
+            config = ApiAuthConfig(sessdata="", bili_jct="", use_system_proxy=self.use_system_proxy)
+            with BiliApiClient.from_config(config) as client:
+                # 生成二维码
+                data = client.generate_qr_code()
+                url = data.get('url')
+                qrcode_key = data.get('qrcode_key')
+
+                if not url or not qrcode_key:
+                    self.loginFailed.emit("获取二维码失败：B站接口返回异常")
+                    return
+
                 # 通知 UI 渲染二维码
                 self.qrReady.emit(url)
                 self.statusUpdated.emit("请使用哔哩哔哩客户端扫码")
