@@ -10,6 +10,7 @@ from danmaku_sender.types.models.user import UserProfile
 from danmaku_sender.config import ApiAuthConfig
 from danmaku_sender.runtime.state.app_state import AppState
 from danmaku_sender.runtime.managers.account_manager import AccountManager
+from danmaku_sender.repo.bili_api_client import BiliApiClient
 from danmaku_sender.service.auth_service import AuthService
 
 
@@ -46,7 +47,7 @@ class AccountController(QObject):
     def check_account(self, account: AccountCredential, config: ApiAuthConfig):
         """异步检测账号是否有效"""
         PoolTask.submit(
-            AuthService.check_login,
+            self._task_check_login,
             lambda result: self.checkFinished.emit(account, result),
             lambda _: self.checkFinished.emit(account, False),
             config,
@@ -55,8 +56,20 @@ class AccountController(QObject):
     def fetch_user_info(self, account: AccountCredential, config: ApiAuthConfig):
         """异步获取用户信息（昵称、uid）"""
         PoolTask.submit(
-            AuthService.fetch_raw_user_info,
+            self._task_fetch_user_info,
             lambda result: self.userInfoFetched.emit(account, result),
             lambda _: self.userInfoFetched.emit(account, None),
             config,
         )
+
+    # ---- 后台任务 ----
+
+    def _task_check_login(self, config: ApiAuthConfig) -> bool:
+        """检测账号是否有效（后台线程执行）"""
+        with BiliApiClient.from_config(config) as client:
+            return AuthService(client).check_login()
+
+    def _task_fetch_user_info(self, config: ApiAuthConfig) -> dict | None:
+        """获取用户信息（后台线程执行）"""
+        with BiliApiClient.from_config(config) as client:
+            return AuthService(client).fetch_raw_user_info()

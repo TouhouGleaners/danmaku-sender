@@ -4,6 +4,7 @@ from PySide6.QtCore import QObject, Signal, QThreadPool, Slot
 
 from danmaku_sender.types.models.video import VideoInfo
 from danmaku_sender.config import ApiAuthConfig
+from danmaku_sender.repo.bili_api_client import BiliApiClient
 from danmaku_sender.service.video_fetcher import VideoFetcher
 from .concurrency import PoolTask
 
@@ -49,7 +50,7 @@ class VideoController(QObject):
         if not is_background:
             self.fetchStarted.emit()
 
-        task = PoolTask(VideoFetcher.fetch_info_from_config, bvid, auth_config)
+        task = PoolTask(self._task_fetch_info, bvid, auth_config)
 
         @Slot(object)
         def _on_fetch_succeeded(info: VideoInfo):
@@ -76,7 +77,7 @@ class VideoController(QObject):
         if not bvids:
             return
 
-        task = PoolTask(VideoFetcher.fetch_infos_from_config, bvids, auth_config)
+        task = PoolTask(self._task_fetch_infos, bvids, auth_config)
 
         @Slot(list)
         def _on_fetch_completed(results: list[tuple[str, VideoInfo | Exception]]):
@@ -88,3 +89,22 @@ class VideoController(QObject):
 
         task.signals.result.connect(_on_fetch_completed)
         _bg_fetch_pool.start(task)
+
+    # ---- 后台任务 ----
+
+    def _task_fetch_info(self, bvid: str, auth_config: ApiAuthConfig) -> VideoInfo:
+        """获取单条视频信息（后台线程执行）"""
+        with BiliApiClient.from_config(auth_config) as client:
+            return VideoFetcher(client).fetch_info(bvid)
+
+    def _task_fetch_infos(self, bvids: list[str], auth_config: ApiAuthConfig) -> list[tuple[str, VideoInfo | Exception]]:
+        """批量获取视频信息（后台线程执行）"""
+        results = []
+        with BiliApiClient.from_config(auth_config) as client:
+            fetcher = VideoFetcher(client)
+            for bvid in bvids:
+                try:
+                    results.append((bvid, fetcher.fetch_info(bvid)))
+                except Exception as e:
+                    results.append((bvid, e))
+        return results
