@@ -1,8 +1,8 @@
 """
 认证服务层
 
-封装 B 站用户认证相关的 API 操作，controller 层不直接接触 BiliApiClient。
-纯依赖注入设计：不管理连接生命周期，由调用方负责创建和注入依赖。
+封装 B 站用户认证相关的 API 操作。
+纯依赖注入设计：不管理连接生命周期，由 Controller 层负责创建 BiliApiClient 并注入。
 """
 
 import logging
