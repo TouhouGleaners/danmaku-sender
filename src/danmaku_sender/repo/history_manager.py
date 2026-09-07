@@ -8,7 +8,7 @@ from playhouse.migrate import SqliteMigrator, migrate
 from .orm_models import db, SentDanmaku
 
 from danmaku_sender.types.models.danmaku import Danmaku
-from danmaku_sender.types.models.common import DanmakuStatus, VideoTarget, PendingCidRecord, PendingDanmakuRecord
+from danmaku_sender.types.models.common import DanmakuStatus, VideoTarget, PendingCidRecord, PendingDanmakuRecord, MonitorStats
 
 
 logger = logging.getLogger(__name__)
@@ -196,6 +196,25 @@ class HistoryManager:
             logger.error(f"获取统计失败: {e}", exc_info=True)
 
         return 0, 0, 0
+
+    def get_stats_for_target(self, target: VideoTarget, baseline: float = 0.0) -> MonitorStats:
+        """获取指定目标的统计数据，返回包含 pending 的完整统计
+
+        Args:
+            target: 视频目标
+            baseline: 统计基线时间
+
+        Returns:
+            MonitorStats: {'total': int, 'verified': int, 'pending': int, 'lost': int}
+        """
+        total, verified, lost = self.get_stats(target.cid, baseline)
+        pending = total - verified - lost
+        return MonitorStats(
+            total=total,
+            verified=verified,
+            pending=max(0, pending),
+            lost=lost
+        )
 
     def count_records(self, target: VideoTarget, dm: Danmaku) -> int:
         """
