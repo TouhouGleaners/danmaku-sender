@@ -35,8 +35,8 @@ class ConfigManager:
     def load(self, state: AppState) -> None:
         """从 config.json 加载配置到 state"""
         data = read_json(CONFIG_PATH)
-        if data is None:
-            logger.info("未找到配置文件或解析失败，使用默认设置。")
+        if not isinstance(data, dict):
+            logger.info("未找到配置文件或格式异常，使用默认设置。")
             return
 
         def _load_section[T: BaseModel](key: str, model_class: type[T], default_instance: T) -> T:

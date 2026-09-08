@@ -83,8 +83,8 @@ class AccountManager:
             logger.warning("账号文件解密失败（密钥不匹配），文件已保留，修复密钥环后可恢复。")
             return []
 
-        except json.JSONDecodeError as e:
-            logger.warning(f"账号文件 JSON 解析失败（文件损坏）: {e}")
+        except (json.JSONDecodeError, UnicodeError) as e:
+            logger.warning(f"账号文件解析失败（文件损坏）: {e}")
             backup_corrupt_file(ACCOUNTS_PATH)
             return []
 
