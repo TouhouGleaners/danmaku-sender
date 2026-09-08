@@ -1,4 +1,3 @@
-import os
 import json
 import logging
 import keyring
@@ -8,7 +7,7 @@ from cryptography.fernet import Fernet, InvalidToken
 from danmaku_sender.runtime.state.app_state import AppState
 from danmaku_sender.config.app_meta import AppInfo
 from danmaku_sender.types.models.account import AccountCredential
-from danmaku_sender.utils.file_utils import atomic_write_bytes
+from danmaku_sender.utils.file_utils import atomic_write_bytes, backup_corrupt_file
 
 
 KEYRING_SERVICE_NAME = f"{AppInfo.NAME_EN}-CredentialsKey"
@@ -67,7 +66,7 @@ class AccountManager:
 
             if not isinstance(raw_list, list):
                 logger.warning("accounts.json 格式异常：顶层不是列表，已备份。")
-                self._backup_corrupt_file(ACCOUNTS_PATH)
+                backup_corrupt_file(ACCOUNTS_PATH)
                 return []
 
             accounts = []
@@ -86,7 +85,7 @@ class AccountManager:
 
         except json.JSONDecodeError as e:
             logger.warning(f"账号文件 JSON 解析失败（文件损坏）: {e}")
-            self._backup_corrupt_file(ACCOUNTS_PATH)
+            backup_corrupt_file(ACCOUNTS_PATH)
             return []
 
         except Exception as unexpected_e:
@@ -97,11 +96,10 @@ class AccountManager:
         """将账号列表加密后写入 accounts.json。"""
         if not accounts:
             logger.info("账号列表为空，删除账号文件。")
-            if ACCOUNTS_PATH.exists():
-                try:
-                    os.remove(ACCOUNTS_PATH)
-                except OSError as e:
-                    logger.error(f"删除账号文件失败: {e}", exc_info=True)
+            try:
+                ACCOUNTS_PATH.unlink(missing_ok=True)
+            except OSError as e:
+                logger.error(f"删除账号文件失败: {e}", exc_info=True)
             return
 
         try:
@@ -129,13 +127,3 @@ class AccountManager:
             state.sessdata = first.sessdata
             state.bili_jct = first.bili_jct
             logger.info(f"已激活账号: {first.name or '(未命名)'}")
-
-    @staticmethod
-    def _backup_corrupt_file(path: Path) -> None:
-        """将损坏的文件备份为 .corrupt 后缀。"""
-        try:
-            backup = path.with_suffix(".json.corrupt")
-            path.rename(backup)
-            logger.info(f"已将损坏的文件备份为: {backup}")
-        except OSError as e:
-            logger.error(f"无法备份损坏的文件: {e}")
