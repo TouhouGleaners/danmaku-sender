@@ -150,7 +150,7 @@ def read_json[T](
             backup_corrupt_file(path)
         return default
 
-    except OSError as e:
+    except (OSError, UnicodeError) as e:
         logger.error(f"读取文件失败 [{path}]: {e}")
         return default
 
