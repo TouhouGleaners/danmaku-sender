@@ -3,10 +3,10 @@ import logging
 
 from pydantic import ValidationError, BaseModel
 
-from ..state.app_state import AppState
-
+from danmaku_sender.runtime.state.app_state import AppState
 from danmaku_sender.config.app_meta import AppInfo
 from danmaku_sender.config import SenderConfig, MonitorConfig, ValidationConfig
+from danmaku_sender.utils.file_utils import atomic_write, read_json
 
 
 logger = logging.getLogger(__name__)
@@ -26,26 +26,17 @@ class ConfigManager:
         }
 
         try:
-            with open(CONFIG_PATH, 'w', encoding='utf-8') as f:
-                json.dump(config_data, f, indent=2)
+            with atomic_write(CONFIG_PATH) as f:
+                json.dump(config_data, f, indent=2, ensure_ascii=False)
             logger.info(f"配置已保存: {CONFIG_PATH}")
         except Exception as e:
             logger.error(f"保存配置失败: {e}")
 
     def load(self, state: AppState) -> None:
         """从 config.json 加载配置到 state"""
-        if not CONFIG_PATH.exists():
-            logger.info("未找到配置文件，使用默认设置。")
-            return
-
-        try:
-            with open(CONFIG_PATH, 'r', encoding='utf-8') as f:
-                data = json.load(f)
-        except json.JSONDecodeError as e:
-            logger.error(f"配置文件 JSON 格式损坏，将使用默认设置[{CONFIG_PATH}]: {e}")
-            return
-        except Exception as e:
-            logger.error(f"读取配置文件失败: {e}")
+        data = read_json(CONFIG_PATH)
+        if not isinstance(data, dict):
+            logger.info("未找到配置文件或格式异常，使用默认设置。")
             return
 
         def _load_section[T: BaseModel](key: str, model_class: type[T], default_instance: T) -> T:
