@@ -5,10 +5,10 @@ import keyring
 from pathlib import Path
 from cryptography.fernet import Fernet, InvalidToken
 
-from ..state.app_state import AppState
-
+from danmaku_sender.runtime.state.app_state import AppState
 from danmaku_sender.config.app_meta import AppInfo
 from danmaku_sender.types.models.account import AccountCredential
+from danmaku_sender.utils.file_utils import atomic_write_bytes
 
 
 KEYRING_SERVICE_NAME = f"{AppInfo.NAME_EN}-CredentialsKey"
@@ -116,7 +116,7 @@ class AccountManager:
             json_bytes = json.dumps(raw_list, ensure_ascii=False).encode('utf-8')
             encrypted_bytes = f.encrypt(json_bytes)
 
-            ACCOUNTS_PATH.write_bytes(encrypted_bytes)
+            atomic_write_bytes(ACCOUNTS_PATH, encrypted_bytes)
             logger.info(f"已保存 {len(accounts)} 个账号到 {ACCOUNTS_PATH}")
         except Exception as e:
             logger.error(f"保存账号数据失败: {e}", exc_info=True)

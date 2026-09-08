@@ -3,10 +3,10 @@ import logging
 
 from pydantic import ValidationError, BaseModel
 
-from ..state.app_state import AppState
-
+from danmaku_sender.runtime.state.app_state import AppState
 from danmaku_sender.config.app_meta import AppInfo
 from danmaku_sender.config import SenderConfig, MonitorConfig, ValidationConfig
+from danmaku_sender.utils.file_utils import atomic_write_text
 
 
 logger = logging.getLogger(__name__)
@@ -26,8 +26,8 @@ class ConfigManager:
         }
 
         try:
-            with open(CONFIG_PATH, 'w', encoding='utf-8') as f:
-                json.dump(config_data, f, indent=2)
+            json_str = json.dumps(config_data, indent=2, ensure_ascii=False)
+            atomic_write_text(CONFIG_PATH, json_str)
             logger.info(f"配置已保存: {CONFIG_PATH}")
         except Exception as e:
             logger.error(f"保存配置失败: {e}")
