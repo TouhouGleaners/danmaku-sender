@@ -4,19 +4,17 @@ from copy import deepcopy
 from PySide6.QtWidgets import (
     QDialog, QVBoxLayout, QHBoxLayout, QFormLayout, QLabel,
     QCheckBox, QSpinBox, QDoubleSpinBox, QPushButton, QGroupBox,
-    QTextEdit, QTabWidget, QWidget, QLineEdit, QComboBox, QFileDialog,
-    QMessageBox
+    QMessageBox, QTabWidget, QWidget, QLineEdit, QComboBox, QFileDialog,
 )
-from PySide6.QtCore import Qt, Signal, Slot
+from PySide6.QtCore import Slot
 
+from danmaku_sender.controller.video_controller import VideoController
 from danmaku_sender.types.models.queue import QueueTask, TaskStatus
 from danmaku_sender.types.models.video import VideoInfo
 from danmaku_sender.types.models.common import VideoTarget
-from danmaku_sender.config import SenderConfig
-from danmaku_sender.controller.video_controller import VideoController
 from danmaku_sender.service.danmaku_parser import DanmakuParser
-from danmaku_sender.utils.string_utils import parse_bilibili_link
 from danmaku_sender.ui.framework.binder import UIBinder
+from danmaku_sender.utils.string_utils import parse_bilibili_link
 
 
 logger = logging.getLogger(__name__)
