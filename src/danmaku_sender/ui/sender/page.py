@@ -21,7 +21,7 @@ from danmaku_sender.types.models.queue import QueueTask, TaskStatus
 from danmaku_sender.repo.history_manager import HistoryManager
 from danmaku_sender.service.sender import SendingContext
 from danmaku_sender.runtime.state.app_state import AppState
-from danmaku_sender.ui.common.notification import send_windows_notification
+from danmaku_sender.runtime.infra.platform import send_windows_notification
 from danmaku_sender.utils.time_utils import format_duration
 
 

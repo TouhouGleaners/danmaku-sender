@@ -6,7 +6,7 @@ import threading
 from PySide6.QtCore import Signal
 
 from danmaku_sender.controller.concurrency import WorkerThread
-from danmaku_sender.controller.system_utils import KeepSystemAwake
+from danmaku_sender.runtime.infra.platform import KeepSystemAwake
 from danmaku_sender.service.sender import SendPipeline, SendJob
 from danmaku_sender.service.sender.delay_manager import DelayManager
 from danmaku_sender.types.models.common import VideoTarget
