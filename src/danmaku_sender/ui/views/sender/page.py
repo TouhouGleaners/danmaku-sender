@@ -12,8 +12,8 @@ from .components.queue_table import ProgressBarDelegate, QueueTableModel
 from .components.dialogs.task_builder import TaskBuilderDialog
 from .components.dialogs.task_detail import TaskDetailDialog
 
-from danmaku_sender.ui.editor import EditorDialog
-from danmaku_sender.ui.monitor_dialog import MonitorDialog
+from danmaku_sender.ui.views.editor import EditorDialog
+from danmaku_sender.ui.views.monitor import MonitorDialog
 from danmaku_sender.ui.framework.style_loader import SvgIcon
 from danmaku_sender.controller.sender import SenderController
 from danmaku_sender.service.danmaku_parser import DanmakuParser

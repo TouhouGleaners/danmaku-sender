@@ -1,4 +1,5 @@
 """账号管理主窗口"""
+
 import logging
 
 from PySide6.QtCore import Qt

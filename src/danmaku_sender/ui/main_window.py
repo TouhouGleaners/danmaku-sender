@@ -7,14 +7,14 @@ from PySide6.QtWidgets import (
 from PySide6.QtGui import QAction, QCloseEvent, QDesktopServices, QShortcut, QKeySequence
 from PySide6.QtCore import Qt, QUrl, QTimer, QSize, QEvent, Slot
 
+from .dialogs import AboutDialog, HelpDialog, UpdateDialog
 from .framework.image_processor import QtImageProcessor
 from .framework.style_loader import SvgIcon, load_stylesheet, get_app_icon
-from .sender import SenderPage
-from .settings_page import SettingsPage
-from .monitor_page import MonitorPage
-from .dialogs import AboutDialog, HelpDialog, UpdateDialog
-from .account_manager import AccountDialog
-from .history import HistoryPage
+from .views.sender import SenderPage
+from .views.settings import SettingsPage
+from .views.monitor import MonitorPage
+from .views.account import AccountDialog
+from .views.history import HistoryPage
 
 from danmaku_sender.config.app_meta import AppInfo, UI
 from danmaku_sender.types.models.common import MonitorStats

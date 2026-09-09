@@ -13,9 +13,8 @@ from PIL import Image
 
 from danmaku_sender.controller.auth_controller import AuthController
 
-from ..types.models.common import AuthCookies
-from ..config.app_meta import AppInfo, Links
-from danmaku_sender.config.app_meta import AppInfo
+from danmaku_sender.types.models.common import AuthCookies
+from danmaku_sender.config.app_meta import AppInfo, Links
 
 
 logger = logging.getLogger(__name__)

@@ -1,4 +1,5 @@
 """账号管理子组件：账号卡片"""
+
 from PySide6.QtCore import QSize, Qt, QTimer, Signal
 from PySide6.QtGui import QMouseEvent, QPixmap
 from PySide6.QtWidgets import (
