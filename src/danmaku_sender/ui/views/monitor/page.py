@@ -39,6 +39,9 @@ class MonitorPage(QWidget):
         self._queue_monitoring = False
         self._queue_stats: dict[str, MonitorStats] = {}  # task_id -> stats
 
+        # 队列监视轮询定时器（仅在监视运行期间激活）
+        self._stats_timer = QTimer(self)
+
         self._create_ui()
         self._connect_signals()
 
@@ -192,6 +195,7 @@ class MonitorPage(QWidget):
     def _connect_signals(self):
         # Internal
         self.btn_monitor_queue.clicked.connect(self._toggle_queue_monitor)
+        self._stats_timer.timeout.connect(self._on_stats_tick)
         self.anchor_combo.currentIndexChanged.connect(self._on_anchor_changed)
         self.btn_reset_anchor.clicked.connect(self._on_reset_anchor_clicked)
 
@@ -199,6 +203,7 @@ class MonitorPage(QWidget):
         self.monitor_controller.statsUpdated.connect(self.statsUpdated.emit)
         self.monitor_controller.statusUpdated.connect(self.status_label.setText)
         self.monitor_controller.taskFinished.connect(self._on_finished)
+        self.monitor_controller.queueVerifyFinished.connect(self._refresh_queue_stats)
 
         # QueueState
         self.state.queue_state.tasksChanged.connect(self._on_queue_changed)
@@ -289,6 +294,7 @@ class MonitorPage(QWidget):
         if self._queue_monitoring:
             # 停止队列监视
             self._queue_monitoring = False
+            self._stats_timer.stop()
             self._queue_stats.clear()
             self._refresh_queue_table()
             self._update_overall_stats()
@@ -309,11 +315,28 @@ class MonitorPage(QWidget):
         self._queue_stats.clear()
         self._set_ui_running(True)
 
-        # 为每个任务查询统计数据
+        # 立即执行第一轮，之后按轮询间隔循环
+        self._on_stats_tick()
+        self._stats_timer.start(self.interval_spin.value() * 1000)
+
+    @Slot()
+    def _on_stats_tick(self):
+        """定时触发：发起一轮后台在线核销（不阻塞 UI），并刷新本地统计"""
+        if not self._queue_monitoring:
+            return
+
+        tasks = self.state.queue_state.tasks
+        cids = [
+            task.target.cid for task in tasks
+            if task.status in (TaskStatus.COMPLETED, TaskStatus.RUNNING)
+        ]
+        if cids:
+            self.monitor_controller.verify_queue_online(cids, self.state.get_api_auth())
+
         self._refresh_queue_stats()
 
     def _refresh_queue_stats(self):
-        """刷新队列中所有任务的统计数据"""
+        """从本地数据库刷新队列中所有任务的统计数据并渲染"""
         if not self._queue_monitoring:
             return
 
