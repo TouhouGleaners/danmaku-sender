@@ -1,4 +1,4 @@
-"""发送任务 Worker - 负责单任务发送和队列执行的后台线程"""
+"""发送任务 Worker - 负责队列执行的后台线程"""
 
 import logging
 import threading
@@ -9,8 +9,6 @@ from danmaku_sender.controller.concurrency import WorkerThread
 from danmaku_sender.runtime.infra.platform import KeepSystemAwake
 from danmaku_sender.service.sender import SendPipeline, SendJob
 from danmaku_sender.service.sender.delay_manager import DelayManager
-from danmaku_sender.types.models.common import VideoTarget
-from danmaku_sender.types.models.danmaku import Danmaku
 from danmaku_sender.types.models.queue import QueueTask, TaskStatus
 from danmaku_sender.repo.history_manager import HistoryManager
 from danmaku_sender.config import ApiAuthConfig, SenderConfig
@@ -18,47 +16,6 @@ from danmaku_sender.runtime.state.queue_state import QueueState
 
 
 logger = logging.getLogger(__name__)
-
-
-class SendTaskWorker(WorkerThread):
-    """用于后台发送弹幕的线程（薄壳：仅负责线程生命周期与信号桥接）"""
-    progressUpdated = Signal(int, int, float)  # 已尝试, 总数, ETA
-    taskFinished = Signal(object)              # SendingContext
-
-    def __init__(
-        self,
-        target: VideoTarget,
-        danmakus: list[Danmaku],
-        auth_config: ApiAuthConfig,
-        strategy_config: SenderConfig,
-        stop_event: threading.Event,
-        history_manager: HistoryManager,
-        parent=None
-    ):
-        super().__init__(parent)
-        self.target = target
-        self.danmakus = danmakus
-        self.auth_config = auth_config
-        self.strategy_config = strategy_config
-        self.stop_event = stop_event
-        self.history_manager = history_manager
-
-    def run(self):
-        ctx = None
-        try:
-            with KeepSystemAwake(self.strategy_config.prevent_sleep):
-                pipeline = SendPipeline(self.auth_config, self.history_manager)
-                job = SendJob(
-                    target=self.target,
-                    danmakus=self.danmakus,
-                    config=self.strategy_config,
-                    stop_event=self.stop_event,
-                )
-                ctx = pipeline.execute(job, progress_emitter=self.progressUpdated.emit)
-        except Exception as e:
-            self.report_error("任务发生严重错误", e)
-        finally:
-            self.taskFinished.emit(ctx)
 
 
 class QueueWorker(WorkerThread):

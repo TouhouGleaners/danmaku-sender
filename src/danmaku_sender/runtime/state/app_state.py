@@ -2,7 +2,6 @@ import time
 
 from PySide6.QtCore import QObject, Signal
 
-from .video_state import VideoState
 from .queue_state import QueueState
 
 from danmaku_sender.config import ApiAuthConfig, SenderConfig, MonitorConfig, ValidationConfig
@@ -35,7 +34,6 @@ class AppState(QObject):
         self.validation_config = ValidationConfig()
 
         # 运行时状态
-        self.video_state = VideoState()
         self.queue_state = QueueState(self)
 
         # 多账号

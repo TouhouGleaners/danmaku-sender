@@ -11,8 +11,8 @@ from danmaku_sender.config.app_meta import AppInfo
 
 class LogNamespace:
     """日志命名空间契约（基于模块路径）"""
-    SENDER_PREFIXES = ("danmaku_sender.service.sender", "danmaku_sender.ui.sender", "danmaku_sender.controller.sender")
-    MONITOR_PREFIXES = ("danmaku_sender.service.bili_monitor", "danmaku_sender.ui.monitor_page", "danmaku_sender.controller.monitor_controller")
+    SENDER_PREFIXES = ("danmaku_sender.service.sender", "danmaku_sender.ui.views.sender", "danmaku_sender.controller.sender")
+    MONITOR_PREFIXES = ("danmaku_sender.service.bili_monitor", "danmaku_sender.ui.views.monitor", "danmaku_sender.controller.monitor_controller")
 
 
 class GuiLoggingHandler(logging.Handler):
@@ -57,8 +57,8 @@ class GuiLoggingHandler(logging.Handler):
         发出一条日志记录。
 
         该方法会处理日志记录，并根据模块路径前缀路由至对应的信号:
-        danmaku_sender.service.sender / danmaku_sender.ui.sender → sender_signal
-        danmaku_sender.service.bili_monitor / danmaku_sender.ui.monitor_page → monitor_signal
+        danmaku_sender.service.sender / danmaku_sender.ui.views.sender → sender_signal
+        danmaku_sender.service.bili_monitor / danmaku_sender.ui.views.monitor → monitor_signal
         其他模块的日志将被忽略
 
         Args:

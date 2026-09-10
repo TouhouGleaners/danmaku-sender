@@ -13,7 +13,6 @@ from .components.dialogs.task_builder import TaskBuilderDialog
 from .components.dialogs.task_detail import TaskDetailDialog
 
 from danmaku_sender.ui.views.editor import EditorDialog
-from danmaku_sender.ui.views.monitor import MonitorDialog
 from danmaku_sender.ui.framework.style_loader import SvgIcon
 from danmaku_sender.controller.sender import SenderController
 from danmaku_sender.service.danmaku_parser import DanmakuParser
@@ -220,7 +219,6 @@ class SenderPage(QWidget):
 
         menu.addAction("查看详情/编辑配置", lambda: self._show_task_detail(task))  # 所有状态都能查看
         menu.addAction("编辑弹幕", lambda: self._edit_danmakus(task)).setEnabled(is_editable)
-        menu.addAction("监视发送", lambda: self._monitor_task(task))
         menu.addSeparator()
         menu.addAction("上移", lambda: self._move_task(task.task_id, -1)).setEnabled(is_editable)
         menu.addAction("下移", lambda: self._move_task(task.task_id, 1)).setEnabled(is_editable)
@@ -250,11 +248,6 @@ class SenderPage(QWidget):
                 self._queue_model.refresh_row(row)
             self.logger.info(f"已编辑弹幕: {task.target.display_string} ({task.total} 条)")
 
-    def _monitor_task(self, task: QueueTask):
-        """监视单个任务的发送状态（打开监视器弹窗）"""
-        dialog = MonitorDialog(task, self.state, self.sender_controller.history_manager, self)
-        dialog.exec()
-
     def _move_task(self, task_id: str, direction: int):
         self.state.queue_state.move_task(task_id, direction)
 
@@ -283,7 +276,7 @@ class SenderPage(QWidget):
     @Slot()
     def _start_queue(self):
         """启动队列发送"""
-        if self.sender_controller.is_running() or self.sender_controller.is_queue_running():
+        if self.sender_controller.is_queue_running():
             return
 
         auth_config = self.state.get_api_auth()
