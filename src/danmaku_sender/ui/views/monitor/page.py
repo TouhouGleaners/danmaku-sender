@@ -15,7 +15,7 @@ from .table import QueueMonitorModel
 from danmaku_sender.ui.framework.binder import UIBinder
 from danmaku_sender.ui.framework.style_loader import SvgIcon
 
-from danmaku_sender.types.models.common import MonitorStats, VideoTarget
+from danmaku_sender.types.models.common import MonitorStats
 from danmaku_sender.types.models.queue import TaskStatus
 from danmaku_sender.runtime.state.app_state import AppState
 from danmaku_sender.repo.history_manager import HistoryManager
@@ -181,16 +181,8 @@ class MonitorPage(QWidget):
         self.btn_monitor_queue.setProperty("action", "true")
         self.btn_monitor_queue.setProperty("state", "ready")
 
-        self.start_btn = QPushButton("监视单任务")
-        self.start_btn.setIcon(SvgIcon("start.svg"))
-        self.start_btn.setFixedWidth(120)
-        self.start_btn.setCursor(Qt.CursorShape.PointingHandCursor)
-        self.start_btn.setProperty("action", "true")
-        self.start_btn.setProperty("state", "ready")
-
         action_layout.addWidget(self.status_label, stretch=1)
         action_layout.addWidget(self.btn_monitor_queue)
-        action_layout.addWidget(self.start_btn)
 
         main_layout.addLayout(action_layout)
 
@@ -198,13 +190,11 @@ class MonitorPage(QWidget):
 
     def _connect_signals(self):
         # Internal
-        self.start_btn.clicked.connect(self._toggle_task)
         self.btn_monitor_queue.clicked.connect(self._toggle_queue_monitor)
         self.anchor_combo.currentIndexChanged.connect(self._on_anchor_changed)
         self.btn_reset_anchor.clicked.connect(self._on_reset_anchor_clicked)
 
         # MonitorController
-        self.monitor_controller.statsUpdated.connect(self._on_stats_updated)
         self.monitor_controller.statsUpdated.connect(self.statsUpdated.emit)
         self.monitor_controller.statusUpdated.connect(self.status_label.setText)
         self.monitor_controller.taskFinished.connect(self._on_finished)
@@ -232,15 +222,13 @@ class MonitorPage(QWidget):
         super().showEvent(event)
         self._refresh_queue_table()
 
-    def _update_btn_style(self, running: bool, btn: QPushButton | None = None):
-        """统一刷新按钮状态与图标的私有方法"""
-        if btn is None:
-            btn = self.start_btn
+    def _update_btn_style(self, running: bool):
+        """统一刷新按钮状态与图标"""
         state = "running" if running else "ready"
-        btn.setProperty("state", state)
-        btn.style().unpolish(btn)
-        btn.style().polish(btn)
-        btn.setIcon(self._icon_stop if running else self._icon_start)
+        self.btn_monitor_queue.setProperty("state", state)
+        self.btn_monitor_queue.style().unpolish(self.btn_monitor_queue)
+        self.btn_monitor_queue.style().polish(self.btn_monitor_queue)
+        self.btn_monitor_queue.setIcon(self._icon_stop if running else self._icon_start)
 
     def _update_anchor_display(self, baseline: float):
         if baseline <= 0:
@@ -277,56 +265,23 @@ class MonitorPage(QWidget):
         self.lbl_pending.setText(str(pending))
         self.lbl_lost.setText(str(lost))
 
-    def _set_ui_running(self, running, btn=None):
-        if btn is None:
-            btn = self.start_btn
+    def _set_ui_running(self, running: bool):
         self.interval_spin.setEnabled(not running)
-        btn.setEnabled(True)
+        self.btn_monitor_queue.setEnabled(True)
 
         self.state.monitor_is_active = running
 
         if running:
-            btn.setText("停止监视")
-            self._update_btn_style(True, btn)
-            self.log_output.clear()
-            self.status_label.setText("监视器：启动中...")
+            self.btn_monitor_queue.setText("停止监视")
+            self._update_btn_style(True)
+            self.status_label.setText("监视器：运行中...")
         else:
-            btn.setText("监视单任务" if btn == self.start_btn else "监视队列")
-            self._update_btn_style(False, btn)
+            self.btn_monitor_queue.setText("监视队列")
+            self._update_btn_style(False)
             self.status_label.setText("监视器：已停止")
 
     # region Slots
     # region Slots Internal
-    @Slot()
-    def _toggle_task(self):
-        """切换单任务监视"""
-        if self.monitor_controller.is_running():
-            self.monitor_controller.stop_task()
-            self.start_btn.setText("正在停止...")
-            self.start_btn.setEnabled(False)
-            return
-
-        cid = self.state.video_state.selected_cid
-        bvid = self.state.video_state.bvid
-        title = self.state.video_state.video_title
-
-        if not cid:
-            QMessageBox.warning(self, "无法启动", "请先在“发射器”页面获取视频信息并选择分P。\n(监视器需要 CID 来查询数据库)")
-            return
-
-        if not self.state.sessdata:
-            QMessageBox.warning(self, "凭证缺失", "请先配置 Cookie。")
-            return
-
-        self._set_ui_running(True, self.start_btn)
-
-        target = VideoTarget(bvid=bvid, cid=cid, title=title)
-        self.monitor_controller.start_task(
-            target=target,
-            auth_config=self.state.get_api_auth(),
-            monitor_config=self.state.monitor_config
-        )
-
     @Slot()
     def _toggle_queue_monitor(self):
         """切换队列监视"""
@@ -336,8 +291,7 @@ class MonitorPage(QWidget):
             self._queue_stats.clear()
             self._refresh_queue_table()
             self._update_overall_stats()
-            self._set_ui_running(False, self.btn_monitor_queue)
-            self.status_label.setText("队列监视：已停止")
+            self._set_ui_running(False)
             return
 
         # 启动队列监视
@@ -352,8 +306,7 @@ class MonitorPage(QWidget):
 
         self._queue_monitoring = True
         self._queue_stats.clear()
-        self._set_ui_running(True, self.btn_monitor_queue)
-        self.status_label.setText("队列监视：运行中...")
+        self._set_ui_running(True)
 
         # 为每个任务查询统计数据
         self._refresh_queue_stats()
@@ -407,21 +360,9 @@ class MonitorPage(QWidget):
 
     # endregion
     # region Slots MonitorController
-    @Slot(dict)
-    def _on_stats_updated(self, stats: MonitorStats):
-        """
-        处理后端传回的统计数据（单任务监视）
-
-        stats: {'total': int, 'verified': int, 'pending': int, 'lost': int}
-        """
-        self.lbl_total.setText(str(stats.get('total', 0)))
-        self.lbl_verified.setText(str(stats.get('verified', 0)))
-        self.lbl_pending.setText(str(stats.get('pending', 0)))
-        self.lbl_lost.setText(str(stats.get('lost', 0)))
-
     @Slot()
     def _on_finished(self):
-        self._set_ui_running(False, self.start_btn)
+        self._set_ui_running(False)
 
     # endregion
     # region Slots QueueState
