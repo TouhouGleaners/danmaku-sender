@@ -260,11 +260,14 @@ class MonitorPage(QWidget):
         self._reposition_empty_hint()
 
     def _update_overall_stats(self) -> dict:
-        """更新整体统计卡片；返回合计值"""
-        total = sum(s.get('total', 0) for s in self._queue_stats.values())
-        verified = sum(s.get('verified', 0) for s in self._queue_stats.values())
-        pending = sum(s.get('pending', 0) for s in self._queue_stats.values())
-        lost = sum(s.get('lost', 0) for s in self._queue_stats.values())
+        """更新整体统计卡片；只汇总当前队列中的任务（已移除的任务不计入）。返回合计值"""
+        current_ids = {t.task_id for t in self.state.queue_state.tasks}
+        totals = [s for tid, s in self._queue_stats.items() if tid in current_ids]
+
+        total = sum(s.get('total', 0) for s in totals)
+        verified = sum(s.get('verified', 0) for s in totals)
+        pending = sum(s.get('pending', 0) for s in totals)
+        lost = sum(s.get('lost', 0) for s in totals)
 
         self.lbl_total.setText(str(total))
         self.lbl_verified.setText(str(verified))

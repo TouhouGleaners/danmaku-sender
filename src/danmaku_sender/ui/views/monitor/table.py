@@ -68,8 +68,12 @@ class QueueMonitorModel(QAbstractTableModel):
 
     @staticmethod
     def _format_tooltip(task: QueueTask) -> str:
-        """完整定位信息：视频标题、BV号、分P、CID"""
-        lines = [task.target.display_string, f"BV号: {task.target.bvid}"]
+        """完整定位信息：视频标题、任务状态、BV号、分P、CID"""
+        lines = [
+            task.target.display_string,
+            f"状态: {task.status.value}",
+            f"BV号: {task.target.bvid}",
+        ]
         if task.p_title:
             lines.append(f"分P: {task.p_title}")
         lines.append(f"CID: {task.target.cid}")
