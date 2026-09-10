@@ -16,7 +16,7 @@ from danmaku_sender.ui.framework.binder import UIBinder
 from danmaku_sender.ui.framework.style_loader import SvgIcon
 
 from danmaku_sender.types.models.common import MonitorStats
-from danmaku_sender.types.models.queue import TaskStatus
+from danmaku_sender.types.models.queue import QueueTask, TaskStatus
 from danmaku_sender.runtime.state.app_state import AppState
 from danmaku_sender.repo.history_manager import HistoryManager
 from danmaku_sender.controller.monitor_controller import MonitorController
@@ -259,8 +259,8 @@ class MonitorPage(QWidget):
         super().resizeEvent(event)
         self._reposition_empty_hint()
 
-    def _update_overall_stats(self):
-        """更新整体统计数据"""
+    def _update_overall_stats(self) -> dict:
+        """更新整体统计卡片；返回合计值"""
         total = sum(s.get('total', 0) for s in self._queue_stats.values())
         verified = sum(s.get('verified', 0) for s in self._queue_stats.values())
         pending = sum(s.get('pending', 0) for s in self._queue_stats.values())
@@ -270,6 +270,7 @@ class MonitorPage(QWidget):
         self.lbl_verified.setText(str(verified))
         self.lbl_pending.setText(str(pending))
         self.lbl_lost.setText(str(lost))
+        return {'total': total, 'verified': verified, 'pending': pending, 'lost': lost}
 
     def _set_ui_running(self, running: bool):
         self.interval_spin.setEnabled(not running)
@@ -326,17 +327,33 @@ class MonitorPage(QWidget):
             return
 
         tasks = self.state.queue_state.tasks
-        cids = [
-            task.target.cid for task in tasks
-            if task.status in (TaskStatus.COMPLETED, TaskStatus.RUNNING)
+        cid_labels = [
+            (task.target.cid, self._display_of(task))
+            for task in tasks
+            if task.status in (TaskStatus.COMPLETED, TaskStatus.RUNNING, TaskStatus.FAILED, TaskStatus.PAUSED)
         ]
-        if cids:
-            self.monitor_controller.verify_queue_online(cids, self.state.get_api_auth())
+        if cid_labels:
+            self.logger.info(f"🔍 开始对账一轮，共 {len(cid_labels)} 个分P。")
+            self.monitor_controller.verify_queue_online(cid_labels, self.state.get_api_auth())
 
-        self._refresh_queue_stats()
+        totals = self._refresh_queue_stats()
+        if totals:
+            baseline = self.state.monitor_config.stats_baseline
+            anchor = "全量历史" if baseline <= 0 else datetime.fromtimestamp(baseline).strftime('%m-%d %H:%M')
+            self.logger.info(
+                f"统计(基线 {anchor}): 已发 {totals['total']} / 存活 {totals['verified']}"
+                f" / 待验 {totals['pending']} / 疑似 {totals['lost']}"
+            )
 
-    def _refresh_queue_stats(self):
-        """从本地数据库刷新队列中所有任务的统计数据并渲染"""
+    @staticmethod
+    def _display_of(task: QueueTask) -> str:
+        """日志前缀，如 "P1 - 序章"；无分P信息时退回视频标题/BVID"""
+        if task.p_index > 0 and task.p_title:
+            return f"P{task.p_index} - {task.p_title}"
+        return task.p_title or task.target.display_string
+
+    def _refresh_queue_stats(self) -> dict | None:
+        """从本地数据库刷新队列中所有任务的统计数据并渲染；返回合计值"""
         if not self._queue_monitoring:
             return
 
@@ -353,7 +370,7 @@ class MonitorPage(QWidget):
                 self._queue_stats[task.task_id] = stats
 
         self._refresh_queue_table()
-        self._update_overall_stats()
+        return self._update_overall_stats()
 
     @Slot(int)
     def _on_anchor_changed(self, index: int):
