@@ -276,7 +276,7 @@ class SenderPage(QWidget):
     @Slot()
     def _start_queue(self):
         """启动队列发送"""
-        if self.sender_controller.is_running() or self.sender_controller.is_queue_running():
+        if self.sender_controller.is_queue_running():
             return
 
         auth_config = self.state.get_api_auth()
