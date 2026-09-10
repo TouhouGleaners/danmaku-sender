@@ -6,7 +6,7 @@ from PySide6.QtCore import Qt, Signal, Slot
 from PySide6.QtGui import QTextCursor
 from PySide6.QtWidgets import (
     QComboBox, QGridLayout, QGroupBox, QHBoxLayout,
-    QLabel, QMessageBox, QPushButton, QSizePolicy,
+    QLabel, QMessageBox, QPushButton,
     QSpinBox, QTextEdit, QVBoxLayout, QWidget,
     QTableView, QHeaderView, QAbstractItemView,
 )
@@ -50,31 +50,6 @@ class MonitorPage(QWidget):
         main_layout = QVBoxLayout()
         main_layout.setSpacing(10)
         main_layout.setContentsMargins(10, 10, 10, 10)
-
-        # --- 顶部：目标信息 ---
-        info_group = QGroupBox("监视目标")
-        info_layout = QHBoxLayout()
-
-        self.target_label = QLabel("尚未选择视频")
-        self.target_label.setStyleSheet("""
-            font-size: 14px;
-            font-weight: bold;
-            color: #34495e;
-            padding: 2px 0px;
-        """)
-        self.target_label.setSizePolicy(QSizePolicy.Policy.Ignored, QSizePolicy.Policy.Preferred)
-        self.target_label.setMinimumWidth(0)
-        line_height = self.target_label.fontMetrics().lineSpacing()
-        self.target_label.setMaximumHeight(line_height * 3 + 10)
-
-        self.target_label.setWordWrap(True)
-        self.target_label.setAlignment(Qt.AlignmentFlag.AlignLeft | Qt.AlignmentFlag.AlignTop)
-
-        info_layout.addWidget(QLabel("当前目标:"))
-        info_layout.addWidget(self.target_label, stretch=1)
-
-        info_group.setLayout(info_layout)
-        main_layout.addWidget(info_group)
 
         # --- 队列任务表格 ---
         queue_group = QGroupBox("队列任务状态")
@@ -245,7 +220,6 @@ class MonitorPage(QWidget):
 
     def showEvent(self, event):
         super().showEvent(event)
-        self._refresh_info_labels()
         self._refresh_queue_table()
 
     def _update_btn_style(self, running: bool, btn: QPushButton | None = None):
@@ -264,26 +238,6 @@ class MonitorPage(QWidget):
         else:
             dt_str = datetime.fromtimestamp(baseline).strftime('%m-%d %H:%M:%S')
             self.anchor_display.setText(dt_str)
-
-    def _refresh_info_labels(self):
-        video_state = self.state.video_state
-
-        if video_state.selected_cid:
-            info_parts = []
-            if title := video_state.video_title:
-                info_parts.append(title)
-
-            if part := video_state.selected_part_name:
-                info_parts.append(part)
-
-            display_text = "\n".join(info_parts)
-            display_text += f" (CID: {video_state.selected_cid})"
-
-            self.target_label.setText(display_text)
-            self.target_label.setToolTip(display_text)
-        else:
-            self.target_label.setText("尚未选择视频 (请在发射器页面加载)")
-            self.target_label.setToolTip("")
 
     def _refresh_queue_table(self):
         """刷新队列任务表格"""
