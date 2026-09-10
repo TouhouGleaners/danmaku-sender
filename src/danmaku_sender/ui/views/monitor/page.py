@@ -300,6 +300,7 @@ class MonitorPage(QWidget):
             self._refresh_queue_table()
             self._update_overall_stats()
             self._set_ui_running(False)
+            self.logger.info("⏹ 队列监视已停止")
             return
 
         # 启动队列监视
@@ -315,6 +316,9 @@ class MonitorPage(QWidget):
         self._queue_monitoring = True
         self._queue_stats.clear()
         self._set_ui_running(True)
+        self.logger.info(
+            f"▶ 队列监视已启动：{len(tasks)} 个任务，轮询间隔 {self.interval_spin.value()} 秒"
+        )
 
         # 立即执行第一轮，之后按轮询间隔循环
         self._on_stats_tick()
@@ -333,7 +337,6 @@ class MonitorPage(QWidget):
             if task.status in (TaskStatus.COMPLETED, TaskStatus.RUNNING, TaskStatus.FAILED, TaskStatus.PAUSED)
         ]
         if cid_labels:
-            self.logger.info(f"🔍 开始对账一轮，共 {len(cid_labels)} 个分P。")
             self.monitor_controller.verify_queue_online(cid_labels, self.state.get_api_auth())
 
         totals = self._refresh_queue_stats()
