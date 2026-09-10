@@ -2,7 +2,7 @@ import logging
 import time
 from datetime import datetime
 
-from PySide6.QtCore import Qt, Signal, Slot
+from PySide6.QtCore import Qt, QTimer, Signal, Slot
 from PySide6.QtGui import QTextCursor
 from PySide6.QtWidgets import (
     QComboBox, QGridLayout, QGroupBox, QHBoxLayout,
@@ -71,6 +71,16 @@ class MonitorPage(QWidget):
         header.setSectionResizeMode(3, QHeaderView.ResizeMode.ResizeToContents)
         header.setSectionResizeMode(4, QHeaderView.ResizeMode.ResizeToContents)
         header.setSectionResizeMode(5, QHeaderView.ResizeMode.ResizeToContents)
+
+        # 空状态引导
+        self._empty_hint = QLabel("当前队列暂无任务  请先在「发射器」页面添加任务", self.queue_table.viewport())
+        self._empty_hint.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        self._empty_hint.setStyleSheet("color: #888; font-size: 14px;")
+        self._empty_hint.setVisible(False)
+        self._queue_model.modelReset.connect(self._update_empty_hint)
+
+        # 布局完成后再定位，避免 viewport geometry 为零
+        QTimer.singleShot(0, self._update_empty_hint)
 
         queue_layout.addWidget(self.queue_table)
         main_layout.addWidget(queue_group)
@@ -243,6 +253,17 @@ class MonitorPage(QWidget):
         """刷新队列任务表格"""
         tasks = self.state.queue_state.tasks
         self._queue_model.update_data(tasks, self._queue_stats)
+
+    def _update_empty_hint(self):
+        self._empty_hint.setVisible(self._queue_model.rowCount() == 0)
+        self._reposition_empty_hint()
+
+    def _reposition_empty_hint(self):
+        self._empty_hint.setGeometry(self.queue_table.viewport().rect())
+
+    def resizeEvent(self, event):
+        super().resizeEvent(event)
+        self._reposition_empty_hint()
 
     def _update_overall_stats(self):
         """更新整体统计数据"""
