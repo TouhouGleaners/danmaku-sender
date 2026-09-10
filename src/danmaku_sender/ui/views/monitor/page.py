@@ -75,6 +75,7 @@ class MonitorPage(QWidget):
         header.setSectionResizeMode(4, QHeaderView.ResizeMode.ResizeToContents)
         header.setSectionResizeMode(5, QHeaderView.ResizeMode.ResizeToContents)
         header.setSectionResizeMode(6, QHeaderView.ResizeMode.ResizeToContents)
+        header.setSectionResizeMode(7, QHeaderView.ResizeMode.ResizeToContents)
 
         # 空状态引导
         self._empty_hint = QLabel("当前队列暂无任务  请先在「发射器」页面添加任务", self.queue_table.viewport())

@@ -13,17 +13,18 @@ class Column(IntEnum):
     """表格列索引"""
     SEQ = 0
     TARGET = 1
-    TOTAL = 2
-    VERIFIED = 3
-    PENDING = 4
-    LOST = 5
-    RATE = 6
+    STATUS = 2
+    TOTAL = 3
+    VERIFIED = 4
+    PENDING = 5
+    LOST = 6
+    RATE = 7
 
 
 class QueueMonitorModel(QAbstractTableModel):
     """队列监视表格模型"""
 
-    HEADERS = ["序号", "目标视频", "已发送", "已存活", "待验证", "疑似丢失", "存活率"]
+    HEADERS = ["序号", "目标视频", "状态", "已发送", "已存活", "待验证", "疑似丢失", "存活率"]
     _DEFAULT_STATS: MonitorStats = {'total': 0, 'verified': 0, 'pending': 0, 'lost': 0}
 
     def __init__(self):
@@ -50,6 +51,7 @@ class QueueMonitorModel(QAbstractTableModel):
         return {
             'seq': index + 1,
             'name': self._format_target(task),
+            'status': task.status.value,
             'tooltip': self._format_tooltip(task),
             'total': total,
             'verified': verified,
@@ -68,12 +70,8 @@ class QueueMonitorModel(QAbstractTableModel):
 
     @staticmethod
     def _format_tooltip(task: QueueTask) -> str:
-        """完整定位信息：视频标题、任务状态、BV号、分P、CID"""
-        lines = [
-            task.target.display_string,
-            f"状态: {task.status.value}",
-            f"BV号: {task.target.bvid}",
-        ]
+        """完整定位信息：视频标题、BV号、分P、CID"""
+        lines = [task.target.display_string, f"BV号: {task.target.bvid}"]
         if task.p_title:
             lines.append(f"分P: {task.p_title}")
         lines.append(f"CID: {task.target.cid}")
@@ -119,6 +117,7 @@ class QueueMonitorModel(QAbstractTableModel):
         key_map = {
             Column.SEQ: 'seq',
             Column.TARGET: 'name',
+            Column.STATUS: 'status',
             Column.TOTAL: 'total',
             Column.VERIFIED: 'verified',
             Column.PENDING: 'pending',
