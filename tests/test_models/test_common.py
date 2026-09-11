@@ -1,5 +1,5 @@
 """common 模型单元测试 — VideoTarget, DanmakuStatus"""
-from danmaku_sender.core.models.common import VideoTarget
+from danmaku_sender.types.models.common import VideoTarget
 
 
 class TestVideoTarget:

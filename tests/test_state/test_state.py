@@ -1,8 +1,12 @@
-"""Pydantic 配置模型单元测试 — SenderConfig, MonitorConfig, ValidationConfig, VideoState"""
+"""状态与配置模型单元测试 — SenderConfig, MonitorConfig, ValidationConfig, QueueState"""
 import pytest
 from pydantic import ValidationError
-from danmaku_sender.core.models.danmaku import Danmaku
-from danmaku_sender.core.state import SenderConfig, MonitorConfig, ValidationConfig, VideoState
+
+from danmaku_sender.types.models.danmaku import Danmaku
+from danmaku_sender.types.models.common import VideoTarget
+from danmaku_sender.types.models.queue import QueueTask, TaskStatus
+from danmaku_sender.config import SenderConfig, MonitorConfig, ValidationConfig
+from danmaku_sender.runtime.state.queue_state import QueueState
 
 
 class TestSenderConfig:
@@ -44,11 +48,11 @@ class TestSenderConfig:
 
     def test_rest_min_greater_than_rest_max_raises(self):
         with pytest.raises(ValidationError, match="爆发休息的最小值不能大于最大值"):
-            SenderConfig(burst_size=3, rest_min=50.0, rest_max=30.0)
+            SenderConfig(burst_enabled=True, burst_size=3, rest_min=50.0, rest_max=30.0)
 
-    def test_rest_min_greater_than_rest_max_burst_size_1_ok(self):
-        """burst_size <= 1 时不校验 rest_min/rest_max"""
-        cfg = SenderConfig(burst_size=1, rest_min=50.0, rest_max=30.0)
+    def test_rest_range_ignored_when_burst_disabled(self):
+        """burst_enabled=False 时不校验 rest_min/rest_max"""
+        cfg = SenderConfig(burst_size=3, rest_min=50.0, rest_max=30.0)
         assert cfg.rest_min == 50.0
 
     def test_validate_assignment(self):
@@ -89,36 +93,80 @@ class TestValidationConfig:
         assert cfg.enabled is False
 
 
-class TestVideoState:
-    def test_default_state(self):
-        vs = VideoState()
-        assert vs.bvid == ""
-        assert vs.selected_cid is None
-        assert vs.loaded_danmakus == []
-        assert vs.is_ready_to_send is False
-        assert vs.danmaku_count == 0
+def make_task(cid: int = 1, status: TaskStatus = TaskStatus.PENDING) -> QueueTask:
+    return QueueTask(
+        target=VideoTarget(bvid=f"BV{cid:03d}", cid=cid, title=f"T{cid}"),
+        danmakus=[],
+        config_snapshot=SenderConfig(),
+        status=status,
+    )
 
-    def test_ready_to_send_all_set(self):
-        vs = VideoState(
-            bvid="BV1xx411c7mD",
-            selected_cid=1001,
-            loaded_danmakus=[Danmaku(msg="t", progress=0)]
-        )
-        assert vs.is_ready_to_send is True
 
-    def test_not_ready_missing_bvid(self):
-        vs = VideoState(selected_cid=1001, loaded_danmakus=[Danmaku(msg="t", progress=0)])
-        assert vs.is_ready_to_send is False
+class TestQueueState:
+    """QueueState 队列操作与信号"""
 
-    def test_not_ready_missing_cid(self):
-        vs = VideoState(bvid="BV1xx411c7mD", loaded_danmakus=[Danmaku(msg="t", progress=0)])
-        assert vs.is_ready_to_send is False
+    def test_add_and_lookup(self):
+        qs = QueueState()
+        t = make_task(1)
+        qs.add_task(t)
+        assert not qs.is_empty
+        assert qs.pending_count == 1
+        assert qs.get_task_by_id(t.task_id) is t
 
-    def test_not_ready_empty_danmakus(self):
-        vs = VideoState(bvid="BV1xx411c7mD", selected_cid=1001)
-        assert vs.is_ready_to_send is False
+    def test_remove_only_pending_or_unconfigured(self):
+        qs = QueueState()
+        running = make_task(1, TaskStatus.RUNNING)
+        pending = make_task(2)
+        qs.add_task(running)
+        qs.add_task(pending)
+        assert qs.remove_task(running.task_id) is False
+        assert qs.remove_task(pending.task_id) is True
+        assert qs.get_task_by_id(pending.task_id) is None
 
-    def test_danmaku_count(self):
-        dms = [Danmaku(msg=f"d{i}", progress=i * 1000) for i in range(5)]
-        vs = VideoState(loaded_danmakus=dms)
-        assert vs.danmaku_count == 5
+    def test_move_task(self):
+        qs = QueueState()
+        t1, t2, t3 = make_task(1), make_task(2), make_task(3)
+        for t in (t1, t2, t3):
+            qs.add_task(t)
+        assert qs.move_task(t3.task_id, -1) is True
+        assert [t.target.cid for t in qs.tasks] == [1, 3, 2]
+        assert qs.move_task(t1.task_id, -1) is False  # 已在顶端
+
+    def test_move_non_movable_task(self):
+        qs = QueueState()
+        done = make_task(1, TaskStatus.COMPLETED)
+        other = make_task(2)
+        qs.add_task(done)
+        qs.add_task(other)
+        assert qs.move_task(done.task_id, 1) is False  # 已完成任务不可移动
+
+    def test_clear_completed_keeps_pending_and_paused(self):
+        qs = QueueState()
+        for t in (
+            make_task(1, TaskStatus.COMPLETED),
+            make_task(2, TaskStatus.FAILED),
+            make_task(3, TaskStatus.PENDING),
+            make_task(4, TaskStatus.PAUSED),
+        ):
+            qs.add_task(t)
+        qs.clear_completed()
+        assert [t.status for t in qs.tasks] == [TaskStatus.PENDING, TaskStatus.PAUSED]
+
+    def test_update_task_status(self):
+        qs = QueueState()
+        t = make_task(1)
+        qs.add_task(t)
+        events = []
+        qs.taskStatusChanged.connect(lambda tid, s: events.append((tid, s)))
+        qs.update_task_status(t.task_id, TaskStatus.RUNNING, "err")
+        assert t.status == TaskStatus.RUNNING
+        assert t.error_msg == "err"
+        assert events == [(t.task_id, TaskStatus.RUNNING.value)]
+
+    def test_current_index_signal(self):
+        qs = QueueState()
+        fired = []
+        qs.currentTaskChanged.connect(lambda i: fired.append(i))
+        qs.current_index = 2
+        assert qs.current_index == 2
+        assert fired == [2]

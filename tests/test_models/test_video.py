@@ -1,6 +1,6 @@
 """VideoInfo / VideoPart 模型单元测试"""
 import pytest
-from danmaku_sender.core.models.video import VideoInfo, VideoPart
+from danmaku_sender.types.models.video import VideoInfo, VideoPart
 
 
 @pytest.fixture

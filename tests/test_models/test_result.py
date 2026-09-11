@@ -1,6 +1,6 @@
 """DanmakuSendResult 模型单元测试"""
-from danmaku_sender.core.models.result import DanmakuSendResult
-from danmaku_sender.core.exceptions.api_errors import BiliDmErrorCode
+from danmaku_sender.types.models.result import DanmakuSendResult
+from danmaku_sender.types.exceptions.api_errors import BiliDmErrorCode
 
 
 class TestFromApiResponse:

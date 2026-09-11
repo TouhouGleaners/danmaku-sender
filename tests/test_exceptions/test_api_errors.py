@@ -1,6 +1,6 @@
 """BiliDmErrorCode 枚举单元测试"""
 import pytest
-from danmaku_sender.core.exceptions.api_errors import BiliDmErrorCode, ERROR_METADATA
+from danmaku_sender.types.exceptions.api_errors import BiliDmErrorCode, ERROR_METADATA
 
 
 class TestFromCode:
