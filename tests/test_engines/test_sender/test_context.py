@@ -1,9 +1,9 @@
 """SendingContext / SendJob 单元测试"""
 import pytest
-from danmaku_sender.core.models.danmaku import Danmaku
-from danmaku_sender.core.models.common import VideoTarget
-from danmaku_sender.core.state import SenderConfig
-from danmaku_sender.core.engines.sender.context import SendingContext, SendJob
+from danmaku_sender.types.models.danmaku import Danmaku
+from danmaku_sender.types.models.common import VideoTarget
+from danmaku_sender.config import SenderConfig
+from danmaku_sender.service.sender.context import SendingContext, SendJob
 from threading import Event
 
 
@@ -11,7 +11,6 @@ from threading import Event
 def sending_context() -> SendingContext:
     return SendingContext(
         total=10,
-        config=SenderConfig(),
         target=VideoTarget(bvid="BV1xx411c7mD", cid=1001)
     )
 

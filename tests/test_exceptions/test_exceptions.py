@@ -1,6 +1,6 @@
 """自定义异常类单元测试"""
 import pytest
-from danmaku_sender.core.exceptions.exceptions import BiliNetworkError, BiliApiError
+from danmaku_sender.types.exceptions.exceptions import BiliNetworkError, BiliApiError
 
 
 class TestBiliNetworkError:

@@ -1,5 +1,5 @@
 """Danmaku 模型单元测试"""
-from danmaku_sender.core.models.danmaku import Danmaku
+from danmaku_sender.types.models.danmaku import Danmaku
 
 
 class TestDanmakuDefaults:

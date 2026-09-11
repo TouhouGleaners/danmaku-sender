@@ -1,9 +1,9 @@
 """EditorSession 单元测试 — 编辑器核心会话层"""
 import pytest
-from danmaku_sender.core.models.danmaku import Danmaku
-from danmaku_sender.core.models.editor_types import EditorField, InsertPosition
-from danmaku_sender.core.state import ValidationConfig
-from danmaku_sender.core.engines.editor_session import EditorSession
+from danmaku_sender.types.models.danmaku import Danmaku
+from danmaku_sender.types.models.editor_types import EditorField, InsertPosition
+from danmaku_sender.config import ValidationConfig
+from danmaku_sender.service.editor_session import EditorSession
 from tests.conftest import make_danmaku as _dm
 
 

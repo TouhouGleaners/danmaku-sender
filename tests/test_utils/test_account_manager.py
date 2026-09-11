@@ -1,31 +1,50 @@
-"""account_manager 单元测试 — 多账号存储"""
+"""AccountManager 单元测试 — 多账号加密存储"""
 import json
 import pytest
-from pathlib import Path
+from cryptography.fernet import Fernet
 
-from danmaku_sender.core.models.account import AccountCredential
-from danmaku_sender.utils import account_manager
-
-
-@pytest.fixture
-def accounts_file(tmp_path: Path, monkeypatch):
-    """将 accounts.json 路径重定向到临时目录"""
-    fake_path = tmp_path / "accounts.json"
-    monkeypatch.setattr(account_manager, "get_accounts_filepath", lambda: fake_path)
-    return fake_path
+from danmaku_sender.runtime.managers import account_manager
+from danmaku_sender.runtime.managers.account_manager import AccountManager
+from danmaku_sender.types.models.account import AccountCredential
 
 
 @pytest.fixture
-def mock_fernet(monkeypatch):
-    """mock 掉 _get_encryption_key，使用临时 Fernet 密钥"""
-    from cryptography.fernet import Fernet
-    key = Fernet.generate_key()
-    fernet = Fernet(key)
-    monkeypatch.setattr(
-        "danmaku_sender.utils.account_manager._get_encryption_key",
-        lambda: key
-    )
-    return fernet
+def accounts_path(tmp_path, monkeypatch):
+    """将 ACCOUNTS_PATH 重定向到临时目录"""
+    fake = tmp_path / "accounts.json"
+    monkeypatch.setattr(account_manager, "ACCOUNTS_PATH", fake)
+    return fake
+
+
+class FakeKeyring:
+    """内存版密钥环，可注入失败"""
+
+    def __init__(self):
+        self.store = {}
+        self.fail_get = False
+        self.fail_set = False
+
+    def get_password(self, service, username):
+        if self.fail_get:
+            raise RuntimeError("密钥环读取失败")
+        return self.store.get(username)
+
+    def set_password(self, service, username, value):
+        if self.fail_set:
+            raise RuntimeError("密钥环写入失败")
+        self.store[username] = value
+
+
+@pytest.fixture
+def keyring_fake(monkeypatch):
+    kr = FakeKeyring()
+    monkeypatch.setattr(account_manager, "keyring", kr)
+    return kr
+
+
+@pytest.fixture
+def manager():
+    return AccountManager()
 
 
 class TestAccountCredential:
@@ -53,68 +72,82 @@ class TestAccountCredential:
 class TestLoadAccounts:
     """load_accounts"""
 
-    def test_no_file_returns_empty(self, accounts_file, mock_fernet):
-        assert account_manager.load_accounts() == []
+    def test_no_file_returns_empty(self, accounts_path, keyring_fake, manager):
+        assert manager.load_accounts() == []
 
-    def test_save_then_load_roundtrip(self, accounts_file, mock_fernet):
+    def test_save_then_load_roundtrip(self, accounts_path, keyring_fake, manager):
         original = [
             AccountCredential(uid=1, name="A", sessdata="s1", bili_jct="j1"),
             AccountCredential(uid=2, name="B", sessdata="s2", bili_jct="j2"),
         ]
-        account_manager.save_accounts(original)
-        loaded = account_manager.load_accounts()
-        assert loaded == original
+        manager.save_accounts(original)
+        assert manager.load_accounts() == original
 
-    def test_corrupted_file_returns_empty(self, accounts_file, mock_fernet):
-        """InvalidToken 路径: 非 Fernet 数据"""
-        accounts_file.write_bytes(b"not-valid-fernet-data")
-        assert account_manager.load_accounts() == []
-        assert not accounts_file.exists()  # 损坏文件应被删除
+    def test_key_not_persisted_save_skips_write(self, accounts_path, keyring_fake, manager):
+        """密钥环写入失败（persisted=False）时，跳过写盘以避免产生无法解密的文件"""
+        keyring_fake.fail_set = True
+        manager.save_accounts([AccountCredential(sessdata="s", bili_jct="j")])
+        assert not accounts_path.exists()
 
-    def test_decrypted_garbage_returns_empty(self, accounts_file, mock_fernet):
-        """JSONDecodeError 路径: 解密成功但内容不是合法 JSON"""
-        fernet = mock_fernet
-        accounts_file.write_bytes(fernet.encrypt(b"not-json"))
-        assert account_manager.load_accounts() == []
-        assert not accounts_file.exists()
+    def test_wrong_key_keeps_file(self, accounts_path, keyring_fake, manager):
+        """InvalidToken 路径：密钥不匹配时文件保留，修复密钥环后可恢复"""
+        manager.save_accounts([AccountCredential(sessdata="s", bili_jct="j")])
+        keyring_fake.store["default_user"] = Fernet.generate_key().decode()  # 换掉密钥
+        assert manager.load_accounts() == []
+        assert accounts_path.exists()  # 文件不删除
 
-    def test_non_list_json_returns_empty(self, accounts_file, mock_fernet):
+    def test_keyring_unavailable_skips_disk_write(self, accounts_path, keyring_fake, manager):
+        """密钥环完全不可用时：密钥仅会话内有效，跳过写盘以避免产生无法解密的文件"""
+        keyring_fake.fail_get = True
+        keyring_fake.fail_set = True
+        manager.save_accounts([AccountCredential(sessdata="s", bili_jct="j")])
+        assert not accounts_path.exists()
+
+    def test_corrupted_json_backed_up(self, accounts_path, keyring_fake, manager):
+        """JSONDecodeError 路径：文件损坏时备份为 .corrupt"""
+        key, _ = manager._get_encryption_key()
+        accounts_path.write_bytes(Fernet(key).encrypt(b"not-json"))
+        assert manager.load_accounts() == []
+        assert not accounts_path.exists()
+        assert accounts_path.with_suffix(".json.corrupt").exists()
+
+    def test_non_list_json_backed_up(self, accounts_path, keyring_fake, manager):
         """如果加密内容是 dict 而非 list"""
-        fernet = mock_fernet
-        encrypted = fernet.encrypt(json.dumps({"bad": "data"}).encode())
-        accounts_file.write_bytes(encrypted)
-        assert account_manager.load_accounts() == []
-        assert not accounts_file.exists()
+        key, _ = manager._get_encryption_key()
+        accounts_path.write_bytes(Fernet(key).encrypt(json.dumps({"bad": "data"}).encode()))
+        assert manager.load_accounts() == []
+        assert accounts_path.with_suffix(".json.corrupt").exists()
 
-    def test_malformed_entry_skipped(self, accounts_file, mock_fernet):
+    def test_malformed_entry_skipped(self, accounts_path, keyring_fake, manager):
         """列表中混入格式异常的条目应被跳过"""
-        fernet = mock_fernet
+        key, _ = manager._get_encryption_key()
+        fernet = Fernet(key)
         data = [
             {"sessdata": "ok", "bili_jct": "ok"},              # 合法
-            {"bad_field": True},                                 # 缺少必填字段
+            {"sessdata": 123, "bili_jct": 456},                                 # 字段类型错误（pydantic v2 不做 int→str 协变）
             {"sessdata": "ok2", "bili_jct": "ok2", "uid": 3},   # 合法
         ]
-        encrypted = fernet.encrypt(json.dumps(data).encode())
-        accounts_file.write_bytes(encrypted)
-        loaded = account_manager.load_accounts()
-        assert len(loaded) == 2
+        accounts_path.write_bytes(fernet.encrypt(json.dumps(data).encode()))
+        assert len(manager.load_accounts()) == 2
 
 
 class TestSaveAccounts:
     """save_accounts"""
 
-    def test_empty_list_deletes_file(self, accounts_file, mock_fernet):
-        accounts_file.write_bytes(b"dummy")
-        account_manager.save_accounts([])
-        assert not accounts_file.exists()
+    def test_empty_list_deletes_file(self, accounts_path, keyring_fake, manager):
+        accounts_path.write_bytes(b"dummy")
+        manager.save_accounts([])
+        assert not accounts_path.exists()
 
-    def test_empty_list_no_file_no_error(self, accounts_file, mock_fernet):
-        account_manager.save_accounts([])
+    def test_empty_list_no_file_no_error(self, accounts_path, keyring_fake, manager):
+        manager.save_accounts([])
 
-    def test_save_creates_encrypted_file(self, accounts_file, mock_fernet):
+    def test_save_creates_encrypted_file(self, accounts_path, keyring_fake, manager):
         accounts = [AccountCredential(sessdata="s", bili_jct="j")]
-        account_manager.save_accounts(accounts)
-        assert accounts_file.exists()
+        manager.save_accounts(accounts)
+        assert accounts_path.exists()
         # 文件内容不应是明文
-        raw = accounts_file.read_bytes()
+        raw = accounts_path.read_bytes()
         assert b"sessdata" not in raw
+        # 密钥应已持久化到密钥环
+        assert "default_user" in keyring_fake.store
