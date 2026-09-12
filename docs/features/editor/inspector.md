@@ -87,21 +87,21 @@
 
 调色板左下角集成了 B 站网页端的 14 种标准弹幕颜色：
 
-| 色块 | 色号 | 名称 |
-|:----:|:----:|:----:|
-| <span style="display:inline-block;width:16px;height:16px;background:#FE0302;border-radius:3px;vertical-align:middle"></span> | `#FE0302` | 红 |
-| <span style="display:inline-block;width:16px;height:16px;background:#FF7204;border-radius:3px;vertical-align:middle"></span> | `#FF7204` | 橙 |
-| <span style="display:inline-block;width:16px;height:16px;background:#FFAA02;border-radius:3px;vertical-align:middle"></span> | `#FFAA02` | 金 |
-| <span style="display:inline-block;width:16px;height:16px;background:#FFD302;border-radius:3px;vertical-align:middle"></span> | `#FFD302` | 亮黄 |
-| <span style="display:inline-block;width:16px;height:16px;background:#FFFF00;border-radius:3px;vertical-align:middle"></span> | `#FFFF00` | 黄 |
-| <span style="display:inline-block;width:16px;height:16px;background:#A0EE00;border-radius:3px;vertical-align:middle"></span> | `#A0EE00` | 亮绿 |
-| <span style="display:inline-block;width:16px;height:16px;background:#00CD00;border-radius:3px;vertical-align:middle"></span> | `#00CD00` | 绿 |
-| <span style="display:inline-block;width:16px;height:16px;background:#019899;border-radius:3px;vertical-align:middle"></span> | `#019899` | 青 |
-| <span style="display:inline-block;width:16px;height:16px;background:#4266BE;border-radius:3px;vertical-align:middle"></span> | `#4266BE` | 蓝 |
-| <span style="display:inline-block;width:16px;height:16px;background:#89D5FF;border-radius:3px;vertical-align:middle"></span> | `#89D5FF` | 浅蓝 |
-| <span style="display:inline-block;width:16px;height:16px;background:#CC0273;border-radius:3px;vertical-align:middle"></span> | `#CC0273` | 紫 |
-| <span style="display:inline-block;width:16px;height:16px;background:#222222;border-radius:3px;vertical-align:middle"></span> | `#222222` | 黑 |
-| <span style="display:inline-block;width:16px;height:16px;background:#9B9B9B;border-radius:3px;vertical-align:middle"></span> | `#9B9B9B` | 灰 |
-| <span style="display:inline-block;width:16px;height:16px;background:#FFFFFF;border:1px solid #ccc;border-radius:3px;vertical-align:middle"></span> | `#FFFFFF` | 白 |
+| 名称 | 色块 | 色号 | 十进制 |
+|:----:|:----:|:----:|:------:|
+| 红 | <span class="color-swatch" style="background: #FE0302"></span> | `#FE0302` | `16646914` |
+| 橙 | <span class="color-swatch" style="background: #FF7204"></span> | `#FF7204` | `16740868` |
+| 金 | <span class="color-swatch" style="background: #FFAA02"></span> | `#FFAA02` | `16755202` |
+| 亮黄 | <span class="color-swatch" style="background: #FFD302"></span> | `#FFD302` | `16765794` |
+| 黄 | <span class="color-swatch" style="background: #FFFF00"></span> | `#FFFF00` | `16776960` |
+| 亮绿 | <span class="color-swatch" style="background: #A0EE00"></span> | `#A0EE00` | `10546944` |
+| 绿 | <span class="color-swatch" style="background: #00CD00"></span> | `#00CD00` | `52480` |
+| 青 | <span class="color-swatch" style="background: #019899"></span> | `#019899` | `104601` |
+| 蓝 | <span class="color-swatch" style="background: #4266BE"></span> | `#4266BE` | `4351678` |
+| 浅蓝 | <span class="color-swatch" style="background: #89D5FF"></span> | `#89D5FF` | `9033215` |
+| 紫 | <span class="color-swatch" style="background: #CC0273"></span> | `#CC0273` | `13370003` |
+| 黑 | <span class="color-swatch" style="background: #222222"></span> | `#222222` | `2236962` |
+| 灰 | <span class="color-swatch" style="background: #9B9B9B"></span> | `#9B9B9B` | `10197915` |
+| 白 | <span class="color-swatch" style="background: #FFFFFF"></span> | `#FFFFFF` | `16777215` |
 
 这些色块是 B 站弹幕系统支持的标准颜色，使用这些颜色可以确保弹幕在视频上的显示效果与预期一致。
