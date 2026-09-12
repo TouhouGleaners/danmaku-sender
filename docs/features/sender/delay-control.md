@@ -34,7 +34,7 @@ B 站对弹幕发送有严格的频率限制。过快的发送会触发风控（
 |← burst_size →|← burst_rest →|← burst_size →|← burst_rest →|
 ```
 
-连续发送 `burst_size` 条后，进入一个较长的休息期（`burst_rest_min` ~ `burst_rest_max` 秒），然后继续下一轮。
+连续发送 `burst_size` 条后，进入一个较长的休息期（`rest_min` ~ `rest_max` 秒），然后继续下一轮。
 
 ### 配置项
 
@@ -42,8 +42,8 @@ B 站对弹幕发送有严格的频率限制。过快的发送会触发风控（
 |:-------|:-----|:-------|
 | `burst_enabled` | 是否启用突发模式 | 关闭 |
 | `burst_size` | 每轮连发条数 | 3 |
-| `burst_rest_min` | 休息期最小时间（秒） | — |
-| `burst_rest_max` | 休息期最大时间（秒） | — |
+| `rest_min` | 休息期最小时间（秒） | 40.0 |
+| `rest_max` | 休息期最大时间（秒） | 45.0 |
 
 !!! tip "推荐配置"
     突发模式开启、每轮 3 条、休息 30~35 秒，是比较安全且高效的组合。
@@ -57,7 +57,7 @@ B 站对弹幕发送有严格的频率限制。过快的发送会触发风控（
 | 配置项 | 说明 | 默认值 |
 |:-------|:-----|:-------|
 | `stop_after_count` | 发送 N 条后自动停止 | 0（不限） |
-| `stop_after_time` | 运行 N 秒后自动停止 | 0（不限） |
+| `stop_after_time` | 运行 N 分钟后自动停止 | 0（不限） |
 
 两个条件可以同时设置，**任一条件先满足即触发停止**。
 
@@ -126,8 +126,8 @@ ETA 根据当前延时设置（随机间隔 + 突发模式的动态变化）实�
     max_delay: 7.0
     burst_enabled: true
     burst_size: 3
-    burst_rest_min: 25
-    burst_rest_max: 35
+    rest_min: 25
+    rest_max: 35
     stop_after_count: 0
     stop_after_time: 0
     prevent_sleep: true

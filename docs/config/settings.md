@@ -12,10 +12,10 @@
 | `max_delay` | float | 8.5 | QDoubleSpinBox | 两条弹幕之间的最大随机间隔（秒） |
 | `burst_enabled` | bool | false | QCheckBox | 是否启用突发模式 |
 | `burst_size` | int | 3 | QSpinBox | 突发模式下每轮连发条数 |
-| `burst_rest_min` | float | — | QDoubleSpinBox | 突发模式休息期最小时间（秒） |
-| `burst_rest_max` | float | — | QDoubleSpinBox | 突发模式休息期最大时间（秒） |
+| `rest_min` | float | 40.0 | QDoubleSpinBox | 突发模式休息期最小时间（秒） |
+| `rest_max` | float | 45.0 | QDoubleSpinBox | 突发模式休息期最大时间（秒） |
 | `stop_after_count` | int | 0 | QSpinBox | 发送 N 条后自动停止（0=不限） |
-| `stop_after_time` | int | 0 | QSpinBox | 运行 N 秒后自动停止（0=不限） |
+| `stop_after_time` | int | 0 | QSpinBox | 运行 N 分钟后自动停止（0=不限） |
 | `delay_between_tasks` | float | 30 | QDoubleSpinBox | 两个任务之间的等待时间（秒） |
 | `prevent_sleep` | bool | true | QCheckBox | 发送期间阻止系统休眠 |
 | `use_system_proxy` | bool | true | QCheckBox | 是否使用系统代理 |
