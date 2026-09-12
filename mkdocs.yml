@@ -50,7 +50,7 @@ nav:
   - 🏠 首页: index.md
 
   - 🚀 快速上手:
-      - 获取 B 站身份凭证: setup/credentials.md
+      - 登录 B 站账号: setup/credentials.md
       - 5 分钟发送第一条弹幕: setup/first_send.md
       - 界面总览与导航: setup/ui-overview.md
 

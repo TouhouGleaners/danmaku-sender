@@ -22,7 +22,7 @@ A: 支持 B 站标准 XML 格式。常见的导出工具（bilibili-evolved、�
 
 A: 这两个值是 B 站的登录凭证，等同于临时令牌。程序使用它们代表你的账号向 B 站发送请求。凭证通过系统密钥环 (Keyring) + Fernet 加密存储在本地，不会上传到任何第三方服务器。
 
-详见 [获取 B 站身份凭证](setup/credentials.md) 和 [账号与安全](config/account.md)。
+详见 [登录 B 站账号](setup/credentials.md) 和 [账号与安全](config/account.md)。
 
 ### Q: 凭证过期了怎么办？
 

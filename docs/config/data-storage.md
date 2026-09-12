@@ -17,13 +17,13 @@
 === "macOS"
 
     ```
-    ~/Library/Application Support/BiliDanmakuSender/
+    ~/Library/Application Support/Miku_oso/BiliDanmakuSender/
     ```
 
 === "Linux"
 
     ```
-    ~/.local/share/BiliDanmakuSender/
+    ~/.local/share/Miku_oso/BiliDanmakuSender/
     ```
 
 程序首次运行时会自动创建该目录。

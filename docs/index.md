@@ -57,11 +57,14 @@ Bilibili 没有提供批量发送弹幕的官方工具。如果你需要将一�
 -   [:octicons-rocket-16: **5 分钟上手**](setup/first_send.md)
     从安装到成功发送第一条弹幕的完整流程。
 
--   [:octicons-book-16: **获取身份凭证**](setup/credentials.md)
-    从浏览器中提取 B 站 Cookie（SESSDATA / bili_jct）。
+-   [:octicons-sign-in-16: **登录 B 站账号**](setup/credentials.md)
+    扫码登录或手动获取凭证。
 
 -   [:octicons-question-24: **常见问题**](faq.md)
     解决发送频繁、登录失效等疑问。
+
+-   [:octicons-mark-github-16: **GitHub 仓库**](https://github.com/TouhouGleaners/danmaku-sender)
+    查看源码、提交 Issue 或贡献代码。
 
 </div>
 

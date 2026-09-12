@@ -92,14 +92,14 @@
 | 红 | <span class="color-swatch" style="background: #FE0302"></span> | `#FE0302` | `16646914` |
 | 橙 | <span class="color-swatch" style="background: #FF7204"></span> | `#FF7204` | `16740868` |
 | 金 | <span class="color-swatch" style="background: #FFAA02"></span> | `#FFAA02` | `16755202` |
-| 亮黄 | <span class="color-swatch" style="background: #FFD302"></span> | `#FFD302` | `16765794` |
+| 亮黄 | <span class="color-swatch" style="background: #FFD302"></span> | `#FFD302` | `16765698` |
 | 黄 | <span class="color-swatch" style="background: #FFFF00"></span> | `#FFFF00` | `16776960` |
-| 亮绿 | <span class="color-swatch" style="background: #A0EE00"></span> | `#A0EE00` | `10546944` |
+| 亮绿 | <span class="color-swatch" style="background: #A0EE00"></span> | `#A0EE00` | `10546688` |
 | 绿 | <span class="color-swatch" style="background: #00CD00"></span> | `#00CD00` | `52480` |
 | 青 | <span class="color-swatch" style="background: #019899"></span> | `#019899` | `104601` |
 | 蓝 | <span class="color-swatch" style="background: #4266BE"></span> | `#4266BE` | `4351678` |
 | 浅蓝 | <span class="color-swatch" style="background: #89D5FF"></span> | `#89D5FF` | `9033215` |
-| 紫 | <span class="color-swatch" style="background: #CC0273"></span> | `#CC0273` | `13370003` |
+| 紫 | <span class="color-swatch" style="background: #CC0273"></span> | `#CC0273` | `13369971` |
 | 黑 | <span class="color-swatch" style="background: #222222"></span> | `#222222` | `2236962` |
 | 灰 | <span class="color-swatch" style="background: #9B9B9B"></span> | `#9B9B9B` | `10197915` |
 | 白 | <span class="color-swatch" style="background: #FFFFFF"></span> | `#FFFFFF` | `16777215` |

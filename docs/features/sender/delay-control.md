@@ -122,11 +122,11 @@ ETA 根据当前延时设置（随机间隔 + 突发模式的动态变化）实�
 === "高效模式（适合大批量）"
 
     ```yaml
-    min_delay: 6.0
-    max_delay: 7.0
+    min_delay: 8.5
+    max_delay: 9.5
     burst_enabled: true
-    burst_size: 3
-    rest_min: 25
+    burst_size: 5
+    rest_min: 30
     rest_max: 35
     stop_after_count: 0
     stop_after_time: 0

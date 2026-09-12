@@ -29,9 +29,9 @@
 
 | 配置项 | 类型 | 默认值 | UI 控件 | 说明 |
 |:-------|:-----|:-------|:--------|:-----|
-| `refresh_interval` | int | 60 | QSpinBox | 轮询 B 站弹幕池的间隔（秒），范围 10~3600 |
+| `refresh_interval` | int | 60 | QSpinBox | 轮询 B 站弹幕池的间隔（秒），最小 10 |
 | `prevent_sleep` | bool | true | QCheckBox | 监视期间阻止系统休眠 |
-| `use_system_proxy` | bool | — | — | 是否使用系统代理 |
+| `use_system_proxy` | bool | true | — | 是否使用系统代理 |
 | `stats_baseline` | float | 程序启动时间 | QComboBox + 按钮 | 统计基线时间戳（瞬态，不持久化） |
 
 详细说明见 [实时存活率仪表盘](../features/monitor/dashboard.md)。

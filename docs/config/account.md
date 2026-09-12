@@ -21,7 +21,7 @@
 **方式二：手动输入**
 
 1. 切换到「手动输入」Tab。
-2. 填入该账号的 `SESSDATA` 和 `bili_jct`（获取方式见 [获取 B 站身份凭证](../setup/credentials.md)）。
+2. 填入该账号的 `SESSDATA` 和 `bili_jct`（获取方式见 [登录 B 站账号](../setup/credentials.md)）。
 3. 点击 **保存**，账号出现在列表中。
 
 ### 切换账号
