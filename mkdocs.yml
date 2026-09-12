@@ -45,14 +45,34 @@ markdown_extensions:
 
 nav:
   - 🏠 首页: index.md
+
   - 🚀 快速上手:
-      - 准备工作 (获取 Cookie): setup/credentials.md
-      - 发送你的第一批弹幕: setup/first_send.md
-  - 🛠️ 核心功能指南:
-      - 批量发送与频率控制: guides/sender.md
-      - 弹幕修复与高级编辑: guides/editor.md
-      - 实时监视与丢弹对账: guides/monitor.md
-  - 🎨 进阶技巧:
-      - 解决时间轴偏移: advanced/offset.md
-      - 自定义弹幕包制作: advanced/canvas.md
-  - ❓ 常见问题: faq.md
+      - 获取 B 站身份凭证: setup/credentials.md
+      - 5 分钟发送第一条弹幕: setup/first_send.md
+      - 界面总览与导航: setup/ui-overview.md
+
+  - 📦 核心功能手册:
+      - 🎯 弹幕发射器:
+          - 任务创建与队列操作: features/sender/create-task.md
+          - 频率控制与并发策略: features/sender/delay-control.md
+          - 断点续传与智能去重: features/sender/resume.md
+      - 🎨 弹幕编辑器:
+          - 校验规则与异常标红: features/editor/validation.md
+          - 单条编辑与属性检查器: features/editor/inspector.md
+          - 批量修复工具: features/editor/batch-tools.md
+          - 时间轴平移修正: features/editor/offset.md
+      - 📡 弹幕监视器:
+          - 实时存活率仪表盘: features/monitor/dashboard.md
+          - 弹幕池轮询与丢失排查: features/monitor/verify.md
+      - 📜 历史记录管理:
+          - 搜索筛选与单条验证: features/history/search.md
+
+  - ⚙️ 配置与数据:
+      - 账号与安全 (keyring 加密): config/account.md
+      - 全局发送与监视配置: config/settings.md
+      - 用户数据目录与存储结构: config/data-storage.md
+
+  - 🔧 进阶与排查:
+      - 彩虹弹幕与高级特效包: advanced/canvas.md
+      - 错误码速查与故障排查: advanced/troubleshooting.md
+      - 🙋 常见问题 (FAQ): faq.md
