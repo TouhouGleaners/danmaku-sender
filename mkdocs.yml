@@ -79,3 +79,5 @@ nav:
       - 彩虹弹幕与高级特效包: advanced/canvas.md
       - 错误码速查与故障排查: advanced/troubleshooting.md
       - 🙋 常见问题 (FAQ): faq.md
+
+  - 📋 更新日志: changelog.md
