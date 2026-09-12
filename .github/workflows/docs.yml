@@ -2,7 +2,7 @@ name: Deploy Docs
 on:
   push:
     branches: [main]
-    paths: ["docs/**", "mkdocs.yml"]
+    paths: ["docs/**", "mkdocs.yml", "CHANGELOG.md"]
 
 permissions:
   contents: write
@@ -20,6 +20,9 @@ jobs:
 
       - name: Install Dependencies
         run: pip install mkdocs-material
+
+      - name: Copy Changelog
+        run: cp CHANGELOG.md docs/changelog.md
 
       - name: Deploy
         run: mkdocs gh-deploy --force
