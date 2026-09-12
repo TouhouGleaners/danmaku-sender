@@ -122,21 +122,37 @@ src/danmaku_sender/
     └── dialogs/    #   通用弹窗（关于、帮助、更新、扫码登录）
 ```
 
-**依赖方向（单向）：**
+**目标依赖方向（单向）：**
 ```
 ui → controller → runtime → service → repo → config → types
 ```
 
+> [!NOTE]
+> 这是目标架构方向，当前实现中可能存在跨层依赖（如 controller 直接导入 config），这是历史遗留问题，后续重构时会逐步修正。
+
 > [!WARNING]
-> - 同包内使用相对导入（如 `from .system_utils import KeepSystemAwake`）
+> - 同包内使用相对导入（如 `from .components import EditorTableModel`）
 > - 跨包使用绝对导入（如 `from danmaku_sender.repo.bili_api_client import BiliApiClient`）
-> - 禁止反向依赖
+> - 禁止反向依赖（ui → controller → runtime 是允许的，反之不行）
 
 ---
 
 ## 代码风格指南
 
-我们遵循 [PEP 8](https://www.python.org/dev/peps/pep-0008/) 代码风格。在提交代码前，请使用 `black` 或 `flake8` 等工具进行检查和格式化。
+我们遵循 [PEP 8](https://www.python.org/dev/peps/pep-0008/) 代码风格，使用 [Ruff](https://docs.astral.sh/ruff/) 进行代码检查和格式化。
+
+安装依赖后（`pip install -e .[dev]`），可以直接运行：
+
+```bash
+# 代码检查
+ruff check
+
+# 代码检查并自动修复
+ruff check --fix
+
+# 代码格式化
+ruff format
+```
 
 ### Commit 消息规范
 
@@ -158,7 +174,10 @@ Commit 消息格式为：`<type>(<scope>): <description>`
 - `feat(sender): 添加队列拖拽排序功能`
 - `fix(monitor): 修复监视器日志路由问题`
 - `refactor(editor): 编辑器改为发射器附属弹窗`
-- `docs: 更新 README 使用指南`
+- `docs(readme): 更新 README 使用指南`
+
+> [!NOTE]
+> scope 是可选的，但建议填写以明确改动范围。文档类改动建议使用 `docs(readme)`、`docs(contributing)` 等具体 scope。
 
 ### 分支命名规范
 
@@ -171,7 +190,7 @@ Commit 消息格式为：`<type>(<scope>): <description>`
 
 ### 导入规范
 
-- **文件顶部导入**：所有导入必须写在文件最上方，禁止局部导入
+- **文件顶部导入**：所有导入原则上必须写在文件最上方；应用程序入口点中为避免导入循环或初始化问题而保留的有意局部导入属于例外
 - **同包内**：使用相对导入（如 `from .components import EditorTableModel`）
 - **跨包**：使用绝对导入（如 `from danmaku_sender.repo.bili_api_client import BiliApiClient`）
 
@@ -180,9 +199,14 @@ Commit 消息格式为：`<type>(<scope>): <description>`
 from danmaku_sender.types.models.queue import QueueTask
 from danmaku_sender.config import SenderConfig
 
-# 错误 - 局部导入
+# 错误 - 普通函数中的局部导入
 def some_function():
     from danmaku_sender.types.models.queue import QueueTask
+
+# 例外 - 应用程序入口点中的有意局部导入
+def main():
+    init_app_logging(log_dir)  # 必须先初始化日志
+    from .runtime import Runtime  # 避免日志系统未初始化时导入
 ```
 
 ### 类型注解
