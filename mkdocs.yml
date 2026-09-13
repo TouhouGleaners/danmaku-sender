@@ -16,6 +16,7 @@ copyright: Copyright &copy; 2025 - 2026 <a href="https://github.com/Mikuoso">Mik
 theme:
   name: material
   language: zh
+  custom_dir: overrides
   favicon: images/logo.svg
   logo: images/logo.svg
   features:
@@ -42,14 +43,17 @@ theme:
 
 # Plugins
 plugins:
+  - search
   - git-revision-date-localized:
       enable_creation_date: true
       locale: zh
+      timezone: Asia/Shanghai
   - git-committers:
       repository: TouhouGleaners/danmaku-sender
       branch: main
-      docs_path: docs
-      token: !ENV GITHUB_TOKEN
+      token: !ENV [GITHUB_TOKEN, '']
+      exclude_committers:
+        - web-flow
 
 # Additional Configuration
 extra:
