@@ -76,6 +76,7 @@ markdown_extensions:
   - pymdownx.tabbed:
       alternate_style: true
   - pymdownx.details
+  - pymdownx.keys
   - admonition
 
 # Navigation
