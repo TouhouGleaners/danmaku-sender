@@ -36,4 +36,4 @@
 ### 第 4 步：填入程序
 复制对应的值，打开「账号管理」弹窗，切换到「手动输入」Tab，分别填入对应的输入框并保存。
 
-![获取 Cookie 示意图](../images/cookie_guide.png){ width=”500” }
+![获取 Cookie 示意图](../assets/images/cookie_guide.png){ width=”500” }
