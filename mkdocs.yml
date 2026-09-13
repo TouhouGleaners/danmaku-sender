@@ -14,6 +14,7 @@ theme:
   features:
     - navigation.tabs    # 顶部横向导航条
     - navigation.top     # 回到顶部按钮
+    - navigation.footer  # 底部上一页/下一页导航
     - content.code.copy  # 代码块一键复制按钮
   palette:
     # 浅色模式
@@ -30,6 +31,11 @@ theme:
       toggle:
         icon: material/brightness-4
         name: 切换到浅色模式
+
+copyright: Copyright &copy; 2025 - 2026 <a href="https://github.com/Mikuoso">Miku_oso</a>. All rights reserved.
+
+extra:
+  generator: false
 
 extra_css:
   - stylesheets/extra.css
