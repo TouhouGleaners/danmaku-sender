@@ -1,0 +1,15 @@
+{% extends "base.html" %}
+
+{% block extrahead %}
+  {{ super() }}
+  <style>
+    /* 取消 Material 主题对正文底/顶部贡献者头像的默认灰度滤镜 */
+    .md-source-file img,
+    .md-typeset .md-source-file img,
+    .md-content .md-source-file img {
+      filter: none !important;
+      -webkit-filter: none !important;
+      opacity: 1 !important;
+    }
+  </style>
+{% endblock %}
