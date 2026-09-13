@@ -1,21 +1,29 @@
+# Project Information
 site_name: B站弹幕补档工具
 site_description: 现代化 Bilibili 弹幕发送、校验与补档工具
 site_author: Miku_oso
 site_url: https://TouhouGleaners.github.io/danmaku-sender/
 
-# 仓库信息
+# Repository Information
 repo_name: TouhouGleaners/danmaku-sender
 repo_url: https://github.com/TouhouGleaners/danmaku-sender
 edit_uri: edit/main/docs/
 
+# Copyright
+copyright: Copyright &copy; 2025 - 2026 <a href="https://github.com/Mikuoso">Miku_oso</a>. All rights reserved.
+
+# Configuration
 theme:
   name: material
   language: zh
+  favicon: images/logo.svg
+  logo: images/logo.svg
   features:
-    - navigation.tabs    # 顶部横向导航条
-    - navigation.top     # 回到顶部按钮
-    - navigation.footer  # 底部上一页/下一页导航
-    - content.code.copy  # 代码块一键复制按钮
+    - navigation.tabs      # 顶部横向导航条
+    - navigation.top       # 回到顶部按钮
+    - navigation.footer    # 底部上一页/下一页导航
+    - content.code.copy    # 代码块一键复制按钮
+    - content.action.edit  # 页面顶部编辑按钮
   palette:
     # 浅色模式
     - media: "(prefers-color-scheme: light)"
@@ -32,14 +40,7 @@ theme:
         icon: material/brightness-4
         name: 切换到浅色模式
 
-copyright: Copyright &copy; 2025 - 2026 <a href="https://github.com/Mikuoso">Miku_oso</a>. All rights reserved.
-
-extra:
-  generator: false
-
-extra_css:
-  - stylesheets/extra.css
-
+# Plugins
 plugins:
   - git-revision-date-localized:
       enable_creation_date: true
@@ -50,6 +51,14 @@ plugins:
       docs_path: docs
       token: !ENV GITHUB_TOKEN
 
+# Additional Configuration
+extra:
+  generator: false
+
+extra_css:
+  - stylesheets/extra.css
+
+# Extensions
 markdown_extensions:
   - attr_list
   - md_in_html
@@ -62,6 +71,7 @@ markdown_extensions:
   - pymdownx.details
   - admonition
 
+# Navigation
 nav:
   - 🏠 首页: index.md
 
