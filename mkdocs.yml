@@ -12,9 +12,9 @@ theme:
   name: material
   language: zh
   features:
-    - navigation.tabs   # 顶部横向导航条
-    - navigation.top    # 回到顶部按钮
-    - content.code.copy # 代码块一键复制按钮
+    - navigation.tabs    # 顶部横向导航条
+    - navigation.top     # 回到顶部按钮
+    - content.code.copy  # 代码块一键复制按钮
   palette:
     # 浅色模式
     - media: "(prefers-color-scheme: light)"
@@ -26,13 +26,23 @@ theme:
     # 深色模式
     - media: "(prefers-color-scheme: dark)"
       scheme: slate
-      primary: blue
+      primary: black
       toggle:
         icon: material/brightness-4
         name: 切换到浅色模式
 
 extra_css:
   - stylesheets/extra.css
+
+plugins:
+  - git-revision-date-localized:
+      enable_creation_date: true
+      locale: zh
+  - git-committers:
+      repository: TouhouGleaners/danmaku-sender
+      branch: main
+      docs_path: docs
+      token: !ENV GITHUB_TOKEN
 
 markdown_extensions:
   - attr_list
