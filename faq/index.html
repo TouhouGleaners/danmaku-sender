@@ -190,6 +190,8 @@
         </button>
       </nav>
       
+        <div class="md-search__suggest" data-md-component="search-suggest"></div>
+      
     </form>
     <div class="md-search__output">
       <div class="md-search__scrollwrap" tabindex="0" data-md-scrollfix>
@@ -210,7 +212,7 @@
         <a href="https://github.com/TouhouGleaners/danmaku-sender" title="前往仓库" class="md-source" data-md-component="source">
   <div class="md-source__icon md-icon">
     
-    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 448 512"><!--! Font Awesome Free 7.1.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2025 Fonticons, Inc.--><path d="M439.6 236.1 244 40.5c-5.4-5.5-12.8-8.5-20.4-8.5s-15 3-20.4 8.4L162.5 81l51.5 51.5c27.1-9.1 52.7 16.8 43.4 43.7l49.7 49.7c34.2-11.8 61.2 31 35.5 56.7-26.5 26.5-70.2-2.9-56-37.3L240.3 199v121.9c25.3 12.5 22.3 41.8 9.1 55-6.4 6.4-15.2 10.1-24.3 10.1s-17.8-3.6-24.3-10.1c-17.6-17.6-11.1-46.9 11.2-56v-123c-20.8-8.5-24.6-30.7-18.6-45L142.6 101 8.5 235.1C3 240.6 0 247.9 0 255.5s3 15 8.5 20.4l195.6 195.7c5.4 5.4 12.7 8.4 20.4 8.4s15-3 20.4-8.4l194.7-194.7c5.4-5.4 8.4-12.8 8.4-20.4s-3-15-8.4-20.4"/></svg>
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512"><!--! Font Awesome Free 7.1.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2025 Fonticons, Inc.--><path d="M173.9 397.4c0 2-2.3 3.6-5.2 3.6-3.3.3-5.6-1.3-5.6-3.6 0-2 2.3-3.6 5.2-3.6 3-.3 5.6 1.3 5.6 3.6m-31.1-4.5c-.7 2 1.3 4.3 4.3 4.9 2.6 1 5.6 0 6.2-2s-1.3-4.3-4.3-5.2c-2.6-.7-5.5.3-6.2 2.3m44.2-1.7c-2.9.7-4.9 2.6-4.6 4.9.3 2 2.9 3.3 5.9 2.6 2.9-.7 4.9-2.6 4.6-4.6-.3-1.9-3-3.2-5.9-2.9M252.8 8C114.1 8 8 113.3 8 252c0 110.9 69.8 205.8 169.5 239.2 12.8 2.3 17.3-5.6 17.3-12.1 0-6.2-.3-40.4-.3-61.4 0 0-70 15-84.7-29.8 0 0-11.4-29.1-27.8-36.6 0 0-22.9-15.7 1.6-15.4 0 0 24.9 2 38.6 25.8 21.9 38.6 58.6 27.5 72.9 20.9 2.3-16 8.8-27.1 16-33.7-55.9-6.2-112.3-14.3-112.3-110.5 0-27.5 7.6-41.3 23.6-58.9-2.6-6.5-11.1-33.3 2.6-67.9 20.9-6.5 69 27 69 27 20-5.6 41.5-8.5 62.8-8.5s42.8 2.9 62.8 8.5c0 0 48.1-33.6 69-27 13.7 34.7 5.2 61.4 2.6 67.9 16 17.7 25.8 31.5 25.8 58.9 0 96.5-58.9 104.2-114.8 110.5 9.2 7.9 17 22.9 17 46.4 0 33.7-.3 75.4-.3 83.6 0 6.5 4.6 14.4 17.3 12.1C436.2 457.8 504 362.9 504 252 504 113.3 391.5 8 252.8 8M105.2 352.9c-1.3 1-1 3.3.7 5.2 1.6 1.6 3.9 2.3 5.2 1 1.3-1 1-3.3-.7-5.2-1.6-1.6-3.9-2.3-5.2-1m-10.8-8.1c-.7 1.3.3 2.9 2.3 3.9 1.6 1 3.6.7 4.3-.7.7-1.3-.3-2.9-2.3-3.9-2-.6-3.6-.3-4.3.7m32.4 35.6c-1.6 1.3-1 4.3 1.3 6.2 2.3 2.3 5.2 2.6 6.5 1 1.3-1.3.7-4.3-1.3-6.2-2.2-2.3-5.2-2.6-6.5-1m-11.4-14.7c-1.6 1-1.6 3.6 0 5.9s4.3 3.3 5.6 2.3c1.6-1.3 1.6-3.9 0-6.2-1.4-2.3-4-3.3-5.6-2"/></svg>
   </div>
   <div class="md-source__repository">
     TouhouGleaners/danmaku-sender
@@ -396,7 +398,7 @@
       <a href="https://github.com/TouhouGleaners/danmaku-sender" title="前往仓库" class="md-source" data-md-component="source">
   <div class="md-source__icon md-icon">
     
-    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 448 512"><!--! Font Awesome Free 7.1.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2025 Fonticons, Inc.--><path d="M439.6 236.1 244 40.5c-5.4-5.5-12.8-8.5-20.4-8.5s-15 3-20.4 8.4L162.5 81l51.5 51.5c27.1-9.1 52.7 16.8 43.4 43.7l49.7 49.7c34.2-11.8 61.2 31 35.5 56.7-26.5 26.5-70.2-2.9-56-37.3L240.3 199v121.9c25.3 12.5 22.3 41.8 9.1 55-6.4 6.4-15.2 10.1-24.3 10.1s-17.8-3.6-24.3-10.1c-17.6-17.6-11.1-46.9 11.2-56v-123c-20.8-8.5-24.6-30.7-18.6-45L142.6 101 8.5 235.1C3 240.6 0 247.9 0 255.5s3 15 8.5 20.4l195.6 195.7c5.4 5.4 12.7 8.4 20.4 8.4s15-3 20.4-8.4l194.7-194.7c5.4-5.4 8.4-12.8 8.4-20.4s-3-15-8.4-20.4"/></svg>
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512"><!--! Font Awesome Free 7.1.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2025 Fonticons, Inc.--><path d="M173.9 397.4c0 2-2.3 3.6-5.2 3.6-3.3.3-5.6-1.3-5.6-3.6 0-2 2.3-3.6 5.2-3.6 3-.3 5.6 1.3 5.6 3.6m-31.1-4.5c-.7 2 1.3 4.3 4.3 4.9 2.6 1 5.6 0 6.2-2s-1.3-4.3-4.3-5.2c-2.6-.7-5.5.3-6.2 2.3m44.2-1.7c-2.9.7-4.9 2.6-4.6 4.9.3 2 2.9 3.3 5.9 2.6 2.9-.7 4.9-2.6 4.6-4.6-.3-1.9-3-3.2-5.9-2.9M252.8 8C114.1 8 8 113.3 8 252c0 110.9 69.8 205.8 169.5 239.2 12.8 2.3 17.3-5.6 17.3-12.1 0-6.2-.3-40.4-.3-61.4 0 0-70 15-84.7-29.8 0 0-11.4-29.1-27.8-36.6 0 0-22.9-15.7 1.6-15.4 0 0 24.9 2 38.6 25.8 21.9 38.6 58.6 27.5 72.9 20.9 2.3-16 8.8-27.1 16-33.7-55.9-6.2-112.3-14.3-112.3-110.5 0-27.5 7.6-41.3 23.6-58.9-2.6-6.5-11.1-33.3 2.6-67.9 20.9-6.5 69 27 69 27 20-5.6 41.5-8.5 62.8-8.5s42.8 2.9 62.8 8.5c0 0 48.1-33.6 69-27 13.7 34.7 5.2 61.4 2.6 67.9 16 17.7 25.8 31.5 25.8 58.9 0 96.5-58.9 104.2-114.8 110.5 9.2 7.9 17 22.9 17 46.4 0 33.7-.3 75.4-.3 83.6 0 6.5 4.6 14.4 17.3 12.1C436.2 457.8 504 362.9 504 252 504 113.3 391.5 8 252.8 8M105.2 352.9c-1.3 1-1 3.3.7 5.2 1.6 1.6 3.9 2.3 5.2 1 1.3-1 1-3.3-.7-5.2-1.6-1.6-3.9-2.3-5.2-1m-10.8-8.1c-.7 1.3.3 2.9 2.3 3.9 1.6 1 3.6.7 4.3-.7.7-1.3-.3-2.9-2.3-3.9-2-.6-3.6-.3-4.3.7m32.4 35.6c-1.6 1.3-1 4.3 1.3 6.2 2.3 2.3 5.2 2.6 6.5 1 1.3-1.3.7-4.3-1.3-6.2-2.2-2.3-5.2-2.6-6.5-1m-11.4-14.7c-1.6 1-1.6 3.6 0 5.9s4.3 3.3 5.6 2.3c1.6-1.3 1.6-3.9 0-6.2-1.4-2.3-4-3.3-5.6-2"/></svg>
   </div>
   <div class="md-source__repository">
     TouhouGleaners/danmaku-sender
@@ -1470,45 +1472,6 @@
     </span>
   </a>
   
-    <nav class="md-nav" aria-label="基础问题">
-      <ul class="md-nav__list">
-        
-          <li class="md-nav__item">
-  <a href="#q" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Q: 这个工具是做什么的？
-      
-    </span>
-  </a>
-  
-</li>
-        
-          <li class="md-nav__item">
-  <a href="#q_1" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Q: 需要安装什么环境？
-      
-    </span>
-  </a>
-  
-</li>
-        
-          <li class="md-nav__item">
-  <a href="#q_2" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Q: 支持哪些弹幕文件格式？
-      
-    </span>
-  </a>
-  
-</li>
-        
-      </ul>
-    </nav>
-  
 </li>
       
         <li class="md-nav__item">
@@ -1519,45 +1482,6 @@
       
     </span>
   </a>
-  
-    <nav class="md-nav" aria-label="凭证相关">
-      <ul class="md-nav__list">
-        
-          <li class="md-nav__item">
-  <a href="#q-sessdata-bili_jct" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Q: SESSDATA 和 bili_jct 是什么？安全吗？
-      
-    </span>
-  </a>
-  
-</li>
-        
-          <li class="md-nav__item">
-  <a href="#q_3" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Q: 凭证过期了怎么办？
-      
-    </span>
-  </a>
-  
-</li>
-        
-          <li class="md-nav__item">
-  <a href="#q_4" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Q: 可以同时用多个账号吗？
-      
-    </span>
-  </a>
-  
-</li>
-        
-      </ul>
-    </nav>
   
 </li>
       
@@ -1570,56 +1494,6 @@
     </span>
   </a>
   
-    <nav class="md-nav" aria-label="发送相关">
-      <ul class="md-nav__list">
-        
-          <li class="md-nav__item">
-  <a href="#q_5" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Q: 发送速度可以更快吗？
-      
-    </span>
-  </a>
-  
-</li>
-        
-          <li class="md-nav__item">
-  <a href="#q_6" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Q: 发送成功了，但视频上看不到弹幕？
-      
-    </span>
-  </a>
-  
-</li>
-        
-          <li class="md-nav__item">
-  <a href="#q_7" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Q: 发送中断了，能接着发吗？
-      
-    </span>
-  </a>
-  
-</li>
-        
-          <li class="md-nav__item">
-  <a href="#q_8" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Q: 失败的弹幕怎么处理？
-      
-    </span>
-  </a>
-  
-</li>
-        
-      </ul>
-    </nav>
-  
 </li>
       
         <li class="md-nav__item">
@@ -1630,34 +1504,6 @@
       
     </span>
   </a>
-  
-    <nav class="md-nav" aria-label="弹幕编辑器相关">
-      <ul class="md-nav__list">
-        
-          <li class="md-nav__item">
-  <a href="#q_9" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Q: 为什么要先校验再发送？
-      
-    </span>
-  </a>
-  
-</li>
-        
-          <li class="md-nav__item">
-  <a href="#q_10" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Q: 编辑器里的修改会自动保存吗？
-      
-    </span>
-  </a>
-  
-</li>
-        
-      </ul>
-    </nav>
   
 </li>
       
@@ -1670,34 +1516,6 @@
     </span>
   </a>
   
-    <nav class="md-nav" aria-label="监视器相关">
-      <ul class="md-nav__list">
-        
-          <li class="md-nav__item">
-  <a href="#q_11" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Q: 监视器显示「疑似丢失」，弹幕一定丢了吗？
-      
-    </span>
-  </a>
-  
-</li>
-        
-          <li class="md-nav__item">
-  <a href="#q_12" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Q: 监视器的「统计基线」是什么意思？
-      
-    </span>
-  </a>
-  
-</li>
-        
-      </ul>
-    </nav>
-  
 </li>
       
         <li class="md-nav__item">
@@ -1708,34 +1526,6 @@
       
     </span>
   </a>
-  
-    <nav class="md-nav" aria-label="配置相关">
-      <ul class="md-nav__list">
-        
-          <li class="md-nav__item">
-  <a href="#q_13" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Q: 配置文件在哪里？
-      
-    </span>
-  </a>
-  
-</li>
-        
-          <li class="md-nav__item">
-  <a href="#q_14" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Q: 重装系统后数据还在吗？
-      
-    </span>
-  </a>
-  
-</li>
-        
-      </ul>
-    </nav>
   
 </li>
       
@@ -1817,45 +1607,6 @@
     </span>
   </a>
   
-    <nav class="md-nav" aria-label="基础问题">
-      <ul class="md-nav__list">
-        
-          <li class="md-nav__item">
-  <a href="#q" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Q: 这个工具是做什么的？
-      
-    </span>
-  </a>
-  
-</li>
-        
-          <li class="md-nav__item">
-  <a href="#q_1" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Q: 需要安装什么环境？
-      
-    </span>
-  </a>
-  
-</li>
-        
-          <li class="md-nav__item">
-  <a href="#q_2" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Q: 支持哪些弹幕文件格式？
-      
-    </span>
-  </a>
-  
-</li>
-        
-      </ul>
-    </nav>
-  
 </li>
       
         <li class="md-nav__item">
@@ -1866,45 +1617,6 @@
       
     </span>
   </a>
-  
-    <nav class="md-nav" aria-label="凭证相关">
-      <ul class="md-nav__list">
-        
-          <li class="md-nav__item">
-  <a href="#q-sessdata-bili_jct" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Q: SESSDATA 和 bili_jct 是什么？安全吗？
-      
-    </span>
-  </a>
-  
-</li>
-        
-          <li class="md-nav__item">
-  <a href="#q_3" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Q: 凭证过期了怎么办？
-      
-    </span>
-  </a>
-  
-</li>
-        
-          <li class="md-nav__item">
-  <a href="#q_4" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Q: 可以同时用多个账号吗？
-      
-    </span>
-  </a>
-  
-</li>
-        
-      </ul>
-    </nav>
   
 </li>
       
@@ -1917,56 +1629,6 @@
     </span>
   </a>
   
-    <nav class="md-nav" aria-label="发送相关">
-      <ul class="md-nav__list">
-        
-          <li class="md-nav__item">
-  <a href="#q_5" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Q: 发送速度可以更快吗？
-      
-    </span>
-  </a>
-  
-</li>
-        
-          <li class="md-nav__item">
-  <a href="#q_6" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Q: 发送成功了，但视频上看不到弹幕？
-      
-    </span>
-  </a>
-  
-</li>
-        
-          <li class="md-nav__item">
-  <a href="#q_7" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Q: 发送中断了，能接着发吗？
-      
-    </span>
-  </a>
-  
-</li>
-        
-          <li class="md-nav__item">
-  <a href="#q_8" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Q: 失败的弹幕怎么处理？
-      
-    </span>
-  </a>
-  
-</li>
-        
-      </ul>
-    </nav>
-  
 </li>
       
         <li class="md-nav__item">
@@ -1977,34 +1639,6 @@
       
     </span>
   </a>
-  
-    <nav class="md-nav" aria-label="弹幕编辑器相关">
-      <ul class="md-nav__list">
-        
-          <li class="md-nav__item">
-  <a href="#q_9" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Q: 为什么要先校验再发送？
-      
-    </span>
-  </a>
-  
-</li>
-        
-          <li class="md-nav__item">
-  <a href="#q_10" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Q: 编辑器里的修改会自动保存吗？
-      
-    </span>
-  </a>
-  
-</li>
-        
-      </ul>
-    </nav>
   
 </li>
       
@@ -2017,34 +1651,6 @@
     </span>
   </a>
   
-    <nav class="md-nav" aria-label="监视器相关">
-      <ul class="md-nav__list">
-        
-          <li class="md-nav__item">
-  <a href="#q_11" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Q: 监视器显示「疑似丢失」，弹幕一定丢了吗？
-      
-    </span>
-  </a>
-  
-</li>
-        
-          <li class="md-nav__item">
-  <a href="#q_12" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Q: 监视器的「统计基线」是什么意思？
-      
-    </span>
-  </a>
-  
-</li>
-        
-      </ul>
-    </nav>
-  
 </li>
       
         <li class="md-nav__item">
@@ -2055,34 +1661,6 @@
       
     </span>
   </a>
-  
-    <nav class="md-nav" aria-label="配置相关">
-      <ul class="md-nav__list">
-        
-          <li class="md-nav__item">
-  <a href="#q_13" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Q: 配置文件在哪里？
-      
-    </span>
-  </a>
-  
-</li>
-        
-          <li class="md-nav__item">
-  <a href="#q_14" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Q: 重装系统后数据还在吗？
-      
-    </span>
-  </a>
-  
-</li>
-        
-      </ul>
-    </nav>
   
 </li>
       
@@ -2105,7 +1683,7 @@
   
     <a href="https://github.com/TouhouGleaners/danmaku-sender/edit/main/docs/faq.md" title="编辑此页" class="md-content__button md-icon" rel="edit">
       
-      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M10 20H6V4h7v5h5v3.1l2-2V8l-6-6H6c-1.1 0-2 .9-2 2v16c0 1.1.9 2 2 2h4zm10.2-7c.1 0 .3.1.4.2l1.3 1.3c.2.2.2.6 0 .8l-1 1-2.1-2.1 1-1c.1-.1.2-.2.4-.2m0 3.9L14.1 23H12v-2.1l6.1-6.1z"/></svg>
+      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M20.71 7.04c.39-.39.39-1.04 0-1.41l-2.34-2.34c-.37-.39-1.02-.39-1.41 0l-1.84 1.83 3.75 3.75M3 17.25V21h3.75L17.81 9.93l-3.75-3.75z"/></svg>
     </a>
   
   
@@ -2113,47 +1691,76 @@
 
 <h1 id="faq">常见问题 (FAQ)</h1>
 <h2 id="_1">基础问题</h2>
-<h3 id="q">Q: 这个工具是做什么的？</h3>
-<p>A: BiliDanmakuSender 是一个 B 站弹幕批量发送工具。它可以加载 XML 弹幕文件，批量发送到指定视频，并追踪弹幕的存活率。主要用于弹幕补档、弹幕迁移等场景。</p>
-<h3 id="q_1">Q: 需要安装什么环境？</h3>
-<p>A: 不需要。从 <a href="https://github.com/TouhouGleaners/danmaku-sender/releases/latest">GitHub Releases</a> 下载可执行文件即可直接运行。</p>
-<h3 id="q_2">Q: 支持哪些弹幕文件格式？</h3>
-<p>A: 支持 B 站标准 XML 格式。常见的导出工具（bilibili-evolved、弹幕姬等）都支持此格式。</p>
+<details class="question" open="open">
+<summary>这个工具是做什么的？</summary>
+<p>BiliDanmakuSender 是一个 B 站弹幕批量发送工具。它可以加载 XML 弹幕文件，批量发送到指定视频，并追踪弹幕的存活率。主要用于弹幕补档、弹幕迁移等场景。</p>
+</details>
+<details class="question" open="open">
+<summary>需要安装什么环境？</summary>
+<p>不需要。从 <a href="https://github.com/TouhouGleaners/danmaku-sender/releases/latest">GitHub Releases</a> 下载可执行文件即可直接运行。</p>
+</details>
+<details class="question" open="open">
+<summary>支持哪些弹幕文件格式？</summary>
+<p>支持 B 站标准 XML 格式。常见的导出工具（bilibili-evolved、弹幕姬等）都支持此格式。</p>
+</details>
 <hr />
 <h2 id="_2">凭证相关</h2>
-<h3 id="q-sessdata-bili_jct">Q: SESSDATA 和 bili_jct 是什么？安全吗？</h3>
-<p>A: 这两个值是 B 站的登录凭证，等同于临时令牌。程序使用它们代表你的账号向 B 站发送请求。凭证通过系统密钥环 (Keyring) + Fernet 加密存储在本地，不会上传到任何第三方服务器。</p>
+<details class="question" open="open">
+<summary>SESSDATA 和 bili_jct 是什么？安全吗？</summary>
+<p>这两个值是 B 站的登录凭证，等同于临时令牌。程序使用它们代表你的账号向 B 站发送请求。凭证通过系统密钥环 (Keyring) + Fernet 加密存储在本地，不会上传到任何第三方服务器。</p>
 <p>详见 <a href="../setup/credentials/">登录 B 站账号</a> 和 <a href="../config/account/">账号与安全</a>。</p>
-<h3 id="q_3">Q: 凭证过期了怎么办？</h3>
-<p>A: 重新从浏览器中获取 SESSDATA 和 bili_jct，更新到账号管理中即可。B 站的凭证有效期通常较长，但如果退出登录或修改密码会使凭证立即失效。</p>
-<h3 id="q_4">Q: 可以同时用多个账号吗？</h3>
-<p>A: 可以。在账号管理弹窗中添加多个账号，点击即可切换。同一时间只有一个账号处于激活状态。</p>
+</details>
+<details class="question" open="open">
+<summary>凭证过期了怎么办？</summary>
+<p>重新从浏览器中获取 SESSDATA 和 bili_jct，更新到账号管理中即可。B 站的凭证有效期通常较长，但如果退出登录或修改密码会使凭证立即失效。</p>
+</details>
+<details class="question" open="open">
+<summary>可以同时用多个账号吗？</summary>
+<p>可以。在账号管理弹窗中添加多个账号，点击即可切换。同一时间只有一个账号处于激活状态。</p>
+</details>
 <hr />
 <h2 id="_3">发送相关</h2>
-<h3 id="q_5">Q: 发送速度可以更快吗？</h3>
-<p>A: B 站有 5 秒的硬性频率限制。程序默认设置为 8 秒左右（考虑网络延迟和 CDN 波动的安全余量）。不建议降低间隔——即使是 7 秒也可能因网络波动触发 <code>36703: 发送频率过快</code> 错误。如果需要提高整体效率，建议使用突发模式在安全范围内加快节奏。详见 <a href="../features/sender/delay-control/">频率控制与并发策略</a>。</p>
-<h3 id="q_6">Q: 发送成功了，但视频上看不到弹幕？</h3>
-<p>A: 「发送成功」只表示 B 站服务器接受了请求，弹幕还需要通过审核系统。审核可能需要几分钟到几小时。如果长时间未显示，可能是弹幕内容触发了审核拦截。使用「弹幕监视器」可以追踪弹幕的存活状态。</p>
-<h3 id="q_7">Q: 发送中断了，能接着发吗？</h3>
-<p>A: 可以。程序支持断点续传——重新启动队列后，已成功发送的弹幕会被自动跳过，从未发送的弹幕继续。详见 <a href="../features/sender/resume/">断点续传与智能去重</a>。</p>
-<h3 id="q_8">Q: 失败的弹幕怎么处理？</h3>
-<p>A: 任务完成后，程序会弹出对话框询问是否保存失败弹幕。选择「是」会将失败弹幕导出为新的 XML 文件，修复后可以重新发送。</p>
+<details class="question" open="open">
+<summary>发送速度可以更快吗？</summary>
+<p>B 站有 5 秒的硬性频率限制。程序默认设置为 8 秒左右（考虑网络延迟和 CDN 波动的安全余量）。不建议降低间隔——即使是 7 秒也可能因网络波动触发 <code>36703: 发送频率过快</code> 错误。如果需要提高整体效率，建议使用突发模式在安全范围内加快节奏。详见 <a href="../features/sender/delay-control/">频率控制与并发策略</a>。</p>
+</details>
+<details class="question" open="open">
+<summary>发送成功了，但视频上看不到弹幕？</summary>
+<p>「发送成功」只表示 B 站服务器接受了请求，弹幕还需要通过审核系统。审核可能需要几分钟到几小时。如果长时间未显示，可能是弹幕内容触发了审核拦截。使用「弹幕监视器」可以追踪弹幕的存活状态。</p>
+</details>
+<details class="question" open="open">
+<summary>发送中断了，能接着发吗？</summary>
+<p>可以。程序支持断点续传——重新启动队列后，已成功发送的弹幕会被自动跳过，从未发送的弹幕继续。详见 <a href="../features/sender/resume/">断点续传与智能去重</a>。</p>
+</details>
+<details class="question" open="open">
+<summary>失败的弹幕怎么处理？</summary>
+<p>任务完成后，程序会弹出对话框询问是否保存失败弹幕。选择「是」会将失败弹幕导出为新的 XML 文件，修复后可以重新发送。</p>
+</details>
 <hr />
 <h2 id="_4">弹幕编辑器相关</h2>
-<h3 id="q_9">Q: 为什么要先校验再发送？</h3>
-<p>A: XML 文件中的弹幕可能包含换行符、超长内容、禁用符号等问题，这些问题会导致 B 站 API 拒绝发送。提前校验可以批量修复这些问题，避免发送过程中浪费时间在注定失败的弹幕上。</p>
-<h3 id="q_10">Q: 编辑器里的修改会自动保存吗？</h3>
-<p>A: 不会。编辑器采用「暂存区」设计，所有修改都保存在内存中。只有点击 <strong>[应用所有修改]</strong> 按钮后，修改才会同步回发射器的发送任务。</p>
+<details class="question" open="open">
+<summary>为什么要先校验再发送？</summary>
+<p>XML 文件中的弹幕可能包含换行符、超长内容、禁用符号等问题，这些问题会导致 B 站 API 拒绝发送。提前校验可以批量修复这些问题，避免发送过程中浪费时间在注定失败的弹幕上。</p>
+</details>
+<details class="question" open="open">
+<summary>编辑器里的修改会自动保存吗？</summary>
+<p>不会。编辑器采用「暂存区」设计，所有修改都保存在内存中。只有点击 <strong>[应用所有修改]</strong> 按钮后，修改才会同步回发射器的发送任务。</p>
+</details>
 <hr />
 <h2 id="_5">监视器相关</h2>
-<h3 id="q_11">Q: 监视器显示「疑似丢失」，弹幕一定丢了吗？</h3>
-<p>A: 不一定。B 站的弹幕审核可能有延迟，尤其是新账号或含敏感词的弹幕。建议等待几轮查询后再确认。如果多轮查询后仍然显示丢失，可以去历史记录页面手动验证。</p>
-<h3 id="q_12">Q: 监视器的「统计基线」是什么意思？</h3>
-<p>A: 统计基线决定了只统计哪个时间点之后的发送记录。例如设置为「本次启动后」，就只统计本次程序启动后发送的弹幕，不会被之前的数据干扰。适合分批次发送时使用。</p>
+<details class="question" open="open">
+<summary>监视器显示「疑似丢失」，弹幕一定丢了吗？</summary>
+<p>不一定。B 站的弹幕审核可能有延迟，尤其是新账号或含敏感词的弹幕。建议等待几轮查询后再确认。如果多轮查询后仍然显示丢失，可以去历史记录页面手动验证。</p>
+</details>
+<details class="question" open="open">
+<summary>监视器的「统计基线」是什么意思？</summary>
+<p>统计基线决定了只统计哪个时间点之后的发送记录。例如设置为「本次启动后」，就只统计本次程序启动后发送的弹幕，不会被之前的数据干扰。适合分批次发送时使用。</p>
+</details>
 <hr />
 <h2 id="_6">配置相关</h2>
-<h3 id="q_13">Q: 配置文件在哪里？</h3>
-<p>A: 所有配置存储在用户数据目录中：</p>
+<details class="question" open="open">
+<summary>配置文件在哪里？</summary>
+<p>所有配置存储在用户数据目录中：</p>
 <table>
 <thead>
 <tr>
@@ -2177,8 +1784,11 @@
 </tbody>
 </table>
 <p>详见 <a href="../config/data-storage/">用户数据目录与存储结构</a>。</p>
-<h3 id="q_14">Q: 重装系统后数据还在吗？</h3>
-<p>A: 如果 <code>%LOCALAPPDATA%</code> 目录在重装时被保留（或你提前备份了），数据可以恢复。但账号凭证需要本机的 Keyring 密钥才能解密，重装系统后需要重新添加账号。</p>
+</details>
+<details class="question" open="open">
+<summary>重装系统后数据还在吗？</summary>
+<p>如果 <code>%LOCALAPPDATA%</code> 目录在重装时被保留（或你提前备份了），数据可以恢复。但账号凭证需要本机的 Keyring 密钥才能解密，重装系统后需要重新添加账号。</p>
+</details>
 
 
 
@@ -2201,7 +1811,7 @@
     <span class="md-icon" title="最后更新">
       <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M21 13.1c-.1 0-.3.1-.4.2l-1 1 2.1 2.1 1-1c.2-.2.2-.6 0-.8l-1.3-1.3c-.1-.1-.2-.2-.4-.2m-1.9 1.8-6.1 6V23h2.1l6.1-6.1zM12.5 7v5.2l4 2.4-1 1L11 13V7zM11 21.9c-5.1-.5-9-4.8-9-9.9C2 6.5 6.5 2 12 2c5.3 0 9.6 4.1 10 9.3-.3-.1-.6-.2-1-.2s-.7.1-1 .2C19.6 7.2 16.2 4 12 4c-4.4 0-8 3.6-8 8 0 4.1 3.1 7.5 7.1 7.9l-.1.2z"/></svg>
     </span>
-    <span class="git-revision-date-localized-plugin git-revision-date-localized-plugin-date" title="2026年9月12日 19:24:09 CST">2026年9月12日</span>
+    <span class="git-revision-date-localized-plugin git-revision-date-localized-plugin-date" title="2026年9月14日 08:10:05 CST">2026年9月14日</span>
   </span>
 
     
@@ -2328,7 +1938,7 @@
     
       
       
-      <script id="__config" type="application/json">{"annotate": null, "base": "..", "features": ["navigation.tabs", "navigation.top", "navigation.footer", "content.code.copy", "content.action.edit"], "search": "../assets/javascripts/workers/search.2c215733.min.js", "tags": null, "translations": {"clipboard.copied": "\u5df2\u590d\u5236", "clipboard.copy": "\u590d\u5236", "search.result.more.one": "\u5728\u8be5\u9875\u4e0a\u8fd8\u6709 1 \u4e2a\u7b26\u5408\u6761\u4ef6\u7684\u7ed3\u679c", "search.result.more.other": "\u5728\u8be5\u9875\u4e0a\u8fd8\u6709 # \u4e2a\u7b26\u5408\u6761\u4ef6\u7684\u7ed3\u679c", "search.result.none": "\u6ca1\u6709\u627e\u5230\u7b26\u5408\u6761\u4ef6\u7684\u7ed3\u679c", "search.result.one": "\u627e\u5230 1 \u4e2a\u7b26\u5408\u6761\u4ef6\u7684\u7ed3\u679c", "search.result.other": "# \u4e2a\u7b26\u5408\u6761\u4ef6\u7684\u7ed3\u679c", "search.result.placeholder": "\u952e\u5165\u4ee5\u5f00\u59cb\u641c\u7d22", "search.result.term.missing": "\u7f3a\u5c11", "select.version": "\u9009\u62e9\u5f53\u524d\u7248\u672c"}, "version": null}</script>
+      <script id="__config" type="application/json">{"annotate": null, "base": "..", "features": ["search.suggest", "search.highlight", "navigation.tabs", "navigation.top", "navigation.footer", "content.code.copy", "content.action.edit"], "search": "../assets/javascripts/workers/search.2c215733.min.js", "tags": null, "translations": {"clipboard.copied": "\u5df2\u590d\u5236", "clipboard.copy": "\u590d\u5236", "search.result.more.one": "\u5728\u8be5\u9875\u4e0a\u8fd8\u6709 1 \u4e2a\u7b26\u5408\u6761\u4ef6\u7684\u7ed3\u679c", "search.result.more.other": "\u5728\u8be5\u9875\u4e0a\u8fd8\u6709 # \u4e2a\u7b26\u5408\u6761\u4ef6\u7684\u7ed3\u679c", "search.result.none": "\u6ca1\u6709\u627e\u5230\u7b26\u5408\u6761\u4ef6\u7684\u7ed3\u679c", "search.result.one": "\u627e\u5230 1 \u4e2a\u7b26\u5408\u6761\u4ef6\u7684\u7ed3\u679c", "search.result.other": "# \u4e2a\u7b26\u5408\u6761\u4ef6\u7684\u7ed3\u679c", "search.result.placeholder": "\u952e\u5165\u4ee5\u5f00\u59cb\u641c\u7d22", "search.result.term.missing": "\u7f3a\u5c11", "select.version": "\u9009\u62e9\u5f53\u524d\u7248\u672c"}, "version": null}</script>
     
     
       <script src="../assets/javascripts/bundle.d7400e89.min.js"></script>
