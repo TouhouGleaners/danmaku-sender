@@ -1,30 +1,47 @@
 import logging
 
-from PySide6.QtWidgets import (
-    QMainWindow, QWidget, QMessageBox, QHBoxLayout, QVBoxLayout, QFrame, QApplication,
-    QListWidget, QListWidgetItem, QStackedWidget, QLabel, QSystemTrayIcon, QMenu
+from PySide6.QtCore import QEvent, QSize, Qt, QTimer, QUrl, Slot
+from PySide6.QtGui import (
+    QAction,
+    QCloseEvent,
+    QDesktopServices,
+    QKeySequence,
+    QShortcut,
 )
-from PySide6.QtGui import QAction, QCloseEvent, QDesktopServices, QShortcut, QKeySequence
-from PySide6.QtCore import Qt, QUrl, QTimer, QSize, QEvent, Slot
+from PySide6.QtWidgets import (
+    QApplication,
+    QFrame,
+    QHBoxLayout,
+    QLabel,
+    QListWidget,
+    QListWidgetItem,
+    QMainWindow,
+    QMenu,
+    QMessageBox,
+    QStackedWidget,
+    QSystemTrayIcon,
+    QVBoxLayout,
+    QWidget,
+)
 
-from .dialogs import AboutDialog, HelpDialog, UpdateDialog
-from .framework.image_processor import QtImageProcessor
-from .framework.style_loader import SvgIcon, load_stylesheet, get_app_icon
-from .views.sender import SenderPage
-from .views.settings import SettingsPage
-from .views.monitor import MonitorPage
-from .views.account import AccountDialog
-from .views.history import HistoryPage
-
-from danmaku_sender.config.app_meta import AppInfo, UI
-from danmaku_sender.types.models.common import MonitorStats
-from danmaku_sender.types.models.user import UserProfile
+from danmaku_sender.config.app_meta import UI, AppInfo
+from danmaku_sender.controller.account_controller import AccountController
+from danmaku_sender.controller.auth_controller import AuthController
+from danmaku_sender.controller.system_controller import SystemController
 from danmaku_sender.runtime import Runtime
 from danmaku_sender.runtime.infra.log_utils import GuiLoggingHandler
 from danmaku_sender.runtime.managers.theme_manager import ThemeManager
-from danmaku_sender.controller.auth_controller import AuthController, UserProfile
-from danmaku_sender.controller.account_controller import AccountController
-from danmaku_sender.controller.system_controller import SystemController
+from danmaku_sender.types.models.common import MonitorStats
+from danmaku_sender.types.models.user import UserProfile
+
+from .dialogs import AboutDialog, HelpDialog, UpdateDialog
+from .framework.image_processor import QtImageProcessor
+from .framework.style_loader import SvgIcon, get_app_icon, load_stylesheet
+from .views.account import AccountDialog
+from .views.history import HistoryPage
+from .views.monitor import MonitorPage
+from .views.sender import SenderPage
+from .views.settings import SettingsPage
 
 
 class MainWindow(QMainWindow):
@@ -84,7 +101,7 @@ class MainWindow(QMainWindow):
         """窗口关闭事件: 保存配置与凭证"""
         try:
             AccountController.save_credentials(self.state, self._current_profile, self.rt.account_manager)
-        except Exception as e:
+        except (OSError, ValueError) as e:
             self.logger.error(f"保存凭证失败: {e}")
 
         self.rt.config_manager.save(self.state)
@@ -316,17 +333,13 @@ class MainWindow(QMainWindow):
         self.state.credentialsChanged.connect(lambda: self._auth_debounce_timer.start(800))
         self.auth_controller.userProfileReady.connect(self._on_user_profile_updated)
 
-        # 系统组件联动
-        self.state.editorDirtyChanged.connect(self._refresh_sidebar_badges)
-        self.state.senderActiveChanged.connect(self._refresh_sidebar_badges)
-
         # 自动更新检查流
         self.system_controller.updateFound.connect(self._on_update_found)
         self.system_controller.updateNotFound.connect(lambda is_m:
             QMessageBox.information(self, "检查更新", "当前已是最新版本。") if is_m else None
         )
         self.system_controller.checkFailed.connect(lambda err, is_m:
-            QMessageBox.warning(self, "检查更新失败", f"无法连接到更新服务器:\n{str(err)}") if is_m else None
+            QMessageBox.warning(self, "检查更新失败", f"无法连接到更新服务器:\n{err}") if is_m else None
         )
 
         self.state.senderActiveChanged.connect(self._refresh_global_status)
@@ -382,21 +395,12 @@ class MainWindow(QMainWindow):
         self._refresh_default_avatar()
 
     @Slot()
-    def _refresh_sidebar_badges(self):
-        """动态刷新侧边栏项目的文字后缀"""
-        if sender_item := self.sidebar.item(1):
-            sender_item.setText("弹幕发射器 ▶" if self.state.sender_is_active else "弹幕发射器")
-
-        if editor_item := self.sidebar.item(2):
-            editor_item.setText("弹幕编辑器 •" if self.state.editor_is_dirty else "弹幕编辑器")
-
-    @Slot()
     def _open_log_folder(self):
         log_dir = AppInfo.Paths.LOGS
         if not log_dir.exists():
             try:
                 log_dir.mkdir(parents=True, exist_ok=True)
-            except Exception as e:
+            except OSError as e:
                 QMessageBox.warning(self, "错误", f"无法创建日志目录：\n{e}")
                 return
 
