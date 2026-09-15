@@ -80,13 +80,12 @@ class QueueState(QObject):
         return None
 
     def update_task_status(self, task_id: str, status: TaskStatus, error_msg: str = ""):
-        """更新任务状态并通知所有观察者"""
+        """更新任务状态"""
         task = self.get_task_by_id(task_id)
         if task:
             task.status = status
             task.error_msg = error_msg
             self.taskStatusChanged.emit(task_id, status.value)
-            self.tasksChanged.emit()
 
     @property
     def pending_count(self) -> int:
