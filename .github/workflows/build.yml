@@ -52,7 +52,7 @@ jobs:
                --include-data-dir=assets=assets `
                --output-dir=dist-standalone `
                --output-filename=BiliDanmakuSender `
-               run.py
+               src/danmaku_sender/__main__.py
 
     - name: Build Onefile (Single EXE)
       run: |
@@ -66,7 +66,7 @@ jobs:
                --include-data-dir=assets=assets `
                --output-dir=dist-onefile `
                --output-filename=BiliDanmakuSender `
-               run.py
+               src/danmaku_sender/__main__.py
 
     - name: Repackage and Rename Assets
       shell: pwsh
@@ -77,8 +77,9 @@ jobs:
             Move-Item -Path "dist-onefile/BiliDanmakuSender.exe" -Destination "BiliDanmakuSender-$tag-onefile-x64.exe"
         }
 
-        if (Test-Path "dist-standalone/run.dist") {
-            Move-Item -Path "dist-standalone/run.dist" -Destination "AppDist"
+        $distDir = Get-ChildItem -Path "dist-standalone/*.dist" -Directory | Select-Object -First 1
+        if ($distDir) {
+            Move-Item -Path $distDir.FullName -Destination "AppDist"
         }
 
         $targetExe = Get-ChildItem -Path "AppDist/*.exe" | Select-Object -First 1

@@ -77,7 +77,7 @@ jobs:
                --include-data-dir=assets=assets `
                --output-dir=dist-standalone `
                --output-filename=BiliDanmakuSender `
-               run.py
+               src/danmaku_sender/__main__.py
 
     - name: Build Onefile
       if: steps.check.outputs.skip != 'true'
@@ -90,7 +90,7 @@ jobs:
                --include-data-dir=assets=assets `
                --output-dir=dist-onefile `
                --output-filename=BiliDanmakuSender `
-               run.py
+               src/danmaku_sender/__main__.py
 
     - name: Package artifacts
       if: steps.check.outputs.skip != 'true'
@@ -102,8 +102,9 @@ jobs:
             Move-Item -Path "dist-onefile/BiliDanmakuSender.exe" -Destination "BiliDanmakuSender-$suffix-onefile-x64.exe"
         }
 
-        if (Test-Path "dist-standalone/run.dist") {
-            Move-Item -Path "dist-standalone/run.dist" -Destination "AppDist"
+        $distDir = Get-ChildItem -Path "dist-standalone/*.dist" -Directory | Select-Object -First 1
+        if ($distDir) {
+            Move-Item -Path $distDir.FullName -Destination "AppDist"
             7z a -tzip -mx=9 "BiliDanmakuSender-$suffix-portable-x64.zip" "./AppDist/*"
         }
 
