@@ -218,6 +218,7 @@ class MonitorPage(QWidget):
 
         # QueueState
         self.state.queue_state.tasksChanged.connect(self._on_queue_changed)
+        self.state.queue_state.taskDataChanged.connect(self._on_queue_changed)
         self.state.queue_state.taskStatusChanged.connect(self._on_queue_task_status_changed)
 
     def init_bindings(self):

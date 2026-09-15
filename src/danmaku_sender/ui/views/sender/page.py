@@ -213,6 +213,7 @@ class SenderPage(QWidget):
         # QueueState
         self.state.queue_state.tasksChanged.connect(self._on_queue_changed)
         self.state.queue_state.taskDataChanged.connect(self._on_queue_task_updated)
+        self.state.queue_state.taskProgressChanged.connect(self._on_queue_task_progress)
         self.state.queue_state.taskStatusChanged.connect(self._on_queue_task_status_changed)
 
     def append_log(self, message: str):
@@ -421,7 +422,7 @@ class SenderPage(QWidget):
         parser = DanmakuParser()
         try:
             danmakus = parser.parse_xml_file(file_path)
-        except Exception as e:  # noqa: BLE001  # 待异常处理契约统一后再收窄
+        except Exception as e:
             self.logger.error(f"弹幕文件解析失败: {e}")
             return
 
@@ -451,6 +452,14 @@ class SenderPage(QWidget):
         row = self._queue_model.get_row_by_id(task_id)
         if row >= 0:
             self._queue_model.refresh_row(row)
+
+    @Slot(str, int, int)
+    def _on_queue_task_progress(self, task_id: str, attempted: int, total: int):
+        """QueueState 通知进度变更，刷新对应行 + 底部进度条"""
+        row = self._queue_model.get_row_by_id(task_id)
+        if row >= 0:
+            self._queue_model.refresh_row(row)
+        self._update_bottom_bar(attempted, total)
 
     @Slot(str, object)
     def _on_queue_task_status_changed(self, task_id: str, status: TaskStatus):
@@ -492,18 +501,12 @@ class SenderPage(QWidget):
 
     @Slot(str, int, int, float)
     def _on_task_progress(self, task_id: str, attempted: int, task_total: int, eta: float):
+        # 进度更新走 QueueState → taskProgressChanged → _on_queue_task_progress
         self._update_task_data(task_id, attempted, task_total)
-        self._update_bottom_bar(attempted, task_total)
 
     def _update_task_data(self, task_id: str, attempted: int, task_total: int):
-        """更新任务数据并刷新表格行"""
-        task = self.state.queue_state.get_task_by_id(task_id)
-        if task:
-            task.attempted = attempted
-            task.total = task_total
-            row = self._queue_model.get_row_by_id(task_id)
-            if row >= 0:
-                self._queue_model.refresh_row(row)
+        """通过 QueueState 更新进度（自动发射 taskProgressChanged）"""
+        self.state.queue_state.update_task_progress(task_id, attempted, task_total)
 
     def _update_bottom_bar(self, attempted: int, task_total: int):
         """更新底部进度条（队列级 + 弹幕总数 + ETA）"""

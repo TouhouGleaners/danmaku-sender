@@ -70,7 +70,7 @@ class QueueState(QObject):
 
     @property
     def processed_danmaku_count(self) -> int:
-        """全队列已处理弹幕数（不含 PENDING 和 PAUSED）"""
+        """全队列已处理弹幕数（不含 PENDING、UNCONFIGURED 和 PAUSED）"""
         return sum(
             t.attempted for t in self._tasks
             if t.status not in (TaskStatus.PENDING, TaskStatus.UNCONFIGURED, TaskStatus.PAUSED)
@@ -190,3 +190,11 @@ class QueueState(QObject):
             task.status = status
             task.error_msg = error_msg
             self.taskStatusChanged.emit(task_id, status)
+
+    def update_task_progress(self, task_id: str, attempted: int, total: int):
+        """更新发送进度并通知观察者"""
+        task = self.get_task_by_id(task_id)
+        if task:
+            task.attempted = attempted
+            task.total = total
+            self.taskProgressChanged.emit(task_id, attempted, total)
