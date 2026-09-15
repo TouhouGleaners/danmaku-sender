@@ -256,8 +256,8 @@ class SenderPage(QWidget):
         auth_config = self.state.get_api_auth()
         dialog = TaskDetailDialog(task, auth_config, self.state.sender_is_active, self)
         if dialog.exec() == QDialog.DialogCode.Accepted:
-            # 通知 QueueState 任务数据已变更（自动刷新表格）
-            self.state.queue_state.taskDataChanged.emit(task.task_id)
+            # 通过 QueueState 统一应用编辑结果（自动发射 taskDataChanged）
+            self.state.queue_state.apply_edit(task.task_id, dialog.editing)
             self.logger.info(f"已更新任务: {task.target.display_string}")
 
     def _edit_danmakus(self, task: QueueTask):

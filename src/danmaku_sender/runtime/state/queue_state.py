@@ -161,7 +161,7 @@ class QueueState(QObject):
 
         # 状态自愈：UNCONFIGURED → PENDING
         if task.status == TaskStatus.UNCONFIGURED and task.total > 0:
-            task.status = TaskStatus.PENDING
+            self.update_task_status(task_id, TaskStatus.PENDING)
 
         self.taskDataChanged.emit(task_id)
         logger.info(f"已分配弹幕: {task.target.display_string} ({task.total} 条)")
