@@ -34,8 +34,8 @@ class QueueState(QObject):
 
     @property
     def tasks(self) -> list[QueueTask]:
-        """任务列表（只读快照）"""
-        return self._tasks
+        """任务列表（防御性副本，防止外部绕过信号直接修改）"""
+        return list(self._tasks)
 
     @property
     def current_index(self) -> int:
@@ -172,7 +172,13 @@ class QueueState(QObject):
         if not task:
             return
 
+        old_status = task.status
         task.apply_edit(source)
+
+        # 状态发生变化
+        if task.status != old_status:
+            self.update_task_status(task_id, task.status, task.error_msg)
+
         self.taskDataChanged.emit(task_id)
 
     # ── 状态变更（发射 taskStatusChanged）─────────────────
