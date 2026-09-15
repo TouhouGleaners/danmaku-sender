@@ -20,7 +20,8 @@ class QueueState(QObject):
 
     # ── 信号 ──────────────────────────────────────────────
     tasksChanged = Signal()                      # 队列结构变更（增删排序）
-    taskUpdated = Signal(str)                    # 任务数据变更（弹幕数、配置等）
+    taskDataChanged = Signal(str)                # 任务数据变更（弹幕数、配置等）
+    taskProgressChanged = Signal(str, int, int)  # (task_id, attempted, total)
     taskStatusChanged = Signal(str, TaskStatus)  # (task_id, TaskStatus 枚举)
     currentTaskChanged = Signal(int)             # 当前执行游标
 
@@ -142,7 +143,7 @@ class QueueState(QObject):
             self.tasksChanged.emit()
             logger.info(f"已清除 {removed} 个已完成任务")
 
-    # ── 数据变更（发射 taskUpdated）───────────────────────
+    # ── 数据变更（发射 taskDataChanged）───────────────────────
 
     def assign_danmakus(self, task_id: str, danmakus: list[Danmaku], xml_path: str = ""):
         """为任务分配/更新弹幕列表，自动联动计算总数并激活就绪状态。
@@ -162,7 +163,7 @@ class QueueState(QObject):
         if task.status == TaskStatus.UNCONFIGURED and task.total > 0:
             task.status = TaskStatus.PENDING
 
-        self.taskUpdated.emit(task_id)
+        self.taskDataChanged.emit(task_id)
         logger.info(f"已分配弹幕: {task.target.display_string} ({task.total} 条)")
 
     def apply_edit(self, task_id: str, source: QueueTask):
@@ -172,7 +173,7 @@ class QueueState(QObject):
             return
 
         task.apply_edit(source)
-        self.taskUpdated.emit(task_id)
+        self.taskDataChanged.emit(task_id)
 
     # ── 状态变更（发射 taskStatusChanged）─────────────────
 

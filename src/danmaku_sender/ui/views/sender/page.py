@@ -212,7 +212,7 @@ class SenderPage(QWidget):
 
         # QueueState
         self.state.queue_state.tasksChanged.connect(self._on_queue_changed)
-        self.state.queue_state.taskUpdated.connect(self._on_queue_task_updated)
+        self.state.queue_state.taskDataChanged.connect(self._on_queue_task_updated)
         self.state.queue_state.taskStatusChanged.connect(self._on_queue_task_status_changed)
 
     def append_log(self, message: str):
@@ -257,7 +257,7 @@ class SenderPage(QWidget):
         dialog = TaskDetailDialog(task, auth_config, self.state.sender_is_active, self)
         if dialog.exec() == QDialog.DialogCode.Accepted:
             # 通知 QueueState 任务数据已变更（自动刷新表格）
-            self.state.queue_state.taskUpdated.emit(task.task_id)
+            self.state.queue_state.taskDataChanged.emit(task.task_id)
             self.logger.info(f"已更新任务: {task.target.display_string}")
 
     def _edit_danmakus(self, task: QueueTask):
