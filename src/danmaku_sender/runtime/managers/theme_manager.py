@@ -2,9 +2,10 @@ import logging
 from dataclasses import dataclass
 
 from PySide6.QtCore import QObject, Qt, Signal, Slot
-from PySide6.QtGui import QGuiApplication
+from PySide6.QtGui import QColor, QGuiApplication, QPalette
+from PySide6.QtWidgets import QApplication
 
-from danmaku_sender.config.theme_config import ThemeMode
+from danmaku_sender.config.theme_config import ThemeConfig, ThemeMode
 
 logger = logging.getLogger(__name__)
 
@@ -22,6 +23,23 @@ class Palette:
     success: str            # 成功绿
     danger: str             # 危险红
     danger_bg: str          # 危险状态背景
+
+    def to_qpalette(self) -> QPalette:
+        """桥接到 Qt QPalette，让原生控件（QComboBox、QSpinBox 等）跟随主题"""
+        p = QPalette()
+        p.setColor(QPalette.ColorRole.Window, QColor(self.bg_base))
+        p.setColor(QPalette.ColorRole.WindowText, QColor(self.text_main))
+        p.setColor(QPalette.ColorRole.Base, QColor(self.bg_surface))
+        p.setColor(QPalette.ColorRole.AlternateBase, QColor(self.bg_base))
+        p.setColor(QPalette.ColorRole.ToolTipBase, QColor(self.bg_surface))
+        p.setColor(QPalette.ColorRole.ToolTipText, QColor(self.text_main))
+        p.setColor(QPalette.ColorRole.Text, QColor(self.text_main))
+        p.setColor(QPalette.ColorRole.Button, QColor(self.bg_hover))
+        p.setColor(QPalette.ColorRole.ButtonText, QColor(self.text_main))
+        p.setColor(QPalette.ColorRole.BrightText, QColor(self.primary))
+        p.setColor(QPalette.ColorRole.Highlight, QColor(self.primary))
+        p.setColor(QPalette.ColorRole.HighlightedText, QColor("#ffffff"))
+        return p
 
 
 class ThemeManager(QObject):
@@ -81,7 +99,7 @@ class ThemeManager(QObject):
         self._theme_mode = mode
         self._apply_mode()
 
-    def bind_config(self, theme_config):
+    def bind_config(self, theme_config: ThemeConfig):
         """订阅 ThemeConfig 的变更（由 Runtime.bootstrap 调用）"""
         theme_config.subscribe("theme_mode", lambda v: self.set_theme_mode(v))
 
@@ -118,4 +136,8 @@ class ThemeManager(QObject):
     def _set_theme(self, palette: Palette):
         if self._current_palette != palette:
             self._current_palette = palette
+            # 桥接 QPalette，让原生控件跟随主题
+            app = QApplication.instance()
+            if isinstance(app, QApplication):
+                app.setPalette(palette.to_qpalette())
             self.themeChanged.emit(palette)
