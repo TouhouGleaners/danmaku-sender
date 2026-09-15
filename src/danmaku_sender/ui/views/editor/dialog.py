@@ -399,9 +399,7 @@ class EditorDialog(QDialog):
 
         # UNCONFIGURED → PENDING
         if self.task.status == TaskStatus.UNCONFIGURED and final_list:
-            self.task.status = TaskStatus.PENDING
-
-        self.controller.state.queue_state.tasksChanged.emit()
+            self.controller.state.queue_state.update_task_status(self.task.task_id, TaskStatus.PENDING)
 
         self.logger.info(f"已保存 {len(final_list)} 条弹幕到任务")
         QMessageBox.information(
