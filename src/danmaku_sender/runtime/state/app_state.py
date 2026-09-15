@@ -2,10 +2,16 @@ import time
 
 from PySide6.QtCore import QObject, Signal
 
-from .queue_state import QueueState
-
-from danmaku_sender.config import ApiAuthConfig, SenderConfig, MonitorConfig, ValidationConfig
+from danmaku_sender.config import (
+    ApiAuthConfig,
+    MonitorConfig,
+    SenderConfig,
+    ThemeConfig,
+    ValidationConfig,
+)
 from danmaku_sender.types.models.account import AccountCredential
+
+from .queue_state import QueueState
 
 
 class AppState(QObject):
@@ -31,6 +37,7 @@ class AppState(QObject):
         # 各模块配置
         self.sender_config = SenderConfig()
         self.monitor_config = MonitorConfig()
+        self.theme_config = ThemeConfig()
         self.validation_config = ValidationConfig()
 
         # 运行时状态

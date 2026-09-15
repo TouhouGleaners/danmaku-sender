@@ -1,10 +1,20 @@
 from PySide6.QtWidgets import (
-    QWidget, QVBoxLayout, QHBoxLayout, QFormLayout, QLabel, QCheckBox,
-    QGroupBox, QSpinBox, QDoubleSpinBox, QFrame
+    QCheckBox,
+    QComboBox,
+    QDoubleSpinBox,
+    QFormLayout,
+    QFrame,
+    QGroupBox,
+    QHBoxLayout,
+    QLabel,
+    QSpinBox,
+    QVBoxLayout,
+    QWidget,
 )
 
-from danmaku_sender.ui.framework.binder import UIBinder
+from danmaku_sender.config.theme_config import ThemeMode
 from danmaku_sender.runtime.state.app_state import AppState
+from danmaku_sender.ui.framework.binder import UIBinder
 
 
 class SettingsPage(QWidget):
@@ -22,6 +32,12 @@ class SettingsPage(QWidget):
         # --- 系统设置 ---
         system_group = QGroupBox("系统设置")
         system_layout = QFormLayout()
+
+        self.theme_combo = QComboBox()
+        self.theme_combo.addItem("跟随系统", ThemeMode.SYSTEM)
+        self.theme_combo.addItem("浅色模式", ThemeMode.LIGHT)
+        self.theme_combo.addItem("深色模式", ThemeMode.DARK)
+        system_layout.addRow("界面主题:", self.theme_combo)
 
         self.prevent_sleep_checkbox = QCheckBox("任务运行时阻止电脑休眠")
         self.prevent_sleep_checkbox.setChecked(True)
@@ -163,6 +179,9 @@ class SettingsPage(QWidget):
 
     def init_bindings(self) -> None:
         """将 UI 控件与全局状态 (AppState) 进行双向绑定"""
+        # 主题设置（UIBinder 自动处理 QComboBox ↔ ThemeMode 枚举的双向同步）
+        UIBinder.bind(self.theme_combo, self.state.theme_config, "theme_mode")
+
         UIBinder.bind(self.prevent_sleep_checkbox, self.state.sender_config, "prevent_sleep", clear_old=True)
         UIBinder.bind(self.proxy_checkbox, self.state.sender_config, "use_system_proxy", clear_old=True)
 
