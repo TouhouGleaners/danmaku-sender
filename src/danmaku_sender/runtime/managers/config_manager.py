@@ -1,13 +1,17 @@
 import json
 import logging
 
-from pydantic import ValidationError, BaseModel
+from pydantic import BaseModel, ValidationError
 
-from danmaku_sender.runtime.state.app_state import AppState
+from danmaku_sender.config import (
+    MonitorConfig,
+    SenderConfig,
+    ThemeConfig,
+    ValidationConfig,
+)
 from danmaku_sender.config.app_meta import AppInfo
-from danmaku_sender.config import SenderConfig, MonitorConfig, ValidationConfig
+from danmaku_sender.runtime.state.app_state import AppState
 from danmaku_sender.utils.file_utils import atomic_write, read_json
-
 
 logger = logging.getLogger(__name__)
 
@@ -22,6 +26,7 @@ class ConfigManager:
         config_data = {
             "sender": state.sender_config.model_dump(),
             "monitor": state.monitor_config.model_dump(),
+            "theme": state.theme_config.model_dump(mode="json"),
             "validation": state.validation_config.model_dump()
         }
 
@@ -50,6 +55,7 @@ class ConfigManager:
         # 校验配置
         state.sender_config = _load_section("sender", SenderConfig, state.sender_config)
         state.monitor_config = _load_section("monitor", MonitorConfig, state.monitor_config)
+        state.theme_config = _load_section("theme", ThemeConfig, state.theme_config)
         state.validation_config = _load_section("validation", ValidationConfig, state.validation_config)
 
         logger.info(f"配置文件加载与校验流程结束[{CONFIG_PATH}]。")
