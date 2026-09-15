@@ -1,9 +1,10 @@
 import logging
 from dataclasses import dataclass
 
+from PySide6.QtCore import QObject, Qt, Signal, Slot
 from PySide6.QtGui import QGuiApplication
-from PySide6.QtCore import Qt, QObject, Signal, Slot
 
+from danmaku_sender.config.theme_config import ThemeMode
 
 logger = logging.getLogger(__name__)
 
@@ -66,6 +67,7 @@ class ThemeManager(QObject):
     def __init__(self):
         super().__init__()
         self._current_palette = self.LIGHT
+        self._theme_mode = ThemeMode.SYSTEM
 
         # 监听系统级别的主题切换
         if hasattr(QGuiApplication, "styleHints"):
@@ -74,20 +76,42 @@ class ThemeManager(QObject):
     def current(self) -> Palette:
         return self._current_palette
 
-    def init_theme(self):
-        """初始化时获取系统当前主题"""
-        if hasattr(QGuiApplication, "styleHints"):
-            scheme = QGuiApplication.styleHints().colorScheme()
-            is_dark = scheme == Qt.ColorScheme.Dark
-            self._set_theme(self.DARK if is_dark else self.LIGHT)
+    def init_theme(self, mode: ThemeMode = ThemeMode.SYSTEM):
+        """初始化主题"""
+        self._theme_mode = mode
+        self._apply_mode()
+
+    def set_theme_mode(self, mode: ThemeMode):
+        """设置主题模式（system / light / dark）"""
+        if self._theme_mode == mode:
+            return
+        self._theme_mode = mode
+        logger.info(f"主题模式已切换: {mode.value}")
+        self._apply_mode()
+
+    def _apply_mode(self):
+        """根据当前模式应用对应调色板"""
+        match self._theme_mode:
+            case ThemeMode.SYSTEM:
+                if hasattr(QGuiApplication, "styleHints"):
+                    scheme = QGuiApplication.styleHints().colorScheme()
+                    is_dark = scheme == Qt.ColorScheme.Dark
+                    self._set_theme(self.DARK if is_dark else self.LIGHT)
+                else:
+                    self._set_theme(self.LIGHT)
+            case ThemeMode.DARK:
+                self._set_theme(self.DARK)
+            case ThemeMode.LIGHT:
+                self._set_theme(self.LIGHT)
 
     @Slot(Qt.ColorScheme)
     def _on_system_theme_changed(self, scheme: Qt.ColorScheme):
-        is_dark = scheme == Qt.ColorScheme.Dark
-        self._set_theme(self.DARK if is_dark else self.LIGHT)
+        """系统主题变化时，仅在 system 模式下响应"""
+        if self._theme_mode == ThemeMode.SYSTEM:
+            is_dark = scheme == Qt.ColorScheme.Dark
+            self._set_theme(self.DARK if is_dark else self.LIGHT)
 
     def _set_theme(self, palette: Palette):
         if self._current_palette != palette:
             self._current_palette = palette
-            logger.info("系统深浅色模式改变，已热切换基础调色板。")
             self.themeChanged.emit(palette)

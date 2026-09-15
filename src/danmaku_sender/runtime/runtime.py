@@ -1,13 +1,12 @@
 import logging
 
-from .infra.resources import AppResources
-from .state.app_state import AppState
-from .managers.config_manager import ConfigManager
-from .managers.account_manager import AccountManager
-
 from danmaku_sender.config.app_meta import AppInfo
 from danmaku_sender.repo.history_manager import HistoryManager
 
+from .infra.resources import AppResources
+from .managers.account_manager import AccountManager
+from .managers.config_manager import ConfigManager
+from .state.app_state import AppState
 
 logger = logging.getLogger(__name__)
 
@@ -49,3 +48,6 @@ class Runtime:
             logger.error(f"凭据加载失败，将以未登录状态继续: {e}")
 
         self.config_manager.load(self.app_state)
+
+        # 配置加载后，应用用户选择的主题模式
+        self.resources.theme.set_theme_mode(self.app_state.theme_config.theme_mode)
