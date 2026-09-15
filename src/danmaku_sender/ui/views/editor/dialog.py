@@ -2,21 +2,32 @@ import logging
 from pathlib import Path
 from typing import Any
 
-from PySide6.QtCore import Qt, QModelIndex, QPoint, Slot
+from PySide6.QtCore import QModelIndex, QPoint, Qt, Slot
 from PySide6.QtWidgets import (
-    QDialog, QVBoxLayout, QHBoxLayout, QPushButton, QLabel,
-    QTableView, QHeaderView, QAbstractItemView, QMessageBox,
-    QMenu, QFrame, QCheckBox, QSplitter, QFileDialog
+    QAbstractItemView,
+    QCheckBox,
+    QDialog,
+    QFileDialog,
+    QFrame,
+    QHBoxLayout,
+    QHeaderView,
+    QLabel,
+    QMenu,
+    QMessageBox,
+    QPushButton,
+    QSplitter,
+    QTableView,
+    QVBoxLayout,
 )
 
-from .components import EditorTableModel, ValidationRulesGroup, PropertyInspectorGroup
-from .dialogs import EditDanmakuDialog, TimeOffsetDialog, ArrayGeneratorDialog
-
-from danmaku_sender.ui.framework.style_loader import SvgIcon
 from danmaku_sender.controller.editor_controller import EditorController
-from danmaku_sender.types.models.editor_types import EditorField, InsertPosition
-from danmaku_sender.types.models.queue import QueueTask
 from danmaku_sender.runtime.state.app_state import AppState
+from danmaku_sender.types.models.editor_types import EditorField, InsertPosition
+from danmaku_sender.types.models.queue import QueueTask, TaskStatus
+from danmaku_sender.ui.framework.style_loader import SvgIcon
+
+from .components import EditorTableModel, PropertyInspectorGroup, ValidationRulesGroup
+from .dialogs import ArrayGeneratorDialog, EditDanmakuDialog, TimeOffsetDialog
 
 
 class EditorDialog(QDialog):
@@ -385,6 +396,12 @@ class EditorDialog(QDialog):
         # 更新任务的弹幕数据
         self.task.danmakus = final_list
         self.task.total = len(final_list)
+
+        # UNCONFIGURED → PENDING
+        if self.task.status == TaskStatus.UNCONFIGURED and final_list:
+            self.task.status = TaskStatus.PENDING
+
+        self.controller.state.queue_state.tasksChanged.emit()
 
         self.logger.info(f"已保存 {len(final_list)} 条弹幕到任务")
         QMessageBox.information(

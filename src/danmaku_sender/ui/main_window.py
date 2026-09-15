@@ -292,7 +292,6 @@ class MainWindow(QMainWindow):
         """绑定全局状态并配置日志路由"""
         # 页面数据绑定
         self.page_settings.init_bindings()
-        self.page_sender.init_bindings()
         self.page_monitor.init_bindings()
         self.page_history.init_bindings()
 

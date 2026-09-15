@@ -1,27 +1,54 @@
 import logging
 
-from PySide6.QtWidgets import (
-    QWidget, QVBoxLayout, QHBoxLayout, QPushButton, QLabel, QDialog,
-    QGroupBox, QTextEdit, QProgressBar, QMessageBox,
-    QTableView, QHeaderView, QAbstractItemView, QMenu
+from PySide6.QtCore import (
+    QDateTime,
+    QEvent,
+    QModelIndex,
+    QPoint,
+    Qt,
+    QTimer,
+    Signal,
+    Slot,
 )
-from PySide6.QtGui import QTextCursor, QShortcut, QKeySequence, QDragEnterEvent, QDragMoveEvent, QDropEvent
-from PySide6.QtCore import Qt, QPoint, QModelIndex, QDateTime, QEvent, QTimer, Signal, Slot
+from PySide6.QtGui import (
+    QDragEnterEvent,
+    QDragMoveEvent,
+    QDropEvent,
+    QKeySequence,
+    QShortcut,
+    QTextCursor,
+)
+from PySide6.QtWidgets import (
+    QAbstractItemView,
+    QDialog,
+    QGroupBox,
+    QHBoxLayout,
+    QHeaderView,
+    QLabel,
+    QMenu,
+    QMessageBox,
+    QProgressBar,
+    QPushButton,
+    QTableView,
+    QTextEdit,
+    QVBoxLayout,
+    QWidget,
+)
 
-from .components.queue_table import ProgressBarDelegate, QueueTableModel
+from danmaku_sender.controller.sender import SenderController
+from danmaku_sender.repo.history_manager import HistoryManager
+from danmaku_sender.runtime.infra.platform import send_windows_notification
+from danmaku_sender.runtime.state.app_state import AppState
+from danmaku_sender.service.danmaku_parser import DanmakuParser
+from danmaku_sender.service.sender import SendingContext
+from danmaku_sender.types.models.queue import QueueTask, TaskStatus
+from danmaku_sender.ui.framework.style_loader import SvgIcon
+from danmaku_sender.ui.views.editor import EditorDialog
+from danmaku_sender.utils.time_utils import format_duration
+
 from .components.dialogs.task_builder import TaskBuilderDialog
 from .components.dialogs.task_detail import TaskDetailDialog
-
-from danmaku_sender.ui.views.editor import EditorDialog
-from danmaku_sender.ui.framework.style_loader import SvgIcon
-from danmaku_sender.controller.sender import SenderController
-from danmaku_sender.service.danmaku_parser import DanmakuParser
-from danmaku_sender.types.models.queue import QueueTask, TaskStatus
-from danmaku_sender.repo.history_manager import HistoryManager
-from danmaku_sender.service.sender import SendingContext
-from danmaku_sender.runtime.state.app_state import AppState
-from danmaku_sender.runtime.infra.platform import send_windows_notification
-from danmaku_sender.utils.time_utils import format_duration
+from .components.queue_table import ProgressBarDelegate, QueueTableModel
 
 
 class SenderPage(QWidget):
@@ -186,10 +213,6 @@ class SenderPage(QWidget):
         # QueueState
         self.state.queue_state.tasksChanged.connect(self._on_queue_changed)
         self.state.queue_state.taskStatusChanged.connect(self._on_queue_task_status_changed)
-
-    def init_bindings(self):
-        """将 UI 控件与 AppState 进行双向绑定"""
-        pass
 
     def append_log(self, message: str):
         """外部调用的日志接口"""
@@ -430,6 +453,7 @@ class SenderPage(QWidget):
     def _on_queue_changed(self):
         self._queue_model.set_tasks(self.state.queue_state.tasks)
 
+    @Slot(str, str)
     def _on_queue_task_status_changed(self, task_id: str, status: str):
         row = self._queue_model.get_row_by_id(task_id)
         if row >= 0:
