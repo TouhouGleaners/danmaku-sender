@@ -23,7 +23,7 @@ from PySide6.QtWidgets import (
 from danmaku_sender.controller.editor_controller import EditorController
 from danmaku_sender.runtime.state.app_state import AppState
 from danmaku_sender.types.models.editor_types import EditorField, InsertPosition
-from danmaku_sender.types.models.queue import QueueTask, TaskStatus
+from danmaku_sender.types.models.queue import QueueTask
 from danmaku_sender.ui.framework.style_loader import SvgIcon
 
 from .components import EditorTableModel, PropertyInspectorGroup, ValidationRulesGroup
@@ -393,15 +393,8 @@ class EditorDialog(QDialog):
         # 获取编辑后的弹幕数据
         final_list = self.controller.get_working_danmakus()
 
-        # 更新任务的弹幕数据
-        self.task.danmakus = final_list
-        self.task.total = len(final_list)
-
-        # UNCONFIGURED → PENDING
-        if self.task.status == TaskStatus.UNCONFIGURED and final_list:
-            self.controller.state.queue_state.update_task_status(self.task.task_id, TaskStatus.PENDING)
-
-        self.controller.state.queue_state.tasksChanged.emit()
+        # 通过 QueueState 统一入口更新弹幕数据（自动处理状态转换 + 信号通知）
+        self.controller.state.queue_state.assign_danmakus(self.task.task_id, final_list)
 
         self.logger.info(f"已保存 {len(final_list)} 条弹幕到任务")
         QMessageBox.information(

@@ -212,6 +212,7 @@ class SenderPage(QWidget):
 
         # QueueState
         self.state.queue_state.tasksChanged.connect(self._on_queue_changed)
+        self.state.queue_state.taskUpdated.connect(self._on_queue_task_updated)
         self.state.queue_state.taskStatusChanged.connect(self._on_queue_task_status_changed)
 
     def append_log(self, message: str):
@@ -255,20 +256,15 @@ class SenderPage(QWidget):
         auth_config = self.state.get_api_auth()
         dialog = TaskDetailDialog(task, auth_config, self.state.sender_is_active, self)
         if dialog.exec() == QDialog.DialogCode.Accepted:
-            # apply_edit 已在 dialog 内部调用，origin 已更新
-            row = self._queue_model.get_row_by_id(task.task_id)
-            if row >= 0:
-                self._queue_model.refresh_row(row)
+            # 通知 QueueState 任务数据已变更（自动刷新表格）
+            self.state.queue_state.taskUpdated.emit(task.task_id)
             self.logger.info(f"已更新任务: {task.target.display_string}")
 
     def _edit_danmakus(self, task: QueueTask):
         """编辑任务的弹幕数据（打开编辑器弹窗）"""
         dialog = EditorDialog(task, self.state, self)
         if dialog.exec() == QDialog.DialogCode.Accepted:
-            # 编辑完成后，刷新表格显示
-            row = self._queue_model.get_row_by_id(task.task_id)
-            if row >= 0:
-                self._queue_model.refresh_row(row)
+            # 编辑器内部已通过 assign_danmakus 通知 QueueState，表格自动刷新
             self.logger.info(f"已编辑弹幕: {task.target.display_string} ({task.total} 条)")
 
     def _move_task(self, task_id: str, direction: int):
@@ -311,7 +307,7 @@ class SenderPage(QWidget):
             QMessageBox.information(self, "队列为空", "没有待发送的任务。")
             return
 
-        self._queue_total_dm = sum(len(t.danmakus) for t in self.state.queue_state.tasks)
+        self._queue_total_dm = self.state.queue_state.total_danmaku_count
         self._update_queue_ui(running=True)
         self.sender_controller.start_queue(self.state.queue_state, auth_config)
 
@@ -332,8 +328,7 @@ class SenderPage(QWidget):
 
     def _on_queue_reorder(self, reordered_tasks):
         """拖拽排序后同步 QueueState"""
-        self.state.queue_state._tasks = reordered_tasks
-        self.state.queue_state.tasksChanged.emit()
+        self.state.queue_state.reorder_tasks(reordered_tasks)
 
     def eventFilter(self, obj, event: QDragEnterEvent | QDragMoveEvent | QDropEvent) -> bool:
         """处理拖放到队列表格上的外部 XML 文件"""
@@ -422,22 +417,19 @@ class SenderPage(QWidget):
             self._assign_file_to_task(pending_from_start[i], file_path)
 
     def _assign_file_to_task(self, task: QueueTask, file_path: str):
-        """解析 XML 并分配弹幕给指定任务"""
+        """解析 XML 并通过 QueueState 分配弹幕给指定任务"""
         parser = DanmakuParser()
         try:
             danmakus = parser.parse_xml_file(file_path)
-        except Exception as e:
+        except Exception as e:  # noqa: BLE001  # 待异常处理契约统一后再收窄
             self.logger.error(f"弹幕文件解析失败: {e}")
             return
 
         if not danmakus:
             self.logger.warning("弹幕文件为空。")
             return
-        task.danmakus = danmakus
-        task.total = len(danmakus)
-        task.xml_path = file_path
-        self.state.queue_state.update_task_status(task.task_id, TaskStatus.PENDING)
-        self.logger.info(f"已分配弹幕: {task.target.display_string} ({len(danmakus)} 条)")
+
+        self.state.queue_state.assign_danmakus(task.task_id, danmakus, xml_path=file_path)
 
     def _update_empty_hint(self):
         self._empty_hint.setVisible(self._queue_model.rowCount() == 0)
@@ -453,8 +445,15 @@ class SenderPage(QWidget):
     def _on_queue_changed(self):
         self._queue_model.set_tasks(self.state.queue_state.tasks)
 
-    @Slot(str, str)
-    def _on_queue_task_status_changed(self, task_id: str, status: str):
+    @Slot(str)
+    def _on_queue_task_updated(self, task_id: str):
+        """QueueState 通知任务数据变更，刷新对应行"""
+        row = self._queue_model.get_row_by_id(task_id)
+        if row >= 0:
+            self._queue_model.refresh_row(row)
+
+    @Slot(str, object)
+    def _on_queue_task_status_changed(self, task_id: str, status: TaskStatus):
         row = self._queue_model.get_row_by_id(task_id)
         if row >= 0:
             self._queue_model.refresh_row(row)
@@ -509,7 +508,7 @@ class SenderPage(QWidget):
     def _update_bottom_bar(self, attempted: int, task_total: int):
         """更新底部进度条（队列级 + 弹幕总数 + ETA）"""
         total_dm = self._queue_total_dm
-        done_dm = self._calc_done_dm()
+        done_dm = self.state.queue_state.processed_danmaku_count
         pct = int((done_dm / total_dm) * 100) if total_dm > 0 else 0
 
         if total_dm > 0:
@@ -527,16 +526,13 @@ class SenderPage(QWidget):
 
         self.progress_bar.setAlignment(Qt.AlignmentFlag.AlignCenter)
 
-    def _calc_done_dm(self) -> int:
-        """计算全队列已处理弹幕数（不含 PENDING 和 PAUSED）"""
-        return sum(t.attempted for t in self.state.queue_state.tasks if t.status not in (TaskStatus.PENDING, TaskStatus.PAUSED))
-
     def _send_queue_notification(self):
         queue_state = self.state.queue_state
-        completed = sum(1 for t in queue_state.tasks if t.status == TaskStatus.COMPLETED)
-        failed = sum(1 for t in queue_state.tasks if t.status == TaskStatus.FAILED)
-        paused = sum(1 for t in queue_state.tasks if t.status == TaskStatus.PAUSED)
-        skipped = sum(1 for t in queue_state.tasks if t.status == TaskStatus.SKIPPED)
+        counts = queue_state.status_counts
+        completed = counts.get(TaskStatus.COMPLETED, 0)
+        failed = counts.get(TaskStatus.FAILED, 0)
+        paused = counts.get(TaskStatus.PAUSED, 0)
+        skipped = counts.get(TaskStatus.SKIPPED, 0)
         total = len(queue_state.tasks)
         summary = f"完成: {completed} / 失败: {failed} / 暂停: {paused} / 跳过: {skipped} / 总计: {total}"
 

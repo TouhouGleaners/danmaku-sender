@@ -2,11 +2,10 @@
 import pytest
 from pydantic import ValidationError
 
-from danmaku_sender.types.models.danmaku import Danmaku
+from danmaku_sender.config import MonitorConfig, SenderConfig, ValidationConfig
+from danmaku_sender.runtime.state.queue_state import QueueState
 from danmaku_sender.types.models.common import VideoTarget
 from danmaku_sender.types.models.queue import QueueTask, TaskStatus
-from danmaku_sender.config import SenderConfig, MonitorConfig, ValidationConfig
-from danmaku_sender.runtime.state.queue_state import QueueState
 
 
 class TestSenderConfig:
@@ -161,7 +160,7 @@ class TestQueueState:
         qs.update_task_status(t.task_id, TaskStatus.RUNNING, "err")
         assert t.status == TaskStatus.RUNNING
         assert t.error_msg == "err"
-        assert events == [(t.task_id, TaskStatus.RUNNING.value)]
+        assert events == [(t.task_id, TaskStatus.RUNNING)]
 
     def test_current_index_signal(self):
         qs = QueueState()

@@ -5,21 +5,31 @@ from datetime import datetime
 from PySide6.QtCore import Qt, QTimer, Signal, Slot
 from PySide6.QtGui import QTextCursor
 from PySide6.QtWidgets import (
-    QComboBox, QGridLayout, QGroupBox, QHBoxLayout,
-    QLabel, QMessageBox, QPushButton,
-    QSpinBox, QTextEdit, QVBoxLayout, QWidget,
-    QTableView, QHeaderView, QAbstractItemView,
+    QAbstractItemView,
+    QComboBox,
+    QGridLayout,
+    QGroupBox,
+    QHBoxLayout,
+    QHeaderView,
+    QLabel,
+    QMessageBox,
+    QPushButton,
+    QSpinBox,
+    QTableView,
+    QTextEdit,
+    QVBoxLayout,
+    QWidget,
 )
 
-from .table import QueueMonitorModel
+from danmaku_sender.controller.monitor_controller import MonitorController
+from danmaku_sender.repo.history_manager import HistoryManager
+from danmaku_sender.runtime.state.app_state import AppState
+from danmaku_sender.types.models.common import MonitorStats
+from danmaku_sender.types.models.queue import QueueTask, TaskStatus
 from danmaku_sender.ui.framework.binder import UIBinder
 from danmaku_sender.ui.framework.style_loader import SvgIcon
 
-from danmaku_sender.types.models.common import MonitorStats
-from danmaku_sender.types.models.queue import QueueTask, TaskStatus
-from danmaku_sender.runtime.state.app_state import AppState
-from danmaku_sender.repo.history_manager import HistoryManager
-from danmaku_sender.controller.monitor_controller import MonitorController
+from .table import QueueMonitorModel
 
 
 class MonitorPage(QWidget):
@@ -421,8 +431,8 @@ class MonitorPage(QWidget):
         if self._queue_monitoring:
             self._refresh_queue_stats()
 
-    @Slot(str, str)
-    def _on_queue_task_status_changed(self, task_id: str, status: str):
+    @Slot(str, object)
+    def _on_queue_task_status_changed(self, task_id: str, status):
         """任务状态变化时刷新统计数据"""
         if self._queue_monitoring:
             self._refresh_queue_stats()
