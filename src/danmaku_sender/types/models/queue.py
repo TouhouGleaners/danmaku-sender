@@ -61,4 +61,5 @@ class QueueTask:
         self.xml_path = source.xml_path
         self.duration_ms = source.duration_ms
         self.status = source.status
+        self.error_msg = source.error_msg
         self.config_snapshot = source.config_snapshot
