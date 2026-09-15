@@ -81,6 +81,10 @@ class ThemeManager(QObject):
         self._theme_mode = mode
         self._apply_mode()
 
+    def bind_config(self, theme_config):
+        """订阅 ThemeConfig 的变更（由 Runtime.bootstrap 调用）"""
+        theme_config.subscribe("theme_mode", lambda v: self.set_theme_mode(v))
+
     def set_theme_mode(self, mode: ThemeMode):
         """设置主题模式（system / light / dark）"""
         if self._theme_mode == mode:

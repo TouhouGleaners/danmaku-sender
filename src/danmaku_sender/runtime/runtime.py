@@ -49,5 +49,6 @@ class Runtime:
 
         self.config_manager.load(self.app_state)
 
-        # 配置加载后，应用用户选择的主题模式
+        # 配置加载后，应用用户选择的主题模式，并订阅后续变更
         self.resources.theme.set_theme_mode(self.app_state.theme_config.theme_mode)
+        self.resources.theme.bind_config(self.app_state.theme_config)
