@@ -2,10 +2,10 @@ import uuid
 from dataclasses import dataclass, field
 from enum import Enum
 
+from danmaku_sender.config import SenderConfig
+
 from .common import VideoTarget
 from .danmaku import Danmaku
-
-from danmaku_sender.config import SenderConfig
 
 
 class TaskStatus(Enum):
