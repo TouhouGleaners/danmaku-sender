@@ -1,21 +1,33 @@
 import logging
 from copy import deepcopy
 
-from PySide6.QtWidgets import (
-    QDialog, QVBoxLayout, QHBoxLayout, QFormLayout, QLabel,
-    QCheckBox, QSpinBox, QDoubleSpinBox, QPushButton, QGroupBox,
-    QMessageBox, QTabWidget, QWidget, QLineEdit, QComboBox, QFileDialog,
-)
 from PySide6.QtCore import Slot
+from PySide6.QtWidgets import (
+    QCheckBox,
+    QComboBox,
+    QDialog,
+    QDoubleSpinBox,
+    QFileDialog,
+    QFormLayout,
+    QGroupBox,
+    QHBoxLayout,
+    QLabel,
+    QLineEdit,
+    QMessageBox,
+    QPushButton,
+    QSpinBox,
+    QTabWidget,
+    QVBoxLayout,
+    QWidget,
+)
 
 from danmaku_sender.controller.video_controller import VideoController
+from danmaku_sender.service.danmaku_parser import DanmakuParser
+from danmaku_sender.types.models.common import VideoTarget
 from danmaku_sender.types.models.queue import QueueTask, TaskStatus
 from danmaku_sender.types.models.video import VideoInfo
-from danmaku_sender.types.models.common import VideoTarget
-from danmaku_sender.service.danmaku_parser import DanmakuParser
 from danmaku_sender.ui.framework.binder import UIBinder
 from danmaku_sender.utils.string_utils import parse_bilibili_link
-
 
 logger = logging.getLogger(__name__)
 
@@ -295,8 +307,7 @@ class TaskDetailDialog(QDialog):
         if not self._validate_config():
             return
 
-        # 全部验证通过，写回原始对象
-        self.origin.apply_edit(self.editing)
+        # 全部验证通过，由调用方通过 QueueState 应用修改
         self.accept()
 
     def _apply_target_changes(self):
