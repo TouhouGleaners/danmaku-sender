@@ -5,7 +5,6 @@ from platformdirs import user_data_dir
 from danmaku_sender._version import __version__
 from danmaku_sender.utils.path_utils import find_assets_dir
 
-
 # 应用数据目录（import 时计算，运行时不变）
 _DATA_DIR = Path(user_data_dir("BiliDanmakuSender", "Miku_oso"))
 _DATA_DIR.mkdir(parents=True, exist_ok=True)
@@ -45,4 +44,5 @@ class Links:
     """存放所有外部URL"""
     GITHUB_REPO = "https://github.com/TouhouGleaners/danmaku-sender"
     GITHUB_ISSUES = f"{GITHUB_REPO}/issues"
+    GITHUB_PAGES = "https://TouhouGleaners.github.io/danmaku-sender/"
     GITHUB_API_RELEASES = "https://api.github.com/repos/TouhouGleaners/danmaku-sender/releases"
