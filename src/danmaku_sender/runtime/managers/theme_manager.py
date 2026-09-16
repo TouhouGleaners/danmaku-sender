@@ -5,9 +5,13 @@ from PySide6.QtCore import QObject, Qt, Signal, Slot
 from PySide6.QtGui import QColor, QGuiApplication, QPalette
 from PySide6.QtWidgets import QApplication
 
+from danmaku_sender.config.app_meta import AppInfo
 from danmaku_sender.config.theme_config import ThemeConfig, ThemeMode
+from danmaku_sender.utils.file_utils import read_json
 
 logger = logging.getLogger(__name__)
+
+THEMES_DIR = AppInfo.Paths.ASSETS / "themes"
 
 
 @dataclass
@@ -48,33 +52,14 @@ class ThemeManager(QObject):
 
     _instance = None
 
-    # --- 浅色调色板 ---
-    LIGHT = Palette(
-        bg_base="#ffffff",
-        bg_surface="#f8f9fa",
-        bg_hover="#f1f3f5",
-        border_color="#e1e4e8",
-        text_main="#444d56",
-        text_secondary="#7f8c8d",
-        primary="#fb7299",
-        success="#2ecc71",
-        danger="#e74c3c",
-        danger_bg="#fff0f0"
-    )
-
-    # --- 深色调色板 ---
-    DARK = Palette(
-        bg_base="#1e1e1e",
-        bg_surface="#252526",
-        bg_hover="#2d2d2d",
-        border_color="#3e3e42",
-        text_main="#cccccc",
-        text_secondary="#858585",
-        primary="#fb7299",
-        success="#27ae60",
-        danger="#e74c3c",
-        danger_bg="#3a1c1c"
-    )
+    @classmethod
+    def load_palette(cls, name: str) -> Palette:
+        """从 assets/themes/{name}.json 加载调色板"""
+        path = THEMES_DIR / f"{name}.json"
+        data = read_json(path)
+        if data is None:
+            raise FileNotFoundError(f"主题文件缺失或损坏: {path}")
+        return Palette(**data)
 
     @classmethod
     def instance(cls) -> 'ThemeManager':
@@ -84,19 +69,21 @@ class ThemeManager(QObject):
 
     def __init__(self):
         super().__init__()
-        self._current_palette = self.LIGHT
-        self._theme_mode = ThemeMode.SYSTEM
+        self.light = self.load_palette("light")
+        self.dark = self.load_palette("dark")
+        self.current_palette = self.light
+        self.theme_mode = ThemeMode.SYSTEM
 
         # 监听系统级别的主题切换
         if hasattr(QGuiApplication, "styleHints"):
             QGuiApplication.styleHints().colorSchemeChanged.connect(self._on_system_theme_changed)
 
     def current(self) -> Palette:
-        return self._current_palette
+        return self.current_palette
 
     def init_theme(self, mode: ThemeMode = ThemeMode.SYSTEM):
         """初始化主题"""
-        self._theme_mode = mode
+        self.theme_mode = mode
         self._apply_mode()
 
     def bind_config(self, theme_config: ThemeConfig):
@@ -105,37 +92,37 @@ class ThemeManager(QObject):
 
     def set_theme_mode(self, mode: ThemeMode):
         """设置主题模式（system / light / dark）"""
-        if self._theme_mode == mode:
+        if self.theme_mode == mode:
             return
-        self._theme_mode = mode
+        self.theme_mode = mode
         logger.info(f"主题模式已切换: {mode.value}")
         self._apply_mode()
 
     def _apply_mode(self):
         """根据当前模式应用对应调色板"""
-        match self._theme_mode:
+        match self.theme_mode:
             case ThemeMode.SYSTEM:
                 if hasattr(QGuiApplication, "styleHints"):
                     scheme = QGuiApplication.styleHints().colorScheme()
                     is_dark = scheme == Qt.ColorScheme.Dark
-                    self._set_theme(self.DARK if is_dark else self.LIGHT)
+                    self._set_theme(self.dark if is_dark else self.light)
                 else:
-                    self._set_theme(self.LIGHT)
+                    self._set_theme(self.light)
             case ThemeMode.DARK:
-                self._set_theme(self.DARK)
+                self._set_theme(self.dark)
             case ThemeMode.LIGHT:
-                self._set_theme(self.LIGHT)
+                self._set_theme(self.light)
 
     @Slot(Qt.ColorScheme)
     def _on_system_theme_changed(self, scheme: Qt.ColorScheme):
         """系统主题变化时，仅在 system 模式下响应"""
-        if self._theme_mode == ThemeMode.SYSTEM:
+        if self.theme_mode == ThemeMode.SYSTEM:
             is_dark = scheme == Qt.ColorScheme.Dark
-            self._set_theme(self.DARK if is_dark else self.LIGHT)
+            self._set_theme(self.dark if is_dark else self.light)
 
     def _set_theme(self, palette: Palette):
-        if self._current_palette != palette:
-            self._current_palette = palette
+        if self.current_palette != palette:
+            self.current_palette = palette
             # 桥接 QPalette，让原生控件跟随主题
             app = QApplication.instance()
             if isinstance(app, QApplication):
