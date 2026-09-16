@@ -57,7 +57,9 @@ class MainWindow(QMainWindow):
         # 主题服务（UI 层持有，通过 AppState 信号驱动）
         self.theme_service = ThemeService(self)
         self.state.themeModeChanged.connect(self.theme_service.apply_theme)
-        self.theme_service.themeChanged.connect(self._on_theme_applied)
+
+        # 首屏主题必须在创建任何 UI 控件前生效，否则 SvgIcon 会拿到错误的调色板颜色
+        self.theme_service.apply_theme(self.state.theme_mode)
 
         # 控制器
         self.auth_controller = AuthController(self)
@@ -77,13 +79,13 @@ class MainWindow(QMainWindow):
         self._create_menu_bar()
         self._init_system_tray()
 
+        # UI 控件就位后，再连接主题变动时的重绘槽（避免首屏 apply_theme 时控件未创建）
+        self.theme_service.themeChanged.connect(self._on_theme_applied)
+
         # 信号与状态绑定
         self._init_auth_system()
         self._bind_state_to_pages()
         self._connect_global_signals()
-
-        # 首次应用主题（后续由 themeModeChanged 信号驱动）
-        self.theme_service.apply_theme(self.state.theme_mode)
 
         QTimer.singleShot(1000, lambda: self._run_update_check(is_manual=False))
 
@@ -144,7 +146,7 @@ class MainWindow(QMainWindow):
         self.avatar_label.setObjectName("avatarLabel")
         self.avatar_label.setFixedSize(36, 36)
         self.avatar_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        self._refresh_default_avatar()
+        self._render_avatar()
 
         self.username_label = QLabel("未登录")
         self.username_label.setObjectName("usernameLabel")
@@ -368,8 +370,16 @@ class MainWindow(QMainWindow):
 
         self.auth_controller.refresh_user_info(self.state.get_api_auth())
 
-    def _refresh_default_avatar(self):
-        """通用方法：渲染高清的默认头像"""
+    def _render_avatar(self):
+        """统一头像渲染：已登录显示真实头像，未登录显示随主题变色的默认 SVG"""
+        if self._current_profile and self._current_profile.is_login and self._current_profile.avatar_bytes:
+            dpr = self.devicePixelRatioF()
+            pixmap = QtImageProcessor.make_circular_pixmap(self._current_profile.avatar_bytes, 36, dpr)
+            if not pixmap.isNull():
+                self.avatar_label.setPixmap(pixmap)
+                return
+
+        # 未登录或无头像：用当前主题前景色渲染默认 SVG
         icon = SvgIcon("default_avatar.svg")
         pixmap = icon.pixmap(36, 36)
         self.avatar_label.setPixmap(pixmap)
@@ -378,20 +388,8 @@ class MainWindow(QMainWindow):
     def _on_user_profile_updated(self, profile: UserProfile):
         """同步更新 UI"""
         self._current_profile = profile
-
-        # 更新文字
         self.username_label.setText(profile.username)
-
-        # 更新头像
-        if profile.is_login and profile.avatar_bytes:
-            dpr = self.devicePixelRatioF()
-            pixmap = QtImageProcessor.make_circular_pixmap(profile.avatar_bytes, 36, dpr)
-            if not pixmap.isNull():
-                self.avatar_label.setPixmap(pixmap)
-                return
-
-        # 未登录或无头像
-        self._refresh_default_avatar()
+        self._render_avatar()
 
     @Slot()
     def _open_log_folder(self):
@@ -473,6 +471,6 @@ class MainWindow(QMainWindow):
     @Slot(Palette)
     def _on_theme_applied(self, palette: Palette):
         """主题应用完成后，刷新需要重绘颜色的位图资源"""
-        self._refresh_default_avatar()
+        self._render_avatar()
 
     # endregion

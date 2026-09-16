@@ -1,4 +1,13 @@
-from .log_utils import GuiLoggingHandler, DailyLogFileHandler, LogNamespace, init_app_logging
-from .resources import AppResources
+from .log_utils import (
+    DailyLogFileHandler,
+    GuiLoggingHandler,
+    LogNamespace,
+    init_app_logging,
+)
 
-__all__ = ["GuiLoggingHandler", "DailyLogFileHandler", "LogNamespace", "init_app_logging", "AppResources"]
+__all__ = [
+    "DailyLogFileHandler",
+    "GuiLoggingHandler",
+    "LogNamespace",
+    "init_app_logging",
+]

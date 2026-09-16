@@ -3,7 +3,6 @@ import logging
 from danmaku_sender.config.app_meta import AppInfo
 from danmaku_sender.repo.history_manager import HistoryManager
 
-from .infra.resources import AppResources
 from .managers.account_manager import AccountManager
 from .managers.config_manager import ConfigManager
 from .state.app_state import AppState
@@ -19,9 +18,6 @@ class Runtime:
     """
 
     def __init__(self) -> None:
-        # === 基础设施 ===
-        self.resources = AppResources()
-
         # === 状态 ===
         self.app_state = AppState()
 
