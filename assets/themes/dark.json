@@ -1,0 +1,12 @@
+{
+  "bg_base": "#1e1e1e",
+  "bg_surface": "#252526",
+  "bg_hover": "#2d2d2d",
+  "border_color": "#3e3e42",
+  "text_main": "#cccccc",
+  "text_secondary": "#858585",
+  "primary": "#fb7299",
+  "success": "#27ae60",
+  "danger": "#e74c3c",
+  "danger_bg": "#3a1c1c"
+}
