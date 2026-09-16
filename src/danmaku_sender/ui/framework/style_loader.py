@@ -1,16 +1,16 @@
-import re
 import logging
+import re
 
-from PySide6.QtGui import QIcon
+from PySide6.QtGui import QIcon, QPalette
 from PySide6.QtWidgets import QApplication
+
+from danmaku_sender.config.app_meta import AppInfo
 
 from .image_processor import QtImageProcessor
 
-from danmaku_sender.config.app_meta import AppInfo
-from danmaku_sender.runtime.managers.theme_manager import ThemeManager
-
-
 logger = logging.getLogger(__name__)
+
+_FALLBACK_COLOR = "#cccccc"
 
 
 def get_app_icon() -> QIcon:
@@ -19,6 +19,15 @@ def get_app_icon() -> QIcon:
     if icon_path.exists():
         return QIcon(str(icon_path))
     return QIcon()
+
+
+def get_current_text_color() -> str:
+    """纯函数：直接从当前 Qt 生效的 Palette 获取主前景色"""
+    app = QApplication.instance()
+    if isinstance(app, QApplication):
+        return app.palette().color(QPalette.ColorRole.WindowText).name()
+    return _FALLBACK_COLOR
+
 
 class SvgIcon:
     """矢量图标加载器。
@@ -37,7 +46,7 @@ class SvgIcon:
         try:
             svg_content = icon_path.read_text(encoding="utf-8")
             if color is None:
-                color = ThemeManager.instance().current().text_main
+                color = get_current_text_color()
 
             if color:
                 if 'fill=' in svg_content:
@@ -54,38 +63,3 @@ class SvgIcon:
         except Exception as e:
             logger.error(f"动态渲染 SVG 图标失败 [{name}]: {e}", exc_info=True)
             return QIcon(str(icon_path))
-
-def load_stylesheet():
-    """加载全局样式表"""
-    qss_path = AppInfo.Paths.ASSETS / "qss" / "style.qss"
-    if not qss_path.exists():
-        return
-
-    try:
-        with open(qss_path, "r", encoding="utf-8") as f:
-            content = f.read()
-
-        palette = ThemeManager.instance().current()
-
-        replacements = {
-            "{bg_base}": palette.bg_base,
-            "{bg_surface}": palette.bg_surface,
-            "{bg_hover}": palette.bg_hover,
-            "{border_color}": palette.border_color,
-            "{text_main}": palette.text_main,
-            "{text_secondary}": palette.text_secondary,
-            "{primary}": palette.primary,
-            "{success}": palette.success,
-            "{danger}": palette.danger,
-            "{danger_bg}": palette.danger_bg
-        }
-
-        for key, value in replacements.items():
-            content = content.replace(key, value)
-
-        app = QApplication.instance()
-        if isinstance(app, QApplication):
-            app.setStyleSheet(content)
-
-    except Exception as e:
-        logger.error(f"渲染样式表模板失败: {e}", exc_info=True)

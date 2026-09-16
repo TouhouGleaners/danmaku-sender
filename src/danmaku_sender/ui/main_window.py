@@ -30,13 +30,13 @@ from danmaku_sender.controller.auth_controller import AuthController
 from danmaku_sender.controller.system_controller import SystemController
 from danmaku_sender.runtime import Runtime
 from danmaku_sender.runtime.infra.log_utils import GuiLoggingHandler
-from danmaku_sender.runtime.managers.theme_manager import ThemeManager
 from danmaku_sender.types.models.common import MonitorStats
 from danmaku_sender.types.models.user import UserProfile
 
 from .dialogs import AboutDialog, UpdateDialog
 from .framework.image_processor import QtImageProcessor
-from .framework.style_loader import SvgIcon, get_app_icon, load_stylesheet
+from .framework.style_loader import SvgIcon, get_app_icon
+from .framework.theme import Palette, ThemeService
 from .views.account import AccountDialog
 from .views.history import HistoryPage
 from .views.monitor import MonitorPage
@@ -54,7 +54,10 @@ class MainWindow(QMainWindow):
         self.setWindowTitle(UI.MAIN_WINDOW_TITLE)
         self.resize(900, 680)
 
-        ThemeManager.instance().themeChanged.connect(self._on_theme_changed)
+        # 主题服务（UI 层持有，通过 AppState 信号驱动）
+        self.theme_service = ThemeService(self)
+        self.state.themeModeChanged.connect(self.theme_service.apply_theme)
+        self.theme_service.themeChanged.connect(self._on_theme_applied)
 
         # 控制器
         self.auth_controller = AuthController(self)
@@ -79,8 +82,9 @@ class MainWindow(QMainWindow):
         self._bind_state_to_pages()
         self._connect_global_signals()
 
-        # 加载样式与后续任务
-        load_stylesheet()
+        # 首次应用主题（后续由 themeModeChanged 信号驱动）
+        self.theme_service.apply_theme(self.state.theme_mode)
+
         QTimer.singleShot(1000, lambda: self._run_update_check(is_manual=False))
 
     def changeEvent(self, event: QEvent):
@@ -466,9 +470,9 @@ class MainWindow(QMainWindow):
         full_status = f"{AppInfo.NAME}\n{sender_info}\n{monitor_info}"
         self.tray_icon.setToolTip(full_status)
 
-    @Slot()
-    def _on_theme_changed(self, _):
-        """当系统深浅色发生改变时，热重载全局 QSS 样式表"""
-        load_stylesheet()
+    @Slot(Palette)
+    def _on_theme_applied(self, palette: Palette):
+        """主题应用完成后，刷新需要重绘颜色的位图资源"""
+        self._refresh_default_avatar()
 
     # endregion

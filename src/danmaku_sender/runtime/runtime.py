@@ -40,15 +40,9 @@ class Runtime:
         # === 数据库 ===
         self.history_manager = HistoryManager(AppInfo.Paths.HISTORY_DB)
 
-        self.resources.theme.init_theme()
-
         try:
             self.account_manager.load_credentials(self.app_state)
         except Exception as e:
             logger.error(f"凭据加载失败，将以未登录状态继续: {e}")
 
         self.config_manager.load(self.app_state)
-
-        # 配置加载后，应用用户选择的主题模式，并订阅后续变更
-        self.resources.theme.set_theme_mode(self.app_state.theme_config.theme_mode)
-        self.resources.theme.bind_config(self.app_state.theme_config)
