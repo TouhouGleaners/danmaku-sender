@@ -7,6 +7,7 @@ from danmaku_sender.config import (
     MonitorConfig,
     SenderConfig,
     ThemeConfig,
+    ThemeMode,
     ValidationConfig,
 )
 from danmaku_sender.types.models.account import AccountCredential
@@ -25,6 +26,7 @@ class AppState(QObject):
     senderActiveChanged = Signal()
     monitorActiveChanged = Signal()
     editorDirtyChanged = Signal()
+    themeModeChanged = Signal(ThemeMode)
 
     def __init__(self):
         super().__init__()
@@ -99,6 +101,18 @@ class AppState(QObject):
         if self._editor_is_dirty != value:
             self._editor_is_dirty = value
             self.editorDirtyChanged.emit()
+
+    @property
+    def theme_mode(self) -> ThemeMode:
+        """读：穿透到底层 theme_config"""
+        return self.theme_config.theme_mode
+
+    @theme_mode.setter
+    def theme_mode(self, value: ThemeMode):
+        """写：集中拦截，更新底层数据并发射 Qt 信号"""
+        if self.theme_config.theme_mode != value:
+            self.theme_config.theme_mode = value
+            self.themeModeChanged.emit(value)
 
     def get_api_auth(self) -> ApiAuthConfig:
         """
