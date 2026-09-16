@@ -54,12 +54,11 @@ class MainWindow(QMainWindow):
         self.setWindowTitle(UI.MAIN_WINDOW_TITLE)
         self.resize(900, 680)
 
-        # 主题服务（UI 层持有，通过 AppState 信号驱动）
+        # 主题服务（UI 层持有，订阅 theme_config 变更驱动）
         self.theme_service = ThemeService(self)
-        self.state.themeModeChanged.connect(self.theme_service.apply_theme)
 
         # 首屏主题必须在创建任何 UI 控件前生效，否则 SvgIcon 会拿到错误的调色板颜色
-        self.theme_service.apply_theme(self.state.theme_mode)
+        self.theme_service.apply_theme(self.state.theme_config.theme_mode)
 
         # 控制器
         self.auth_controller = AuthController(self)
@@ -79,7 +78,10 @@ class MainWindow(QMainWindow):
         self._create_menu_bar()
         self._init_system_tray()
 
-        # UI 控件就位后，再连接主题变动时的重绘槽（避免首屏 apply_theme 时控件未创建）
+        # UI 控件就位后，订阅 theme_config 变更驱动主题渲染
+        self.state.theme_config.subscribe(
+            "theme_mode", lambda mode: self.theme_service.apply_theme(mode)
+        )
         self.theme_service.themeChanged.connect(self._on_theme_applied)
 
         # 信号与状态绑定
