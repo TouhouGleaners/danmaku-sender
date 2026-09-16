@@ -24,7 +24,7 @@ from PySide6.QtWidgets import (
     QWidget,
 )
 
-from danmaku_sender.config.app_meta import UI, AppInfo
+from danmaku_sender.config.app_meta import UI, AppInfo, Links
 from danmaku_sender.controller.account_controller import AccountController
 from danmaku_sender.controller.auth_controller import AuthController
 from danmaku_sender.controller.system_controller import SystemController
@@ -34,7 +34,7 @@ from danmaku_sender.runtime.managers.theme_manager import ThemeManager
 from danmaku_sender.types.models.common import MonitorStats
 from danmaku_sender.types.models.user import UserProfile
 
-from .dialogs import AboutDialog, HelpDialog, UpdateDialog
+from .dialogs import AboutDialog, UpdateDialog
 from .framework.image_processor import QtImageProcessor
 from .framework.style_loader import SvgIcon, get_app_icon, load_stylesheet
 from .views.account import AccountDialog
@@ -61,7 +61,6 @@ class MainWindow(QMainWindow):
         self.system_controller = SystemController(self)
         self.logger = logging.getLogger(__name__)
         self._log_signals_connected = False
-        self._help_dialog = None  # 存储帮助窗口的引用，防止被垃圾回收
         self._current_profile: UserProfile | None = None
 
         # 运行时状态
@@ -105,9 +104,6 @@ class MainWindow(QMainWindow):
             self.logger.error(f"保存凭证失败: {e}")
 
         self.rt.config_manager.save(self.state)
-
-        if self._help_dialog:
-            self._help_dialog.close()
 
         super().closeEvent(event)
 
@@ -235,7 +231,7 @@ class MainWindow(QMainWindow):
         help_menu = menu_bar.addMenu("帮助")
 
         usage_action = QAction("使用说明", self)
-        usage_action.triggered.connect(self._show_help)
+        usage_action.triggered.connect(lambda: QDesktopServices.openUrl(QUrl(Links.GITHUB_PAGES)))
         help_menu.addAction(usage_action)
 
         help_menu.addSeparator()
@@ -404,17 +400,6 @@ class MainWindow(QMainWindow):
                 return
 
         QDesktopServices.openUrl(QUrl.fromLocalFile(str(log_dir)))
-
-    @Slot()
-    def _show_help(self):
-        """显示非模态的帮助窗口"""
-        if not self._help_dialog:
-            self._help_dialog = HelpDialog()
-            self._help_dialog.finished.connect(lambda *args: setattr(self, '_help_dialog', None))
-
-        self._help_dialog.show()
-        self._help_dialog.raise_()
-        self._help_dialog.activateWindow()
 
     @Slot()
     def _show_about(self):

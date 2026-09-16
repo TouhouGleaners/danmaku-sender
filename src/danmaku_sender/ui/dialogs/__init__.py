@@ -1,4 +1,3 @@
-from .dialogs import AboutDialog, HelpDialog, UpdateDialog, QRLoginDialog
+from .dialogs import AboutDialog, QRLoginDialog, UpdateDialog
 
-
-__all__ = ["AboutDialog", "HelpDialog", "UpdateDialog", "QRLoginDialog"]
+__all__ = ["AboutDialog", "QRLoginDialog", "UpdateDialog"]

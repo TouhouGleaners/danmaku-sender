@@ -1,87 +1,31 @@
-import re
 import logging
+import re
 from typing import cast
 
 import qrcode
+from PIL import Image
 from PySide6.QtCore import Qt, QUrl, Slot
 from PySide6.QtGui import QDesktopServices, QImage, QPixmap
 from PySide6.QtWidgets import (
-    QDialog, QVBoxLayout, QHBoxLayout, QTabWidget,
-    QTextBrowser, QPushButton, QLabel
+    QDialog,
+    QHBoxLayout,
+    QLabel,
+    QPushButton,
+    QTextBrowser,
+    QVBoxLayout,
 )
-from PIL import Image
 
-from danmaku_sender.controller.auth_controller import AuthController
-
-from danmaku_sender.types.models.common import AuthCookies
 from danmaku_sender.config.app_meta import AppInfo, Links
-
+from danmaku_sender.controller.auth_controller import AuthController
+from danmaku_sender.types.models.common import AuthCookies
 
 logger = logging.getLogger(__name__)
-
-
-class MarkdownBrowser(QTextBrowser):
-    """专门用于显示 Markdown 的浏览器控件"""
-    def __init__(self, doc_name: str):
-        super().__init__()
-        self.setOpenExternalLinks(True)
-        self.setFrameShape(QTextBrowser.Shape.NoFrame)
-        self.setStyleSheet("padding: 1px;")
-
-        md_path = AppInfo.Paths.ASSETS / "docs" / f"{doc_name}.md"
-        if md_path.exists():
-            try:
-                with open(md_path, "r", encoding="utf-8") as f:
-                    self.setMarkdown(f.read())
-            except Exception as e:
-                logger.error(f"加载帮助文档失败 [{md_path}]: {e}", exc_info=True)
-                self._show_error_placeholder("无法加载文档内容，请检查日志。")
-        else:
-            logger.warning(f"帮助文档缺失: {md_path}")
-            self._show_error_placeholder("该模块暂无帮助文档。")
-
-    def _show_error_placeholder(self, message: str):
-        """显示一个居中的灰色提示文字"""
-        self.setHtml(f"""
-            <div style='text-align: center; margin-top: 50px; color: #888888;'>
-                <h3>⚠️</h3>
-                <p>{message}</p>
-            </div>
-        """)
-
-
-class HelpDialog(QDialog):
-    def __init__(self, parent=None):
-        super().__init__(parent)
-        self.setWindowTitle("使用说明")
-        self.resize(600, 500)
-        self._create_ui()
-
-    def _create_ui(self):
-        layout = QVBoxLayout(self)
-
-        self.tabs = QTabWidget()
-
-        self.tabs.addTab(MarkdownBrowser("sender"), "弹幕发射器")
-        self.tabs.addTab(MarkdownBrowser("validator"), "弹幕校验器")
-        self.tabs.addTab(MarkdownBrowser("monitor"), "弹幕监视器")
-
-        layout.addWidget(self.tabs)
-
-        btn_layout = QHBoxLayout()
-        btn_layout.addStretch()
-        close_btn = QPushButton("关闭")
-        close_btn.setFixedWidth(100)
-        close_btn.clicked.connect(self.accept)
-        btn_layout.addWidget(close_btn)
-
-        layout.addLayout(btn_layout)
 
 
 class AboutDialog(QDialog):
     def __init__(self, parent=None):
         super().__init__(parent)
-        self.setWindowTitle(f"关于")
+        self.setWindowTitle("关于")
         self.setFixedSize(400, 300)
         self._create_ui()
 
@@ -297,7 +241,7 @@ class QRLoginDialog(QDialog):
                 Qt.TransformationMode.SmoothTransformation
             )
             self.qr_label.setPixmap(pixmap)
-        except Exception as e:
+        except Exception:
             self.status_label.setText("二维码渲染失败")
             self.status_label.setStyleSheet("color: #e74c3c;")
 
