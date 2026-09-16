@@ -10,9 +10,6 @@ from .image_processor import QtImageProcessor
 
 logger = logging.getLogger(__name__)
 
-_FALLBACK_COLOR = "#cccccc"
-
-
 def get_app_icon() -> QIcon:
     """获取程序全局图标"""
     icon_path = AppInfo.Paths.ASSETS / "icon.ico"
@@ -21,12 +18,12 @@ def get_app_icon() -> QIcon:
     return QIcon()
 
 
-def get_current_text_color() -> str:
-    """纯函数：直接从当前 Qt 生效的 Palette 获取主前景色"""
+def get_current_text_color() -> str | None:
+    """从当前生效的 Qt 调色板获取前景色；脱离 GUI 环境时返回 None，不强行染色"""
     app = QApplication.instance()
     if isinstance(app, QApplication):
         return app.palette().color(QPalette.ColorRole.WindowText).name()
-    return _FALLBACK_COLOR
+    return None
 
 
 class SvgIcon:
@@ -48,6 +45,7 @@ class SvgIcon:
             if color is None:
                 color = get_current_text_color()
 
+            # 只有真正拿到了颜色才染色；None 时保持 SVG 原样
             if color:
                 if 'fill=' in svg_content:
                     svg_content = re.sub(r'fill=(["\']).*?\1', f'fill="{color}"', svg_content)
