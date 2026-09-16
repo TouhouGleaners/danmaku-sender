@@ -59,7 +59,12 @@ class ThemeManager(QObject):
         data = read_json(path)
         if data is None:
             raise FileNotFoundError(f"主题文件缺失或损坏: {path}")
-        return Palette(**data)
+        if not isinstance(data, dict) or set(data) != set(Palette.__annotations__):
+            raise FileNotFoundError(f"主题文件结构非法: {path}")
+        try:
+            return Palette(**data)
+        except TypeError as e:
+            raise FileNotFoundError(f"主题文件结构非法: {path}") from e
 
     @classmethod
     def instance(cls) -> 'ThemeManager':
