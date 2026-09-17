@@ -3,15 +3,19 @@
 from PySide6.QtCore import QSize, Qt, QTimer, Signal
 from PySide6.QtGui import QMouseEvent, QPixmap
 from PySide6.QtWidgets import (
-    QFrame, QHBoxLayout, QVBoxLayout, QLabel,
-    QPushButton, QWidget, QApplication
+    QApplication,
+    QFrame,
+    QHBoxLayout,
+    QLabel,
+    QPushButton,
+    QVBoxLayout,
+    QWidget,
 )
 
-from danmaku_sender.types.models.account import AccountCredential
 from danmaku_sender.config.app_meta import AppInfo
-from danmaku_sender.ui.framework.style_loader import SvgIcon
+from danmaku_sender.types.models.account import AccountCredential
+from danmaku_sender.ui.framework.icons import SvgIcon
 from danmaku_sender.ui.framework.image_processor import QtImageProcessor
-
 
 # 等级图标缓存：{(icon_name, dpr): QPixmap}，避免重复 SVG 解析
 _level_icon_cache: dict[tuple[str, float], QPixmap] = {}
@@ -95,14 +99,14 @@ class AccountRow(QFrame):
 
         # 右侧操作按钮
         actions = [
-            ("how_to_reg.svg", "使用", self.use_clicked),
-            ("troubleshoot.svg", "检测", self.check_clicked),
-            ("edit.svg", "编辑", self.edit_clicked),
-            ("delete.svg", "删除", self.delete_clicked),
+            (SvgIcon.HOW_TO_REG, "使用", self.use_clicked),
+            (SvgIcon.TROUBLESHOOT, "检测", self.check_clicked),
+            (SvgIcon.EDIT, "编辑", self.edit_clicked),
+            (SvgIcon.DELETE, "删除", self.delete_clicked),
         ]
-        for icon_name, tooltip, signal in actions:
+        for icon, tooltip, signal in actions:
             btn = QPushButton()
-            btn.setIcon(SvgIcon(icon_name))
+            btn.setIcon(icon)
             btn.setIconSize(QSize(20, 20))
             btn.setToolTip(tooltip)
             btn.setCursor(Qt.CursorShape.PointingHandCursor)
@@ -180,15 +184,15 @@ class AccountRow(QFrame):
 
     def _update_status(self, is_valid: bool | None):
         if is_valid is True:
-            self._status_icon.setPixmap(SvgIcon("check_circle.svg", "#4CAF50").pixmap(16, 16))
+            self._status_icon.setPixmap(SvgIcon.CHECK_CIRCLE(color="#4CAF50").pixmap(16, 16))
             self._status_text.setText("有效")
             self._status_text.setProperty("status", "valid")
         elif is_valid is False:
-            self._status_icon.setPixmap(SvgIcon("cancel.svg", "#E53935").pixmap(16, 16))
+            self._status_icon.setPixmap(SvgIcon.CANCEL(color="#E53935").pixmap(16, 16))
             self._status_text.setText("失效")
             self._status_text.setProperty("status", "invalid")
         else:
-            self._status_icon.setPixmap(SvgIcon("help.svg", "#999").pixmap(16, 16))
+            self._status_icon.setPixmap(SvgIcon.HELP(color="#999").pixmap(16, 16))
             self._status_text.setText("未检测")
             self._status_text.setProperty("status", "unknown")
         self._status_text.style().unpolish(self._status_text)

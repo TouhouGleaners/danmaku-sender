@@ -42,7 +42,7 @@ from danmaku_sender.runtime.state.app_state import AppState
 from danmaku_sender.service.danmaku_parser import DanmakuParser
 from danmaku_sender.service.sender import SendingContext
 from danmaku_sender.types.models.queue import QueueTask, TaskStatus
-from danmaku_sender.ui.framework.style_loader import SvgIcon
+from danmaku_sender.ui.framework.icons import SvgIcon
 from danmaku_sender.ui.views.editor import EditorDialog
 from danmaku_sender.utils.time_utils import format_duration
 
@@ -67,9 +67,6 @@ class SenderPage(QWidget):
 
         self._create_ui()
         self._connect_signals()
-
-        self._icon_start = SvgIcon("start.svg")
-        self._icon_stop = SvgIcon("stop.svg")
 
 
     def _create_ui(self):
@@ -138,7 +135,7 @@ class SenderPage(QWidget):
         queue_btn_layout = QHBoxLayout()
 
         self._btn_add_to_queue = QPushButton("新建任务")
-        self._btn_add_to_queue.setIcon(SvgIcon("start.svg"))
+        self._btn_add_to_queue.setIcon(SvgIcon.START)
         self._btn_add_to_queue.setFixedWidth(120)
         self._btn_add_to_queue.setCursor(Qt.CursorShape.PointingHandCursor)
         self._btn_add_to_queue.setProperty("action", "true")
@@ -173,14 +170,14 @@ class SenderPage(QWidget):
         self.progress_bar.setValue(0)
 
         self._btn_start_queue = QPushButton("启动队列")
-        self._btn_start_queue.setIcon(SvgIcon("start.svg"))
+        self._btn_start_queue.setIcon(SvgIcon.START)
         self._btn_start_queue.setFixedWidth(100)
         self._btn_start_queue.setCursor(Qt.CursorShape.PointingHandCursor)
         self._btn_start_queue.setProperty("action", "true")
         self._btn_start_queue.setProperty("state", "ready")
 
         self._btn_stop_queue = QPushButton("停止队列")
-        self._btn_stop_queue.setIcon(SvgIcon("stop.svg"))
+        self._btn_stop_queue.setIcon(SvgIcon.STOP)
         self._btn_stop_queue.setFixedWidth(100)
         self._btn_stop_queue.setCursor(Qt.CursorShape.PointingHandCursor)
         self._btn_stop_queue.setProperty("action", "true")

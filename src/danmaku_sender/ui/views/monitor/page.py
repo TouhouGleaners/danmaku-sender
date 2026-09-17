@@ -27,7 +27,7 @@ from danmaku_sender.runtime.state.app_state import AppState
 from danmaku_sender.types.models.common import MonitorStats
 from danmaku_sender.types.models.queue import QueueTask, TaskStatus
 from danmaku_sender.ui.framework.binder import UIBinder
-from danmaku_sender.ui.framework.style_loader import SvgIcon
+from danmaku_sender.ui.framework.icons import SvgIcon
 
 from .table import QueueMonitorModel
 
@@ -54,9 +54,6 @@ class MonitorPage(QWidget):
 
         self._create_ui()
         self._connect_signals()
-
-        self._icon_start = SvgIcon("start.svg")
-        self._icon_stop = SvgIcon("stop.svg")
 
     def _create_ui(self):
         # 主布局 - 垂直布局
@@ -190,7 +187,7 @@ class MonitorPage(QWidget):
         self.status_label = QLabel("监视器：待命")
 
         self.btn_monitor_queue = QPushButton("监视队列")
-        self.btn_monitor_queue.setIcon(SvgIcon("start.svg"))
+        self.btn_monitor_queue.setIcon(SvgIcon.START)
         self.btn_monitor_queue.setFixedWidth(120)
         self.btn_monitor_queue.setCursor(Qt.CursorShape.PointingHandCursor)
         self.btn_monitor_queue.setProperty("action", "true")
@@ -246,7 +243,7 @@ class MonitorPage(QWidget):
         self.btn_monitor_queue.setProperty("state", state)
         self.btn_monitor_queue.style().unpolish(self.btn_monitor_queue)
         self.btn_monitor_queue.style().polish(self.btn_monitor_queue)
-        self.btn_monitor_queue.setIcon(self._icon_stop if running else self._icon_start)
+        self.btn_monitor_queue.setIcon(SvgIcon.STOP if running else SvgIcon.START)
 
     def _update_anchor_display(self, baseline: float):
         if baseline <= 0:

@@ -5,6 +5,7 @@ from PySide6.QtGui import (
     QAction,
     QCloseEvent,
     QDesktopServices,
+    QIcon,
     QKeySequence,
     QShortcut,
 )
@@ -35,7 +36,7 @@ from danmaku_sender.types.models.user import UserProfile
 
 from .dialogs import AboutDialog, UpdateDialog
 from .framework.image_processor import QtImageProcessor
-from .framework.style_loader import SvgIcon, get_app_icon
+from .framework.icons import APP_ICON, SvgIcon
 from .framework.theme import Palette, ThemeService
 from .views.account import AccountDialog
 from .views.history import HistoryPage
@@ -186,15 +187,15 @@ class MainWindow(QMainWindow):
         self.page_history = HistoryPage(self.state, self.rt.history_manager)
 
         # 定义页面列表
-        pages = [
-            ("全局设置", self.page_settings, "settings.svg"),
-            ("弹幕发射器", self.page_sender, "send.svg"),
-            ("弹幕监视器", self.page_monitor, "monitor.svg"),
-            ("弹幕历史记录", self.page_history, "history.svg"),
+        self._sidebar_pages: list[tuple[str, QWidget, QIcon]] = [
+            ("全局设置", self.page_settings, SvgIcon.SETTINGS),
+            ("弹幕发射器", self.page_sender, SvgIcon.SEND),
+            ("弹幕监视器", self.page_monitor, SvgIcon.MONITOR),
+            ("弹幕历史记录", self.page_history, SvgIcon.HISTORY),
         ]
 
-        for title, widget, icon_name in pages:
-            item = QListWidgetItem(SvgIcon(icon_name), f"{title}")
+        for title, widget, icon in self._sidebar_pages:
+            item = QListWidgetItem(icon, title)
             self.sidebar.addItem(item)
             self.content_stack.addWidget(widget)
 
@@ -257,7 +258,7 @@ class MainWindow(QMainWindow):
     def _init_system_tray(self):
         """初始化系统托盘"""
         self.tray_icon = QSystemTrayIcon(self)
-        self.tray_icon.setIcon(get_app_icon())
+        self.tray_icon.setIcon(APP_ICON)
 
         # 托盘右键菜单
         tray_menu = QMenu(self)
@@ -382,8 +383,7 @@ class MainWindow(QMainWindow):
                 return
 
         # 未登录或无头像：用当前主题前景色渲染默认 SVG
-        icon = SvgIcon("default_avatar.svg")
-        pixmap = icon.pixmap(36, 36)
+        pixmap = SvgIcon.DEFAULT_AVATAR.pixmap(36, 36)
         self.avatar_label.setPixmap(pixmap)
 
     @Slot(UserProfile)
@@ -473,6 +473,15 @@ class MainWindow(QMainWindow):
     @Slot(Palette)
     def _on_theme_applied(self, palette: Palette):
         """主题应用完成后，刷新需要重绘颜色的位图资源"""
+        self._refresh_icons()
+
+    def _refresh_icons(self):
+        """主题切换后重刷所有使用主题前景色的图标"""
+        # 侧边栏导航图标
+        for i, (_, _, icon) in enumerate(self._sidebar_pages):
+            self.sidebar.item(i).setIcon(icon)
+
+        # 头像
         self._render_avatar()
 
     # endregion

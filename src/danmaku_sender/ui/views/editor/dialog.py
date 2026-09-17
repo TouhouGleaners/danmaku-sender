@@ -24,7 +24,7 @@ from danmaku_sender.controller.editor_controller import EditorController
 from danmaku_sender.runtime.state.app_state import AppState
 from danmaku_sender.types.models.editor_types import EditorField, InsertPosition
 from danmaku_sender.types.models.queue import QueueTask
-from danmaku_sender.ui.framework.style_loader import SvgIcon
+from danmaku_sender.ui.framework.icons import SvgIcon
 
 from .components import EditorTableModel, PropertyInspectorGroup, ValidationRulesGroup
 from .dialogs import ArrayGeneratorDialog, EditDanmakuDialog, TimeOffsetDialog
@@ -73,10 +73,10 @@ class EditorDialog(QDialog):
         toolbar_layout.setSpacing(8)
 
         # A: 文件级操作
-        self.btn_import = QPushButton(SvgIcon("file_open.svg"), "导入 XML")
+        self.btn_import = QPushButton(SvgIcon.FILE_OPEN, "导入 XML")
         self.btn_import.clicked.connect(self._import_xml)
 
-        self.btn_export = QPushButton(SvgIcon("file_save.svg"), "导出为 XML")
+        self.btn_export = QPushButton(SvgIcon.FILE_SAVE, "导出为 XML")
         self.btn_export.setEnabled(False)
         self.btn_export.clicked.connect(self._export_xml)
 
@@ -89,25 +89,25 @@ class EditorDialog(QDialog):
         toolbar_layout.addWidget(v_line1)
 
         # B: 批量处理工具 (下拉菜单)
-        self.btn_batch = QPushButton(SvgIcon("handyman.svg"), "批量处理")
+        self.btn_batch = QPushButton(SvgIcon.HANDYMAN, "批量处理")
         self.btn_batch.setEnabled(False)
 
         self.batch_menu = QMenu(self)
-        self.batch_menu.addAction(SvgIcon("format_clear.svg"), "一键去除所有换行符", self._batch_remove_newlines)
-        self.batch_menu.addAction(SvgIcon("short_text.svg"), "一键截断过长弹幕(>100字)", self._batch_truncate_length)
-        self.batch_menu.addAction(SvgIcon("sync_alt.svg"), "整体平移时间轴", self._prompt_time_offset)
+        self.batch_menu.addAction(SvgIcon.FORMAT_CLEAR, "一键去除所有换行符", self._batch_remove_newlines)
+        self.batch_menu.addAction(SvgIcon.SHORT_TEXT, "一键截断过长弹幕(>100字)", self._batch_truncate_length)
+        self.batch_menu.addAction(SvgIcon.SYNC_ALT, "整体平移时间轴", self._prompt_time_offset)
         self.btn_batch.setMenu(self.batch_menu)
 
         toolbar_layout.addWidget(self.btn_batch)
         toolbar_layout.addStretch()
 
         # C: 核心工作流
-        self.undo_btn = QPushButton(SvgIcon("undo.svg"), "撤销")
+        self.undo_btn = QPushButton(SvgIcon.UNDO, "撤销")
         self.undo_btn.setFixedWidth(80)
         self.undo_btn.setEnabled(False)
         self.undo_btn.clicked.connect(self._undo)
 
-        self.run_btn = QPushButton(SvgIcon("play_arrow.svg"), "开始校验")
+        self.run_btn = QPushButton(SvgIcon.PLAY_ARROW, "开始校验")
         self.run_btn.setStyleSheet("background-color: #3498db; color: white; font-weight: bold;")
         self.run_btn.setFixedWidth(100)
         self.run_btn.clicked.connect(self._run_validation)
@@ -181,7 +181,7 @@ class EditorDialog(QDialog):
         self.status_label.setStyleSheet("color: #7f8c8d;")
         self.status_label.setAlignment(Qt.AlignmentFlag.AlignRight | Qt.AlignmentFlag.AlignVCenter)
 
-        self.apply_btn = QPushButton(SvgIcon("done_all.svg"), "应用所有修改")
+        self.apply_btn = QPushButton(SvgIcon.DONE_ALL, "应用所有修改")
         self.apply_btn.setStyleSheet("""
             QPushButton {
                 background-color: #2ecc71;
@@ -436,15 +436,15 @@ class EditorDialog(QDialog):
         menu = QMenu(self)
         row = index.row()
 
-        menu.addAction(SvgIcon("edit_document.svg"), "编辑内容", lambda: self._edit_row(row))
+        menu.addAction(SvgIcon.EDIT_DOCUMENT, "编辑内容", lambda: self._edit_row(row))
         menu.addSeparator()
-        menu.addAction(SvgIcon("vertical_align_top.svg"), "在上方插入新弹幕", lambda: self._insert_row(row, InsertPosition.ABOVE))
-        menu.addAction(SvgIcon("vertical_align_bottom.svg"), "在下方插入新弹幕", lambda: self._insert_row(row, InsertPosition.BELOW))
+        menu.addAction(SvgIcon.VERTICAL_ALIGN_TOP, "在上方插入新弹幕", lambda: self._insert_row(row, InsertPosition.ABOVE))
+        menu.addAction(SvgIcon.VERTICAL_ALIGN_BOTTOM, "在下方插入新弹幕", lambda: self._insert_row(row, InsertPosition.BELOW))
         menu.addSeparator()
-        menu.addAction(SvgIcon("sync_alt.svg"), "平移选中弹幕的时间轴", self._shift_selected_items_time)
-        adv_menu = menu.addMenu(SvgIcon("auto_awesome.svg"), "高级生成工具")
-        adv_menu.addAction(SvgIcon("gradient.svg"), "生成彩虹弹幕阵列", lambda: self._generate_array(row))
-        menu.addAction(SvgIcon("delete.svg"), "删除选中条目", self._delete_selected_items)
+        menu.addAction(SvgIcon.SYNC_ALT, "平移选中弹幕的时间轴", self._shift_selected_items_time)
+        adv_menu = menu.addMenu(SvgIcon.AUTO_AWESOME, "高级生成工具")
+        adv_menu.addAction(SvgIcon.GRADIENT, "生成彩虹弹幕阵列", lambda: self._generate_array(row))
+        menu.addAction(SvgIcon.DELETE, "删除选中条目", self._delete_selected_items)
 
         # 弹出菜单
         menu.exec(self.table.viewport().mapToGlobal(pos))
