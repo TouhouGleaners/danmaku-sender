@@ -5,7 +5,6 @@ from PySide6.QtGui import (
     QAction,
     QCloseEvent,
     QDesktopServices,
-    QIcon,
     QKeySequence,
     QShortcut,
 )
