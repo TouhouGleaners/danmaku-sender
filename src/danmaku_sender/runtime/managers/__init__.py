@@ -1,5 +1,4 @@
-from .config_manager import ConfigManager
 from .account_manager import AccountManager
-from .theme_manager import ThemeManager, Palette
+from .config_manager import ConfigManager
 
-__all__ = ["ConfigManager", "AccountManager", "ThemeManager", "Palette"]
+__all__ = ["AccountManager", "ConfigManager"]

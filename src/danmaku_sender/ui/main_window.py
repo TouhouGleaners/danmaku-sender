@@ -30,13 +30,13 @@ from danmaku_sender.controller.auth_controller import AuthController
 from danmaku_sender.controller.system_controller import SystemController
 from danmaku_sender.runtime import Runtime
 from danmaku_sender.runtime.infra.log_utils import GuiLoggingHandler
-from danmaku_sender.runtime.managers.theme_manager import ThemeManager
 from danmaku_sender.types.models.common import MonitorStats
 from danmaku_sender.types.models.user import UserProfile
 
 from .dialogs import AboutDialog, UpdateDialog
 from .framework.image_processor import QtImageProcessor
-from .framework.style_loader import SvgIcon, get_app_icon, load_stylesheet
+from .framework.style_loader import SvgIcon, get_app_icon
+from .framework.theme import Palette, ThemeService
 from .views.account import AccountDialog
 from .views.history import HistoryPage
 from .views.monitor import MonitorPage
@@ -54,7 +54,11 @@ class MainWindow(QMainWindow):
         self.setWindowTitle(UI.MAIN_WINDOW_TITLE)
         self.resize(900, 680)
 
-        ThemeManager.instance().themeChanged.connect(self._on_theme_changed)
+        # 主题服务（UI 层持有，订阅 theme_config 变更驱动）
+        self.theme_service = ThemeService(self)
+
+        # 首屏主题必须在创建任何 UI 控件前生效，否则 SvgIcon 会拿到错误的调色板颜色
+        self.theme_service.apply_theme(self.state.theme_config.theme_mode)
 
         # 控制器
         self.auth_controller = AuthController(self)
@@ -74,13 +78,17 @@ class MainWindow(QMainWindow):
         self._create_menu_bar()
         self._init_system_tray()
 
+        # UI 控件就位后，订阅 theme_config 变更驱动主题渲染
+        self.state.theme_config.subscribe(
+            "theme_mode", lambda mode: self.theme_service.apply_theme(mode)
+        )
+        self.theme_service.themeChanged.connect(self._on_theme_applied)
+
         # 信号与状态绑定
         self._init_auth_system()
         self._bind_state_to_pages()
         self._connect_global_signals()
 
-        # 加载样式与后续任务
-        load_stylesheet()
         QTimer.singleShot(1000, lambda: self._run_update_check(is_manual=False))
 
     def changeEvent(self, event: QEvent):
@@ -140,7 +148,7 @@ class MainWindow(QMainWindow):
         self.avatar_label.setObjectName("avatarLabel")
         self.avatar_label.setFixedSize(36, 36)
         self.avatar_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        self._refresh_default_avatar()
+        self._render_avatar()
 
         self.username_label = QLabel("未登录")
         self.username_label.setObjectName("usernameLabel")
@@ -364,8 +372,16 @@ class MainWindow(QMainWindow):
 
         self.auth_controller.refresh_user_info(self.state.get_api_auth())
 
-    def _refresh_default_avatar(self):
-        """通用方法：渲染高清的默认头像"""
+    def _render_avatar(self):
+        """统一头像渲染：已登录显示真实头像，未登录显示随主题变色的默认 SVG"""
+        if self._current_profile and self._current_profile.is_login and self._current_profile.avatar_bytes:
+            dpr = self.devicePixelRatioF()
+            pixmap = QtImageProcessor.make_circular_pixmap(self._current_profile.avatar_bytes, 36, dpr)
+            if not pixmap.isNull():
+                self.avatar_label.setPixmap(pixmap)
+                return
+
+        # 未登录或无头像：用当前主题前景色渲染默认 SVG
         icon = SvgIcon("default_avatar.svg")
         pixmap = icon.pixmap(36, 36)
         self.avatar_label.setPixmap(pixmap)
@@ -374,20 +390,8 @@ class MainWindow(QMainWindow):
     def _on_user_profile_updated(self, profile: UserProfile):
         """同步更新 UI"""
         self._current_profile = profile
-
-        # 更新文字
         self.username_label.setText(profile.username)
-
-        # 更新头像
-        if profile.is_login and profile.avatar_bytes:
-            dpr = self.devicePixelRatioF()
-            pixmap = QtImageProcessor.make_circular_pixmap(profile.avatar_bytes, 36, dpr)
-            if not pixmap.isNull():
-                self.avatar_label.setPixmap(pixmap)
-                return
-
-        # 未登录或无头像
-        self._refresh_default_avatar()
+        self._render_avatar()
 
     @Slot()
     def _open_log_folder(self):
@@ -466,9 +470,9 @@ class MainWindow(QMainWindow):
         full_status = f"{AppInfo.NAME}\n{sender_info}\n{monitor_info}"
         self.tray_icon.setToolTip(full_status)
 
-    @Slot()
-    def _on_theme_changed(self, _):
-        """当系统深浅色发生改变时，热重载全局 QSS 样式表"""
-        load_stylesheet()
+    @Slot(Palette)
+    def _on_theme_applied(self, palette: Palette):
+        """主题应用完成后，刷新需要重绘颜色的位图资源"""
+        self._render_avatar()
 
     # endregion

@@ -3,7 +3,6 @@ import logging
 from danmaku_sender.config.app_meta import AppInfo
 from danmaku_sender.repo.history_manager import HistoryManager
 
-from .infra.resources import AppResources
 from .managers.account_manager import AccountManager
 from .managers.config_manager import ConfigManager
 from .state.app_state import AppState
@@ -19,9 +18,6 @@ class Runtime:
     """
 
     def __init__(self) -> None:
-        # === 基础设施 ===
-        self.resources = AppResources()
-
         # === 状态 ===
         self.app_state = AppState()
 
@@ -40,15 +36,9 @@ class Runtime:
         # === 数据库 ===
         self.history_manager = HistoryManager(AppInfo.Paths.HISTORY_DB)
 
-        self.resources.theme.init_theme()
-
         try:
             self.account_manager.load_credentials(self.app_state)
         except Exception as e:
             logger.error(f"凭据加载失败，将以未登录状态继续: {e}")
 
         self.config_manager.load(self.app_state)
-
-        # 配置加载后，应用用户选择的主题模式，并订阅后续变更
-        self.resources.theme.set_theme_mode(self.app_state.theme_config.theme_mode)
-        self.resources.theme.bind_config(self.app_state.theme_config)
