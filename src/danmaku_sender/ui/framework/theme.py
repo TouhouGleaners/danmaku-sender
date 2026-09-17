@@ -15,6 +15,8 @@ from danmaku_sender.config.app_meta import AppInfo
 from danmaku_sender.config.theme_config import ThemeMode
 from danmaku_sender.utils.file_utils import read_json
 
+from .icons import SvgIcon
+
 logger = logging.getLogger(__name__)
 
 THEMES_DIR = AppInfo.Paths.ASSETS / "themes"
@@ -110,7 +112,10 @@ class ThemeService(QObject):
         # 1. 注入原生 QPalette（必须在 setStyleSheet 之前）
         app.setPalette(palette.to_qpalette())
 
-        # 2. 编译并注入全局 QSS（用 str.replace 避免 CSS 大括号冲突）
+        # 2. 清空图标渲染缓存，后续 SvgIcon 常量访问将以新调色板颜色重新渲染
+        SvgIcon.clear_cache()
+
+        # 3. 编译并注入全局 QSS（用 str.replace 避免 CSS 大括号冲突）
         if QSS_PATH.exists():
             try:
                 css = QSS_PATH.read_text(encoding="utf-8")
@@ -131,7 +136,7 @@ class ThemeService(QObject):
             except Exception as e:
                 logger.error(f"加载样式表失败: {e}", exc_info=True)
 
-        # 3. 广播主题变动通知
+        # 4. 广播主题变动通知
         self.themeChanged.emit(palette)
         logger.info(f"全局主题已生效: {self._current_mode.value}")
 

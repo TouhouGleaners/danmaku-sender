@@ -4,18 +4,24 @@ import logging
 
 from PySide6.QtCore import Qt
 from PySide6.QtWidgets import (
-    QDialog, QVBoxLayout, QHBoxLayout, QScrollArea,
-    QPushButton, QLabel, QWidget, QMessageBox,
+    QDialog,
+    QHBoxLayout,
+    QLabel,
+    QMessageBox,
+    QPushButton,
+    QScrollArea,
+    QVBoxLayout,
+    QWidget,
 )
 
-from .components import AccountRow
-from .account_form import AccountFormDialog
-
-from danmaku_sender.types.models.account import AccountCredential
 from danmaku_sender.config import ApiAuthConfig
-from danmaku_sender.runtime.state.app_state import AppState
 from danmaku_sender.controller.account_controller import AccountController
-from danmaku_sender.ui.framework.style_loader import SvgIcon
+from danmaku_sender.runtime.state.app_state import AppState
+from danmaku_sender.types.models.account import AccountCredential
+from danmaku_sender.ui.framework.icons import SvgIcon
+
+from .account_form import AccountFormDialog
+from .components import AccountRow
 
 logger = logging.getLogger(__name__)
 
@@ -84,14 +90,14 @@ class AccountDialog(QDialog):
         # 底部按钮
         btn_row = QHBoxLayout()
         self._btn_clear = QPushButton("清除失效")
-        self._btn_clear.setIcon(SvgIcon("delete_sweep.svg"))
+        self._btn_clear.setIcon(SvgIcon.DELETE)
         self._btn_clear.setCursor(Qt.CursorShape.PointingHandCursor)
         self._btn_clear.clicked.connect(self._clear_invalid)
         self._btn_clear.setEnabled(False)
         btn_row.addWidget(self._btn_clear)
 
         self._btn_check_all = QPushButton("全部检测")
-        self._btn_check_all.setIcon(SvgIcon("troubleshoot.svg"))
+        self._btn_check_all.setIcon(SvgIcon.TROUBLESHOOT)
         self._btn_check_all.setCursor(Qt.CursorShape.PointingHandCursor)
         self._btn_check_all.clicked.connect(self._check_all)
         btn_row.addWidget(self._btn_check_all)
@@ -99,7 +105,7 @@ class AccountDialog(QDialog):
         btn_row.addStretch()
 
         btn_add = QPushButton("添加账号")
-        btn_add.setIcon(SvgIcon("person_add.svg"))
+        btn_add.setIcon(SvgIcon.PERSON_ADD)
         btn_add.setCursor(Qt.CursorShape.PointingHandCursor)
         btn_add.clicked.connect(self._add_account)
         btn_row.addWidget(btn_add)
