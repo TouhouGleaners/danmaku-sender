@@ -21,13 +21,10 @@ logger = logging.getLogger(__name__)
 ICONS_DIR = AppInfo.Paths.ASSETS / "icons"
 
 
-def _load_app_icon() -> QIcon:
-    """加载程序全局窗口图标（.ico）"""
+def get_app_icon() -> QIcon:
+    """获取程序全局窗口图标（在 QApplication 创建后调用）"""
     icon_path = AppInfo.Paths.ASSETS / "icon.ico"
     return QIcon(str(icon_path)) if icon_path.exists() else QIcon()
-
-
-APP_ICON: QIcon = _load_app_icon()
 
 
 def get_current_text_color() -> str | None:
@@ -70,7 +67,10 @@ class _ThemedIcon(QIcon):
         self._subfolder = subfolder
 
     def __call__(self, *, color: str | None = None) -> "_ThemedIcon":
-        """SvgIcon.START(color="#ff0000")：使用指定颜色重新渲染"""
+        """SvgIcon.START(color="#ff0000")：使用指定颜色重新渲染；
+        color=None 时取当前主题前景色，与裸属性访问行为一致"""
+        if color is None:
+            color = get_current_text_color()
         raw_icon = _render_svg_icon(self._file_path_str, color)
         return _ThemedIcon(raw_icon, self._file_path_str, self._subfolder)
 

@@ -5,7 +5,7 @@ from PySide6.QtWidgets import QApplication
 
 from danmaku_sender.config.app_meta import AppInfo
 from danmaku_sender.runtime.infra.log_utils import init_app_logging
-from danmaku_sender.ui.framework.icons import APP_ICON
+from danmaku_sender.ui.framework.icons import get_app_icon
 
 
 def main(argv=None):
@@ -33,7 +33,7 @@ def main(argv=None):
 
     app = QApplication(argv)
     app.setStyle("Fusion")
-    app.setWindowIcon(APP_ICON)
+    app.setWindowIcon(get_app_icon())
     app.setApplicationName(AppInfo.NAME)
     app.setApplicationVersion(AppInfo.VERSION)
 
