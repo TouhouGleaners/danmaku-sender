@@ -6,7 +6,7 @@ from collections import Counter
 from PySide6.QtCore import QObject, Signal
 
 from danmaku_sender.types.models.danmaku import Danmaku
-from danmaku_sender.types.models.queue import QueueTask, TaskStatus
+from danmaku_sender.types.models.queue import InsertPosition, QueueTask, TaskStatus
 
 logger = logging.getLogger(__name__)
 
@@ -101,6 +101,36 @@ class QueueState(QObject):
         self.tasksChanged.emit()
         logger.info(
             f"任务已加入队列: [{task.task_id}] "
+            f"{task.target.display_string} ({len(task.danmakus)} 条弹幕)"
+        )
+
+    def insert_task(
+        self,
+        task: QueueTask,
+        ref_task_id: str,
+        position: InsertPosition = InsertPosition.BELOW,
+    ):
+        """在参考任务上方/下方插入；参考不存在时追加到末尾。
+
+        这是队列插入的唯一公开入口，调用方不接触绝对下标。
+        """
+        ref_index = -1
+        for i, t in enumerate(self._tasks):
+            if t.task_id == ref_task_id:
+                ref_index = i
+                break
+        if ref_index < 0:
+            self.add_task(task)
+            return
+
+        index = ref_index if position is InsertPosition.ABOVE else ref_index + 1
+        if index >= len(self._tasks):
+            self._tasks.append(task)
+        else:
+            self._tasks.insert(max(0, index), task)
+        self.tasksChanged.emit()
+        logger.info(
+            f"任务已插入队列 (相对 {ref_task_id} {position.name}): [{task.task_id}] "
             f"{task.target.display_string} ({len(task.danmakus)} 条弹幕)"
         )
 

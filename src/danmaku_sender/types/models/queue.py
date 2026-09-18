@@ -1,6 +1,6 @@
 import uuid
 from dataclasses import dataclass, field
-from enum import Enum
+from enum import Enum, auto
 
 from danmaku_sender.config import SenderConfig
 
@@ -17,6 +17,12 @@ class TaskStatus(Enum):
     COMPLETED = "已完成"
     FAILED = "失败"
     SKIPPED = "已跳过"
+
+
+class InsertPosition(Enum):
+    """队列任务相对插入位置（相对参考任务）"""
+    ABOVE = auto()
+    BELOW = auto()
 
 
 @dataclass
