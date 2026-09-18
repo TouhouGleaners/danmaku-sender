@@ -41,7 +41,7 @@ from danmaku_sender.runtime.infra.platform import send_windows_notification
 from danmaku_sender.runtime.state.app_state import AppState
 from danmaku_sender.service.danmaku_parser import DanmakuParser
 from danmaku_sender.service.sender import SendingContext
-from danmaku_sender.types.models.queue import QueueTask, TaskStatus
+from danmaku_sender.types.models.queue import InsertPosition, QueueTask, TaskStatus
 from danmaku_sender.ui.framework.icons import SvgIcon
 from danmaku_sender.ui.views.editor import EditorDialog
 from danmaku_sender.utils.time_utils import format_duration
@@ -245,6 +245,14 @@ class SenderPage(QWidget):
         menu.addAction("上移", lambda: self._move_task(task.task_id, -1)).setEnabled(is_editable)
         menu.addAction("下移", lambda: self._move_task(task.task_id, 1)).setEnabled(is_editable)
         menu.addSeparator()
+        can_insert = not self.state.sender_is_active
+        menu.addAction("在上方插入任务", lambda: self._open_task_builder(
+            ref_task_id=task.task_id, insert_position=InsertPosition.ABOVE
+        )).setEnabled(can_insert)
+        menu.addAction("在下方插入任务", lambda: self._open_task_builder(
+            ref_task_id=task.task_id, insert_position=InsertPosition.BELOW
+        )).setEnabled(can_insert)
+        menu.addSeparator()
         menu.addAction("删除", lambda: self._remove_task(task.task_id)).setEnabled(is_editable)
 
         menu.exec(self._queue_table.mapToGlobal(pos))
@@ -281,14 +289,21 @@ class SenderPage(QWidget):
 
     @Slot()
     def _add_to_queue(self):
-        """打开任务构建弹窗"""
-        dialog = TaskBuilderDialog(self.state, self)
-        dialog.taskCreated.connect(self._on_task_created)
-        dialog.exec()
+        """打开任务构建弹窗（追加到末尾）"""
+        self._open_task_builder()
 
-    def _on_task_created(self, task: QueueTask):
-        """弹窗创建任务后的回调"""
-        self.state.queue_state.add_task(task)
+    def _open_task_builder(
+        self,
+        ref_task_id: str | None = None,
+        insert_position: InsertPosition | None = None,
+    ):
+        """打开 TaskBuilderDialog；入队由弹窗直接写 QueueState"""
+        TaskBuilderDialog(
+            self.state,
+            ref_task_id=ref_task_id,
+            insert_position=insert_position,
+            parent=self,
+        ).exec()
 
     @Slot()
     def _start_queue(self):

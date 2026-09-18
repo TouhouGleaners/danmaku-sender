@@ -1,37 +1,55 @@
-import logging
-
+from PySide6.QtCore import Slot
 from PySide6.QtWidgets import (
-    QDialog, QVBoxLayout, QHBoxLayout, QFormLayout, QLineEdit,
-    QPushButton, QComboBox, QFileDialog, QMessageBox, QGroupBox
+    QComboBox,
+    QDialog,
+    QFileDialog,
+    QFormLayout,
+    QGroupBox,
+    QHBoxLayout,
+    QLineEdit,
+    QMessageBox,
+    QPushButton,
+    QVBoxLayout,
 )
-from PySide6.QtCore import Signal, Slot
 
 from danmaku_sender.controller.video_controller import VideoController
-from danmaku_sender.types.models.video import VideoInfo
-from danmaku_sender.types.models.queue import QueueTask, TaskStatus
-from danmaku_sender.types.models.common import VideoTarget
 from danmaku_sender.runtime.state.app_state import AppState
 from danmaku_sender.service.danmaku_parser import DanmakuParser
+from danmaku_sender.types.models.common import VideoTarget
+from danmaku_sender.types.models.queue import InsertPosition, QueueTask, TaskStatus
+from danmaku_sender.types.models.video import VideoInfo
 from danmaku_sender.utils.string_utils import parse_bilibili_link
 
 
-logger = logging.getLogger(__name__)
-
-
 class TaskBuilderDialog(QDialog):
-    """任务构建弹窗：选择视频 → 选择分P → 选择弹幕文件 → 添加到队列"""
+    """任务构建弹窗：选择视频 → 选择分P → 选择弹幕文件 → 写入队列
 
-    taskCreated = Signal(QueueTask)  # 每创建一个任务就发射
+    ref_task_id 为 None：追加到队尾，可连续添加，弹窗保持打开。
+    指定 ref_task_id + insert_position：相对参考任务插入，成功后自动关闭。
+    与 EditorDialog 一致：由弹窗在创建时直接写 QueueState，调用方只负责打开。
+    """
 
-    def __init__(self, state: AppState, parent=None):
+    def __init__(
+        self,
+        state: AppState,
+        ref_task_id: str | None = None,
+        insert_position: InsertPosition | None = None,
+        parent=None,
+    ):
         super().__init__(parent)
         self.state = state
         self.video_controller = VideoController(self)
         self._video_info: VideoInfo | None = None
         self._selected_files: list[str] = []
         self._pending_part_index: int | None = None
+        self._ref_task_id = ref_task_id
+        self._insert_position = insert_position
 
-        self.setWindowTitle("添加任务到队列")
+        if ref_task_id is None:
+            self.setWindowTitle("添加任务到队列")
+        else:
+            label = "上方" if insert_position is InsertPosition.ABOVE else "下方"
+            self.setWindowTitle(f"在选中任务{label}插入")
         self.setMinimumWidth(500)
         self._create_ui()
         self._connect_signals()
@@ -217,9 +235,15 @@ class TaskBuilderDialog(QDialog):
         if not danmakus:
             task.status = TaskStatus.UNCONFIGURED
 
-        self.taskCreated.emit(task)
-        logger.info(f"任务已创建: {target.display_string} ({len(danmakus)} 条弹幕, {task.status.value})")
+        queue_state = self.state.queue_state
+        if self._ref_task_id is None:
+            queue_state.add_task(task)
+            # 追加模式：允许连建，弹窗保持打开
+            self._selected_files = []
+            self._file_input.clear()
+            return
 
-        # 添加后保留分P选择，只清空文件选择
-        self._selected_files = []
-        self._file_input.clear()
+        # 相对插入：写入后关闭（上下文插入是一次性动作）
+        position = self._insert_position or InsertPosition.BELOW
+        queue_state.insert_task(task, self._ref_task_id, position)
+        self.accept()
