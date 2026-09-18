@@ -245,12 +245,13 @@ class SenderPage(QWidget):
         menu.addAction("上移", lambda: self._move_task(task.task_id, -1)).setEnabled(is_editable)
         menu.addAction("下移", lambda: self._move_task(task.task_id, 1)).setEnabled(is_editable)
         menu.addSeparator()
+        can_insert = not self.state.sender_is_active
         menu.addAction("在上方插入任务", lambda: self._open_task_builder(
             ref_task_id=task.task_id, insert_position=InsertPosition.ABOVE
-        ))
+        )).setEnabled(can_insert)
         menu.addAction("在下方插入任务", lambda: self._open_task_builder(
             ref_task_id=task.task_id, insert_position=InsertPosition.BELOW
-        ))
+        )).setEnabled(can_insert)
         menu.addSeparator()
         menu.addAction("删除", lambda: self._remove_task(task.task_id)).setEnabled(is_editable)
 
