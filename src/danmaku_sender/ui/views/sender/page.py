@@ -262,6 +262,9 @@ class SenderPage(QWidget):
         auth_config = self.state.get_api_auth()
         dialog = TaskDetailDialog(task, auth_config, self.state.sender_is_active, self)
         if dialog.exec() == QDialog.DialogCode.Accepted:
+            if self.state.sender_is_active:
+                self.logger.warning("发送进行中，已忽略任务详情编辑结果。")
+                return
             # 通过 QueueState 统一应用编辑结果（自动发射 taskDataChanged）
             self.state.queue_state.apply_edit(task.task_id, dialog.editing)
             self.logger.info(f"已更新任务: {task.target.display_string}")
@@ -322,7 +325,7 @@ class SenderPage(QWidget):
 
         self._queue_total_dm = self.state.queue_state.total_danmaku_count
         self._update_queue_ui(running=True)
-        self.sender_controller.start_queue(self.state.queue_state, auth_config)
+        self.sender_controller.start_queue(auth_config)
 
     @Slot()
     def _stop_queue(self):

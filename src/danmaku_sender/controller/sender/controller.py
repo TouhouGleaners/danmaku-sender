@@ -2,22 +2,20 @@
 
 import logging
 import threading
+from collections.abc import Callable
 from enum import Enum
-from typing import Callable
 
 from PySide6.QtCore import QObject, Signal, Slot
 
-from .workers import QueueWorker
-
+from danmaku_sender.config import ApiAuthConfig
 from danmaku_sender.controller.concurrency import PoolTask
+from danmaku_sender.repo.history_manager import HistoryManager
+from danmaku_sender.runtime.state.app_state import AppState
 from danmaku_sender.service.danmaku_exporter import create_xml_from_danmakus
 from danmaku_sender.types.models.common import UnsentDanmakusRecord
 from danmaku_sender.types.models.queue import TaskStatus
-from danmaku_sender.repo.history_manager import HistoryManager
-from danmaku_sender.config import ApiAuthConfig
-from danmaku_sender.runtime.state.app_state import AppState
-from danmaku_sender.runtime.state.queue_state import QueueState
 
+from .workers import QueueSendWorker
 
 logger = logging.getLogger(__name__)
 
@@ -30,7 +28,11 @@ class SenderStatus(Enum):
 
 
 class SenderController(QObject):
-    """发送任务业务控制器"""
+    """发送任务业务控制器
+
+    持有 AppState；QueueState 只在本层（主线程 slot）变更，
+    后台 QueueSendWorker 仅 emit 事件。
+    """
     # 队列信号
     queueTaskStarted = Signal(str)                      # task_id
     queueTaskCompleted = Signal(str, object)            # (task_id, SendingContext)
@@ -44,7 +46,7 @@ class SenderController(QObject):
         super().__init__(parent)
         self.state = state
         self.history_manager = history_manager
-        self._queue_worker: QueueWorker | None = None
+        self._queue_worker: QueueSendWorker | None = None
         self._stop_event = threading.Event()
 
     @property
@@ -58,8 +60,10 @@ class SenderController(QObject):
 
     # region Queue
 
-    def start_queue(self, queue_state: QueueState, auth_config: ApiAuthConfig, reset_failed: bool = False):
+    def start_queue(self, auth_config: ApiAuthConfig, reset_failed: bool = False):
         """启动队列发送。
+
+        始终使用 AppState.queue_state；Worker 事件也只落账到该队列。
 
         Args:
             reset_failed: 是否重置之前失败/跳过的任务。默认 False，只重置残留的 RUNNING 状态。
@@ -68,7 +72,7 @@ class SenderController(QObject):
             logger.warning("任务已在运行中，无法启动队列。")
             return
 
-        # 重置残留状态
+        queue_state = self.state.queue_state
         resettable = {TaskStatus.RUNNING, TaskStatus.PAUSED}
         if reset_failed:
             resettable |= {TaskStatus.FAILED, TaskStatus.SKIPPED}
@@ -84,27 +88,30 @@ class SenderController(QObject):
 
         self._stop_event.clear()
 
-        self._queue_worker = QueueWorker(
-            queue_state=queue_state,
+        # 主线程取快照交给 Worker；之后状态一律经 signal 回本类 slot 落账
+        snapshot = queue_state.tasks
+        self._queue_worker = QueueSendWorker(
+            tasks=snapshot,
             auth_config=auth_config,
             sender_config=self.state.sender_config,
             history_manager=self.history_manager,
             stop_event=self._stop_event,
         )
 
-        self._queue_worker.taskStarted.connect(self.queueTaskStarted.emit)
-        self._queue_worker.taskCompleted.connect(self.queueTaskCompleted.emit)
-        self._queue_worker.taskFailed.connect(self.queueTaskFailed.emit)
+        self._queue_worker.taskStarted.connect(self._on_task_started)
+        self._queue_worker.taskCompleted.connect(self._on_task_completed)
+        self._queue_worker.taskFailed.connect(self._on_task_failed)
+        self._queue_worker.taskSkipped.connect(self._on_task_skipped)
         self._queue_worker.queueFinished.connect(self._on_queue_finished)
         self._queue_worker.queueProgressUpdated.connect(self.queueProgressUpdated.emit)
         self._queue_worker.taskProgressUpdated.connect(self._on_task_progress)
 
         self._queue_worker.finished.connect(self._on_queue_cleanup)
         self._queue_worker.finished.connect(self._queue_worker.deleteLater)
-        self._queue_worker.start()
 
-        # 标记队列运行状态
+        # 先落下运行闸门，再启动线程，避免启动瞬间 UI 仍可结构编辑
         self.state.sender_is_active = True
+        self._queue_worker.start()
 
     def stop_queue(self):
         """停止队列发送"""
@@ -115,21 +122,49 @@ class SenderController(QObject):
         """检查队列是否正在运行"""
         return self._queue_worker is not None and self._queue_worker.isRunning()
 
+    # endregion
+    # region Worker slots（主线程落账 QueueState）
+
+    @Slot(str, int)
+    def _on_task_started(self, task_id: str, idx: int):
+        self.state.queue_state.update_task_status(task_id, TaskStatus.RUNNING)
+        self.state.queue_state.current_index = idx
+        self.queueTaskStarted.emit(task_id)
+
+    @Slot(str, object)
+    def _on_task_completed(self, task_id: str, ctx):
+        if (
+            ctx is not None
+            and getattr(ctx, "is_manually_stopped", False)
+            and not getattr(ctx, "auto_stop_reason", "")
+        ):
+            self.state.queue_state.update_task_status(task_id, TaskStatus.PAUSED, "用户手动暂停")
+        else:
+            self.state.queue_state.update_task_status(task_id, TaskStatus.COMPLETED)
+        self.queueTaskCompleted.emit(task_id, ctx)
+
+    @Slot(str, str)
+    def _on_task_failed(self, task_id: str, error_msg: str):
+        self.state.queue_state.update_task_status(task_id, TaskStatus.FAILED, error_msg)
+        self.queueTaskFailed.emit(task_id, error_msg)
+
+    @Slot(str, str)
+    def _on_task_skipped(self, task_id: str, reason: str):
+        self.state.queue_state.update_task_status(task_id, TaskStatus.SKIPPED, reason)
+
     @Slot()
     def _on_queue_finished(self):
-        """队列执行完毕"""
+        self.state.queue_state.current_index = -1
         self.queueFinished.emit()
 
     @Slot(str, int, int, float)
     def _on_task_progress(self, task_id: str, attempted: int, task_total: int, eta: float):
-        """转发单任务粒度进度"""
         self.taskProgressUpdated.emit(task_id, attempted, task_total, eta)
 
     @Slot()
     def _on_queue_cleanup(self):
-        """队列 Worker 清理完毕，可安全重启"""
         if self._queue_worker is not None:
-            logger.debug("QueueWorker 线程生命周期结束，正在清理控制器引用。")
+            logger.debug("QueueSendWorker 线程生命周期结束，正在清理控制器引用。")
             self._queue_worker = None
         self.state.sender_is_active = False
         self.queueReady.emit()
