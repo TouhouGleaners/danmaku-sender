@@ -51,6 +51,8 @@ class QueueSendWorker(WorkerThread):
         tasks = self.tasks
         total = len(tasks)
         stopped_early = False
+        # 本线程已发出终态信号的任务；跳过循环不得再依赖共享 status（主线程 slot 可能尚未落账）
+        handled: set[str] = set()
 
         try:
             with KeepSystemAwake(True):
@@ -63,10 +65,12 @@ class QueueSendWorker(WorkerThread):
                         continue
 
                     if task.status == TaskStatus.UNCONFIGURED:
+                        handled.add(task.task_id)
                         self.taskSkipped.emit(task.task_id, "未配置弹幕")
                         continue
 
                     should_continue = self._execute_task(task, idx, total)
+                    handled.add(task.task_id)
 
                     if not should_continue:
                         stopped_early = True
@@ -79,6 +83,8 @@ class QueueSendWorker(WorkerThread):
 
             if stopped_early and not self.stop_event.is_set():
                 for task in tasks:
+                    if task.task_id in handled:
+                        continue
                     if task.status == TaskStatus.PENDING:
                         self.taskSkipped.emit(task.task_id, "致命错误，队列中止")
 

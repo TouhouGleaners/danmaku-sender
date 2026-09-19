@@ -325,7 +325,7 @@ class SenderPage(QWidget):
 
         self._queue_total_dm = self.state.queue_state.total_danmaku_count
         self._update_queue_ui(running=True)
-        self.sender_controller.start_queue(self.state.queue_state, auth_config)
+        self.sender_controller.start_queue(auth_config)
 
     @Slot()
     def _stop_queue(self):

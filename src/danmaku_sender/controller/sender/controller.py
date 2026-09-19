@@ -11,7 +11,6 @@ from danmaku_sender.config import ApiAuthConfig
 from danmaku_sender.controller.concurrency import PoolTask
 from danmaku_sender.repo.history_manager import HistoryManager
 from danmaku_sender.runtime.state.app_state import AppState
-from danmaku_sender.runtime.state.queue_state import QueueState
 from danmaku_sender.service.danmaku_exporter import create_xml_from_danmakus
 from danmaku_sender.types.models.common import UnsentDanmakusRecord
 from danmaku_sender.types.models.queue import TaskStatus
@@ -61,8 +60,10 @@ class SenderController(QObject):
 
     # region Queue
 
-    def start_queue(self, queue_state: QueueState, auth_config: ApiAuthConfig, reset_failed: bool = False):
+    def start_queue(self, auth_config: ApiAuthConfig, reset_failed: bool = False):
         """启动队列发送。
+
+        始终使用 AppState.queue_state；Worker 事件也只落账到该队列。
 
         Args:
             reset_failed: 是否重置之前失败/跳过的任务。默认 False，只重置残留的 RUNNING 状态。
@@ -71,6 +72,7 @@ class SenderController(QObject):
             logger.warning("任务已在运行中，无法启动队列。")
             return
 
+        queue_state = self.state.queue_state
         resettable = {TaskStatus.RUNNING, TaskStatus.PAUSED}
         if reset_failed:
             resettable |= {TaskStatus.FAILED, TaskStatus.SKIPPED}
