@@ -12,6 +12,7 @@ from danmaku_sender.controller.concurrency import PoolTask
 from danmaku_sender.repo.history_manager import HistoryManager
 from danmaku_sender.runtime.state.app_state import AppState
 from danmaku_sender.service.danmaku_exporter import create_xml_from_danmakus
+from danmaku_sender.service.sender.context import SendingContext
 from danmaku_sender.types.models.common import UnsentDanmakusRecord
 from danmaku_sender.types.models.queue import TaskStatus
 
@@ -112,7 +113,7 @@ class SenderController(QObject):
         worker.queueProgressUpdated.connect(self.queueProgressUpdated.emit)
         worker.taskProgressUpdated.connect(self._on_task_progress)
 
-        worker.finished.connect(lambda w=worker: self._on_queue_cleanup(w))
+        worker.ending.connect(self._on_worker_discard)
         worker.finished.connect(worker.deleteLater)
 
         # 先落下运行闸门，再启动线程，避免启动瞬间 UI 仍可结构编辑
@@ -143,12 +144,8 @@ class SenderController(QObject):
         self.queueTaskStarted.emit(task_id)
 
     @Slot(str, object)
-    def _on_task_completed(self, task_id: str, ctx):
-        if (
-            ctx is not None
-            and getattr(ctx, "is_manually_stopped", False)
-            and not getattr(ctx, "auto_stop_reason", "")
-        ):
+    def _on_task_completed(self, task_id: str, ctx: SendingContext | None):
+        if ctx is not None and ctx.is_manually_stopped and not ctx.auto_stop_reason:
             self.state.queue_state.update_task_status(task_id, TaskStatus.PAUSED, "用户手动暂停")
         else:
             self.state.queue_state.update_task_status(task_id, TaskStatus.COMPLETED)
@@ -174,10 +171,11 @@ class SenderController(QObject):
         self.taskProgressUpdated.emit(task_id, attempted, task_total, eta)
 
     @Slot(object)
-    def _on_queue_cleanup(self, worker: QueueSendWorker):
-        """仅当清理的是当前 _worker 时才释放引用。"""
+    def _on_worker_discard(self, worker: QueueSendWorker):
+        """主线程清理：仅当仍是当前 _queue_worker 时释放引用。"""
         if worker is not self._queue_worker:
             return
+
         logger.debug("QueueSendWorker 线程生命周期结束，正在清理控制器引用。")
         self._queue_worker = None
         self.state.sender_is_active = False
