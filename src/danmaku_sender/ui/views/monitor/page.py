@@ -193,6 +193,7 @@ class MonitorPage(QWidget):
 
         # MonitorController
         self.monitor_controller.taskStatsUpdated.connect(self._on_task_stats_updated)
+        self.monitor_controller.taskVerifyFailed.connect(self._on_task_verify_failed)
         self.monitor_controller.overallStatsUpdated.connect(self._on_overall_stats_updated)
         self.monitor_controller.statusUpdated.connect(self.status_label.setText)
         self.monitor_controller.monitorFailed.connect(self._on_monitor_failed)
@@ -268,6 +269,12 @@ class MonitorPage(QWidget):
         self.lbl_lost.setText(str(lost))
         return {'total': total, 'verified': verified, 'pending': pending, 'lost': lost}
 
+    def _sync_overall_stats(self) -> dict:
+        """刷新统计卡片并广播给托盘/全局（始终按当前队列聚合）"""
+        totals = self._update_overall_stats()
+        self.statsUpdated.emit(totals)
+        return totals
+
     def _set_ui_running(self, running: bool):
         self.interval_spin.setEnabled(not running)
         self.btn_monitor_queue.setEnabled(True)
@@ -304,7 +311,7 @@ class MonitorPage(QWidget):
         self._queue_stats.clear()
         if not self.monitor_controller.start_queue_monitor(self.state.get_api_auth()):
             self._refresh_queue_table()
-            self._update_overall_stats()
+            self._sync_overall_stats()
             self._set_ui_running(False)
             self.logger.warning("队列监视未能启动")
             return
@@ -312,18 +319,24 @@ class MonitorPage(QWidget):
         self._queue_monitoring = True
         self._set_ui_running(True)
         self._refresh_queue_table()
-        self._update_overall_stats()
+        self._sync_overall_stats()
 
     @Slot(str, object)
     def _on_task_stats_updated(self, task_id: str, stats):
         self._queue_stats[task_id] = stats
         self._refresh_queue_table()
-        self._update_overall_stats()
+        self._sync_overall_stats()
+
+    @Slot(str)
+    def _on_task_verify_failed(self, task_id: str):
+        """本轮核销失败：丢弃缓存，行与合计都不用旧库数据冒充最新结果"""
+        self._queue_stats.pop(task_id, None)
+        self._refresh_queue_table()
+        self._sync_overall_stats()
 
     @Slot(object)
     def _on_overall_stats_updated(self, stats):
-        # 托盘/全局只反映「当前队列」聚合；队列清空则发零值，不用 Worker 轮次快照回退
-        self.statsUpdated.emit(self._update_overall_stats())
+        self._sync_overall_stats()
 
     @Slot()
     def _on_monitor_finished(self):
@@ -368,14 +381,15 @@ class MonitorPage(QWidget):
 
     @Slot()
     def _on_queue_changed(self):
+        """队列结构变化：刷新表格并广播当前队列聚合（托盘不残留旧值）"""
         self._refresh_queue_table()
-        self._update_overall_stats()
+        self._sync_overall_stats()
 
     @Slot(str, object)
     def _on_queue_task_status_changed(self, task_id: str, status):
         if self._queue_monitoring:
             self._refresh_queue_table()
-            self._update_overall_stats()
+            self._sync_overall_stats()
 
     # endregion
 

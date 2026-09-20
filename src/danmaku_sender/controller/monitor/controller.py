@@ -21,6 +21,7 @@ class MonitorController(QObject):
     """
 
     taskStatsUpdated = Signal(str, object)   # (task_id, MonitorStats)
+    taskVerifyFailed = Signal(str)           # task_id
     overallStatsUpdated = Signal(object)     # MonitorStats
     statusUpdated = Signal(str)
     monitorFailed = Signal(str)              # 异常终止
@@ -69,6 +70,7 @@ class MonitorController(QObject):
         )
 
         worker.taskStatsUpdated.connect(self._on_task_stats)
+        worker.taskVerifyFailed.connect(self._on_task_verify_failed)
         worker.overallStatsUpdated.connect(self._on_overall_stats)
         worker.statusUpdated.connect(self._on_status)
         worker.monitorFailed.connect(self._on_monitor_failed)
@@ -97,6 +99,10 @@ class MonitorController(QObject):
     @Slot(str, object)
     def _on_task_stats(self, task_id: str, stats):
         self.taskStatsUpdated.emit(task_id, stats)
+
+    @Slot(str)
+    def _on_task_verify_failed(self, task_id: str):
+        self.taskVerifyFailed.emit(task_id)
 
     @Slot(object)
     def _on_overall_stats(self, stats):

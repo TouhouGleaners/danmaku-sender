@@ -49,6 +49,7 @@ class QueueMonitorWorker(WorkerThread):
     """
 
     taskStatsUpdated = Signal(str, object)   # (task_id, MonitorStats)
+    taskVerifyFailed = Signal(str)           # task_id：本轮核销失败
     overallStatsUpdated = Signal(object)     # MonitorStats 合计
     statusUpdated = Signal(str)
     monitorFailed = Signal(str)              # 异常终止原因（非用户停止）
@@ -148,8 +149,9 @@ class QueueMonitorWorker(WorkerThread):
                         f"在线共 {result['total_checked']} 条。"
                     )
                 except Exception as e:
-                    # 本轮不发该任务统计，避免把未核销的旧库数据当成最新结果
+                    # 本轮不发统计；通知 UI 丢弃该任务缓存，与 Worker 合计口径一致
                     logger.warning(f"[{sample.label}] 在线核销失败，跳过: {e}")
+                    self.taskVerifyFailed.emit(sample.task_id)
                     continue
 
                 stats = self._stats_for(sample.target, baseline)
