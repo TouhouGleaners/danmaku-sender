@@ -1,6 +1,4 @@
-"""队列监视控制器包"""
-
 from .controller import MonitorController
-from .workers import QueueMonitorWorker
+from .workers import MonitorSample, QueueMonitorWorker
 
-__all__ = ["MonitorController", "QueueMonitorWorker"]
+__all__ = ["MonitorController", "MonitorSample", "QueueMonitorWorker"]

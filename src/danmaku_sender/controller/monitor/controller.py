@@ -21,6 +21,7 @@ class MonitorController(QObject):
     taskStatsUpdated = Signal(str, object)   # (task_id, MonitorStats)
     overallStatsUpdated = Signal(object)     # MonitorStats
     statusUpdated = Signal(str)
+    monitorFailed = Signal(str)              # 异常终止
     monitorFinished = Signal()
     monitorReady = Signal()
 
@@ -57,6 +58,7 @@ class MonitorController(QObject):
         self._worker.taskStatsUpdated.connect(self._on_task_stats)
         self._worker.overallStatsUpdated.connect(self._on_overall_stats)
         self._worker.statusUpdated.connect(self._on_status)
+        self._worker.monitorFailed.connect(self._on_monitor_failed)
         self._worker.monitorFinished.connect(self._on_monitor_finished)
         self._worker.finished.connect(self._on_worker_cleanup)
         self._worker.finished.connect(self._worker.deleteLater)
@@ -87,6 +89,11 @@ class MonitorController(QObject):
     @Slot(str)
     def _on_status(self, message: str):
         self.statusUpdated.emit(message)
+
+    @Slot(str)
+    def _on_monitor_failed(self, error_msg: str):
+        logger.error(f"队列监视异常终止: {error_msg}")
+        self.monitorFailed.emit(error_msg)
 
     @Slot()
     def _on_monitor_finished(self):

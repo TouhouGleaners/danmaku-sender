@@ -194,6 +194,7 @@ class MonitorPage(QWidget):
         self.monitor_controller.taskStatsUpdated.connect(self._on_task_stats_updated)
         self.monitor_controller.overallStatsUpdated.connect(self._on_overall_stats_updated)
         self.monitor_controller.statusUpdated.connect(self.status_label.setText)
+        self.monitor_controller.monitorFailed.connect(self._on_monitor_failed)
         self.monitor_controller.monitorFinished.connect(self._on_monitor_finished)
         self.monitor_controller.monitorReady.connect(self._on_monitor_ready)
 
@@ -318,6 +319,11 @@ class MonitorPage(QWidget):
     @Slot()
     def _on_monitor_finished(self):
         self._queue_monitoring = False
+
+    @Slot(str)
+    def _on_monitor_failed(self, error_msg: str):
+        self.logger.error(f"队列监视异常终止: {error_msg}")
+        self.status_label.setText(f"监视器：异常终止 — {error_msg}")
 
     @Slot()
     def _on_monitor_ready(self):
