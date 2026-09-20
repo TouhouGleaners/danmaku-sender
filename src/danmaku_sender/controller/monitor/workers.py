@@ -53,6 +53,7 @@ class QueueMonitorWorker(WorkerThread):
     statusUpdated = Signal(str)
     monitorFailed = Signal(str)              # 异常终止原因（非用户停止）
     monitorFinished = Signal()
+    ending = Signal(object)                  # run() 退出时 emit(self)，供主线程清理
 
     def __init__(
         self,
@@ -119,6 +120,7 @@ class QueueMonitorWorker(WorkerThread):
             self.monitorFailed.emit(str(e))
         finally:
             self.monitorFinished.emit()
+            self.ending.emit(self)
             if failed:
                 logger.warning("队列监视已异常退出，需人工重新启动。")
 
