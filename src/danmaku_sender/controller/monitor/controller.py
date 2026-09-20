@@ -9,7 +9,7 @@ from danmaku_sender.config import ApiAuthConfig
 from danmaku_sender.repo.history_manager import HistoryManager
 from danmaku_sender.runtime.state.app_state import AppState
 
-from .workers import QueueMonitorWorker
+from .workers import MONITORABLE_STATUSES, QueueMonitorWorker
 
 logger = logging.getLogger(__name__)
 
@@ -57,6 +57,12 @@ class MonitorController(QObject):
 
         if not self.state.queue_state.tasks:
             logger.warning("队列为空，没有任务可以监视。")
+            return False
+        # 仅 PENDING/UNCONFIGURED 的队列无法监视，拒绝启动避免空转
+        if not self.state.queue_state.sample_task_fields(set(MONITORABLE_STATUSES)):
+            logger.warning(
+                "队列中没有可监视的任务（需要已完成/发送中/失败/暂停的任务）。"
+            )
             return False
 
         self._stop_event.clear()

@@ -45,6 +45,7 @@ class MonitorPage(QWidget):
         self.monitor_controller = MonitorController(state, history_manager, self)
 
         self._queue_monitoring = False
+        self._monitor_failed = False
         self._queue_stats: dict[str, MonitorStats] = {}  # task_id -> stats
 
         self._create_ui()
@@ -272,13 +273,16 @@ class MonitorPage(QWidget):
         self.btn_monitor_queue.setEnabled(True)
 
         if running:
+            self._monitor_failed = False
             self.btn_monitor_queue.setText("停止监视")
             self._update_btn_style(True)
             self.status_label.setText("监视器：运行中...")
         else:
             self.btn_monitor_queue.setText("监视队列")
             self._update_btn_style(False)
-            self.status_label.setText("监视器：已停止")
+            # 异常终止原因已写入状态栏，清理时不覆盖
+            if not self._monitor_failed:
+                self.status_label.setText("监视器：已停止")
 
     # region Slots
     @Slot()
@@ -328,6 +332,7 @@ class MonitorPage(QWidget):
 
     @Slot(str)
     def _on_monitor_failed(self, error_msg: str):
+        self._monitor_failed = True
         self.logger.error(f"队列监视异常终止: {error_msg}")
         self.status_label.setText(f"监视器：异常终止 — {error_msg}")
 

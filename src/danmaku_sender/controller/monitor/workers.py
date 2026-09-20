@@ -17,11 +17,13 @@ from danmaku_sender.types.models.queue import TaskStatus
 
 logger = logging.getLogger(__name__)
 
-_MONITORABLE = (
-    TaskStatus.COMPLETED,
-    TaskStatus.RUNNING,
-    TaskStatus.FAILED,
-    TaskStatus.PAUSED,
+MONITORABLE_STATUSES: frozenset[TaskStatus] = frozenset(
+    (
+        TaskStatus.COMPLETED,
+        TaskStatus.RUNNING,
+        TaskStatus.FAILED,
+        TaskStatus.PAUSED,
+    )
 )
 
 
@@ -71,7 +73,7 @@ class QueueMonitorWorker(WorkerThread):
         """当前队列中可监视任务的不可变采样（字段在 QueueState 锁内拷贝）。"""
         items: list[MonitorSample] = []
         for task_id, bvid, cid, p_index, p_title, title in (
-            self.state.queue_state.sample_task_fields(set(_MONITORABLE))
+            self.state.queue_state.sample_task_fields(set(MONITORABLE_STATUSES))
         ):
             if p_index > 0 and p_title:
                 label = f"P{p_index} - {p_title}"
