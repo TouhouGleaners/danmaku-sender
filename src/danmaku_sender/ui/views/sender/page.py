@@ -205,7 +205,7 @@ class SenderPage(QWidget):
         self.sender_controller.queueFinished.connect(self._on_queue_finished)
         self.sender_controller.queueReady.connect(lambda: self._update_queue_ui(running=False))
         self.sender_controller.queueProgressUpdated.connect(self._on_queue_progress)
-        self.sender_controller.taskProgressUpdated.connect(self._on_task_progress)
+        # 任务进度由 Controller 落账 QueueState，页面只听 taskProgressChanged
 
         # QueueState
         self.state.queue_state.tasksChanged.connect(self._on_queue_changed)
@@ -486,8 +486,6 @@ class SenderPage(QWidget):
     def _on_queue_task_started(self, task_id: str):
         task = self.state.queue_state.get_task_by_id(task_id)
         if task:
-            task.total = len(task.danmakus)
-            task.attempted = 0
             self.logger.info(f"开始发送: {task.target.display_string}")
 
     @Slot(str, object)
@@ -513,15 +511,6 @@ class SenderPage(QWidget):
         self._queue_total = total
         self._queue_current = current_idx + 1
         self._queue_eta = eta
-
-    @Slot(str, int, int, float)
-    def _on_task_progress(self, task_id: str, attempted: int, task_total: int, eta: float):
-        # 进度更新走 QueueState → taskProgressChanged → _on_queue_task_progress
-        self._update_task_data(task_id, attempted, task_total)
-
-    def _update_task_data(self, task_id: str, attempted: int, task_total: int):
-        """通过 QueueState 更新进度（自动发射 taskProgressChanged）"""
-        self.state.queue_state.update_task_progress(task_id, attempted, task_total)
 
     def _update_bottom_bar(self, attempted: int, task_total: int):
         """更新底部进度条（队列级 + 弹幕总数 + ETA）"""

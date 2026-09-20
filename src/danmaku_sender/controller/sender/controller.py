@@ -128,6 +128,9 @@ class SenderController(QObject):
     @Slot(str, int)
     def _on_task_started(self, task_id: str, idx: int):
         self.state.queue_state.update_task_status(task_id, TaskStatus.RUNNING)
+        task = self.state.queue_state.get_task_by_id(task_id)
+        if task:
+            self.state.queue_state.update_task_progress(task_id, 0, task.total)
         self.state.queue_state.current_index = idx
         self.queueTaskStarted.emit(task_id)
 
@@ -159,6 +162,7 @@ class SenderController(QObject):
 
     @Slot(str, int, int, float)
     def _on_task_progress(self, task_id: str, attempted: int, task_total: int, eta: float):
+        self.state.queue_state.update_task_progress(task_id, attempted, task_total)
         self.taskProgressUpdated.emit(task_id, attempted, task_total, eta)
 
     @Slot()
