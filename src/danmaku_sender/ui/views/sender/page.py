@@ -324,8 +324,10 @@ class SenderPage(QWidget):
             return
 
         self._queue_total_dm = self.state.queue_state.total_danmaku_count
+        if not self.sender_controller.start_queue(auth_config):
+            self.logger.warning("队列发送未能启动")
+            return
         self._update_queue_ui(running=True)
-        self.sender_controller.start_queue(auth_config)
 
     @Slot()
     def _stop_queue(self):

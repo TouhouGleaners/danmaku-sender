@@ -1,3 +1,5 @@
+"""队列监视业务控制器"""
+
 import logging
 import threading
 
@@ -32,43 +34,55 @@ class MonitorController(QObject):
         self._worker: QueueMonitorWorker | None = None
         self._stop_event = threading.Event()
 
-    def start_queue_monitor(self, auth_config: ApiAuthConfig | None = None):
-        """启动队列监视 Worker。"""
+    def start_queue_monitor(self, auth_config: ApiAuthConfig | None = None) -> bool:
+        """启动队列监视 Worker。
+
+        成功返回 True；拒绝启动返回 False。
+        """
         if self.is_running():
             logger.warning("队列监视已在运行中。")
-            return
+            return False
+
+        if self._worker is not None:
+            # 上一个 worker 的 finished 清理尚未投递，禁止覆盖引用
+            logger.warning("上一个监视 Worker 仍在清理中，稍后再试。")
+            return False
 
         if auth_config is None:
             auth_config = self.state.get_api_auth()
+
         if not auth_config.sessdata:
             logger.warning("凭证缺失，无法启动队列监视。")
-            return
+            return False
+
         if not self.state.queue_state.tasks:
             logger.warning("队列为空，没有任务可以监视。")
-            return
+            return False
 
         self._stop_event.clear()
-        self._worker = QueueMonitorWorker(
+        worker = QueueMonitorWorker(
             state=self.state,
             auth_config=auth_config,
             history_manager=self.history_manager,
             stop_event=self._stop_event,
         )
 
-        self._worker.taskStatsUpdated.connect(self._on_task_stats)
-        self._worker.overallStatsUpdated.connect(self._on_overall_stats)
-        self._worker.statusUpdated.connect(self._on_status)
-        self._worker.monitorFailed.connect(self._on_monitor_failed)
-        self._worker.monitorFinished.connect(self._on_monitor_finished)
-        self._worker.finished.connect(self._on_worker_cleanup)
-        self._worker.finished.connect(self._worker.deleteLater)
+        worker.taskStatsUpdated.connect(self._on_task_stats)
+        worker.overallStatsUpdated.connect(self._on_overall_stats)
+        worker.statusUpdated.connect(self._on_status)
+        worker.monitorFailed.connect(self._on_monitor_failed)
+        worker.monitorFinished.connect(self._on_monitor_finished)
+        worker.finished.connect(lambda w=worker: self._on_worker_cleanup(w))
+        worker.finished.connect(worker.deleteLater)
 
+        self._worker = worker
         self.state.monitor_is_active = True
-        self._worker.start()
+        worker.start()
         logger.info(
             f"▶ 队列监视已启动：{len(self.state.queue_state.tasks)} 个任务，"
             f"轮询间隔 {self.state.monitor_config.refresh_interval} 秒"
         )
+        return True
 
     def stop_queue_monitor(self):
         """请求停止队列监视。"""
@@ -99,10 +113,13 @@ class MonitorController(QObject):
     def _on_monitor_finished(self):
         self.monitorFinished.emit()
 
-    @Slot()
-    def _on_worker_cleanup(self):
-        if self._worker is not None:
-            logger.debug("QueueMonitorWorker 线程生命周期结束，正在清理控制器引用。")
-            self._worker = None
+    @Slot(object)
+    def _on_worker_cleanup(self, worker: QueueMonitorWorker):
+        """仅当清理的是当前 _worker 时才释放引用，避免旧线程回调误清新实例。"""
+        if worker is not self._worker:
+            return
+
+        logger.debug("QueueMonitorWorker 线程生命周期结束，正在清理控制器引用。")
+        self._worker = None
         self.state.monitor_is_active = False
         self.monitorReady.emit()

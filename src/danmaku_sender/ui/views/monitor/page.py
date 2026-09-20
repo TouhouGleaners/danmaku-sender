@@ -297,12 +297,18 @@ class MonitorPage(QWidget):
             QMessageBox.warning(self, "凭证缺失", "请先配置 Cookie。")
             return
 
-        self._queue_monitoring = True
         self._queue_stats.clear()
+        if not self.monitor_controller.start_queue_monitor(self.state.get_api_auth()):
+            self._refresh_queue_table()
+            self._update_overall_stats()
+            self._set_ui_running(False)
+            self.logger.warning("队列监视未能启动")
+            return
+
+        self._queue_monitoring = True
+        self._set_ui_running(True)
         self._refresh_queue_table()
         self._update_overall_stats()
-        self._set_ui_running(True)
-        self.monitor_controller.start_queue_monitor(self.state.get_api_auth())
 
     @Slot(str, object)
     def _on_task_stats_updated(self, task_id: str, stats):

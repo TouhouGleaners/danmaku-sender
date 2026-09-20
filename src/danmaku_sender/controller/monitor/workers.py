@@ -68,21 +68,20 @@ class QueueMonitorWorker(WorkerThread):
 
     @property
     def targets(self) -> list[MonitorSample]:
-        """当前队列中可监视任务的不可变采样。"""
+        """当前队列中可监视任务的不可变采样（字段在 QueueState 锁内拷贝）。"""
         items: list[MonitorSample] = []
-        for task in self.state.queue_state.tasks:
-            if task.status not in _MONITORABLE:
-                continue
-            title = task.target.title
-            if task.p_index > 0 and task.p_title:
-                label = f"P{task.p_index} - {task.p_title}"
+        for task_id, bvid, cid, p_index, p_title, title in (
+            self.state.queue_state.sample_task_fields(set(_MONITORABLE))
+        ):
+            if p_index > 0 and p_title:
+                label = f"P{p_index} - {p_title}"
             else:
-                label = task.p_title or title or task.target.bvid
+                label = p_title or title or bvid
             items.append(
                 MonitorSample(
-                    task_id=task.task_id,
-                    bvid=task.target.bvid,
-                    cid=task.target.cid,
+                    task_id=task_id,
+                    bvid=bvid,
+                    cid=cid,
                     title=title,
                     label=label,
                 )

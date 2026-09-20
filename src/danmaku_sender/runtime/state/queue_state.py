@@ -46,6 +46,32 @@ class QueueState(QObject):
         with self._lock:
             return list(self._tasks)
 
+    def sample_task_fields(
+        self,
+        statuses: set[TaskStatus] | frozenset[TaskStatus],
+    ) -> list[tuple[str, str, int, int, str, str]]:
+        """在同一把锁下拷贝任务字段，避免跨线程读到撕裂的可变对象。
+
+        Returns:
+            list of (task_id, bvid, cid, p_index, p_title, target_title)
+        """
+        rows: list[tuple[str, str, int, int, str, str]] = []
+        with self._lock:
+            for t in self._tasks:
+                if t.status not in statuses:
+                    continue
+                rows.append(
+                    (
+                        t.task_id,
+                        t.target.bvid,
+                        t.target.cid,
+                        t.p_index,
+                        t.p_title,
+                        t.target.title,
+                    )
+                )
+        return rows
+
     @property
     def current_index(self) -> int:
         with self._lock:
