@@ -48,7 +48,7 @@ def pipeline_env(tmp_path, monkeypatch) -> HistoryManager:
 
 
 def _run_pipeline(hm: HistoryManager, target: VideoTarget, danmakus: list[Danmaku]) -> None:
-    """在独立线程中执行管线，与 QueueWorker 的真实调用方式一致"""
+    """在独立线程中执行管线，与 QueueSendWorker 的真实调用方式一致"""
     pipeline = SendPipeline(
         ApiAuthConfig(sessdata="x", bili_jct="y", use_system_proxy=False), hm
     )
