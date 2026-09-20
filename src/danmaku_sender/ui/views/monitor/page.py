@@ -322,9 +322,8 @@ class MonitorPage(QWidget):
 
     @Slot(object)
     def _on_overall_stats_updated(self, stats):
-        totals = self._update_overall_stats()
-        # Worker 轮次合计可能含已移除任务，托盘以当前队列聚合为准
-        self.statsUpdated.emit(totals if totals else dict(stats))
+        # 托盘/全局只反映「当前队列」聚合；队列清空则发零值，不用 Worker 轮次快照回退
+        self.statsUpdated.emit(self._update_overall_stats())
 
     @Slot()
     def _on_monitor_finished(self):

@@ -148,7 +148,9 @@ class QueueMonitorWorker(WorkerThread):
                         f"在线共 {result['total_checked']} 条。"
                     )
                 except Exception as e:
+                    # 本轮不发该任务统计，避免把未核销的旧库数据当成最新结果
                     logger.warning(f"[{sample.label}] 在线核销失败，跳过: {e}")
+                    continue
 
                 stats = self._stats_for(sample.target, baseline)
                 self.taskStatsUpdated.emit(sample.task_id, stats)
