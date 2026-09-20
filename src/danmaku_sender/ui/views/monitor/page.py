@@ -2,7 +2,7 @@ import logging
 import time
 from datetime import datetime
 
-from PySide6.QtCore import Qt, QTimer, Signal, Slot
+from PySide6.QtCore import Qt, Signal, Slot
 from PySide6.QtGui import QTextCursor
 from PySide6.QtWidgets import (
     QAbstractItemView,
@@ -85,9 +85,6 @@ class MonitorPage(QWidget):
         self._empty_hint.setStyleSheet("color: #888; font-size: 14px;")
         self._empty_hint.setVisible(False)
         self._queue_model.modelReset.connect(self._update_empty_hint)
-
-        # 布局完成后再定位，避免 viewport geometry 为零
-        QTimer.singleShot(0, self._update_empty_hint)
 
         queue_layout.addWidget(self.queue_table)
         main_layout.addWidget(queue_group)
@@ -222,6 +219,8 @@ class MonitorPage(QWidget):
     def showEvent(self, event):
         super().showEvent(event)
         self._refresh_queue_table()
+        # 首次显示时 viewport 已有尺寸，再定位空状态提示
+        self._update_empty_hint()
 
     def _update_btn_style(self, running: bool):
         state = "running" if running else "ready"

@@ -54,7 +54,7 @@ class QueueMonitorWorker(WorkerThread):
 
     @property
     def targets(self) -> list[MonitorTargetItem]:
-        """当前队列中可监视的任务采样（只读）"""
+        """当前队列中可监视的任务采样（只读，走 QueueState 快照）"""
         items: list[MonitorTargetItem] = []
         for task in self.state.queue_state.tasks:
             if task.status not in _MONITORABLE:
