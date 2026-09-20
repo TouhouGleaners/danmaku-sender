@@ -29,6 +29,7 @@ class QueueSendWorker(WorkerThread):
     queueFinished = Signal()
     queueProgressUpdated = Signal(int, int, float)  # (current_idx_0based, total, eta)
     taskProgressUpdated = Signal(str, int, int, float)  # (task_id, attempted, task_total, eta)
+    ending = Signal(object)                         # run() 退出时 emit(self)
 
     def __init__(
         self,
@@ -93,6 +94,7 @@ class QueueSendWorker(WorkerThread):
 
         finally:
             self.queueFinished.emit()
+            self.ending.emit(self)
 
     def _execute_task(self, task: QueueTask, idx: int, total: int) -> bool:
         """执行单个队列任务。返回 True 表示继续，False 表示致命错误需中止队列。"""

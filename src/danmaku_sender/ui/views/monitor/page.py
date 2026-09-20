@@ -2,7 +2,7 @@ import logging
 import time
 from datetime import datetime
 
-from PySide6.QtCore import Qt, QTimer, Signal, Slot
+from PySide6.QtCore import Qt, Signal, Slot
 from PySide6.QtGui import QTextCursor
 from PySide6.QtWidgets import (
     QAbstractItemView,
@@ -21,11 +21,10 @@ from PySide6.QtWidgets import (
     QWidget,
 )
 
-from danmaku_sender.controller.monitor_controller import MonitorController
+from danmaku_sender.controller.monitor import MonitorController
 from danmaku_sender.repo.history_manager import HistoryManager
 from danmaku_sender.runtime.state.app_state import AppState
 from danmaku_sender.types.models.common import MonitorStats
-from danmaku_sender.types.models.queue import QueueTask, TaskStatus
 from danmaku_sender.ui.framework.binder import UIBinder
 from danmaku_sender.ui.framework.icons import SvgIcon
 
@@ -33,7 +32,7 @@ from .table import QueueMonitorModel
 
 
 class MonitorPage(QWidget):
-    """监视器页面 - 支持单任务监视和队列总体监视"""
+    """监视器页面 - 队列总体对账监视（信号驱动，Worker 轮询）"""
 
     statsUpdated = Signal(dict)
 
@@ -43,14 +42,11 @@ class MonitorPage(QWidget):
         self.logger = logging.getLogger(__name__)
         self.history_manager = history_manager
 
-        self.monitor_controller = MonitorController(history_manager, self)
+        self.monitor_controller = MonitorController(state, history_manager, self)
 
-        # 队列监视状态
         self._queue_monitoring = False
+        self._monitor_failed = False
         self._queue_stats: dict[str, MonitorStats] = {}  # task_id -> stats
-
-        # 队列监视轮询定时器（仅在监视运行期间激活）
-        self._stats_timer = QTimer(self)
 
         self._create_ui()
         self._connect_signals()
@@ -91,9 +87,6 @@ class MonitorPage(QWidget):
         self._empty_hint.setVisible(False)
         self._queue_model.modelReset.connect(self._update_empty_hint)
 
-        # 布局完成后再定位，避免 viewport geometry 为零
-        QTimer.singleShot(0, self._update_empty_hint)
-
         queue_layout.addWidget(self.queue_table)
         main_layout.addWidget(queue_group)
 
@@ -117,13 +110,9 @@ class MonitorPage(QWidget):
             container.addWidget(lbl_title)
             return lbl_num, container
 
-        # 总发送
         self.lbl_total, layout_total = create_stat_block("已发送 (Total)", "#2c3e50")
-        # 存活
         self.lbl_verified, layout_verified = create_stat_block("已存活 (Verified)", "#27ae60")
-        # 待验
         self.lbl_pending, layout_pending = create_stat_block("待验证 (Pending)", "#f39c12")
-        # 丢失
         self.lbl_lost, layout_lost = create_stat_block("疑似丢失 (Lost)", "#c0392b")
 
         stats_layout.addLayout(layout_total, 0, 0)
@@ -150,7 +139,6 @@ class MonitorPage(QWidget):
         param_layout.addSpacing(20)
         param_layout.addWidget(QLabel("统计基线:"))
 
-        # 下拉框
         self.anchor_combo = QComboBox()
         self.anchor_combo.setFixedWidth(115)
         self.anchor_combo.setPlaceholderText("手动指定")
@@ -159,13 +147,11 @@ class MonitorPage(QWidget):
         self.anchor_combo.addItem("全量历史", "all")
         param_layout.addWidget(self.anchor_combo)
 
-        # 设为当前按钮
         self.btn_reset_anchor = QPushButton("设为当前")
         self.btn_reset_anchor.setToolTip("重置为当前时间，仅统计现在之后的发送记录，用于多批次任务对账。")
         self.btn_reset_anchor.setCursor(Qt.CursorShape.PointingHandCursor)
         param_layout.addWidget(self.btn_reset_anchor)
 
-        # 状态展示
         self.anchor_display = QLabel("(尚未设置)")
         self.anchor_display.setMinimumWidth(130)
         self.anchor_display.setStyleSheet("color: #7f8c8d; font-size: 11px;")
@@ -201,17 +187,18 @@ class MonitorPage(QWidget):
         self.setLayout(main_layout)
 
     def _connect_signals(self):
-        # Internal
         self.btn_monitor_queue.clicked.connect(self._toggle_queue_monitor)
-        self._stats_timer.timeout.connect(self._on_stats_tick)
         self.anchor_combo.currentIndexChanged.connect(self._on_anchor_changed)
         self.btn_reset_anchor.clicked.connect(self._on_reset_anchor_clicked)
 
         # MonitorController
-        self.monitor_controller.statsUpdated.connect(self.statsUpdated.emit)
+        self.monitor_controller.taskStatsUpdated.connect(self._on_task_stats_updated)
+        self.monitor_controller.taskVerifyFailed.connect(self._on_task_verify_failed)
+        self.monitor_controller.overallStatsUpdated.connect(self._on_overall_stats_updated)
         self.monitor_controller.statusUpdated.connect(self.status_label.setText)
-        self.monitor_controller.taskFinished.connect(self._on_finished)
-        self.monitor_controller.queueVerifyFinished.connect(self._refresh_queue_stats)
+        self.monitor_controller.monitorFailed.connect(self._on_monitor_failed)
+        self.monitor_controller.monitorFinished.connect(self._on_monitor_finished)
+        self.monitor_controller.monitorReady.connect(self._on_monitor_ready)
 
         # QueueState
         self.state.queue_state.tasksChanged.connect(self._on_queue_changed)
@@ -219,7 +206,6 @@ class MonitorPage(QWidget):
         self.state.queue_state.taskStatusChanged.connect(self._on_queue_task_status_changed)
 
     def init_bindings(self):
-        # 初始化与绑定
         UIBinder.bind(self.interval_spin, self.state.monitor_config, "refresh_interval")
 
         if self.state.monitor_config.stats_baseline == 0.0:
@@ -236,9 +222,10 @@ class MonitorPage(QWidget):
     def showEvent(self, event):
         super().showEvent(event)
         self._refresh_queue_table()
+        # 首次显示时 viewport 已有尺寸，再定位空状态提示
+        self._update_empty_hint()
 
     def _update_btn_style(self, running: bool):
-        """统一刷新按钮状态与图标"""
         state = "running" if running else "ready"
         self.btn_monitor_queue.setProperty("state", state)
         self.btn_monitor_queue.style().unpolish(self.btn_monitor_queue)
@@ -253,7 +240,6 @@ class MonitorPage(QWidget):
             self.anchor_display.setText(dt_str)
 
     def _refresh_queue_table(self):
-        """刷新队列任务表格"""
         tasks = self.state.queue_state.tasks
         self._queue_model.update_data(tasks, self._queue_stats)
 
@@ -269,7 +255,6 @@ class MonitorPage(QWidget):
         self._reposition_empty_hint()
 
     def _update_overall_stats(self) -> dict:
-        """更新整体统计卡片；只汇总当前队列中的任务（已移除的任务不计入）。返回合计值"""
         current_ids = {t.task_id for t in self.state.queue_state.tasks}
         totals = [s for tid, s in self._queue_stats.items() if tid in current_ids]
 
@@ -284,40 +269,38 @@ class MonitorPage(QWidget):
         self.lbl_lost.setText(str(lost))
         return {'total': total, 'verified': verified, 'pending': pending, 'lost': lost}
 
+    def _sync_overall_stats(self) -> dict:
+        """刷新统计卡片并广播给托盘/全局（始终按当前队列聚合）"""
+        totals = self._update_overall_stats()
+        self.statsUpdated.emit(totals)
+        return totals
+
     def _set_ui_running(self, running: bool):
         self.interval_spin.setEnabled(not running)
         self.btn_monitor_queue.setEnabled(True)
 
-        self.state.monitor_is_active = running
-
         if running:
+            self._monitor_failed = False
             self.btn_monitor_queue.setText("停止监视")
             self._update_btn_style(True)
             self.status_label.setText("监视器：运行中...")
         else:
             self.btn_monitor_queue.setText("监视队列")
             self._update_btn_style(False)
-            self.status_label.setText("监视器：已停止")
+            # 异常终止原因已写入状态栏，清理时不覆盖
+            if not self._monitor_failed:
+                self.status_label.setText("监视器：已停止")
 
     # region Slots
-    # region Slots Internal
     @Slot()
     def _toggle_queue_monitor(self):
-        """切换队列监视"""
-        if self._queue_monitoring:
-            # 停止队列监视
+        if self.monitor_controller.is_running():
+            self.monitor_controller.stop_queue_monitor()
             self._queue_monitoring = False
-            self._stats_timer.stop()
-            self._queue_stats.clear()
-            self._refresh_queue_table()
-            self._update_overall_stats()
-            self._set_ui_running(False)
-            self.logger.info("⏹ 队列监视已停止")
+            self.logger.info("⏹ 队列监视停止请求已发送")
             return
 
-        # 启动队列监视
-        tasks = self.state.queue_state.tasks
-        if not tasks:
+        if not self.state.queue_state.tasks:
             QMessageBox.information(self, "队列为空", "没有任务可以监视。")
             return
 
@@ -325,67 +308,49 @@ class MonitorPage(QWidget):
             QMessageBox.warning(self, "凭证缺失", "请先配置 Cookie。")
             return
 
-        self._queue_monitoring = True
         self._queue_stats.clear()
-        self._set_ui_running(True)
-        self.logger.info(
-            f"▶ 队列监视已启动：{len(tasks)} 个任务，轮询间隔 {self.interval_spin.value()} 秒"
-        )
+        if not self.monitor_controller.start_queue_monitor(self.state.get_api_auth()):
+            self._refresh_queue_table()
+            self._sync_overall_stats()
+            self._set_ui_running(False)
+            self.logger.warning("队列监视未能启动")
+            return
 
-        # 立即执行第一轮，之后按轮询间隔循环
-        self._on_stats_tick()
-        self._stats_timer.start(self.interval_spin.value() * 1000)
+        self._queue_monitoring = True
+        self._set_ui_running(True)
+        self._refresh_queue_table()
+        self._sync_overall_stats()
+
+    @Slot(str, object)
+    def _on_task_stats_updated(self, task_id: str, stats):
+        self._queue_stats[task_id] = stats
+        self._refresh_queue_table()
+        self._sync_overall_stats()
+
+    @Slot(str)
+    def _on_task_verify_failed(self, task_id: str):
+        """本轮核销失败：丢弃缓存，行与合计都不用旧库数据冒充最新结果"""
+        self._queue_stats.pop(task_id, None)
+        self._refresh_queue_table()
+        self._sync_overall_stats()
+
+    @Slot(object)
+    def _on_overall_stats_updated(self, stats):
+        self._sync_overall_stats()
 
     @Slot()
-    def _on_stats_tick(self):
-        """定时触发：发起一轮后台在线核销（不阻塞 UI），并刷新本地统计"""
-        if not self._queue_monitoring:
-            return
+    def _on_monitor_finished(self):
+        self._queue_monitoring = False
 
-        tasks = self.state.queue_state.tasks
-        cid_labels = [
-            (task.target.cid, self._display_of(task))
-            for task in tasks
-            if task.status in (TaskStatus.COMPLETED, TaskStatus.RUNNING, TaskStatus.FAILED, TaskStatus.PAUSED)
-        ]
-        if cid_labels:
-            self.monitor_controller.verify_queue_online(cid_labels, self.state.get_api_auth())
+    @Slot(str)
+    def _on_monitor_failed(self, error_msg: str):
+        self._monitor_failed = True
+        self.logger.error(f"队列监视异常终止: {error_msg}")
+        self.status_label.setText(f"监视器：异常终止 — {error_msg}")
 
-        totals = self._refresh_queue_stats()
-        if totals:
-            baseline = self.state.monitor_config.stats_baseline
-            anchor = "全量历史" if baseline <= 0 else datetime.fromtimestamp(baseline).strftime('%m-%d %H:%M')
-            self.logger.info(
-                f"统计(基线 {anchor}): 已发 {totals['total']} / 存活 {totals['verified']}"
-                f" / 待验 {totals['pending']} / 疑似 {totals['lost']}"
-            )
-
-    @staticmethod
-    def _display_of(task: QueueTask) -> str:
-        """日志前缀，如 "P1 - 序章"；无分P信息时退回视频标题/BVID"""
-        if task.p_index > 0 and task.p_title:
-            return f"P{task.p_index} - {task.p_title}"
-        return task.p_title or task.target.display_string
-
-    def _refresh_queue_stats(self) -> dict | None:
-        """从本地数据库刷新队列中所有任务的统计数据并渲染；返回合计值"""
-        if not self._queue_monitoring:
-            return
-
-        tasks = self.state.queue_state.tasks
-        baseline = self.state.monitor_config.stats_baseline
-
-        for task in tasks:
-            if task.status in (TaskStatus.COMPLETED, TaskStatus.FAILED, TaskStatus.RUNNING):
-                # 查询该任务的统计数据
-                stats = self.history_manager.get_stats_for_target(
-                    target=task.target,
-                    baseline=baseline
-                )
-                self._queue_stats[task.task_id] = stats
-
-        self._refresh_queue_table()
-        return self._update_overall_stats()
+    @Slot()
+    def _on_monitor_ready(self):
+        self._set_ui_running(False)
 
     @Slot(int)
     def _on_anchor_changed(self, index: int):
@@ -414,28 +379,18 @@ class MonitorPage(QWidget):
         self.anchor_combo.setCurrentIndex(-1)
         self.anchor_combo.blockSignals(False)
 
-    # endregion
-    # region Slots MonitorController
-    @Slot()
-    def _on_finished(self):
-        self._set_ui_running(False)
-
-    # endregion
-    # region Slots QueueState
     @Slot()
     def _on_queue_changed(self):
-        """队列变化时刷新表格"""
+        """队列结构变化：刷新表格并广播当前队列聚合（托盘不残留旧值）"""
         self._refresh_queue_table()
-        if self._queue_monitoring:
-            self._refresh_queue_stats()
+        self._sync_overall_stats()
 
     @Slot(str, object)
     def _on_queue_task_status_changed(self, task_id: str, status):
-        """任务状态变化时刷新统计数据"""
         if self._queue_monitoring:
-            self._refresh_queue_stats()
+            self._refresh_queue_table()
+            self._sync_overall_stats()
 
-    # endregion
     # endregion
 
     def append_log(self, message: str):
