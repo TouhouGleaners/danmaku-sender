@@ -187,14 +187,14 @@ class TaskDetailDialog(QDialog):
         raw = self._bv_input.text().strip()
         if not raw:
             return
-        bvid, p_index = parse_bilibili_link(raw)
+        bvid, page = parse_bilibili_link(raw)
         if not bvid:
             return
         self._bv_input.setText(bvid)
         self._pending_part_index = None
-        # 只要链接带 ?p= 就用 p_index 定位（不论 BVID 是否变化）
-        if p_index is not None:
-            self._pending_part_index = p_index
+        # 链接带 ?p= 时用 page（1-based，同 part.page）定位
+        if page is not None:
+            self._pending_part_index = page
         self._fetch_btn.setEnabled(False)
         self._fetch_btn.setText("获取中...")
         self._part_combo.clear()

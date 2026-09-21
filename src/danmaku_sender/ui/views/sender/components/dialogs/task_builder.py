@@ -121,13 +121,13 @@ class TaskBuilderDialog(QDialog):
         if not raw:
             return
 
-        bvid, p_index = parse_bilibili_link(raw)
+        bvid, page = parse_bilibili_link(raw)
         if not bvid:
             QMessageBox.warning(self, "格式错误", "未能识别有效的 BV 号。")
             return
 
         self._bv_input.setText(bvid)
-        self._pending_part_index = p_index
+        self._pending_part_index = page
         self._fetch_btn.setEnabled(False)
         self._fetch_btn.setText("获取中...")
         self._part_combo.clear()
