@@ -7,10 +7,10 @@ BV_PATTERN = re.compile(r"(BV[a-zA-Z0-9]{10})")  # BV + 10 位字母数字
 P_PATTERN = re.compile(r"[?&]p=(\d+)")  # B 站 URL 分P参数
 
 
-def parse_bilibili_link(text: str | None) -> tuple[str | None, int | None]:
+def parse_bilibili_link(text: str) -> tuple[str | None, int | None]:
     """
     从文本中提取 BVID 和分P序号（B 站 URL 的 p 参数）。
-    纯 BVID、夹在说明文字里的 BV 号均可提取。
+    纯 BVID、夹在说明文字里的 BV 号均可提取。`text` 必须是 str（可为空）。
 
     Returns:
         (bvid, page)

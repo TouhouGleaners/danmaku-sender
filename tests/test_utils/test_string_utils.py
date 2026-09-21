@@ -51,11 +51,6 @@ class TestParseBilibiliLink:
         assert bvid is None
         assert p is None
 
-    def test_none_input(self):
-        bvid, p = parse_bilibili_link(None)
-        assert bvid is None
-        assert p is None
-
     def test_no_bvid_no_p(self):
         bvid, p = parse_bilibili_link("这是一段普通文本")
         assert bvid is None
