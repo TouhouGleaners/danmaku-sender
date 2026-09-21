@@ -10,7 +10,7 @@ class TestParseBilibiliLink:
     def test_full_url_with_p_index(self):
         bvid, p = parse_bilibili_link("https://www.bilibili.com/video/BV1xx411c7mD?p=3")
         assert bvid == "BV1xx411c7mD"
-        assert p == 2  # 0-based
+        assert p == 3  # 1-based，与 B 站 ?p= 一致
 
     def test_full_url_without_p_index(self):
         bvid, p = parse_bilibili_link("https://www.bilibili.com/video/BV1xx411c7mD")
@@ -25,12 +25,12 @@ class TestParseBilibiliLink:
     def test_url_with_ampersand_p(self):
         bvid, p = parse_bilibili_link("https://www.bilibili.com/video/BV1xx411c7mD?vd_source=abc&p=5")
         assert bvid == "BV1xx411c7mD"
-        assert p == 4
+        assert p == 5
 
     def test_url_with_p_equals_1(self):
-        """p=1 应解析为 0-based 索引 0"""
+        """p=1 是第一话，保持 1-based"""
         _, p = parse_bilibili_link("https://www.bilibili.com/video/BV1xx411c7mD?p=1")
-        assert p == 0
+        assert p == 1
 
     # === 纯 BVID ===
 
@@ -62,7 +62,7 @@ class TestParseBilibiliLink:
         assert p is None
 
     def test_invalid_p_index_zero(self):
-        """p=0 不应被解析（正则要求 >0）"""
+        """p=0 不应被解析（分P从 1 起）"""
         _, p = parse_bilibili_link("https://www.bilibili.com/video/BV1xx411c7mD?p=0")
         assert p is None
 
