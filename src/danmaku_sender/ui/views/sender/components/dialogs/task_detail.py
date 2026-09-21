@@ -48,7 +48,7 @@ class TaskDetailDialog(QDialog):
         self.editing = deepcopy(task)       # 编辑副本（工作区）
         self._api_auth = api_auth
         self._video_info: VideoInfo | None = None
-        self._pending_part_index: int | None = None
+        self._pending_part_page: int | None = None
         self._selected_file: str | None = None
         self._video_controller = VideoController(self)
         self._is_editable = (
@@ -187,14 +187,14 @@ class TaskDetailDialog(QDialog):
         raw = self._bv_input.text().strip()
         if not raw:
             return
-        bvid, p_index = parse_bilibili_link(raw)
+        bvid, page = parse_bilibili_link(raw)
         if not bvid:
             return
         self._bv_input.setText(bvid)
-        self._pending_part_index = None
-        # 只要链接带 ?p= 就用 p_index 定位（不论 BVID 是否变化）
-        if p_index is not None:
-            self._pending_part_index = p_index
+        self._pending_part_page = None
+        # 链接带 ?p= 时用 page（1-based，同 part.page）定位
+        if page is not None:
+            self._pending_part_page = page
         self._fetch_btn.setEnabled(False)
         self._fetch_btn.setText("获取中...")
         self._part_combo.clear()
@@ -225,11 +225,11 @@ class TaskDetailDialog(QDialog):
         if self._part_combo.count() == 0:
             return
 
-        if self._pending_part_index is not None:
-            # 用 page 编号匹配 combo 的 itemData（而不是直接用作索引）
+        if self._pending_part_page is not None:
+            # 按 itemData（1-based page）匹配，不是 combo 行号
             target_index = next(
                 (i for i in range(self._part_combo.count())
-                 if self._part_combo.itemData(i) == self._pending_part_index),
+                 if self._part_combo.itemData(i) == self._pending_part_page),
                 -1
             )
             if target_index >= 0:
@@ -242,7 +242,7 @@ class TaskDetailDialog(QDialog):
             )
             self._part_combo.setCurrentIndex(target_index)
 
-        self._pending_part_index = None
+        self._pending_part_page = None
 
     @Slot(str, str)
     def _on_fetch_failed(self, bvid: str, error_msg: str):
@@ -269,7 +269,7 @@ class TaskDetailDialog(QDialog):
         if page is None:
             return
         if self._video_info:
-            self._pending_part_index = page
+            self._pending_part_page = page
         # 刷新底部详情
         self._update_detail_display(page)
 
