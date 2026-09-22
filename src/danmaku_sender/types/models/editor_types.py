@@ -22,11 +22,11 @@ class EditorField(Enum):
         return getattr(item.working, self.value)
 
     def set_value(self, item: 'EditorItem', val: Any) -> None:
-        """设置 Danmaku 实例中对应的属性值"""
+        """设置弹幕对应字段（Danmaku 不可变：换新对象，不原地改）"""
         if self == EditorField.IS_DELETED:
             item.is_deleted = val
         else:
-            setattr(item.working, self.value, val)
+            item.working = item.working.replace(**{self.value: val})
 
 
 @dataclass
@@ -34,9 +34,10 @@ class EditorItem:
     """
     弹幕节点容器
 
-    内聚了单条弹幕在编辑周期内的所有状态
+    内聚了单条弹幕在编辑周期内的所有状态。
+    head/working 指向不可变 Danmaku：未改动时可共享同一对象，改动用 replace 换新。
     """
-    head: Danmaku                 # HEAD 快照：检出时的不可变状态
+    head: Danmaku                 # HEAD 快照：检出时的状态（替换 working 不影响）
     working: Danmaku              # 工作区：当前正在编辑的状态
     id: str = field(default_factory=lambda: str(uuid.uuid4()))
     is_deleted: bool = False      # 逻辑删除标记

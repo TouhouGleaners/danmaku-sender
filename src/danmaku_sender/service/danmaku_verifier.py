@@ -45,15 +45,13 @@ class DanmakuVerifier:
         """
         try:
             xml_content = self.api_client.get_danmaku_list_xml(cid)
-            online_danmakus = self.parser.parse_xml_content(xml_content, is_online=True)
+            online_dmids = self.parser.parse_online_dmids(xml_content)
         except (BiliApiError, BiliNetworkError) as e:
             logger.warning(f"[CID:{cid}] 获取在线弹幕失败: {e}")
             raise
         except Exception as e:
             logger.error(f"[CID:{cid}] 解析在线弹幕内容时发生错误: {e}")
             raise
-
-        online_dmids = [dm.dmid for dm in online_danmakus if dm.dmid]
 
         verified_count = 0
         if online_dmids:
@@ -139,8 +137,7 @@ class DanmakuVerifier:
         """
         try:
             xml_content = self.api_client.get_danmaku_list_xml(cid)
-            online_danmakus = self.parser.parse_xml_content(xml_content, is_online=True)
-            return [dm.dmid for dm in online_danmakus if dm.dmid]
+            return self.parser.parse_online_dmids(xml_content)
         except (BiliApiError, BiliNetworkError) as e:
             logger.warning(f"[CID:{cid}] 获取在线弹幕失败: {e}")
             raise

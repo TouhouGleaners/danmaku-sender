@@ -93,11 +93,9 @@ class SendPipeline:
         return ctx
 
     def _record_result(self, target: VideoTarget, dm: Danmaku, result: DanmakuSendResult):
-        """将成功发送的弹幕记录到历史数据库"""
+        """将成功发送的弹幕记录到历史数据库（dmid 以服务器回执为准）"""
         if result.is_success and result.dmid:
-            if not dm.dmid:
-                dm.dmid = result.dmid
-            self.history_manager.record_danmaku(target, dm, result.is_visible)
+            self.history_manager.record_danmaku(target, dm, result.dmid, result.is_visible)
 
     def _calc_eta(self, attempted: int, total: int, config: SenderConfig) -> float:
         """基于任务配置计算 ETA（秒）"""

@@ -118,8 +118,7 @@ class QueueSendWorker(WorkerThread):
             config.skip_sent = self.sender_config.skip_sent  # 全局策略，不走快照
             job = SendJob(
                 target=spec.target,
-                # 克隆弹幕：发送管线会回填 dmid，不得写穿进 TaskSpec
-                danmakus=[dm.clone() for dm in spec.danmakus],
+                danmakus=list(spec.danmakus),  # Danmaku 不可变，无需克隆
                 config=config,
                 stop_event=self.stop_event,
             )

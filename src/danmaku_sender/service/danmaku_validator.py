@@ -66,15 +66,12 @@ def validate_danmaku_list(
                 ks = ", ".join(f"'{k}'" for k in found_ks)
                 reasons.append(f"命中自定义过滤词: {ks}")
 
-        # 问题汇总
+        # 问题汇总（纯函数：不回写 Danmaku，结论由调用方挂在 EditorItem.error_msg）
         if reasons:
-            dm.is_valid = False
             problems.append({
                 'original_index': i,
                 'danmaku': dm,
                 'reason': ", ".join(reasons)
             })
-        else:
-            dm.is_valid = True
 
     return problems

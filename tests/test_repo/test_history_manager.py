@@ -22,7 +22,7 @@ def hm(tmp_path) -> HistoryManager:
 
 
 def _record(hm: HistoryManager, target: VideoTarget, dmid: str, msg: str = "弹幕") -> bool:
-    return hm.record_danmaku(target, Danmaku(msg=msg, progress=1000, dmid=dmid))
+    return hm.record_danmaku(target, Danmaku(msg=msg, progress=1000), dmid)
 
 
 class TestRecordDanmaku:

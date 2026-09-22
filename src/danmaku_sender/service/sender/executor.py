@@ -58,9 +58,6 @@ class DanmakuExecutor:
         result = DanmakuSendResult.from_api_response(resp_json)
 
         if result.is_success:
-            # 若 B 站 API 返回了 DMID，则回填给内存对象
-            if result.dmid:
-                danmaku.dmid = result.dmid
             self.logger.info(f"✅ 发送成功 [ID:{result.dmid}]: {danmaku.msg}")
         else:
             self.logger.warning(f"❌ 发送失败: {result.hint}")

@@ -11,9 +11,9 @@ class DanmakuStatus(IntEnum):
     LOST = 2      # 已丢失
 
 
-@dataclass
+@dataclass(frozen=True)
 class VideoTarget:
-    """封装发送目标BVID和CID的视频信息"""
+    """封装发送目标BVID和CID的视频信息（不可变）"""
     bvid: str
     cid: int
     title: str = ""

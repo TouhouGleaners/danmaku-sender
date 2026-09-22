@@ -1,4 +1,8 @@
-"""Danmaku 模型单元测试"""
+"""Danmaku 模型单元测试 — 不可变发送载荷"""
+import dataclasses
+
+import pytest
+
 from danmaku_sender.types.models.danmaku import Danmaku
 
 
@@ -17,17 +21,45 @@ class TestDanmakuDefaults:
         dm = Danmaku(msg="test", progress=1000)
         assert dm.color == 16777215  # 0xFFFFFF
 
-    def test_default_dmid_empty(self):
-        dm = Danmaku(msg="test", progress=1000)
-        assert dm.dmid == ""
 
-    def test_default_is_valid_true(self):
+class TestDanmakuFrozen:
+    """不可变约束：载荷发出去就不能被改"""
+
+    def test_msg_assignment_raises(self):
         dm = Danmaku(msg="test", progress=1000)
-        assert dm.is_valid is True
+        with pytest.raises(dataclasses.FrozenInstanceError):
+            dm.msg = "x"  # type: ignore[misc]
+
+    def test_progress_assignment_raises(self):
+        dm = Danmaku(msg="test", progress=1000)
+        with pytest.raises(dataclasses.FrozenInstanceError):
+            dm.progress = 0  # type: ignore[misc]
+
+    def test_has_no_dmid_or_is_valid(self):
+        dm = Danmaku(msg="test", progress=1000)
+        assert not hasattr(dm, "dmid")
+        assert not hasattr(dm, "is_valid")
+
+
+class TestDanmakuReplace:
+    """replace 换值语义"""
+
+    def test_replace_returns_new_object(self):
+        dm = Danmaku(msg="original", progress=1000, color=255)
+        new = dm.replace(msg="modified")
+        assert new is not dm
+        assert new.msg == "modified"
+        assert dm.msg == "original"
+
+    def test_replace_keeps_other_fields(self):
+        dm = Danmaku(msg="test", progress=1000, mode=Danmaku.Mode.TOP)
+        new = dm.replace(msg="x")
+        assert new.mode == Danmaku.Mode.TOP
+        assert new.progress == 1000
 
 
 class TestDanmakuProperties:
-    """progress_sec / is_sent 属性"""
+    """progress_sec"""
 
     def test_progress_sec_conversion(self):
         dm = Danmaku(msg="test", progress=5000)
@@ -36,14 +68,6 @@ class TestDanmakuProperties:
     def test_progress_sec_zero(self):
         dm = Danmaku(msg="test", progress=0)
         assert dm.progress_sec == 0.0
-
-    def test_is_sent_false_when_no_dmid(self):
-        dm = Danmaku(msg="test", progress=1000, dmid="")
-        assert dm.is_sent is False
-
-    def test_is_sent_true_when_has_dmid(self):
-        dm = Danmaku(msg="test", progress=1000, dmid="12345")
-        assert dm.is_sent is True
 
 
 class TestDanmakuMode:
@@ -85,27 +109,6 @@ class TestDanmakuToApiParams:
         assert params['mode'] == 4
 
 
-class TestDanmakuClone:
-    """clone 深拷贝"""
-
-    def test_clone_produces_equal_object(self):
-        dm = Danmaku(msg="original", progress=1000, color=255)
-        cloned = dm.clone()
-        assert cloned == dm
-        assert cloned is not dm
-
-    def test_clone_is_independent(self):
-        dm = Danmaku(msg="original", progress=1000)
-        cloned = dm.clone()
-        cloned.msg = "modified"
-        assert dm.msg == "original"
-
-    def test_clone_preserves_mode(self):
-        dm = Danmaku(msg="test", progress=1000, mode=Danmaku.Mode.TOP)
-        cloned = dm.clone()
-        assert cloned.mode == Danmaku.Mode.TOP
-
-
 class TestDanmakuFromXml:
     """from_xml 工厂方法"""
 
@@ -117,12 +120,6 @@ class TestDanmakuFromXml:
         assert dm.mode == Danmaku.Mode.SCROLL
         assert dm.fontsize == 25
         assert dm.color == 16777215
-        assert dm.dmid == ""  # is_online=False
-
-    def test_online_danmaku_with_dmid(self):
-        p_attr = ["10.0", "1", "25", "16777215", "1234567890", "0", "0", "dmid123"]
-        dm = Danmaku.from_xml(p_attr, "在线弹幕", is_online=True)
-        assert dm.dmid == "dmid123"
 
     def test_bottom_mode(self):
         p_attr = ["5.0", "4"]
@@ -161,3 +158,14 @@ class TestDanmakuFromXml:
         dm = Danmaku.from_xml(p_attr, "大字红")
         assert dm.fontsize == 36
         assert dm.color == 255
+
+
+class TestDmidFromXml:
+    """dmid_from_xml：身份与载荷分离"""
+
+    def test_extracts_dmid(self):
+        p_attr = ["10.0", "1", "25", "16777215", "1234567890", "0", "0", "dmid123"]
+        assert Danmaku.dmid_from_xml(p_attr) == "dmid123"
+
+    def test_empty_when_missing(self):
+        assert Danmaku.dmid_from_xml(["1.0", "1"]) == ""
