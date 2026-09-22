@@ -103,6 +103,7 @@ class SenderController(QObject):
             sender_config=self.state.sender_config,
             history_manager=self.history_manager,
             stop_event=self._stop_event,
+            prevent_sleep=self.state.global_config.prevent_sleep,
         )
 
         worker.taskStarted.connect(self._on_task_started)

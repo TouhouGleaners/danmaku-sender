@@ -21,10 +21,6 @@ class SenderConfig(EventedModel):
     stop_after_count: int = Field(default=0, ge=0)
     stop_after_time: int = Field(default=0, ge=0)
 
-    # 系统设置
-    prevent_sleep: bool = True
-    use_system_proxy: bool = True
-
     # 断点续传
     skip_sent: bool = True
 

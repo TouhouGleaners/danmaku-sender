@@ -89,7 +89,7 @@ ETA 根据当前延时设置（随机间隔 + 突发模式的动态变化）实�
 
 | 配置项 | 说明 | 默认值 |
 |:-------|:-----|:-------|
-| `prevent_sleep` | 发送期间阻止系统休眠 | 开启 |
+| `global.prevent_sleep` | 任务运行时阻止系统休眠（全局，发送/监视共用） | 开启 |
 
 开启后，程序会在发送期间调用系统 API 阻止 Windows 进入睡眠状态，避免长时间发送中途断开。发送结束后自动恢复正常休眠策略。
 
@@ -99,7 +99,7 @@ ETA 根据当前延时设置（随机间隔 + 突发模式的动态变化）实�
 
 | 配置项 | 说明 | 默认值 |
 |:-------|:-----|:-------|
-| `use_system_proxy` | 是否使用系统代理 | 开启 |
+| `global.use_system_proxy` | 是否使用系统代理（全局，发送/监视共用） | 开启 |
 
 开启后，程序会通过 Windows 系统代理设置访问 B 站 API。如果你使用代理软件上网，保持开启即可；如果直连网络发送失败，可以尝试关闭此选项。
 
@@ -115,8 +115,6 @@ ETA 根据当前延时设置（随机间隔 + 突发模式的动态变化）实�
     burst_enabled: false
     stop_after_count: 0
     stop_after_time: 0
-    prevent_sleep: true
-    use_system_proxy: true
     ```
 
 === "高效模式（适合大批量）"
@@ -130,8 +128,6 @@ ETA 根据当前延时设置（随机间隔 + 突发模式的动态变化）实�
     rest_max: 35
     stop_after_count: 0
     stop_after_time: 0
-    prevent_sleep: true
-    use_system_proxy: true
     ```
 
 === "测试模式（小批量试水）"
@@ -142,6 +138,4 @@ ETA 根据当前延时设置（随机间隔 + 突发模式的动态变化）实�
     burst_enabled: false
     stop_after_count: 10
     stop_after_time: 0
-    prevent_sleep: false
-    use_system_proxy: true
     ```

@@ -4,6 +4,7 @@ import logging
 from pydantic import BaseModel, ValidationError
 
 from danmaku_sender.config import (
+    GlobalConfig,
     MonitorConfig,
     SenderConfig,
     ThemeConfig,
@@ -24,6 +25,7 @@ class ConfigManager:
     def save(self, state: AppState) -> None:
         """保存非敏感配置到 config.json"""
         config_data = {
+            "global": state.global_config.model_dump(),
             "sender": state.sender_config.model_dump(),
             "monitor": state.monitor_config.model_dump(),
             "theme": state.theme_config.model_dump(mode="json"),
@@ -53,6 +55,7 @@ class ConfigManager:
             return default_instance
 
         # 校验配置
+        state.global_config = _load_section("global", GlobalConfig, state.global_config)
         state.sender_config = _load_section("sender", SenderConfig, state.sender_config)
         state.monitor_config = _load_section("monitor", MonitorConfig, state.monitor_config)
         state.theme_config = _load_section("theme", ThemeConfig, state.theme_config)
