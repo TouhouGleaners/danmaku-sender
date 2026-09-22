@@ -27,7 +27,7 @@ class DanmakuParser:
             with open(xml_path, 'r', encoding='utf-8') as f:
                 content = f.read()
             self.logger.debug(f"已成功加载 XML 文件: {xml_path}")
-            return self.parse_xml_content(content, is_online=False)
+            return self.parse_xml_content(content)
 
         except FileNotFoundError:
             self.logger.error(f"弹幕文件不存在: {xml_path}")
@@ -37,13 +37,12 @@ class DanmakuParser:
             self.logger.error(f"文件读取失败: {xml_path}, error: {e}", exc_info=True)
             raise
 
-    def parse_xml_content(self, xml_content: str, is_online: bool = False) -> list[Danmaku]:
+    def parse_xml_content(self, xml_content: str) -> list[Danmaku]:
         """
         解析Bilibili的XML弹幕内容字符串，返回一个 Danmaku 对象列表。
 
         Args:
             xml_content (str): XML弹幕内容的字符串。
-            is_online (bool): 是否为在线实时数据 (为 True 时将尝试提取 dmid)。
 
         Returns:
             list[Danmaku]: Danmaku 对象列表
@@ -52,20 +51,38 @@ class DanmakuParser:
             self.logger.warning("接收到的 XML 内容为空")
             return []
 
+        results = []
+        for node in self._iter_nodes(xml_content):
+            if dm := self._parse_node(node):
+                results.append(dm)
+
+        return results
+
+    def parse_online_dmids(self, xml_content: str) -> list[str]:
+        """解析在线弹幕 XML，只提取服务器身份 dmid（核销用）。
+
+        在线数据的身份字段不进 Danmaku；载荷解析走 parse_xml_content。
+        """
+        if not xml_content or not xml_content.strip():
+            return []
+
+        dmids: list[str] = []
+        for node in self._iter_nodes(xml_content):
+            p_attr = node.get('p', '').split(',')
+            if dmid := Danmaku.dmid_from_xml(p_attr):
+                dmids.append(dmid)
+        return dmids
+
+    def _iter_nodes(self, xml_content: str):
+        """解析 XML 并产出 <d> 节点"""
         try:
             root = ET.fromstring(xml_content)
         except ET.ParseError as e:
             self.logger.error(f"XML 结构解析失败: {e}")
             raise ValueError(f"XML 结构解析失败: {e}") from e
+        return root.findall('d')
 
-        results = []
-        for node in root.findall('d'):
-            if dm := self._parse_node(node, is_online):
-                results.append(dm)
-
-        return results
-
-    def _parse_node(self, node: ET.Element, is_online: bool) -> Danmaku | None:
+    def _parse_node(self, node: ET.Element) -> Danmaku | None:
         """解析单个节点"""
         text = node.text
         p_attr = node.get('p', '').split(',')
@@ -80,7 +97,7 @@ class DanmakuParser:
             return
 
         try:
-            return Danmaku.from_xml(p_attr, text.strip(), is_online)
+            return Danmaku.from_xml(p_attr, text.strip())
         except Exception as e:
             self.logger.warning(
                 "单条弹幕解析失败: %s | text=%r, p_attr=%r",

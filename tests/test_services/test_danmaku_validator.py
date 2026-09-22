@@ -1,7 +1,11 @@
 """danmaku_validator 单元测试 — validate_danmaku_list"""
 import pytest
+
 from danmaku_sender.config import ValidationConfig
-from danmaku_sender.service.danmaku_validator import validate_danmaku_list, FORBIDDEN_SYMBOLS
+from danmaku_sender.service.danmaku_validator import (
+    FORBIDDEN_SYMBOLS,
+    validate_danmaku_list,
+)
 from tests.conftest import make_danmaku as _dm
 
 
@@ -129,18 +133,13 @@ class TestMultipleIssues:
         assert issues[0]['original_index'] == 1
 
 
-class TestIsValidFlag:
-    """is_valid 标记回填"""
+class TestValidatorIsPure:
+    """校验纯函数：不回写 Danmaku，结论只在返回的 issue 列表"""
 
-    def test_valid_danmaku_flag_set_true(self):
-        dm = _dm("正常弹幕")
-        validate_danmaku_list([dm])
-        assert dm.is_valid is True
-
-    def test_invalid_danmaku_flag_set_false(self):
+    def test_does_not_mutate_input(self):
         dm = _dm("a" * 101)
         validate_danmaku_list([dm])
-        assert dm.is_valid is False
+        assert dm.msg == "a" * 101  # 冻结载荷，只断言未被换掉
 
 
 class TestEdgeCases:

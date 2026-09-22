@@ -2,7 +2,12 @@
 import pytest
 from pydantic import ValidationError
 
-from danmaku_sender.config import GlobalConfig, MonitorConfig, SenderConfig, ValidationConfig
+from danmaku_sender.config import (
+    GlobalConfig,
+    MonitorConfig,
+    SenderConfig,
+    ValidationConfig,
+)
 from danmaku_sender.runtime.state.queue_state import QueueState
 from danmaku_sender.types.models.common import VideoTarget
 from danmaku_sender.types.models.danmaku import Danmaku
@@ -282,8 +287,10 @@ class TestQueueState:
         view.config.skip_sent = False
         assert view.config.skip_sent is True
 
-    def test_spec_isolated_from_danmaku_mutation(self):
-        """发送管线式克隆 + 回填 dmid 不得写穿 TaskSpec（SendJob 同款约定）"""
+    def test_spec_danmakus_are_frozen(self):
+        """Danmaku 不可变：写穿 TaskSpec 在类型层就不可能"""
+        import dataclasses
+
         qs = QueueState()
         dm = Danmaku(msg="hi", progress=0)
         t = make_task(1)
@@ -292,6 +299,5 @@ class TestQueueState:
         qs.add_task(t)
 
         snap = qs.snapshots({TaskStatus.PENDING})[0]
-        job_copy = snap.spec.danmakus[0].clone()
-        job_copy.dmid = "9999"
-        assert snap.spec.danmakus[0].dmid == ""
+        with pytest.raises(dataclasses.FrozenInstanceError):
+            snap.spec.danmakus[0].msg = "hacked"  # type: ignore[misc]

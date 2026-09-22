@@ -1,13 +1,14 @@
 """editor_types 模型单元测试 — EditorField, EditorItem"""
 import pytest
+
 from danmaku_sender.types.models.danmaku import Danmaku
-from danmaku_sender.types.models.editor_types import EditorItem, EditorField
+from danmaku_sender.types.models.editor_types import EditorField, EditorItem
 
 
 @pytest.fixture
 def editor_item() -> EditorItem:
     dm = Danmaku(msg="测试弹幕", progress=5000, color=255, fontsize=36, mode=Danmaku.Mode.BOTTOM)
-    return EditorItem(head=dm.clone(), working=dm.clone())
+    return EditorItem(head=dm, working=dm)
 
 
 class TestEditorFieldGetValue:
@@ -60,11 +61,11 @@ class TestEditorItem:
         assert editor_item.id  # UUID 非空
 
     def test_head_and_working_are_independent(self, editor_item: EditorItem):
-        editor_item.working.msg = "修改后"
+        editor_item.working = editor_item.working.replace(msg="修改后")
         assert editor_item.head.msg == "测试弹幕"
 
     def test_unique_ids(self):
         dm = Danmaku(msg="t", progress=0)
-        item1 = EditorItem(head=dm.clone(), working=dm.clone())
-        item2 = EditorItem(head=dm.clone(), working=dm.clone())
+        item1 = EditorItem(head=dm, working=dm)
+        item2 = EditorItem(head=dm, working=dm)
         assert item1.id != item2.id

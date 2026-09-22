@@ -2,14 +2,18 @@ import logging
 import time
 from pathlib import Path
 
-from peewee import SqliteDatabase, fn, Case
-from playhouse.migrate import SqliteMigrator, migrate
+from peewee import Case, SqliteDatabase, fn
 
-from .orm_models import db, SentDanmaku
-
+from danmaku_sender.types.models.common import (
+    DanmakuStatus,
+    MonitorStats,
+    PendingCidRecord,
+    PendingDanmakuRecord,
+    VideoTarget,
+)
 from danmaku_sender.types.models.danmaku import Danmaku
-from danmaku_sender.types.models.common import DanmakuStatus, VideoTarget, PendingCidRecord, PendingDanmakuRecord, MonitorStats
 
+from .orm_models import SentDanmaku, db
 
 logger = logging.getLogger(__name__)
 
@@ -55,12 +59,15 @@ class HistoryManager:
             logger.critical(f"数据库初始化/迁移致命错误: {e}", exc_info=True)
             raise RuntimeError(f"HistoryManager 数据库初始化失败: {e}") from e
 
-    def record_danmaku(self, target: VideoTarget, dm: Danmaku, is_visible_api: bool = True):
+    def record_danmaku(self, target: VideoTarget, dm: Danmaku, dmid: str, is_visible_api: bool = True):
         """
         [存证] 记录一条刚刚发送成功的弹幕。
         对应状态: STATUS_PENDING (0)
+
+        Args:
+            dmid: 服务器返回的弹幕身份（来自 DanmakuSendResult.dmid），不可从 dm 上取
         """
-        if not dm.dmid:
+        if not dmid:
             logger.warning("尝试记录无 ID 的弹幕，操作跳过。")
             return
 
@@ -68,7 +75,7 @@ class HistoryManager:
             (
                 SentDanmaku
                     .insert(
-                        dmid=str(dm.dmid),
+                        dmid=str(dmid),
                         cid=target.cid,
                         bvid=target.bvid,
                         msg=dm.msg,

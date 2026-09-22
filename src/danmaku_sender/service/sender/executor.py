@@ -1,12 +1,12 @@
 import logging
 from threading import Event
 
-from danmaku_sender.types.models.danmaku import Danmaku
-from danmaku_sender.types.models.common import VideoTarget
-from danmaku_sender.types.models.result import DanmakuSendResult
-from danmaku_sender.types.exceptions.exceptions import BiliApiError, BiliNetworkError
-from danmaku_sender.types.exceptions.api_errors import BiliDmErrorCode
 from danmaku_sender.repo.bili_api_client import BiliApiClient
+from danmaku_sender.types.exceptions.api_errors import BiliDmErrorCode
+from danmaku_sender.types.exceptions.exceptions import BiliApiError, BiliNetworkError
+from danmaku_sender.types.models.common import VideoTarget
+from danmaku_sender.types.models.danmaku import Danmaku
+from danmaku_sender.types.models.result import DanmakuSendResult
 
 
 class DanmakuExecutor:
@@ -58,9 +58,6 @@ class DanmakuExecutor:
         result = DanmakuSendResult.from_api_response(resp_json)
 
         if result.is_success:
-            # 若 B 站 API 返回了 DMID，则回填给内存对象
-            if result.dmid:
-                danmaku.dmid = result.dmid
             self.logger.info(f"✅ 发送成功 [ID:{result.dmid}]: {danmaku.msg}")
         else:
             self.logger.warning(f"❌ 发送失败: {result.hint}")

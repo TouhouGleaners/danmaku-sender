@@ -7,7 +7,7 @@ import sqlite3
 import pytest
 
 from danmaku_sender.repo.history_manager import HistoryManager
-from danmaku_sender.types.models.common import VideoTarget, DanmakuStatus
+from danmaku_sender.types.models.common import DanmakuStatus, VideoTarget
 from danmaku_sender.types.models.danmaku import Danmaku
 
 
@@ -22,7 +22,7 @@ def hm(tmp_path) -> HistoryManager:
 
 
 def _record(hm: HistoryManager, target: VideoTarget, dmid: str, msg: str = "弹幕") -> bool:
-    return hm.record_danmaku(target, Danmaku(msg=msg, progress=1000, dmid=dmid))
+    return hm.record_danmaku(target, Danmaku(msg=msg, progress=1000), dmid)
 
 
 class TestRecordDanmaku:

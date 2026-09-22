@@ -1,15 +1,14 @@
 """弹幕核验服务 - 负责查在线、对库、标状态"""
 
 import logging
-from typing import Callable
-
-from .danmaku_parser import DanmakuParser
+from collections.abc import Callable
 
 from danmaku_sender.repo.bili_api_client import BiliApiClient
-from danmaku_sender.types.exceptions.exceptions import BiliApiError, BiliNetworkError
 from danmaku_sender.repo.history_manager import HistoryManager
+from danmaku_sender.types.exceptions.exceptions import BiliApiError, BiliNetworkError
 from danmaku_sender.types.models.common import VerifyResult
 
+from .danmaku_parser import DanmakuParser
 
 logger = logging.getLogger(__name__)
 
@@ -45,15 +44,13 @@ class DanmakuVerifier:
         """
         try:
             xml_content = self.api_client.get_danmaku_list_xml(cid)
-            online_danmakus = self.parser.parse_xml_content(xml_content, is_online=True)
+            online_dmids = self.parser.parse_online_dmids(xml_content)
         except (BiliApiError, BiliNetworkError) as e:
             logger.warning(f"[CID:{cid}] 获取在线弹幕失败: {e}")
             raise
         except Exception as e:
             logger.error(f"[CID:{cid}] 解析在线弹幕内容时发生错误: {e}")
             raise
-
-        online_dmids = [dm.dmid for dm in online_danmakus if dm.dmid]
 
         verified_count = 0
         if online_dmids:
@@ -139,8 +136,7 @@ class DanmakuVerifier:
         """
         try:
             xml_content = self.api_client.get_danmaku_list_xml(cid)
-            online_danmakus = self.parser.parse_xml_content(xml_content, is_online=True)
-            return [dm.dmid for dm in online_danmakus if dm.dmid]
+            return self.parser.parse_online_dmids(xml_content)
         except (BiliApiError, BiliNetworkError) as e:
             logger.warning(f"[CID:{cid}] 获取在线弹幕失败: {e}")
             raise

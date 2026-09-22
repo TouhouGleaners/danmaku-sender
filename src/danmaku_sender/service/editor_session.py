@@ -1,11 +1,18 @@
-import copy
-import logging
 import colorsys
-from typing import Any, Callable
+import logging
+from collections.abc import Callable
+from typing import Any
 
 from danmaku_sender.config import ValidationConfig
 from danmaku_sender.types.models.danmaku import Danmaku
-from danmaku_sender.types.models.editor_types import EditorItem, EditorField, AtomicChange, ViewItem, InsertPosition
+from danmaku_sender.types.models.editor_types import (
+    AtomicChange,
+    EditorField,
+    EditorItem,
+    InsertPosition,
+    ViewItem,
+)
+
 from .danmaku_validator import validate_danmaku_list
 
 
@@ -53,7 +60,8 @@ class EditorSession:
 
         sorted_source = sorted(danmakus, key=lambda x: x.progress)
         for dm in sorted_source:
-            item = EditorItem(head=copy.deepcopy(dm), working=copy.deepcopy(dm))
+            # Danmaku 不可变：head/working 可安全共享；改动时 working 会被 replace 换新
+            item = EditorItem(head=dm, working=dm)
             self.items[item.id] = item
             self.item_order.append(item.id)
 
@@ -177,7 +185,7 @@ class EditorSession:
             progress=new_progress
         )
 
-        new_item = EditorItem(head=new_dm.clone(), working=new_dm.clone())
+        new_item = EditorItem(head=new_dm, working=new_dm)
         new_uid = new_item.id
 
         self.items[new_uid] = new_item
@@ -225,12 +233,16 @@ class EditorSession:
             return True
         return False
 
-    def _execute_batch_transform(self, transform_fn: Callable[[Danmaku], bool], target_uids: list[str] | None = None) -> tuple[int, int]:
+    def _execute_batch_transform(
+        self,
+        transform_fn: Callable[[Danmaku], Danmaku | None],
+        target_uids: list[str] | None = None,
+    ) -> tuple[int, int]:
         """通用批量操作引擎
 
         Args:
-            transform_fn (Callable[[Danmaku], bool]): 业务逻辑函数。接收 Danmaku 对象，返回 True 表示发生了修改。
-            target_uids (list[str] | None): 可选的目标 UID 列表，如果为 None 则作用于所有未删除项。
+            transform_fn: 接收不可变 Danmaku，无变化返回 None，有变化返回新对象（replace）。
+            target_uids: 可选的目标 UID 列表，如果为 None 则作用于所有未删除项。
 
         Returns:
             tuple[int, int]: (修改数, 删除数)
@@ -256,20 +268,25 @@ class EditorSession:
             # 记录初态快照
             snap_msg, snap_progress = item.working.msg, item.working.progress
 
-            if transform_fn(item.working):
-                # 记录属性变化
-                if item.working.msg != snap_msg:
-                    current_step_changes.append(AtomicChange(uid, EditorField.MSG, snap_msg))
-                if item.working.progress != snap_progress:
-                    current_step_changes.append(AtomicChange(uid, EditorField.PROGRESS, snap_progress))
+            new_dm = transform_fn(item.working)
+            if new_dm is None or new_dm == item.working:
+                continue
 
-                # 业务逻辑：改空即删除
-                if not item.working.msg.strip():
-                    item.is_deleted = True
-                    current_step_changes.append(AtomicChange(uid, EditorField.IS_DELETED, False))
-                    deleted_count += 1
-                else:
-                    modified_count += 1
+            item.working = new_dm
+
+            # 记录属性变化
+            if item.working.msg != snap_msg:
+                current_step_changes.append(AtomicChange(uid, EditorField.MSG, snap_msg))
+            if item.working.progress != snap_progress:
+                current_step_changes.append(AtomicChange(uid, EditorField.PROGRESS, snap_progress))
+
+            # 业务逻辑：改空即删除
+            if not item.working.msg.strip():
+                item.is_deleted = True
+                current_step_changes.append(AtomicChange(uid, EditorField.IS_DELETED, False))
+                deleted_count += 1
+            else:
+                modified_count += 1
 
         if current_step_changes:
             self._push_undo_record(current_step_changes)
@@ -281,10 +298,9 @@ class EditorSession:
         Returns:
             tuple[int, int]: 修改数, 删除数
         """
-        def _rule(dm: Danmaku) -> bool:
-            original = dm.msg
-            dm.msg = dm.msg.replace('\n', '').replace('\\n', '').replace('/n', '').strip()
-            return dm.msg != original
+        def _rule(dm: Danmaku) -> Danmaku | None:
+            new_msg = dm.msg.replace('\n', '').replace('\\n', '').replace('/n', '').strip()
+            return dm.replace(msg=new_msg) if new_msg != dm.msg else None
 
         return self._execute_batch_transform(_rule)
 
@@ -297,10 +313,9 @@ class EditorSession:
         Returns:
             int: 修改数
         """
-        def _rule(dm: Danmaku) -> bool:
-            original = dm.msg
-            dm.msg = dm.msg[:limit]
-            return dm.msg != original
+        def _rule(dm: Danmaku) -> Danmaku | None:
+            new_msg = dm.msg[:limit]
+            return dm.replace(msg=new_msg) if new_msg != dm.msg else None
 
         mod_count, _ = self._execute_batch_transform(_rule)
         return mod_count
@@ -318,11 +333,9 @@ class EditorSession:
         if offset_ms == 0:
             return 0
 
-        def _shift_rule(dm: Danmaku) -> bool:
-            initial_progress = dm.progress
+        def _shift_rule(dm: Danmaku) -> Danmaku | None:
             target_progress = max(0, dm.progress + offset_ms)
-            dm.progress = target_progress
-            return target_progress != initial_progress
+            return dm.replace(progress=target_progress) if target_progress != dm.progress else None
 
         mod_count, _ = self._execute_batch_transform(_shift_rule, target_uids)
         return mod_count
@@ -371,7 +384,7 @@ class EditorSession:
                 color=color
             )
 
-            new_item = EditorItem(head=dm.clone(), working=dm.clone())
+            new_item = EditorItem(head=dm, working=dm)
             uid = new_item.id
 
             self.items[uid] = new_item

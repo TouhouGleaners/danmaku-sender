@@ -6,21 +6,20 @@ Controller 层的 Worker 只需调用 pipeline.execute()，无需接触 Executor
 """
 
 import logging
+from collections.abc import Callable
 from dataclasses import replace
-from typing import Callable
 
-from .scheduler import DanmakuScheduler
-from .executor import DanmakuExecutor
-from .context import SendingContext, SendJob
-from .delay_manager import DelayManager
-
+from danmaku_sender.config import ApiAuthConfig, SenderConfig
 from danmaku_sender.repo.bili_api_client import BiliApiClient
 from danmaku_sender.repo.history_manager import HistoryManager
+from danmaku_sender.types.models.common import VideoTarget
 from danmaku_sender.types.models.danmaku import Danmaku
 from danmaku_sender.types.models.result import DanmakuSendResult
-from danmaku_sender.types.models.common import VideoTarget
-from danmaku_sender.config import ApiAuthConfig, SenderConfig
 
+from .context import SendingContext, SendJob
+from .delay_manager import DelayManager
+from .executor import DanmakuExecutor
+from .scheduler import DanmakuScheduler
 
 logger = logging.getLogger(__name__)
 
@@ -93,11 +92,9 @@ class SendPipeline:
         return ctx
 
     def _record_result(self, target: VideoTarget, dm: Danmaku, result: DanmakuSendResult):
-        """将成功发送的弹幕记录到历史数据库"""
+        """将成功发送的弹幕记录到历史数据库（dmid 以服务器回执为准）"""
         if result.is_success and result.dmid:
-            if not dm.dmid:
-                dm.dmid = result.dmid
-            self.history_manager.record_danmaku(target, dm, result.is_visible)
+            self.history_manager.record_danmaku(target, dm, result.dmid, result.is_visible)
 
     def _calc_eta(self, attempted: int, total: int, config: SenderConfig) -> float:
         """基于任务配置计算 ETA（秒）"""

@@ -1,9 +1,11 @@
 """EditorSession 单元测试 — 编辑器核心会话层"""
 import pytest
-from danmaku_sender.types.models.danmaku import Danmaku
-from danmaku_sender.types.models.editor_types import EditorField, InsertPosition
+
 from danmaku_sender.config import ValidationConfig
 from danmaku_sender.service.editor_session import EditorSession
+from danmaku_sender.types.models.danmaku import Danmaku
+from danmaku_sender.types.models.editor_types import EditorField, InsertPosition
+from tests.conftest import edit_working as _edit
 from tests.conftest import make_danmaku as _dm
 
 
@@ -62,9 +64,9 @@ class TestLoadData:
         loaded_session.load_data([_dm("新", 0)])
         assert loaded_session.is_dirty is False
 
-    def test_head_and_working_are_deep_copies(self, loaded_session: EditorSession):
+    def test_head_and_working_are_independent(self, loaded_session: EditorSession):
         item = list(loaded_session.items.values())[0]
-        item.working.msg = "修改"
+        _edit(item, msg="修改")
         assert item.head.msg != "修改"
 
 
@@ -119,14 +121,14 @@ class TestValidate:
 
     def test_long_danmaku_flagged(self, loaded_session: EditorSession):
         uid = loaded_session.item_order[0]
-        loaded_session.items[uid].working.msg = "a" * 101
+        _edit(loaded_session.items[uid], msg="a" * 101)
         loaded_session.validate(10000, ValidationConfig())
         assert loaded_session.items[uid].error_msg != ""
 
     def test_skips_deleted_items(self, loaded_session: EditorSession):
         uid = loaded_session.item_order[0]
         loaded_session.items[uid].is_deleted = True
-        loaded_session.items[uid].working.msg = "a" * 101
+        _edit(loaded_session.items[uid], msg="a" * 101)
         loaded_session.validate(10000, ValidationConfig())
         # 已删除的不应被校验，其他应正常
         assert loaded_session.items[uid].error_msg == ""
@@ -260,7 +262,7 @@ class TestInsertItem:
     def test_insert_above_at_zero_clamped(self, loaded_session: EditorSession):
         # 将第一条设为 progress=200
         uid = loaded_session.item_order[0]
-        loaded_session.items[uid].working.progress = 200
+        _edit(loaded_session.items[uid], progress=200)
         new_uid = loaded_session.insert_item(uid, InsertPosition.ABOVE)
         assert isinstance(new_uid, str)
         assert loaded_session.items[new_uid].working.progress == 0  # max(0, 200-500)
@@ -354,26 +356,26 @@ class TestUpdateItemProperties:
 class TestBatchRemoveNewlines:
     def test_removes_literal_newline(self, loaded_session: EditorSession):
         uid = loaded_session.item_order[0]
-        loaded_session.items[uid].working.msg = "hello\nworld"
+        _edit(loaded_session.items[uid], msg="hello\nworld")
         mod, del_ = loaded_session.batch_remove_newlines()
         assert loaded_session.items[uid].working.msg == "helloworld"
         assert mod == 1
 
     def test_removes_escaped_newline(self, loaded_session: EditorSession):
         uid = loaded_session.item_order[0]
-        loaded_session.items[uid].working.msg = "hello\\nworld"
+        _edit(loaded_session.items[uid], msg="hello\\nworld")
         loaded_session.batch_remove_newlines()
         assert loaded_session.items[uid].working.msg == "helloworld"
 
     def test_removes_slash_n(self, loaded_session: EditorSession):
         uid = loaded_session.item_order[0]
-        loaded_session.items[uid].working.msg = "hello/nworld"
+        _edit(loaded_session.items[uid], msg="hello/nworld")
         loaded_session.batch_remove_newlines()
         assert loaded_session.items[uid].working.msg == "helloworld"
 
     def test_empty_after_removal_marks_deleted(self, loaded_session: EditorSession):
         uid = loaded_session.item_order[0]
-        loaded_session.items[uid].working.msg = "\n"
+        _edit(loaded_session.items[uid], msg="\n")
         mod, del_ = loaded_session.batch_remove_newlines()
         assert loaded_session.items[uid].is_deleted is True
         assert del_ == 1
@@ -386,7 +388,7 @@ class TestBatchRemoveNewlines:
     def test_skips_deleted(self, loaded_session: EditorSession):
         uid = loaded_session.item_order[0]
         loaded_session.items[uid].is_deleted = True
-        loaded_session.items[uid].working.msg = "hello\nworld"
+        _edit(loaded_session.items[uid], msg="hello\nworld")
         mod, _ = loaded_session.batch_remove_newlines()
         assert mod == 0
 
@@ -398,7 +400,7 @@ class TestBatchRemoveNewlines:
 class TestBatchTruncateLength:
     def test_truncates_long_content(self, loaded_session: EditorSession):
         uid = loaded_session.item_order[0]
-        loaded_session.items[uid].working.msg = "a" * 150
+        _edit(loaded_session.items[uid], msg="a" * 150)
         count = loaded_session.batch_truncate_length(100)
         assert loaded_session.items[uid].working.msg == "a" * 100
         assert count == 1
@@ -409,7 +411,7 @@ class TestBatchTruncateLength:
 
     def test_custom_limit(self, loaded_session: EditorSession):
         uid = loaded_session.item_order[0]
-        loaded_session.items[uid].working.msg = "abcde"
+        _edit(loaded_session.items[uid], msg="abcde")
         count = loaded_session.batch_truncate_length(3)
         assert loaded_session.items[uid].working.msg == "abc"
         assert count == 1
@@ -495,7 +497,6 @@ class TestGenerateDanmakuArray:
     def test_can_undo_array(self, loaded_session: EditorSession):
         ref_uid = loaded_session.item_order[0]
         uids = loaded_session.generate_danmaku_array(ref_uid, "test", Danmaku.Mode.SCROLL, 2, "classic")
-        original_count = len(loaded_session.items)
         loaded_session.undo()
         # 撤销后新增的条目应被标记删除
         for uid in uids:
