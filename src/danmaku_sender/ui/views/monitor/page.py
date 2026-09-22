@@ -221,7 +221,7 @@ class MonitorPage(QWidget):
 
     def showEvent(self, event):
         super().showEvent(event)
-        UIBinder.pull_all(self)
+        UIBinder.refresh_all(self)
         self._refresh_queue_table()
         # 首次显示时 viewport 已有尺寸，再定位空状态提示
         self._update_empty_hint()

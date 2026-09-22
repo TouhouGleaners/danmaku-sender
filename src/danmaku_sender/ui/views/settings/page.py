@@ -23,7 +23,7 @@ class SettingsPage(QWidget):
 
     配置写入走 UIBinder（Widget→Model）；主题需要即时生效，
     故在写成功钩子里发 themeApplied——这是真广播点，不是隐式订阅。
-    刷新靠 showEvent → UIBinder.pull_all（打开谁，谁就从状态重读）。
+    刷新靠 showEvent → UIBinder.refresh_all（打开谁，谁就从状态重读）。
     """
 
     themeApplied = Signal(object)  # ThemeMode：主题已写入配置，可立即应用
@@ -223,6 +223,6 @@ class SettingsPage(QWidget):
     def showEvent(self, event):
         """打开页面时从状态重读控件值（无隐式同步）"""
         super().showEvent(event)
-        UIBinder.pull_all(self)
-        # pull 屏蔽信号防回环，依赖控件的联动需显式重算
+        UIBinder.refresh_all(self)
+        # refresh 屏蔽信号防回环，依赖控件的联动需显式重算
         self._on_burst_toggled(self.burst_enabled_cb.isChecked())

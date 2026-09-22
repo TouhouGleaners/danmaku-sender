@@ -11,7 +11,7 @@ from PySide6.QtWidgets import (
 
 logger = logging.getLogger(__name__)
 
-# 绑定登记：widget → (model, field_name)，供 pull / pull_all 反读
+# 绑定登记：widget → (model, field_name)，供 refresh / refresh_all 反读
 _BINDING_PROP = "_binder_binding"
 
 
@@ -22,11 +22,11 @@ class UIBinder:
     职责:
     1. Widget → Model: 通过 Qt 信号自动回写，支持 Pydantic 验证与异常反馈。
     2. 刷新 (Model → Widget): 不做隐式订阅。调用方在页面 showEvent / 对话框打开前
-       调用 pull() / pull_all() 显式重读——「打开谁，谁就从状态重读」。
+       调用 refresh() / refresh_all() 显式重读——「打开谁，谁就从状态重读」。
     3. 写成功钩子: on_wrote 用于主题即时生效、自动落盘等真广播点。
     4. 生命周期管理: 内部维护绑定注册表 (_active_bindings)，每次重绑时自动解除历史信号。
 
-    约定：业务代码不得为「UI 跟着状态变」另建订阅——要么 pull，要么在变更处显式 emit。
+    约定：业务代码不得为「UI 跟着状态变」另建订阅——要么 refresh，要么在变更处显式 emit。
     """
 
     # 静态绑定注册表
@@ -134,7 +134,7 @@ class UIBinder:
         if widget not in UIBinder._active_bindings:
             UIBinder._active_bindings[widget] = []
 
-        # 记录 (model, field)，供 pull 反读
+        # 记录 (model, field)，供 refresh 反读
         widget.setProperty(_BINDING_PROP, (model, field_name))
 
         # 初始数据挂载 (Model -> UI)
@@ -175,7 +175,7 @@ class UIBinder:
             UIBinder._active_bindings[widget].append((signal_instance, _update_model_proxy))
 
     @staticmethod
-    def pull(widget: QWidget) -> None:
+    def refresh(widget: QWidget) -> None:
         """把模型当前值刷进单个已绑定控件（打开页面/对话框时调用）"""
         binding = widget.property(_BINDING_PROP)
         if not binding:
@@ -185,14 +185,15 @@ class UIBinder:
             UIBinder._set_widget_value(widget, getattr(model, field_name))
             UIBinder._set_widget_invalid_state(widget, False)
         except Exception as e:
-            logger.warning(f"pull 失败 [{field_name}]: {e}")
+            logger.warning(f"refresh 失败 [{field_name}]: {e}")
 
     @staticmethod
-    def pull_all(parent: QWidget) -> None:
+    def refresh_all(parent: QWidget) -> None:
         """把 parent 子树内所有已绑定控件从模型重读一遍。
 
         页面 showEvent / 对话框 exec 前调用，保证「打开谁，谁就新鲜」。
+        刷新是静默的（防回环），依赖控件的联动须调用方自己补。
         """
         for w in parent.findChildren(QWidget):
             if w.property(_BINDING_PROP) is not None:
-                UIBinder.pull(w)
+                UIBinder.refresh(w)

@@ -66,10 +66,10 @@ class TaskDetailDialog(QDialog):
             self._set_readonly_mode()
 
     def showEvent(self, event):
-        """打开时从沙盒重读控件值（与 pull 纪律一致）"""
+        """打开时从沙盒重读控件值（与 refresh 纪律一致）"""
         super().showEvent(event)
-        UIBinder.pull_all(self)
-        # pull 屏蔽信号防回环，依赖控件的联动需显式重算
+        UIBinder.refresh_all(self)
+        # refresh 屏蔽信号防回环，依赖控件的联动需显式重算
         self._on_burst_toggled(self._burst_cb.isChecked())
 
     def _create_ui(self):

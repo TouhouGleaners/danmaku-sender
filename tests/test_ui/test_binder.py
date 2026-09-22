@@ -1,4 +1,4 @@
-"""UIBinder 单向写绑定与 pull 刷新"""
+"""UIBinder 单向写绑定与 refresh 刷新"""
 import os
 
 import pytest
@@ -60,7 +60,7 @@ def test_invalid_write_flags_widget_and_keeps_model(qapp):
     assert spin.property("invalid") is True
 
 
-def test_pull_rereads_model_into_widget(qapp):
+def test_refresh_rereads_model_into_widget(qapp):
     from danmaku_sender.ui.framework.binder import UIBinder
 
     cfg = _Cfg()
@@ -69,11 +69,11 @@ def test_pull_rereads_model_into_widget(qapp):
     UIBinder.bind(spin, cfg, "count")
     cfg.count = 8  # 外部改模型，控件不会自动跟（无隐式订阅）
     assert spin.value() == 3
-    UIBinder.pull(spin)
+    UIBinder.refresh(spin)
     assert spin.value() == 8
 
 
-def test_pull_all_covers_descendants(qapp):
+def test_refresh_all_covers_descendants(qapp):
     from danmaku_sender.ui.framework.binder import UIBinder
 
     cfg = _Cfg(enabled=True, count=2)
@@ -82,5 +82,5 @@ def test_pull_all_covers_descendants(qapp):
     cb = QCheckBox(inner)
     UIBinder.bind(cb, cfg, "enabled")
     cfg.enabled = False
-    UIBinder.pull_all(parent)
+    UIBinder.refresh_all(parent)
     assert cb.isChecked() is False
