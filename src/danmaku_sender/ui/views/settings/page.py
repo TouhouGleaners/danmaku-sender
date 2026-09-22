@@ -182,11 +182,9 @@ class SettingsPage(QWidget):
         # 主题设置（UIBinder 自动处理 QComboBox ↔ ThemeMode 枚举的双向同步）
         UIBinder.bind(self.theme_combo, self.state.theme_config, "theme_mode")
 
-        UIBinder.bind(self.prevent_sleep_checkbox, self.state.sender_config, "prevent_sleep", clear_old=True)
-        UIBinder.bind(self.proxy_checkbox, self.state.sender_config, "use_system_proxy", clear_old=True)
-
-        UIBinder.bind(self.prevent_sleep_checkbox, self.state.monitor_config, "prevent_sleep", clear_old=False)
-        UIBinder.bind(self.proxy_checkbox, self.state.monitor_config, "use_system_proxy", clear_old=False)
+        # 全局系统设置（跨发送器/监视器共享，单绑一份）
+        UIBinder.bind(self.prevent_sleep_checkbox, self.state.global_config, "prevent_sleep")
+        UIBinder.bind(self.proxy_checkbox, self.state.global_config, "use_system_proxy")
 
         # 发送延迟策略
         config = self.state.sender_config

@@ -4,6 +4,7 @@ from PySide6.QtCore import QObject, Signal
 
 from danmaku_sender.config import (
     ApiAuthConfig,
+    GlobalConfig,
     MonitorConfig,
     SenderConfig,
     ThemeConfig,
@@ -24,7 +25,6 @@ class AppState(QObject):
     monitorLogReceived = Signal(str)
     senderActiveChanged = Signal()
     monitorActiveChanged = Signal()
-    editorDirtyChanged = Signal()
 
     def __init__(self):
         super().__init__()
@@ -34,7 +34,8 @@ class AppState(QObject):
         self._sessdata: str = ""
         self._bili_jct: str = ""
 
-        # 各模块配置
+        # 各模块配置（global_config 为跨模块共享的系统设置）
+        self.global_config = GlobalConfig()
         self.sender_config = SenderConfig()
         self.monitor_config = MonitorConfig()
         self.theme_config = ThemeConfig()
@@ -48,7 +49,6 @@ class AppState(QObject):
 
         self._sender_is_active: bool = False
         self._monitor_is_active: bool = False
-        self._editor_is_dirty: bool = False
 
     @property
     def sessdata(self) -> str:
@@ -90,16 +90,6 @@ class AppState(QObject):
             self._monitor_is_active = value
             self.monitorActiveChanged.emit()
 
-    @property
-    def editor_is_dirty(self) -> bool:
-        return self._editor_is_dirty
-
-    @editor_is_dirty.setter
-    def editor_is_dirty(self, value: bool):
-        if self._editor_is_dirty != value:
-            self._editor_is_dirty = value
-            self.editorDirtyChanged.emit()
-
     def get_api_auth(self) -> ApiAuthConfig:
         """
         工厂方法：从当前状态生成一个用于初始化的 API 凭证对象。
@@ -107,5 +97,5 @@ class AppState(QObject):
         return ApiAuthConfig(
             sessdata=self.sessdata,
             bili_jct=self.bili_jct,
-            use_system_proxy=self.sender_config.use_system_proxy
+            use_system_proxy=self.global_config.use_system_proxy,
         )

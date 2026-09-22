@@ -4,6 +4,17 @@
 
 ---
 
+## 全局系统设置 (GlobalConfig)
+
+跨发送器 / 监视器共享，只此一份。
+
+| 配置项 | 类型 | 默认值 | UI 控件 | 说明 |
+|:-------|:-----|:-------|:--------|:-----|
+| `prevent_sleep` | bool | true | QCheckBox | 任务运行时阻止系统休眠 |
+| `use_system_proxy` | bool | true | QCheckBox | 是否使用系统代理 |
+
+---
+
 ## 发送策略 (SenderConfig)
 
 | 配置项 | 类型 | 默认值 | UI 控件 | 说明 |
@@ -17,8 +28,6 @@
 | `stop_after_count` | int | 0 | QSpinBox | 发送 N 条后自动停止（0=不限） |
 | `stop_after_time` | int | 0 | QSpinBox | 运行 N 分钟后自动停止（0=不限） |
 | `delay_between_tasks` | float | 30 | QDoubleSpinBox | 两个任务之间的等待时间（秒） |
-| `prevent_sleep` | bool | true | QCheckBox | 发送期间阻止系统休眠 |
-| `use_system_proxy` | bool | true | QCheckBox | 是否使用系统代理 |
 | `skip_sent` | bool | true | QCheckBox | 是否启用断点续传（发送前查重） |
 
 详细说明见 [频率控制与并发策略](../features/sender/delay-control.md) 和 [断点续传与智能去重](../features/sender/resume.md)。
@@ -30,8 +39,6 @@
 | 配置项 | 类型 | 默认值 | UI 控件 | 说明 |
 |:-------|:-----|:-------|:--------|:-----|
 | `refresh_interval` | int | 60 | QSpinBox | 轮询 B 站弹幕池的间隔（秒），最小 10 |
-| `prevent_sleep` | bool | true | QCheckBox | 监视期间阻止系统休眠 |
-| `use_system_proxy` | bool | true | — | 是否使用系统代理 |
 | `stats_baseline` | float | 程序启动时间 | QComboBox + 按钮 | 统计基线时间戳（瞬态，不持久化） |
 
 详细说明见 [实时存活率仪表盘](../features/monitor/dashboard.md)。

@@ -1,11 +1,25 @@
-"""状态与配置模型单元测试 — SenderConfig, MonitorConfig, ValidationConfig, QueueState"""
+"""状态与配置模型单元测试 — GlobalConfig, SenderConfig, MonitorConfig, ValidationConfig, QueueState"""
 import pytest
 from pydantic import ValidationError
 
-from danmaku_sender.config import MonitorConfig, SenderConfig, ValidationConfig
+from danmaku_sender.config import GlobalConfig, MonitorConfig, SenderConfig, ValidationConfig
 from danmaku_sender.runtime.state.queue_state import QueueState
 from danmaku_sender.types.models.common import VideoTarget
 from danmaku_sender.types.models.queue import QueueTask, TaskStatus
+
+
+class TestGlobalConfig:
+    """GlobalConfig 全局系统设置"""
+
+    def test_default_values(self):
+        cfg = GlobalConfig()
+        assert cfg.prevent_sleep is True
+        assert cfg.use_system_proxy is True
+
+    def test_custom_values(self):
+        cfg = GlobalConfig(prevent_sleep=False, use_system_proxy=False)
+        assert cfg.prevent_sleep is False
+        assert cfg.use_system_proxy is False
 
 
 class TestSenderConfig:
@@ -20,8 +34,6 @@ class TestSenderConfig:
         assert cfg.rest_max == 45.0
         assert cfg.stop_after_count == 0
         assert cfg.stop_after_time == 0
-        assert cfg.prevent_sleep is True
-        assert cfg.use_system_proxy is True
         assert cfg.skip_sent is True
 
     def test_valid_custom_values(self):
@@ -65,8 +77,6 @@ class TestMonitorConfig:
     def test_default_values(self):
         cfg = MonitorConfig()
         assert cfg.refresh_interval == 60
-        assert cfg.prevent_sleep is True
-        assert cfg.use_system_proxy is True
 
     def test_refresh_interval_too_small(self):
         with pytest.raises(ValidationError):

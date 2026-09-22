@@ -62,6 +62,7 @@ class QueueMonitorWorker(WorkerThread):
         auth_config: ApiAuthConfig,
         history_manager: HistoryManager,
         stop_event: threading.Event,
+        prevent_sleep: bool = True,
         parent=None,
     ):
         super().__init__(parent)
@@ -69,6 +70,7 @@ class QueueMonitorWorker(WorkerThread):
         self.auth_config = auth_config
         self.history_manager = history_manager
         self.stop_event = stop_event
+        self.prevent_sleep = prevent_sleep
 
     @property
     def targets(self) -> list[MonitorSample]:
@@ -108,7 +110,7 @@ class QueueMonitorWorker(WorkerThread):
     def run(self):
         failed = False
         try:
-            with KeepSystemAwake(True):
+            with KeepSystemAwake(self.prevent_sleep):
                 while not self.stop_event.is_set():
                     self._run_round()
                     if self.stop_event.wait(self.poll_interval_seconds):

@@ -38,6 +38,7 @@ class QueueSendWorker(WorkerThread):
         sender_config: SenderConfig,
         history_manager: HistoryManager,
         stop_event: threading.Event,
+        prevent_sleep: bool = True,
         parent=None,
     ):
         super().__init__(parent)
@@ -46,6 +47,7 @@ class QueueSendWorker(WorkerThread):
         self.sender_config = sender_config
         self.history_manager = history_manager
         self.stop_event = stop_event
+        self.prevent_sleep = prevent_sleep
 
     def run(self):
         """遍历任务快照逐个执行。启动后添加的任务不会被处理。"""
@@ -56,7 +58,7 @@ class QueueSendWorker(WorkerThread):
         handled: set[str] = set()
 
         try:
-            with KeepSystemAwake(True):
+            with KeepSystemAwake(self.prevent_sleep):
                 for idx, task in enumerate(tasks):
                     if self.stop_event.is_set():
                         stopped_early = True

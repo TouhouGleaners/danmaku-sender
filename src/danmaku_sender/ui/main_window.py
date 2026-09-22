@@ -410,7 +410,7 @@ class MainWindow(QMainWindow):
 
     def _run_update_check(self, is_manual: bool = False):
         """启动更新检查"""
-        self.system_controller.check_for_updates(self.state.sender_config.use_system_proxy, is_manual)
+        self.system_controller.check_for_updates(self.state.global_config.use_system_proxy, is_manual)
 
     @Slot(str, str, str)
     def _on_update_found(self, ver: str, notes: str, url: str):

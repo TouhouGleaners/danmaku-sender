@@ -140,7 +140,7 @@ class AccountDialog(QDialog):
         return ApiAuthConfig(
             sessdata=account.sessdata,
             bili_jct=account.bili_jct,
-            use_system_proxy=self.state.sender_config.use_system_proxy,
+            use_system_proxy=self.state.global_config.use_system_proxy,
         )
 
     def _use_account(self, account: AccountCredential):
@@ -151,13 +151,13 @@ class AccountDialog(QDialog):
         self.accept()
 
     def _add_account(self):
-        proxy = self.state.sender_config.use_system_proxy
+        proxy = self.state.global_config.use_system_proxy
         dialog = AccountFormDialog(edit_data=None, use_system_proxy=proxy, parent=self)
         dialog.saved.connect(self._on_account_saved)
         dialog.exec()
 
     def _edit_account(self, account: AccountCredential):
-        proxy = self.state.sender_config.use_system_proxy
+        proxy = self.state.global_config.use_system_proxy
         dialog = AccountFormDialog(edit_data=account, use_system_proxy=proxy, parent=self)
         dialog.saved.connect(lambda new, _old: self._on_edit_saved(new, account))
         dialog.exec()
