@@ -270,3 +270,28 @@ class TestQueueState:
         qs.add_task(t1)
         qs.reorder_tasks(["nope"])
         assert [v.target.cid for v in qs.tasks] == [1]
+
+    def test_view_config_returns_copy(self):
+        """经 TaskView.config 改字段不得影响队列中的工单"""
+        qs = QueueState()
+        t = make_task(1)
+        t.config_snapshot.skip_sent = True
+        qs.add_task(t)
+        view = qs.get_task_by_id(t.task_id)
+        assert view is not None
+        view.config.skip_sent = False
+        assert view.config.skip_sent is True
+
+    def test_spec_isolated_from_danmaku_mutation(self):
+        """发送管线式克隆 + 回填 dmid 不得写穿 TaskSpec（SendJob 同款约定）"""
+        qs = QueueState()
+        dm = Danmaku(msg="hi", progress=0)
+        t = make_task(1)
+        t.danmakus = [dm]
+        t.total = 1
+        qs.add_task(t)
+
+        snap = qs.snapshots({TaskStatus.PENDING})[0]
+        job_copy = snap.spec.danmakus[0].clone()
+        job_copy.dmid = "9999"
+        assert snap.spec.danmakus[0].dmid == ""

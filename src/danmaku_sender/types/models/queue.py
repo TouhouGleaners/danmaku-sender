@@ -31,7 +31,8 @@ class TaskSpec:
 
     Worker 只持有 TaskSpec / TaskSnapshot，摸不到 TaskRuntime。
     config 为入队/改单时的 model_copy 快照，入队后禁止再改其字段。
-    danmakus 为 tuple，结构上不可替换；元素 Danmaku 的 dmid 仍由发送管线回填。
+    danmakus 为 tuple，结构上不可替换；发送管线须持有自己的 Danmaku 副本
+    （见 SendJob 构造处的 clone），不得回填 dmid 写穿本工单。
     """
     task_id: str
     target: VideoTarget
@@ -94,7 +95,8 @@ class TaskView:
 
     @property
     def config(self) -> SenderConfig:
-        return self._record.spec.config
+        """配置副本。返回拷贝以防经只读视图改写队列配置（变更必须走 QueueState）。"""
+        return self._record.spec.config.model_copy()
 
     @property
     def p_index(self) -> int:
