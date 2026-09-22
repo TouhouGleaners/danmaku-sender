@@ -6,8 +6,8 @@ Controller 层的 Worker 只需调用 pipeline.execute()，无需接触 Executor
 """
 
 import logging
+from collections.abc import Callable
 from dataclasses import replace
-from typing import Callable
 
 from danmaku_sender.config import ApiAuthConfig, SenderConfig
 from danmaku_sender.repo.bili_api_client import BiliApiClient

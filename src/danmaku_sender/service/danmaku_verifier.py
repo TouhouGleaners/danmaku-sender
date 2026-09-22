@@ -1,7 +1,7 @@
 """弹幕核验服务 - 负责查在线、对库、标状态"""
 
 import logging
-from typing import Callable
+from collections.abc import Callable
 
 from danmaku_sender.repo.bili_api_client import BiliApiClient
 from danmaku_sender.repo.history_manager import HistoryManager
