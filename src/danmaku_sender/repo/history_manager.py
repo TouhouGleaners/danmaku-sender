@@ -2,14 +2,18 @@ import logging
 import time
 from pathlib import Path
 
-from peewee import SqliteDatabase, fn, Case
-from playhouse.migrate import SqliteMigrator, migrate
+from peewee import Case, SqliteDatabase, fn
 
-from .orm_models import db, SentDanmaku
-
+from danmaku_sender.types.models.common import (
+    DanmakuStatus,
+    MonitorStats,
+    PendingCidRecord,
+    PendingDanmakuRecord,
+    VideoTarget,
+)
 from danmaku_sender.types.models.danmaku import Danmaku
-from danmaku_sender.types.models.common import DanmakuStatus, VideoTarget, PendingCidRecord, PendingDanmakuRecord, MonitorStats
 
+from .orm_models import SentDanmaku, db
 
 logger = logging.getLogger(__name__)
 

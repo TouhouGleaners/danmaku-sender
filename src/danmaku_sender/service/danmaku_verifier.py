@@ -3,13 +3,12 @@
 import logging
 from typing import Callable
 
-from .danmaku_parser import DanmakuParser
-
 from danmaku_sender.repo.bili_api_client import BiliApiClient
-from danmaku_sender.types.exceptions.exceptions import BiliApiError, BiliNetworkError
 from danmaku_sender.repo.history_manager import HistoryManager
+from danmaku_sender.types.exceptions.exceptions import BiliApiError, BiliNetworkError
 from danmaku_sender.types.models.common import VerifyResult
 
+from .danmaku_parser import DanmakuParser
 
 logger = logging.getLogger(__name__)
 

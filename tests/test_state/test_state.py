@@ -2,7 +2,12 @@
 import pytest
 from pydantic import ValidationError
 
-from danmaku_sender.config import GlobalConfig, MonitorConfig, SenderConfig, ValidationConfig
+from danmaku_sender.config import (
+    GlobalConfig,
+    MonitorConfig,
+    SenderConfig,
+    ValidationConfig,
+)
 from danmaku_sender.runtime.state.queue_state import QueueState
 from danmaku_sender.types.models.common import VideoTarget
 from danmaku_sender.types.models.danmaku import Danmaku

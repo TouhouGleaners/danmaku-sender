@@ -7,7 +7,7 @@ import sqlite3
 import pytest
 
 from danmaku_sender.repo.history_manager import HistoryManager
-from danmaku_sender.types.models.common import VideoTarget, DanmakuStatus
+from danmaku_sender.types.models.common import DanmakuStatus, VideoTarget
 from danmaku_sender.types.models.danmaku import Danmaku
 
 

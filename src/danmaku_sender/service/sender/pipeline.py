@@ -9,18 +9,17 @@ import logging
 from dataclasses import replace
 from typing import Callable
 
-from .scheduler import DanmakuScheduler
-from .executor import DanmakuExecutor
-from .context import SendingContext, SendJob
-from .delay_manager import DelayManager
-
+from danmaku_sender.config import ApiAuthConfig, SenderConfig
 from danmaku_sender.repo.bili_api_client import BiliApiClient
 from danmaku_sender.repo.history_manager import HistoryManager
+from danmaku_sender.types.models.common import VideoTarget
 from danmaku_sender.types.models.danmaku import Danmaku
 from danmaku_sender.types.models.result import DanmakuSendResult
-from danmaku_sender.types.models.common import VideoTarget
-from danmaku_sender.config import ApiAuthConfig, SenderConfig
 
+from .context import SendingContext, SendJob
+from .delay_manager import DelayManager
+from .executor import DanmakuExecutor
+from .scheduler import DanmakuScheduler
 
 logger = logging.getLogger(__name__)
 

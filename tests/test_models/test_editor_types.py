@@ -1,7 +1,8 @@
 """editor_types 模型单元测试 — EditorField, EditorItem"""
 import pytest
+
 from danmaku_sender.types.models.danmaku import Danmaku
-from danmaku_sender.types.models.editor_types import EditorItem, EditorField
+from danmaku_sender.types.models.editor_types import EditorField, EditorItem
 
 
 @pytest.fixture

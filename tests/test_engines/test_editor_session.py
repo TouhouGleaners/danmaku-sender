@@ -1,9 +1,10 @@
 """EditorSession 单元测试 — 编辑器核心会话层"""
 import pytest
-from danmaku_sender.types.models.danmaku import Danmaku
-from danmaku_sender.types.models.editor_types import EditorField, InsertPosition
+
 from danmaku_sender.config import ValidationConfig
 from danmaku_sender.service.editor_session import EditorSession
+from danmaku_sender.types.models.danmaku import Danmaku
+from danmaku_sender.types.models.editor_types import EditorField, InsertPosition
 from tests.conftest import edit_working as _edit
 from tests.conftest import make_danmaku as _dm
 
@@ -496,7 +497,6 @@ class TestGenerateDanmakuArray:
     def test_can_undo_array(self, loaded_session: EditorSession):
         ref_uid = loaded_session.item_order[0]
         uids = loaded_session.generate_danmaku_array(ref_uid, "test", Danmaku.Mode.SCROLL, 2, "classic")
-        original_count = len(loaded_session.items)
         loaded_session.undo()
         # 撤销后新增的条目应被标记删除
         for uid in uids:

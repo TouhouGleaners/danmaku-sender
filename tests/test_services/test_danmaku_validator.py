@@ -1,7 +1,11 @@
 """danmaku_validator 单元测试 — validate_danmaku_list"""
 import pytest
+
 from danmaku_sender.config import ValidationConfig
-from danmaku_sender.service.danmaku_validator import validate_danmaku_list, FORBIDDEN_SYMBOLS
+from danmaku_sender.service.danmaku_validator import (
+    FORBIDDEN_SYMBOLS,
+    validate_danmaku_list,
+)
 from tests.conftest import make_danmaku as _dm
 
 
