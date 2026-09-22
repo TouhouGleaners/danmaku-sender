@@ -95,10 +95,14 @@ class SenderController(QObject):
 
         self._stop_event.clear()
 
-        # 主线程取快照交给 Worker；之后状态一律经 signal 回本类 slot 落账
-        snapshot = queue_state.tasks
+        # 主线程取不可变快照交给 Worker；之后状态一律经 signal 回本类 slot 落账
+        snapshots = queue_state.snapshots({TaskStatus.PENDING, TaskStatus.UNCONFIGURED})
+        if not snapshots:
+            logger.warning("队列中没有可执行的任务快照。")
+            return False
+
         worker = QueueSendWorker(
-            tasks=snapshot,
+            tasks=snapshots,
             auth_config=auth_config,
             sender_config=self.state.sender_config,
             history_manager=self.history_manager,

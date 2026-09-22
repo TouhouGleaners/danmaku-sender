@@ -5,6 +5,7 @@ from pydantic import ValidationError
 from danmaku_sender.config import GlobalConfig, MonitorConfig, SenderConfig, ValidationConfig
 from danmaku_sender.runtime.state.queue_state import QueueState
 from danmaku_sender.types.models.common import VideoTarget
+from danmaku_sender.types.models.danmaku import Danmaku
 from danmaku_sender.types.models.queue import QueueTask, TaskStatus
 
 
@@ -120,7 +121,9 @@ class TestQueueState:
         qs.add_task(t)
         assert not qs.is_empty
         assert qs.pending_count == 1
-        assert qs.get_task_by_id(t.task_id) is t
+        view = qs.get_task_by_id(t.task_id)
+        assert view is not None
+        assert view.task_id == t.task_id
 
     def test_remove_only_pending_or_unconfigured(self):
         qs = QueueState()
@@ -168,8 +171,10 @@ class TestQueueState:
         events = []
         qs.taskStatusChanged.connect(lambda tid, s: events.append((tid, s)))
         qs.update_task_status(t.task_id, TaskStatus.RUNNING, "err")
-        assert t.status == TaskStatus.RUNNING
-        assert t.error_msg == "err"
+        view = qs.get_task_by_id(t.task_id)
+        assert view is not None
+        assert view.status == TaskStatus.RUNNING
+        assert view.error_msg == "err"
         assert events == [(t.task_id, TaskStatus.RUNNING)]
 
     def test_current_index_signal(self):
@@ -179,3 +184,89 @@ class TestQueueState:
         qs.current_index = 2
         assert qs.current_index == 2
         assert fired == [2]
+
+    def test_view_is_live_facade(self):
+        """TaskView 读到的是当前值，落账后无需换对象"""
+        qs = QueueState()
+        t = make_task(1)
+        qs.add_task(t)
+        view = qs.get_task_by_id(t.task_id)
+        assert view is not None
+        assert view.status == TaskStatus.PENDING
+        qs.update_task_status(t.task_id, TaskStatus.RUNNING)
+        assert view.status == TaskStatus.RUNNING
+
+    def test_snapshot_freezes_status(self):
+        """快照采样后，主线程落账不再影响已发出的快照"""
+        qs = QueueState()
+        t = make_task(1)
+        qs.add_task(t)
+        snap = qs.snapshots({TaskStatus.PENDING})[0]
+        assert snap.status == TaskStatus.PENDING
+        qs.update_task_status(t.task_id, TaskStatus.RUNNING)
+        assert snap.status == TaskStatus.PENDING
+        assert qs.snapshots({TaskStatus.RUNNING})[0].status == TaskStatus.RUNNING
+
+    def test_snapshot_excludes_other_statuses(self):
+        qs = QueueState()
+        qs.add_task(make_task(1, TaskStatus.PENDING))
+        qs.add_task(make_task(2, TaskStatus.COMPLETED))
+        assert len(qs.snapshots({TaskStatus.PENDING})) == 1
+        assert len(qs.snapshots({TaskStatus.PENDING, TaskStatus.COMPLETED})) == 2
+
+    def test_assign_danmakus_replaces_spec(self):
+        qs = QueueState()
+        t = make_task(1, TaskStatus.UNCONFIGURED)
+        qs.add_task(t)
+        dms = [Danmaku(msg="hi", progress=0)]
+        qs.assign_danmakus(t.task_id, dms, xml_path="a.xml")
+        view = qs.get_task_by_id(t.task_id)
+        assert view is not None
+        assert view.total == 1
+        assert view.xml_path == "a.xml"
+        assert view.status == TaskStatus.PENDING  # UNCONFIGURED → PENDING
+
+    def test_apply_edit_refused_when_running(self):
+        """发送中拒绝结构编辑（UI 闸门之外的结构保证）"""
+        qs = QueueState()
+        t = make_task(1)
+        qs.add_task(t)
+        qs.update_task_status(t.task_id, TaskStatus.RUNNING)
+        draft = make_task(99)
+        draft.p_title = "hacked"
+        assert qs.apply_edit(t.task_id, draft) is False
+        view = qs.get_task_by_id(t.task_id)
+        assert view is not None
+        assert view.p_title != "hacked"
+
+    def test_apply_edit_rebuilds_spec(self):
+        qs = QueueState()
+        t = make_task(1)
+        qs.add_task(t)
+        view = qs.get_task_by_id(t.task_id)
+        assert view is not None
+        draft = view.to_draft()
+        draft.p_title = "新标题"
+        draft.danmakus = [Danmaku(msg="x", progress=1000)]
+        draft.total = 1
+        assert qs.apply_edit(t.task_id, draft) is True
+        view = qs.get_task_by_id(t.task_id)
+        assert view is not None
+        assert view.p_title == "新标题"
+        assert view.total == 1
+        assert view.task_id == t.task_id  # id 不被沙盒覆盖
+
+    def test_reorder_tasks_by_ids(self):
+        qs = QueueState()
+        t1, t2, t3 = make_task(1), make_task(2), make_task(3)
+        for t in (t1, t2, t3):
+            qs.add_task(t)
+        qs.reorder_tasks([t3.task_id, t1.task_id, t2.task_id])
+        assert [v.target.cid for v in qs.tasks] == [3, 1, 2]
+
+    def test_reorder_tasks_rejects_mismatch(self):
+        qs = QueueState()
+        t1 = make_task(1)
+        qs.add_task(t1)
+        qs.reorder_tasks(["nope"])
+        assert [v.target.cid for v in qs.tasks] == [1]

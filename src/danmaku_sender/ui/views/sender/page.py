@@ -41,7 +41,7 @@ from danmaku_sender.runtime.infra.platform import send_windows_notification
 from danmaku_sender.runtime.state.app_state import AppState
 from danmaku_sender.service.danmaku_parser import DanmakuParser
 from danmaku_sender.service.sender import SendingContext
-from danmaku_sender.types.models.queue import InsertPosition, QueueTask, TaskStatus
+from danmaku_sender.types.models.queue import InsertPosition, TaskStatus, TaskView
 from danmaku_sender.ui.framework.icons import SvgIcon
 from danmaku_sender.ui.views.editor import EditorDialog
 from danmaku_sender.utils.time_utils import format_duration
@@ -257,7 +257,7 @@ class SenderPage(QWidget):
 
         menu.exec(self._queue_table.mapToGlobal(pos))
 
-    def _show_task_detail(self, task: QueueTask):
+    def _show_task_detail(self, task: TaskView):
         """查看/编辑任务详情和配置"""
         auth_config = self.state.get_api_auth()
         dialog = TaskDetailDialog(task, auth_config, self.state.sender_is_active, self)
@@ -269,7 +269,7 @@ class SenderPage(QWidget):
             self.state.queue_state.apply_edit(task.task_id, dialog.editing)
             self.logger.info(f"已更新任务: {task.target.display_string}")
 
-    def _edit_danmakus(self, task: QueueTask):
+    def _edit_danmakus(self, task: TaskView):
         """编辑任务的弹幕数据（打开编辑器弹窗）"""
         dialog = EditorDialog(task, self.state, self)
         if dialog.exec() == QDialog.DialogCode.Accepted:
@@ -344,9 +344,9 @@ class SenderPage(QWidget):
     # endregion
     # region Slots Queue
 
-    def _on_queue_reorder(self, reordered_tasks):
-        """拖拽排序后同步 QueueState"""
-        self.state.queue_state.reorder_tasks(reordered_tasks)
+    def _on_queue_reorder(self, task_ids: list[str]):
+        """拖拽排序后按 task_id 顺序同步 QueueState"""
+        self.state.queue_state.reorder_tasks(task_ids)
 
     def eventFilter(self, obj, event: QDragEnterEvent | QDragMoveEvent | QDropEvent) -> bool:
         """处理拖放到队列表格上的外部 XML 文件"""
@@ -434,7 +434,7 @@ class SenderPage(QWidget):
                 break
             self._assign_file_to_task(pending_from_start[i], file_path)
 
-    def _assign_file_to_task(self, task: QueueTask, file_path: str):
+    def _assign_file_to_task(self, task: TaskView, file_path: str):
         """解析 XML 并通过 QueueState 分配弹幕给指定任务"""
         parser = DanmakuParser()
         try:

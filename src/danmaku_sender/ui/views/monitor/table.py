@@ -6,7 +6,7 @@ from PySide6.QtCore import Qt, QAbstractTableModel, QModelIndex
 from PySide6.QtGui import QColor
 
 from danmaku_sender.types.models.common import MonitorStats
-from danmaku_sender.types.models.queue import QueueTask
+from danmaku_sender.types.models.queue import TaskView
 
 
 class Column(IntEnum):
@@ -31,7 +31,7 @@ class QueueMonitorModel(QAbstractTableModel):
         super().__init__()
         self._data: list[dict] = []
 
-    def update_data(self, tasks: list[QueueTask], stats_map: dict[str, MonitorStats]):
+    def update_data(self, tasks: list[TaskView], stats_map: dict[str, MonitorStats]):
         """更新表格数据
 
         Args:
@@ -42,7 +42,7 @@ class QueueMonitorModel(QAbstractTableModel):
         self._data = [self._build_row(i, task, stats_map) for i, task in enumerate(tasks)]
         self.endResetModel()
 
-    def _build_row(self, index: int, task: QueueTask, stats_map: dict) -> dict:
+    def _build_row(self, index: int, task: TaskView, stats_map: dict) -> dict:
         """构建单行数据"""
         stats: MonitorStats = stats_map.get(task.task_id, self._DEFAULT_STATS)
         total = stats.get('total', 0)
@@ -61,7 +61,7 @@ class QueueMonitorModel(QAbstractTableModel):
         }
 
     @staticmethod
-    def _format_target(task: QueueTask) -> str:
+    def _format_target(task: TaskView) -> str:
         """目标视频列：视频标题 + 分P标题"""
         parts = [task.target.display_string]
         if task.p_title:
@@ -69,7 +69,7 @@ class QueueMonitorModel(QAbstractTableModel):
         return " - ".join(parts)
 
     @staticmethod
-    def _format_tooltip(task: QueueTask) -> str:
+    def _format_tooltip(task: TaskView) -> str:
         """完整定位信息：视频标题、BV号、分P、CID"""
         lines = [task.target.display_string, f"BV号: {task.target.bvid}"]
         if task.p_title:

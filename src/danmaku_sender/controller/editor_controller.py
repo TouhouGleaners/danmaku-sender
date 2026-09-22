@@ -8,7 +8,7 @@ from danmaku_sender.service.editor_session import EditorSession
 from danmaku_sender.runtime.state.app_state import AppState
 from danmaku_sender.types.models.danmaku import Danmaku
 from danmaku_sender.types.models.editor_types import ViewItem, InsertPosition
-from danmaku_sender.types.models.queue import QueueTask
+from danmaku_sender.types.models.queue import TaskView
 from danmaku_sender.service.danmaku_parser import DanmakuParser
 from danmaku_sender.service.danmaku_exporter import export_danmakus_to_xml
 
@@ -17,12 +17,12 @@ class EditorController(QObject):
     """
     编辑器业务控制器 (Mediator / ViewModel)
 
-    负责桥接 UI、QueueTask 与 EditorSession。
-    编辑器作为发射器的附属弹窗，直接编辑 QueueTask 的弹幕数据。
+    负责桥接 UI、TaskView 与 EditorSession。
+    编辑器作为发射器的附属弹窗，读取任务弹幕、保存时经 QueueState.assign_danmakus 写回。
     """
     dataChanged = Signal()
 
-    def __init__(self, task: QueueTask, state: AppState, parent=None):
+    def __init__(self, task: TaskView, state: AppState, parent=None):
         super().__init__(parent)
         self.logger = logging.getLogger(__name__)
         self.task = task
@@ -69,7 +69,7 @@ class EditorController(QObject):
         if not self.task.danmakus:
             return False
 
-        self.session.load_data(self.task.danmakus)
+        self.session.load_data(list(self.task.danmakus))
         self.run_validation()
         self.session.mark_head_errors()  # 锁定初始错误快照
         self.session.set_dirty(False)

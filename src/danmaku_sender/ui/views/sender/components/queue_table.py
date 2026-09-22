@@ -5,7 +5,7 @@ from PySide6.QtCore import Qt, QAbstractTableModel, QModelIndex, QSize, QMimeDat
 from PySide6.QtGui import QBrush, QColor, QPainter
 from PySide6.QtWidgets import QStyledItemDelegate, QStyleOptionProgressBar, QStyleOptionViewItem, QStyle, QApplication
 
-from danmaku_sender.types.models.queue import QueueTask, TaskStatus
+from danmaku_sender.types.models.queue import TaskStatus, TaskView
 
 
 class QueueCol(IntEnum):
@@ -21,7 +21,7 @@ class ProgressBarDelegate(QStyledItemDelegate):
     """在表格单元格中绘制进度条"""
 
     def paint(self, painter: QPainter, option: QStyleOptionViewItem, index: QModelIndex):
-        task: QueueTask | None = index.data(Qt.ItemDataRole.UserRole)
+        task: TaskView | None = index.data(Qt.ItemDataRole.UserRole)
         if task is None:
             return super().paint(painter, option, index)
 
@@ -69,11 +69,11 @@ class QueueTableModel(QAbstractTableModel):
 
     def __init__(self, parent=None):
         super().__init__(parent)
-        self._tasks: list[QueueTask] = []
-        self.on_reorder: Callable[[list[QueueTask]], None] | None = None
+        self._tasks: list[TaskView] = []
+        self.on_reorder: Callable[[list[str]], None] | None = None
         self.queue_running: bool = False
 
-    def set_tasks(self, tasks: list[QueueTask]):
+    def set_tasks(self, tasks: list[TaskView]):
         self.beginResetModel()
         self._tasks = tasks
         self.endResetModel()
@@ -96,7 +96,7 @@ class QueueTableModel(QAbstractTableModel):
                 return i
         return -1
 
-    def get_task_at(self, row: int) -> QueueTask | None:
+    def get_task_at(self, row: int) -> TaskView | None:
         if 0 <= row < len(self._tasks):
             return self._tasks[row]
         return None
@@ -136,7 +136,7 @@ class QueueTableModel(QAbstractTableModel):
 
         return None
 
-    def _get_display(self, task: QueueTask, col: int, row: int) -> str:
+    def _get_display(self, task: TaskView, col: int, row: int) -> str:
         match col:
             case QueueCol.INDEX:
                 return str(row + 1)
@@ -152,7 +152,7 @@ class QueueTableModel(QAbstractTableModel):
                 return task.status.value
         return ""
 
-    def _get_color(self, task: QueueTask, col: int):
+    def _get_color(self, task: TaskView, col: int):
         if col == QueueCol.STATUS:
             return QBrush({
                 TaskStatus.PENDING: QColor("#f39c12"),
@@ -165,7 +165,7 @@ class QueueTableModel(QAbstractTableModel):
             }.get(task.status, QColor("#f39c12")))
         return None
 
-    def _get_tooltip(self, task: QueueTask, col: int):
+    def _get_tooltip(self, task: TaskView, col: int):
         if col == QueueCol.STATUS and task.error_msg:
             return task.error_msg
         return None
@@ -239,9 +239,9 @@ class QueueTableModel(QAbstractTableModel):
 
         reordered = remaining[:insert_at] + moved + remaining[insert_at:]
 
-        # 委托给上层同步 QueueState
+        # 委托给上层按 task_id 顺序同步 QueueState（不传可变任务对象）
         if self.on_reorder:
-            self.on_reorder(reordered)
+            self.on_reorder([t.task_id for t in reordered])
         else:
             self.beginResetModel()
             self._tasks = reordered
