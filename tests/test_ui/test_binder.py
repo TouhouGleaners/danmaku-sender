@@ -1,4 +1,6 @@
 """UIBinder 单向写绑定与 pull 刷新"""
+import os
+
 import pytest
 from pydantic import BaseModel, ConfigDict, Field
 from PySide6.QtWidgets import QApplication, QCheckBox, QSpinBox, QWidget
@@ -6,6 +8,8 @@ from PySide6.QtWidgets import QApplication, QCheckBox, QSpinBox, QWidget
 
 @pytest.fixture(scope="module")
 def qapp():
+    # 无头 CI 没有显示服务器，必须在创建 QApplication 前切到离屏，否则 Qt 直接 abort
+    os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
     app = QApplication.instance() or QApplication([])
     yield app
 

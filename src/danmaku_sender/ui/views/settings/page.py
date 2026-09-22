@@ -224,3 +224,5 @@ class SettingsPage(QWidget):
         """打开页面时从状态重读控件值（无隐式同步）"""
         super().showEvent(event)
         UIBinder.pull_all(self)
+        # pull 屏蔽信号防回环，依赖控件的联动需显式重算
+        self._on_burst_toggled(self.burst_enabled_cb.isChecked())
