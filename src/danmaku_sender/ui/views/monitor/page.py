@@ -208,8 +208,8 @@ class MonitorPage(QWidget):
     def init_bindings(self):
         UIBinder.bind(self.interval_spin, self.state.monitor_config, "refresh_interval")
 
-        if self.state.monitor_config.stats_baseline == 0.0:
-            self.state.monitor_config.stats_baseline = self.state.app_launch_time
+        if self.state.stats_baseline == 0.0:
+            self.state.stats_baseline = self.state.app_launch_time
 
             idx = self.anchor_combo.findData("launch")
             if idx >= 0:
@@ -217,10 +217,11 @@ class MonitorPage(QWidget):
                 self.anchor_combo.setCurrentIndex(idx)
                 self.anchor_combo.blockSignals(False)
 
-        self._update_anchor_display(self.state.monitor_config.stats_baseline)
+        self._update_anchor_display(self.state.stats_baseline)
 
     def showEvent(self, event):
         super().showEvent(event)
+        UIBinder.pull_all(self)
         self._refresh_queue_table()
         # 首次显示时 viewport 已有尺寸，再定位空状态提示
         self._update_empty_hint()
@@ -366,13 +367,13 @@ class MonitorPage(QWidget):
         elif data == "all":
             new_baseline = 0.0
 
-        self.state.monitor_config.stats_baseline = new_baseline
+        self.state.stats_baseline = new_baseline
         self._update_anchor_display(new_baseline)
 
     @Slot()
     def _on_reset_anchor_clicked(self):
         current_ts = time.time()
-        self.state.monitor_config.stats_baseline = current_ts
+        self.state.stats_baseline = current_ts
         self._update_anchor_display(current_ts)
 
         self.anchor_combo.blockSignals(True)

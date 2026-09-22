@@ -95,7 +95,7 @@ class QueueMonitorWorker(WorkerThread):
 
     @property
     def stats_baseline(self) -> float:
-        return float(self.state.monitor_config.stats_baseline)
+        return float(self.state.stats_baseline)
 
     @property
     def poll_interval_seconds(self) -> float:

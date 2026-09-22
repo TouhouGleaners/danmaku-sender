@@ -1,8 +1,6 @@
 from enum import Enum
 
-from pydantic import ConfigDict
-
-from danmaku_sender.types.models.evented_model import EventedModel
+from pydantic import BaseModel, ConfigDict
 
 
 class ThemeMode(Enum):
@@ -12,7 +10,7 @@ class ThemeMode(Enum):
     DARK = "dark"
 
 
-class ThemeConfig(EventedModel):
+class ThemeConfig(BaseModel):
     """主题配置"""
     model_config = ConfigDict(validate_assignment=True)
 

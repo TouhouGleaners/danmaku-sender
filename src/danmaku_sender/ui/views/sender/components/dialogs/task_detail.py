@@ -65,6 +65,11 @@ class TaskDetailDialog(QDialog):
         if not self._is_editable:
             self._set_readonly_mode()
 
+    def showEvent(self, event):
+        """打开时从沙盒重读控件值（与 pull 纪律一致）"""
+        super().showEvent(event)
+        UIBinder.pull_all(self)
+
     def _create_ui(self):
         layout = QVBoxLayout(self)
 

@@ -78,10 +78,8 @@ class MainWindow(QMainWindow):
         self._create_menu_bar()
         self._init_system_tray()
 
-        # UI 控件就位后，订阅 theme_config 变更驱动主题渲染
-        self.state.theme_config.subscribe(
-            "theme_mode", lambda mode: self.theme_service.apply_theme(mode)
-        )
+        # 主题链路：设置页写配置 → themeApplied 显式信号 → 立即应用（无隐式订阅）
+        self.page_settings.themeApplied.connect(self.theme_service.apply_theme)
         self.theme_service.themeChanged.connect(self._on_theme_applied)
 
         # 信号与状态绑定
