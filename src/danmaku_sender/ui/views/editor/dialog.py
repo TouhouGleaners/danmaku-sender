@@ -23,7 +23,7 @@ from PySide6.QtWidgets import (
 from danmaku_sender.controller.editor_controller import EditorController
 from danmaku_sender.runtime.state.app_state import AppState
 from danmaku_sender.types.models.editor_types import EditorField, InsertPosition
-from danmaku_sender.types.models.queue import QueueTask
+from danmaku_sender.types.models.queue import TaskView
 from danmaku_sender.ui.framework.icons import SvgIcon
 
 from .components import EditorTableModel, PropertyInspectorGroup, ValidationRulesGroup
@@ -33,7 +33,7 @@ from .dialogs import ArrayGeneratorDialog, EditDanmakuDialog, TimeOffsetDialog
 class EditorDialog(QDialog):
     """编辑器弹窗 - 用于编辑单个任务的弹幕数据"""
 
-    def __init__(self, task: QueueTask, state: AppState, parent=None):
+    def __init__(self, task: TaskView, state: AppState, parent=None):
         super().__init__(parent)
         self.task = task
         self.controller = EditorController(task, state, self)

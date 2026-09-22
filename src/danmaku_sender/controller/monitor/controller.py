@@ -52,10 +52,10 @@ class MonitorController(QObject):
             logger.warning("凭证缺失，无法启动队列监视。")
             return False
 
-        if not self.state.queue_state.tasks:
+        if self.state.queue_state.is_empty:
             logger.warning("队列为空，没有任务可以监视。")
             return False
-        if not self.state.queue_state.sample_task_fields(set(MONITORABLE_STATUSES)):
+        if not self.state.queue_state.snapshots(set(MONITORABLE_STATUSES)):
             logger.warning(
                 "队列中没有可监视的任务（需要已完成/发送中/失败/暂停的任务）。"
             )

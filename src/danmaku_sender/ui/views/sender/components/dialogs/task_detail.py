@@ -1,5 +1,4 @@
 import logging
-from copy import deepcopy
 
 from PySide6.QtCore import Slot
 from PySide6.QtWidgets import (
@@ -24,7 +23,7 @@ from PySide6.QtWidgets import (
 from danmaku_sender.controller.video_controller import VideoController
 from danmaku_sender.service.danmaku_parser import DanmakuParser
 from danmaku_sender.types.models.common import VideoTarget
-from danmaku_sender.types.models.queue import QueueTask, TaskStatus
+from danmaku_sender.types.models.queue import TaskStatus, TaskView
 from danmaku_sender.types.models.video import VideoInfo
 from danmaku_sender.ui.framework.binder import UIBinder
 from danmaku_sender.utils.string_utils import parse_bilibili_link
@@ -36,16 +35,16 @@ class TaskDetailDialog(QDialog):
     """任务详情与配置编辑弹窗
 
     编辑沙盒模式:
-    - origin: 原始任务（只读引用，保存时才写入）
-    - editing: 编辑副本（所有修改在这里进行）
+    - origin: 原始任务只读视图（TaskView，展示用）
+    - editing: 编辑沙盒（QueueTask 草稿，所有修改在这里进行）
     - 配置区通过 UIBinder 绑定到 editing.config_snapshot，实时验证 + 自动变红
     - 取消时丢弃 editing，不做任何修改
     """
 
-    def __init__(self, task: QueueTask, api_auth, queue_active: bool = False, parent=None):
+    def __init__(self, task: TaskView, api_auth, queue_active: bool = False, parent=None):
         super().__init__(parent)
-        self.origin = task                  # 原始引用（只读）
-        self.editing = deepcopy(task)       # 编辑副本（工作区）
+        self.origin = task                  # 只读视图
+        self.editing = task.to_draft()      # 编辑沙盒（工作区）
         self._api_auth = api_auth
         self._video_info: VideoInfo | None = None
         self._pending_part_page: int | None = None
