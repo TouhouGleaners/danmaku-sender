@@ -1,3 +1,4 @@
+from PySide6.QtCore import Signal
 from PySide6.QtWidgets import (
     QCheckBox,
     QComboBox,
@@ -18,6 +19,15 @@ from danmaku_sender.ui.framework.binder import UIBinder
 
 
 class SettingsPage(QWidget):
+    """全局设置页
+
+    配置写入走 UIBinder（Widget→Model）；主题需要即时生效，
+    故在写成功钩子里发 themeApplied——这是真广播点，不是隐式订阅。
+    刷新靠 showEvent → UIBinder.refresh_all（打开谁，谁就从状态重读）。
+    """
+
+    themeApplied = Signal(object)  # ThemeMode：主题已写入配置，可立即应用
+
     def __init__(self, state: AppState):
         super().__init__()
 
@@ -178,9 +188,14 @@ class SettingsPage(QWidget):
             ctrl.setEnabled(checked)
 
     def init_bindings(self) -> None:
-        """将 UI 控件与全局状态 (AppState) 进行双向绑定"""
-        # 主题设置（UIBinder 自动处理 QComboBox ↔ ThemeMode 枚举的双向同步）
-        UIBinder.bind(self.theme_combo, self.state.theme_config, "theme_mode")
+        """将 UI 控件与全局状态 (AppState) 进行单向写绑定"""
+        # 主题：写成功后立刻广播，驱动 ThemeService 应用
+        UIBinder.bind(
+            self.theme_combo,
+            self.state.theme_config,
+            "theme_mode",
+            on_wrote=lambda _f, v: self.themeApplied.emit(v),
+        )
 
         # 全局系统设置（跨发送器/监视器共享，单绑一份）
         UIBinder.bind(self.prevent_sleep_checkbox, self.state.global_config, "prevent_sleep")
@@ -203,4 +218,11 @@ class SettingsPage(QWidget):
         UIBinder.bind(self.skip_sent_cb, config, "skip_sent")
 
         # 初始化爆发控件状态
+        self._on_burst_toggled(self.burst_enabled_cb.isChecked())
+
+    def showEvent(self, event):
+        """打开页面时从状态重读控件值（无隐式同步）"""
+        super().showEvent(event)
+        UIBinder.refresh_all(self)
+        # refresh 屏蔽信号防回环，依赖控件的联动需显式重算
         self._on_burst_toggled(self.burst_enabled_cb.isChecked())

@@ -1,9 +1,7 @@
-from pydantic import ConfigDict, Field, model_validator
-
-from danmaku_sender.types.models.evented_model import EventedModel
+from pydantic import BaseModel, ConfigDict, Field, model_validator
 
 
-class SenderConfig(EventedModel):
+class SenderConfig(BaseModel):
     """发送器的配置数据"""
     model_config = ConfigDict(validate_assignment=True)
 

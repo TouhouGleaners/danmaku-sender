@@ -50,6 +50,9 @@ class AppState(QObject):
         self._sender_is_active: bool = False
         self._monitor_is_active: bool = False
 
+        # 会话运行时（不持久化）：监视统计基线时间戳，0 表示全量历史
+        self.stats_baseline: float = 0.0
+
     @property
     def sessdata(self) -> str:
         return self._sessdata

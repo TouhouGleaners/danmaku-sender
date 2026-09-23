@@ -1,6 +1,6 @@
 import logging
 import weakref
-from typing import Any, Callable, Protocol, runtime_checkable
+from typing import Any, Callable
 
 from pydantic import ValidationError
 from PySide6.QtCore import SignalInstance
@@ -11,31 +11,22 @@ from PySide6.QtWidgets import (
 
 logger = logging.getLogger(__name__)
 
-
-@runtime_checkable
-class Subscribable(Protocol):
-    """可订阅字段变更的模型接口（鸭子类型契约）
-
-    任何类只要实现了 subscribe/unsubscribe，即使没有显式继承此协议，
-    isinstance 检查也会通过，Pylance 会在 if 分支内自动收窄类型。
-    """
-
-    def subscribe(self, field_name: str, callback: Callable[[Any], None]) -> None: ...
-
-    def unsubscribe(self, field_name: str, callback: Callable[[Any], None]) -> None: ...
+# 绑定登记：widget → (model, field_name)，供 refresh / refresh_all 反读
+_BINDING_PROP = "_binder_binding"
 
 
 class UIBinder:
     """
-    轻量级 MVVM 双向绑定引擎
+    轻量级单向写绑定引擎（Widget → Model）
 
     职责:
-    1. 状态同步: 自动实现 Model 与 View (PySide6 Widget) 的数据双向同步。
-       - Widget → Model: 通过 Qt 信号自动回写，支持 Pydantic 验证与异常反馈。
-       - Model → Widget: 若 Model 继承了 EventedModel（实现了 Subscribable 协议），
-         当字段被外部修改时，已绑定的 Widget 会自动更新（通过 weakref 防止内存泄漏）。
-    2. 生命周期管理: 内部维护绑定注册表 (_active_bindings)，每次重绑时自动解除历史信号，防止内存泄漏与重复触发。
-    3. 异常反馈: 拦截 Pydantic 的 ValidationError，并通过动态属性 (invalid) 与 QSS 联动实现非侵入式的 UI 异常反馈。
+    1. Widget → Model: 通过 Qt 信号自动回写，支持 Pydantic 验证与异常反馈。
+    2. 刷新 (Model → Widget): 不做隐式订阅。调用方在页面 showEvent / 对话框打开前
+       调用 refresh() / refresh_all() 显式重读——「打开谁，谁就从状态重读」。
+    3. 写成功钩子: on_wrote 用于主题即时生效、自动落盘等真广播点。
+    4. 生命周期管理: 内部维护绑定注册表 (_active_bindings)，每次重绑时自动解除历史信号。
+
+    约定：业务代码不得为「UI 跟着状态变」另建订阅——要么 refresh，要么在变更处显式 emit。
     """
 
     # 静态绑定注册表
@@ -92,16 +83,37 @@ class UIBinder:
             widget.blockSignals(False)
 
     @staticmethod
-    def bind(widget: QWidget, model: Any, field_name: str, clear_old: bool = True, realtime: bool = False) -> None:
+    def _read_widget_value(widget: QWidget) -> Any:
+        """从控件读取当前值"""
+        if isinstance(widget, QCheckBox):
+            return widget.isChecked()
+        if isinstance(widget, (QSpinBox, QDoubleSpinBox)):
+            return widget.value()
+        if isinstance(widget, QLineEdit):
+            return widget.text().strip()
+        if isinstance(widget, QComboBox):
+            return widget.currentData()
+        return None
+
+    @staticmethod
+    def bind(
+        widget: QWidget,
+        model: Any,
+        field_name: str,
+        clear_old: bool = True,
+        realtime: bool = False,
+        on_wrote: Callable[[str, Any], None] | None = None,
+    ) -> None:
         """
-        执行双向绑定注册
+        执行单向写绑定注册，并挂载初始值
 
         Args:
             widget: 目标 Qt 控件
-            model: 绑定的数据模型（若继承 EventedModel 则自动支持反向同步）
+            model: 绑定的数据模型
             field_name: 模型上的属性名称
             clear_old: 如果为 True，则清空该控件之前绑定的所有逻辑（默认行为）。设为 False 支持 1对N 绑定。
             realtime: 仅针对 QLineEdit，True 为按键实时更新，False 为失焦/回车更新。
+            on_wrote: 写成功后的钩子 (field_name, new_value)，用于即时生效/落盘等广播点
         """
         if not hasattr(model, field_name):
             logger.error(f"绑定失败: 模型 {type(model).__name__} 不存在字段 '{field_name}'")
@@ -122,25 +134,22 @@ class UIBinder:
         if widget not in UIBinder._active_bindings:
             UIBinder._active_bindings[widget] = []
 
+        # 记录 (model, field)，供 refresh 反读
+        widget.setProperty(_BINDING_PROP, (model, field_name))
+
         # 初始数据挂载 (Model -> UI)
         current_value = getattr(model, field_name)
         UIBinder._set_widget_value(widget, current_value)
 
-        # 构建回写代理 (UI -> Model Proxy)
+        # 构建回写代理 (UI -> Model)
         def _update_model_proxy(*args) -> None:
-            new_val: Any = None
-            if isinstance(widget, QCheckBox):
-                new_val = widget.isChecked()
-            elif isinstance(widget, (QSpinBox, QDoubleSpinBox)):
-                new_val = widget.value()
-            elif isinstance(widget, QLineEdit):
-                new_val = widget.text().strip()
-            elif isinstance(widget, QComboBox):
-                new_val = widget.currentData()
+            new_val = UIBinder._read_widget_value(widget)
 
             try:
                 setattr(model, field_name, new_val)
                 UIBinder._set_widget_invalid_state(widget, False)
+                if on_wrote is not None:
+                    on_wrote(field_name, new_val)
             except ValidationError as e:
                 error_msg = "\n".join([err.get('msg', '格式错误') for err in e.errors()])
                 logger.warning(f"UI 赋值触发模型边界保护 [{field_name}={new_val}]: {error_msg}")
@@ -165,38 +174,26 @@ class UIBinder:
             # 存入弱引用注册表，确保安全回收
             UIBinder._active_bindings[widget].append((signal_instance, _update_model_proxy))
 
-        # Model → Widget 反向同步（自动检测：model 实现了 Subscribable 协议则启用）
-        if isinstance(model, Subscribable):
-            # 重绑时清理旧订阅，防止旧 model 的回调继续推值
-            if clear_old:
-                prev = widget.property("_binder_subscription")
-                if prev is not None:
-                    old_model, old_field, old_cb = prev
-                    old_unsub = getattr(old_model, "unsubscribe", None)
-                    if callable(old_unsub):
-                        old_unsub(old_field, old_cb)
-                    widget.setProperty("_binder_subscription", None)
+    @staticmethod
+    def refresh(widget: QWidget) -> None:
+        """把模型当前值刷进单个已绑定控件（打开页面/对话框时调用）"""
+        binding = widget.property(_BINDING_PROP)
+        if not binding:
+            return
+        model, field_name = binding
+        try:
+            UIBinder._set_widget_value(widget, getattr(model, field_name))
+            UIBinder._set_widget_invalid_state(widget, False)
+        except Exception as e:
+            logger.warning(f"refresh 失败 [{field_name}]: {e}")
 
-            # 用 weakref 持有 widget，防止 Model 生命周期 > Widget 时造成内存泄漏
-            w_ref = weakref.ref(widget)
+    @staticmethod
+    def refresh_all(parent: QWidget) -> None:
+        """把 parent 子树内所有已绑定控件从模型重读一遍。
 
-            def _on_model_changed(new_val: Any):
-                w = w_ref()
-                if w is not None:
-                    try:
-                        UIBinder._set_widget_value(w, new_val)
-                    except RuntimeError:
-                        # PySide6: Python 包装对象仍存在但底层 C++ 对象已销毁
-                        # 等同于 widget 已死，注销自身
-                        unsub = getattr(model, "unsubscribe", None)
-                        if callable(unsub):
-                            unsub(field_name, _on_model_changed)
-                else:
-                    # widget 已被 Python GC，主动注销自身，防止死回调积压
-                    unsub = getattr(model, "unsubscribe", None)
-                    if callable(unsub):
-                        unsub(field_name, _on_model_changed)
-
-            model.subscribe(field_name, _on_model_changed)
-            # 记录当前订阅信息，用于下次重绑时清理
-            widget.setProperty("_binder_subscription", (model, field_name, _on_model_changed))
+        页面 showEvent / 对话框 exec 前调用，保证「打开谁，谁就新鲜」。
+        刷新是静默的（防回环），依赖控件的联动须调用方自己补。
+        """
+        for w in parent.findChildren(QWidget):
+            if w.property(_BINDING_PROP) is not None:
+                UIBinder.refresh(w)
