@@ -1,18 +1,18 @@
-"""表单绑定工具：将 PySide 控件与 Pydantic 模型字段关联。
+"""表单与模型绑定基础设施 (Form Binder)
+
+将 PySide 控件与 Pydantic 模型字段安全连接。
 
 按表单的提交方式选择绑定器：
-
-- :class:`LiveFormBinder`（实时修改）：没有「保存」按钮，控件变更立即写入模型（如设置页）。
-  页面 ``showEvent`` 时调用 ``fill()`` 刷新。
-- :class:`DraftFormBinder`（草稿修改）：有「保存」按钮，控件即草稿，确认时才写入模型（如任务详情对话框）。
-  打开时 ``fill()``，确认时 ``collect()``。
-
-公共函数 :func:`mark_invalid` / :func:`clear_invalid` 提供统一的控件无效态视觉反馈，两个绑定器内部也会调用。
+  - LiveFormBinder:（实时修改）：没有「保存」按钮，控件变更立即写入模型（如设置页）。
+    页面 ``showEvent`` 时调用 ``fill()`` 刷新。
+  - DraftFormBinder:（草稿修改）：有「保存」按钮，控件即草稿，确认时才写入模型（如任务详情对话框）。
+    打开时 ``fill()``，确认时 ``collect()``。
 """
 
 import logging
 import weakref
-from collections.abc import Callable
+from collections.abc import Callable, Generator
+from contextlib import contextmanager
 from typing import Any, ClassVar, NamedTuple
 
 from pydantic import BaseModel, ValidationError
@@ -73,122 +73,106 @@ def _set_widget_invalid_state(widget: QWidget, is_invalid: bool, error_msg: str 
         widget.setToolTip("")
 
 
-def _set_widget_value(
-    widget: QWidget,
-    value: Any,
-    to_widget: Callable[[Any], Any] | None = None,
-) -> None:
-    """将单个值写入控件。
+class _WidgetAdapter:
+    """内聚所有 Qt 控件读、写、发信号逻辑的纯静态适配器。"""
 
-    不屏蔽控件信号，用户连接的信号槽照常触发。
-    若该控件已绑定写回，调用方需在写入前后压入/弹出 LiveFormBinder 的填充深度，避免写回模型。
+    @staticmethod
+    def read(widget: QWidget) -> Any:
+        """从控件安全读取当前值。
 
-    Args:
-        widget: 目标控件。
-        value: 写入的值；若提供 ``to_widget`` 则先做转换。
-        to_widget: 模型字段值转控件值的可选转换函数。
-    """
-    if to_widget is not None:
-        value = to_widget(value)
-    if isinstance(widget, QCheckBox):
-        new = bool(value)
-        old = widget.isChecked()
-        widget.setChecked(new)
-        if old == new:
-            _emit_unchanged(widget, new)
-    elif isinstance(widget, QSpinBox):
-        new = int(float(value))
-        old = widget.value()
-        widget.setValue(new)
-        if old == new:
-            _emit_unchanged(widget, new)
-    elif isinstance(widget, QDoubleSpinBox):
-        new = float(value)
-        old = widget.value()
-        widget.setValue(new)
-        if old == new:
-            _emit_unchanged(widget, new)
-    elif isinstance(widget, QLineEdit):
-        new = str(value) if value is not None else ""
-        old = widget.text()
-        widget.setText(new)
-        if old == new:
-            _emit_unchanged(widget, new)
-    elif isinstance(widget, QComboBox):
-        idx = widget.findData(value)
-        if idx >= 0:
-            old = widget.currentIndex()
-            widget.setCurrentIndex(idx)
-            if old == idx:
-                _emit_unchanged(widget, idx)
-    else:
-        logger.warning(f"form_binder 尚不支持处理类型为 {type(widget)} 的控件")
+        Args:
+            widget: 目标控件。
 
+        Returns:
+            控件当前值；控件类型不受支持时返回 ``None``。
+        """
+        if isinstance(widget, QCheckBox):
+            return widget.isChecked()
+        if isinstance(widget, (QSpinBox, QDoubleSpinBox)):
+            return widget.value()
+        if isinstance(widget, QLineEdit):
+            return widget.text().strip()
+        if isinstance(widget, QComboBox):
+            return widget.currentData()
+        return None
 
-def _emit_unchanged(widget: QWidget, value: Any) -> None:
-    """值未变化时补发控件信号。
+    @staticmethod
+    def write(
+        widget: QWidget,
+        value: Any,
+        to_widget: Callable[[Any], Any] | None = None,
+    ) -> None:
+        """向控件灌入新值；若值未发生改变，主动补发 Qt 信号以保证联动槽执行。
 
-    Qt 在赋值结果与当前值相同时不发信号，但表单刷新仍需要驱动联动槽（如勾选框控制子控件可用性）。
-    写回代理由 LiveFormBinder 的填充深度挡住，不会因此污染模型。
+        Args:
+            widget: 目标控件。
+            value: 写入的值；若提供 ``to_widget`` 则先做转换。
+            to_widget: 模型字段值转控件值的可选转换函数。
+        """
+        if to_widget is not None:
+            value = to_widget(value)
 
-    只补发 Qt「值变化」语义的信号，不伪造用户交互信号。
-    QLineEdit 补 ``textChanged`` 而非 ``editingFinished``（后者表示用户结束编辑，程序灌值不应触发）。
-    """
-    if isinstance(widget, QCheckBox):
-        widget.toggled.emit(widget.isChecked())
-        # stateChanged 携带 Qt.CheckState（0/1/2），不是 bool
-        widget.stateChanged.emit(widget.checkState().value)
-    elif isinstance(widget, QSpinBox):
-        widget.valueChanged.emit(widget.value())
-    elif isinstance(widget, QDoubleSpinBox):
-        widget.valueChanged.emit(widget.value())
-    elif isinstance(widget, QLineEdit):
-        widget.textChanged.emit(widget.text())
-    elif isinstance(widget, QComboBox):
-        widget.currentIndexChanged.emit(widget.currentIndex())
+        def _apply_val[T](new: T, getter: Callable[[], T], setter: Callable[[T], None]) -> None:
+            old = getter()
+            setter(new)
+            if old == new:
+                _WidgetAdapter.emit_unchanged(widget, new)
 
+        if isinstance(widget, QCheckBox):
+            _apply_val(bool(value), widget.isChecked, widget.setChecked)
+        elif isinstance(widget, QSpinBox):
+            _apply_val(int(float(value)), widget.value, widget.setValue)
+        elif isinstance(widget, QDoubleSpinBox):
+            _apply_val(float(value), widget.value, widget.setValue)
+        elif isinstance(widget, QLineEdit):
+            _apply_val(str(value) if value is not None else "", widget.text, widget.setText)
+        elif isinstance(widget, QComboBox):
+            idx = widget.findData(value)
+            if idx >= 0:
+                _apply_val(idx, widget.currentIndex, widget.setCurrentIndex)
+        else:
+            logger.warning(f"form_binder 尚未适配控件类型: {type(widget)}")
 
-def _read_widget_value(widget: QWidget) -> Any:
-    """读取控件当前值。
+    @staticmethod
+    def emit_unchanged(widget: QWidget, value: Any) -> None:
+        """值未变化时主动补发 Qt 原生值变化信号，驱动依赖本控件的外部 UI 联动。
 
-    Args:
-        widget: 目标控件。
+        只补发「值变化」语义的信号，不伪造用户交互信号。
+        QLineEdit 补 ``textChanged`` 而非 ``editingFinished``（后者表示用户结束编辑，程序灌值不应触发）。
+        """
+        if isinstance(widget, QCheckBox):
+            widget.toggled.emit(widget.isChecked())
+            # stateChanged 携带 Qt.CheckState（0/1/2），不是 bool
+            widget.stateChanged.emit(widget.checkState().value)
+        elif isinstance(widget, (QSpinBox, QDoubleSpinBox)):
+            widget.valueChanged.emit(widget.value())
+        elif isinstance(widget, QLineEdit):
+            widget.textChanged.emit(widget.text())
+        elif isinstance(widget, QComboBox):
+            widget.currentIndexChanged.emit(widget.currentIndex())
 
-    Returns:
-        控件当前值；控件类型不受支持时返回 ``None``。
-    """
-    if isinstance(widget, QCheckBox):
-        return widget.isChecked()
-    if isinstance(widget, (QSpinBox, QDoubleSpinBox)):
-        return widget.value()
-    if isinstance(widget, QLineEdit):
-        return widget.text().strip()
-    if isinstance(widget, QComboBox):
-        return widget.currentData()
-    return None
+    @staticmethod
+    def pick_signal(widget: QWidget, realtime: bool) -> SignalInstance | None:
+        """根据控件类型及响应模式选取写回监听信号。
 
+        Args:
+            widget: 目标控件。
+            realtime: 仅对 ``QLineEdit`` 有效。True 使用 ``textChanged``
+                （输入即触发），False 使用 ``editingFinished``（失焦/回车触发）。
 
-def _pick_signal(widget: QWidget, realtime: bool) -> SignalInstance | None:
-    """按控件类型返回用于触发写回的信号。
-
-    Args:
-        widget: 目标控件。
-        realtime: 仅对 ``QLineEdit`` 有效。True 使用 ``textChanged``
-            （输入即触发），False 使用 ``editingFinished``（失焦/回车触发）。
-
-    Returns:
-        信号实例；控件类型不受支持时返回 ``None``。
-    """
-    if isinstance(widget, QCheckBox):
-        return widget.stateChanged
-    if isinstance(widget, (QSpinBox, QDoubleSpinBox)):
-        return widget.valueChanged
-    if isinstance(widget, QLineEdit):
-        return widget.textChanged if realtime else widget.editingFinished
-    if isinstance(widget, QComboBox):
-        return widget.currentIndexChanged
-    logger.warning(f"form_binder 尚不支持处理类型为 {type(widget)} 的控件")
-    return None
+        Returns:
+            信号实例；控件类型不受支持时返回 ``None``。
+        """
+        if isinstance(widget, QCheckBox):
+            return widget.stateChanged
+        if isinstance(widget, (QSpinBox, QDoubleSpinBox)):
+            return widget.valueChanged
+        if isinstance(widget, QLineEdit):
+            return widget.textChanged if realtime else widget.editingFinished
+        if isinstance(widget, QComboBox):
+            return widget.currentIndexChanged
+        logger.warning(f"form_binder 无法识别信号的控件: {type(widget)}")
+        return None
 
 
 class _LiveField(NamedTuple):
@@ -242,15 +226,32 @@ class LiveFormBinder:
     # 控件 → 绑定元数据（fill 反读 + 重绑时定位旧 slot 断连）。
     # key 为弱引用；value 不得
     # 强引用 key 或能到达 key 的对象（回调、窗口等），否则条目无法回收。
-    _bindings: ClassVar[weakref.WeakKeyDictionary[QWidget, _LiveField]] = (
-        weakref.WeakKeyDictionary()
-    )
+    _bindings: ClassVar[weakref.WeakKeyDictionary[QWidget, _LiveField]] = weakref.WeakKeyDictionary()
     # 每个控件的填充深度（>0 时该控件的写回回调直接返回）。
     # 按控件计数而非全局标志：fill 表单 A 时联动槽可能改动表单 B 的控件，
     # B 的写回必须照常发生，不能被 A 的填充状态误伤。
-    _fill_depth: ClassVar[weakref.WeakKeyDictionary[QWidget, int]] = (
-        weakref.WeakKeyDictionary()
-    )
+    _fill_depth: ClassVar[weakref.WeakKeyDictionary[QWidget, int]] = weakref.WeakKeyDictionary()
+
+    @classmethod
+    @contextmanager
+    def _filling(cls, widget: QWidget) -> Generator[None, None, None]:
+        """在写入控件值期间抑制该控件的写回。
+
+        深度可重入（fill 期间联动槽可能再次触发 fill），归零才放行写回。
+        只抑制当前控件，不影响其他控件的写回。
+
+        Args:
+            widget: 正在灌值的控件。
+        """
+        cls._fill_depth[widget] = cls._fill_depth.get(widget, 0) + 1
+        try:
+            yield
+        finally:
+            depth = cls._fill_depth.get(widget, 0) - 1
+            if depth > 0:
+                cls._fill_depth[widget] = depth
+            else:
+                cls._fill_depth.pop(widget, None)
 
     @classmethod
     def bind(
@@ -284,7 +285,7 @@ class LiveFormBinder:
             return
 
         cls._unbind_widget(widget)
-        signal = _pick_signal(widget, realtime)
+        signal = _WidgetAdapter.pick_signal(widget, realtime)
         if signal is None:
             return
 
@@ -304,7 +305,7 @@ class LiveFormBinder:
             if meta is None or meta.token is not token:
                 return
 
-            raw_val = _read_widget_value(w)
+            raw_val = _WidgetAdapter.read(w)
             try:
                 new_val = to_model(raw_val) if to_model is not None else raw_val
             except Exception as e:
@@ -332,15 +333,8 @@ class LiveFormBinder:
             # 又被 connect 回去，只能靠 token 变成死槽、逐渐累积。
             signal.connect(_write_back)
             # 初始灌值按 fill 的语义压入深度，避免触发任何绑定写回
-            cls._fill_depth[widget] = cls._fill_depth.get(widget, 0) + 1
-            try:
-                _set_widget_value(widget, getattr(model, field_name), to_widget)
-            finally:
-                depth = cls._fill_depth.get(widget, 0) - 1
-                if depth > 0:
-                    cls._fill_depth[widget] = depth
-                else:
-                    cls._fill_depth.pop(widget, None)
+            with cls._filling(widget):
+                _WidgetAdapter.write(widget, getattr(model, field_name), to_widget)
         except Exception:
             # 初始化失败不得留下「有元数据、无连接」的伪绑定
             current = cls._bindings.get(widget)
@@ -363,18 +357,12 @@ class LiveFormBinder:
             f = cls._bindings.get(w)
             if f is None:
                 continue
-            cls._fill_depth[w] = cls._fill_depth.get(w, 0) + 1
-            try:
-                _set_widget_value(w, getattr(f.model, f.field_name), f.to_widget)
-                clear_invalid(w)
-            except Exception as e:
-                logger.warning(f"fill 失败 [{f.field_name}]: {e}")
-            finally:
-                depth = cls._fill_depth.get(w, 0) - 1
-                if depth > 0:
-                    cls._fill_depth[w] = depth
-                else:
-                    cls._fill_depth.pop(w, None)
+            with cls._filling(w):
+                try:
+                    _WidgetAdapter.write(w, getattr(f.model, f.field_name), f.to_widget)
+                    clear_invalid(w)
+                except Exception as e:
+                    logger.warning(f"fill 失败 [{f.field_name}]: {e}")
 
     @classmethod
     def _unbind_widget(cls, widget: QWidget) -> None:
@@ -392,7 +380,7 @@ class LiveFormBinder:
         slot = old.slot_ref()
         if slot is None:
             return
-        signal = _pick_signal(widget, old.realtime)
+        signal = _WidgetAdapter.pick_signal(widget, old.realtime)
         if signal is not None:
             try:
                 signal.disconnect(slot)
@@ -425,13 +413,9 @@ class DraftFormBinder:
     """
 
     # 控件 → 字段映射。key 为弱引用，控件销毁后条目自动移除。
-    _fields: ClassVar[weakref.WeakKeyDictionary[QWidget, _DraftField]] = (
-        weakref.WeakKeyDictionary()
-    )
+    _fields: ClassVar[weakref.WeakKeyDictionary[QWidget, _DraftField]] = weakref.WeakKeyDictionary()
     # 表单面板 → fill 时的基准模型。collect 时未展示字段按基准保留。
-    _bases: ClassVar[weakref.WeakKeyDictionary[QWidget, BaseModel]] = (
-        weakref.WeakKeyDictionary()
-    )
+    _bases: ClassVar[weakref.WeakKeyDictionary[QWidget, BaseModel]] = weakref.WeakKeyDictionary()
 
     @classmethod
     def map(
@@ -468,7 +452,7 @@ class DraftFormBinder:
         for w in cls._iter_fields(parent):
             f = cls._fields[w]
             try:
-                _set_widget_value(w, getattr(model, f.field_name), f.to_widget)
+                _WidgetAdapter.write(w, getattr(model, f.field_name), f.to_widget)
                 clear_invalid(w)
             except Exception as e:
                 logger.warning(f"fill 失败 [{f.field_name}]: {e}")
@@ -500,7 +484,7 @@ class DraftFormBinder:
                     f"collect 跳过: {model_class.__name__} 不存在字段 '{f.field_name}'"
                 )
                 continue
-            raw_val = _read_widget_value(w)
+            raw_val = _WidgetAdapter.read(w)
             try:
                 data[f.field_name] = f.to_model(raw_val) if f.to_model is not None else raw_val
             except Exception as e:
