@@ -83,7 +83,7 @@ def _set_widget_value(
     """将单个值写入控件。
 
     不屏蔽控件信号，用户连接的信号槽照常触发。若该控件已绑定写回，
-    调用方需在写入前置位 LiveFormBinder._filling，避免写回模型。
+    调用方需在写入前后压入/弹出 LiveFormBinder 的填充深度，避免写回模型。
 
     Args:
         widget: 目标控件。
@@ -131,20 +131,25 @@ def _emit_unchanged(widget: QWidget, value: Any) -> None:
     """值未变化时补发控件信号。
 
     Qt 在赋值结果与当前值相同时不发信号，但表单刷新仍需要驱动联动槽
-    （如勾选框控制子控件可用性）。写回代理由 LiveFormBinder._filling 挡住，
+    （如勾选框控制子控件可用性）。写回代理由 LiveFormBinder 的填充深度挡住，
     不会因此污染模型。
+
+    只补发 Qt「值变化」语义的信号，不伪造用户交互信号：
+    QLineEdit 补 ``textChanged`` 而非 ``editingFinished``（后者表示用户
+    结束编辑，程序灌值不应触发）。
     """
     if isinstance(widget, QCheckBox):
-        widget.toggled.emit(bool(value))
-        widget.stateChanged.emit(int(bool(value)))
+        widget.toggled.emit(widget.isChecked())
+        # stateChanged 携带 Qt.CheckState（0/1/2），不是 bool
+        widget.stateChanged.emit(widget.checkState().value)
     elif isinstance(widget, QSpinBox):
-        widget.valueChanged.emit(int(value))
+        widget.valueChanged.emit(widget.value())
     elif isinstance(widget, QDoubleSpinBox):
-        widget.valueChanged.emit(float(value))
+        widget.valueChanged.emit(widget.value())
     elif isinstance(widget, QLineEdit):
-        widget.textChanged.emit(str(value))
+        widget.textChanged.emit(widget.text())
     elif isinstance(widget, QComboBox):
-        widget.currentIndexChanged.emit(int(value))
+        widget.currentIndexChanged.emit(widget.currentIndex())
 
 
 def _read_widget_value(widget: QWidget) -> Any:
@@ -240,9 +245,12 @@ class LiveFormBinder:
     _bindings: ClassVar[weakref.WeakKeyDictionary[QWidget, _LiveField]] = (
         weakref.WeakKeyDictionary()
     )
-    # 程序向控件写值期间的重入深度（>0 时写回回调直接返回）。
-    # 用计数而非布尔：fill 期间联动槽可能再次触发 fill。
-    _filling: ClassVar[int] = 0
+    # 每个控件的填充深度（>0 时该控件的写回回调直接返回）。
+    # 按控件计数而非全局标志：fill 表单 A 时联动槽可能改动表单 B 的控件，
+    # B 的写回必须照常发生，不能被 A 的填充状态误伤。
+    _fill_depth: ClassVar[weakref.WeakKeyDictionary[QWidget, int]] = (
+        weakref.WeakKeyDictionary()
+    )
 
     @classmethod
     def bind(
@@ -289,11 +297,11 @@ class LiveFormBinder:
         wref = weakref.ref(widget)
 
         def _write_back(*args: Any) -> None:
-            # fill / 初始挂载触发的信号不写回，避免覆盖模型或误触发 after_write
-            if cls._filling > 0:
-                return
             w = wref()
             if w is None:
+                return
+            # 该控件正处于灌值期间则不写回，避免覆盖模型或误触发 after_write
+            if cls._fill_depth.get(w, 0) > 0:
                 return
             # 该控件已被重新 bind 到别的字段，或元数据已移除：本闭包作废
             meta = cls._bindings.get(w)
@@ -332,20 +340,23 @@ class LiveFormBinder:
         Args:
             parent: 表单面板或页面；其自身与所有子孙控件中的绑定都会被刷新。
         """
-        cls._filling += 1
-        try:
-            targets: list[QWidget] = [parent, *parent.findChildren(QWidget)]
-            for w in targets:
-                f = cls._bindings.get(w)
-                if f is None:
-                    continue
-                try:
-                    _set_widget_value(w, getattr(f.model, f.field_name), f.to_widget)
-                    clear_invalid(w)
-                except Exception as e:
-                    logger.warning(f"fill 失败 [{f.field_name}]: {e}")
-        finally:
-            cls._filling -= 1
+        targets: list[QWidget] = [parent, *parent.findChildren(QWidget)]
+        for w in targets:
+            f = cls._bindings.get(w)
+            if f is None:
+                continue
+            cls._fill_depth[w] = cls._fill_depth.get(w, 0) + 1
+            try:
+                _set_widget_value(w, getattr(f.model, f.field_name), f.to_widget)
+                clear_invalid(w)
+            except Exception as e:
+                logger.warning(f"fill 失败 [{f.field_name}]: {e}")
+            finally:
+                depth = cls._fill_depth.get(w, 0) - 1
+                if depth > 0:
+                    cls._fill_depth[w] = depth
+                else:
+                    cls._fill_depth.pop(w, None)
 
     @classmethod
     def _unbind_widget(cls, widget: QWidget) -> None:
@@ -479,7 +490,6 @@ class DraftFormBinder:
                             "loc": (f.field_name,),
                             "input": raw_val,
                             "ctx": {"error": e},
-                            "msg": f"{e}",
                         }
                     ],
                 ) from e

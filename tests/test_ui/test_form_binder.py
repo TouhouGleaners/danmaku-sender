@@ -126,6 +126,68 @@ def test_fill_triggers_linkage_even_when_value_unchanged(qapp):
     assert linked == [False], "值未变化的 fill 也必须触发联动槽"
 
 
+def test_fill_unchanged_checkbox_preserves_qt_check_state(qapp):
+    """补发 stateChanged 时参数必须是 Qt.CheckState（0/2），不是 bool 的 0/1。"""
+    from PySide6.QtCore import Qt
+
+    parent = QWidget()
+    cb = QCheckBox(parent)
+    cb.setChecked(True)
+
+    states: list[int] = []
+    cb.stateChanged.connect(states.append)
+
+    LiveFormBinder.bind(cb, _Cfg(enabled=True), "enabled")
+    states.clear()
+    LiveFormBinder.fill(parent)
+
+    assert states == [Qt.CheckState.Checked.value], "checked 时应发 2，不是 1"
+
+
+def test_fill_does_not_suppress_unrelated_bound_widget(qapp):
+    """fill 表单 A 时，联动改动的表单 B 控件必须照常写回，不能被 A 的填充状态误伤。"""
+    cfg_a = _Cfg(count=1)
+    cfg_b = _Cfg(count=2)
+
+    parent_a = QWidget()
+    parent_b = QWidget()
+
+    source = QCheckBox(parent_a)
+    target = QSpinBox(parent_b)
+
+    LiveFormBinder.bind(source, cfg_a, "enabled")
+    LiveFormBinder.bind(target, cfg_b, "count")
+
+    # 跨表单联动：A 的勾选框改动 B 的数值
+    source.toggled.connect(lambda _: target.setValue(5))
+
+    LiveFormBinder.fill(parent_a)
+
+    assert target.value() == 5
+    assert cfg_b.count == 5, "B 的写回不得被 A 的 fill 抑制"
+
+
+def test_fill_line_edit_emits_text_changed_not_editing_finished(qapp):
+    """QLineEdit 补发的是值变化信号 textChanged，不伪造用户交互信号 editingFinished。"""
+    parent = QWidget()
+    edit = QLineEdit(parent)
+    edit.setText("same")
+
+    changed: list[str] = []
+    finished: list[None] = []
+    edit.textChanged.connect(changed.append)
+    edit.editingFinished.connect(lambda: finished.append(None))
+
+    LiveFormBinder.bind(edit, _Cfg(tags=["same"]), "tags",
+                        realtime=True, to_model=parse_keywords, to_widget=join_keywords)
+    changed.clear()
+    finished.clear()
+    LiveFormBinder.fill(parent)
+
+    assert changed == ["same"], "应补发 textChanged"
+    assert finished == [], "不得伪造 editingFinished（那是用户交互语义）"
+
+
 def test_clear_invalid_preserves_permanent_tooltip(qapp):
     """clear_invalid 不得抹掉控件自身的帮助 tooltip。"""
     parent = QWidget()
