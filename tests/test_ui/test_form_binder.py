@@ -5,7 +5,10 @@
 - 草稿修改（DraftFormBinder）：map 不碰模型；collect 校验并保留未展示字段。
 另外覆盖 fill 不阻断用户信号槽（控件联动）、转换函数、重复绑定替换。
 """
+import gc
 import os
+import weakref
+from collections.abc import Callable
 
 import pytest
 from pydantic import BaseModel, ConfigDict, Field, ValidationError
@@ -250,8 +253,6 @@ def test_rebind_same_widget_replaces_old_connection(qapp):
 
 def test_rebind_disconnects_old_after_write(qapp):
     """重绑后旧 after_write 不得被调用，旧写回闭包应随 disconnect 释放。"""
-    import gc
-
     parent = QWidget()
     spin = QSpinBox(parent)
     old_cfg = _Cfg(count=1)
@@ -275,11 +276,63 @@ def test_rebind_disconnects_old_after_write(qapp):
     assert old_slot_ref() is None, "旧写回闭包应随 disconnect 被释放"
 
 
+def test_rebind_during_initial_fill_does_not_leave_old_slot(qapp):
+    """初始化灌值触发的联动里重绑同一控件，旧闭包不得被重新 connect 回去。"""
+    parent = QWidget()
+    spin = QSpinBox(parent)
+    cfg_a = _Cfg(count=1)
+    cfg_b = _Cfg(count=2)
+    old_calls: list[object] = []
+    new_calls: list[object] = []
+    captured: list[weakref.ReferenceType[Callable[..., None]]] = []
+    rebound = False
+
+    def rebind_on_change(_v: int) -> None:
+        nonlocal rebound
+        if rebound:
+            return
+        rebound = True
+        # 在 A 的初始灌值期间重绑到 B，并记下 A 的 slot 弱引用
+        meta = LiveFormBinder._bindings.get(spin)
+        if meta is not None:
+            captured.append(meta.slot_ref)
+        LiveFormBinder.bind(spin, cfg_b, "count",
+                            after_write=lambda f, v: new_calls.append(v))
+
+    spin.valueChanged.connect(rebind_on_change)
+    LiveFormBinder.bind(spin, cfg_a, "count",
+                        after_write=lambda f, v: old_calls.append(v))
+
+    spin.setValue(7)
+    assert old_calls == [], "旧 after_write 不得触发"
+    assert new_calls == [7], "新 after_write 应正常触发"
+    assert cfg_a.count == 1, "旧模型不得被写入"
+    assert cfg_b.count == 7
+
+    # 关键断言：A 的闭包若被重新 connect 回去，会继续被 Qt 强引用、无法回收
+    gc.collect()
+    assert captured and captured[0]() is None, "旧闭包应已随 disconnect 释放"
+
+
+def test_bind_failure_leaves_no_orphan_metadata(qapp):
+    """初始灌值失败不得留下「有元数据、无连接」的伪绑定。"""
+
+    def _bad_to_widget(v: object) -> str:
+        raise RuntimeError("转换炸了")
+
+    parent = QWidget()
+    spin = QSpinBox(parent)
+    before = len(LiveFormBinder._bindings)
+
+    with pytest.raises(RuntimeError):
+        LiveFormBinder.bind(spin, _Cfg(count=3), "count", to_widget=_bad_to_widget)
+
+    assert spin not in LiveFormBinder._bindings, "失败的 bind 不得留下元数据"
+    assert len(LiveFormBinder._bindings) == before
+
+
 def test_bindings_released_when_widget_destroyed(qapp):
     """控件销毁后注册表条目必须可回收（value 不得强引用 key）。"""
-    import gc
-    import weakref
-
     cfg = _Cfg()
     parent = QWidget()
     spin = QSpinBox(parent)

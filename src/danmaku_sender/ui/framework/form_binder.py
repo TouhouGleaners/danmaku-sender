@@ -332,17 +332,27 @@ class LiveFormBinder:
         cls._bindings[widget] = _LiveField(
             model, field_name, to_widget, token, realtime, weakref.ref(_write_back)
         )
-        # 初始灌值按 fill 的语义压入深度，避免触发任何绑定写回
-        cls._fill_depth[widget] = cls._fill_depth.get(widget, 0) + 1
         try:
-            _set_widget_value(widget, getattr(model, field_name), to_widget)
-        finally:
-            depth = cls._fill_depth.get(widget, 0) - 1
-            if depth > 0:
-                cls._fill_depth[widget] = depth
-            else:
-                cls._fill_depth.pop(widget, None)
-        signal.connect(_write_back)
+            # 先连接再灌值：灌值触发的联动里若重绑同一控件，_unbind_widget
+            # 能找到并断开本闭包。反过来「先灌值后连接」会让旧闭包在重绑后
+            # 又被 connect 回去，只能靠 token 变成死槽、逐渐累积。
+            signal.connect(_write_back)
+            # 初始灌值按 fill 的语义压入深度，避免触发任何绑定写回
+            cls._fill_depth[widget] = cls._fill_depth.get(widget, 0) + 1
+            try:
+                _set_widget_value(widget, getattr(model, field_name), to_widget)
+            finally:
+                depth = cls._fill_depth.get(widget, 0) - 1
+                if depth > 0:
+                    cls._fill_depth[widget] = depth
+                else:
+                    cls._fill_depth.pop(widget, None)
+        except Exception:
+            # 初始化失败不得留下「有元数据、无连接」的伪绑定
+            current = cls._bindings.get(widget)
+            if current is not None and current.token is token:
+                cls._unbind_widget(widget)
+            raise
 
     @classmethod
     def fill(cls, parent: QWidget) -> None:
