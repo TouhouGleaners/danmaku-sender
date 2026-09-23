@@ -206,6 +206,48 @@ def test_bindings_released_when_widget_destroyed(qapp):
     assert len(LiveFormBinder._bindings) == 0
 
 
+def test_registry_value_does_not_reference_key(qapp):
+    """注册表 value 不得强引用 key 或其父窗口。
+
+    回归：早期实现把写回闭包存进类级注册表，而 after_write 常写成
+    ``lambda: self.xxx`` 捕获窗口，形成「注册表 → 闭包 → 窗口 → 控件」
+    的强引用链。WeakKeyDictionary 的 value 一旦能到达 key，条目就永生。
+
+    这里直接断言不变量，不依赖 Qt 对象的具体回收时机。
+    """
+    cfg = _Cfg()
+    parent = QWidget()
+    spin = QSpinBox(parent)
+
+    def _after(_f: str, _v: object) -> None:
+        parent.setToolTip("x")  # 故意捕获父窗口
+
+    LiveFormBinder.bind(spin, cfg, "count", after_write=_after)
+    value = LiveFormBinder._bindings.get(spin)
+    assert value is not None
+
+    for item in value:
+        assert item is not spin, "value 不得持有控件本身"
+        assert item is not parent, "value 不得持有控件的父窗口"
+        assert item is not _after, "value 不得持有 after_write 回调"
+
+
+def test_collect_converts_to_model_error_to_validation_error(qapp):
+    """to_model 抛出的异常应转为 ValidationError，调用方不必分叉捕获。"""
+    def _bad_parse(text: str) -> list[str]:
+        raise RuntimeError("解析失败")
+
+    parent = QWidget()
+    edit = QLineEdit(parent)
+    edit.setText("x")
+    DraftFormBinder.map(edit, "tags", to_model=_bad_parse)
+
+    with pytest.raises(ValidationError) as exc:
+        DraftFormBinder.collect(parent, _Cfg)
+    assert "解析失败" in str(exc.value)
+    assert edit.property("invalid") is True
+
+
 # ── DraftFormBinder：草稿修改 ─────────────────────────────
 
 

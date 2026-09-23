@@ -191,18 +191,21 @@ def _pick_signal(widget: QWidget, realtime: bool) -> SignalInstance | None:
 
 
 class _LiveField(NamedTuple):
-    """LiveFormBinder 的内部绑定记录。
+    """LiveFormBinder 的内部绑定元数据（仅供 fill 反读）。
 
-    不持有 widget 的强引用（widget 是注册表的 key）；写回闭包
-    通过 ``weakref.ref`` 访问控件，否则条目会互相引用、无法回收。
-    保存 realtime 是为了重绑时能重新定位到同一信号以断开连接。
+    **禁止**把写回闭包或 after_write 存进来：回调常捕获所在窗口
+    （如 ``lambda: self.xxx``），而本注册表是类级弱引用表（永生根），
+    一旦 value 强引用 key 就形成「注册表 → 回调 → 窗口 → 控件」的
+    强引用链，条目永远无法回收——正是拆除 UIBinder 要消灭的泄漏。
+
+    写回闭包只由 Qt 信号连接持有（控件亡则连接亡），与控件形成
+    可被 Python 循环 GC 回收的环，不受注册表影响。
     """
 
     model: Any
     field_name: str
     to_widget: Callable[[Any], Any] | None
-    slot: Callable[..., None]
-    realtime: bool
+    token: object
 
 
 class _DraftField(NamedTuple):
@@ -232,8 +235,8 @@ class LiveFormBinder:
             LiveFormBinder.fill(self)
     """
 
-    # 控件 → 绑定记录。key 为弱引用；value 中的 slot 只弱引用控件，
-    # 两者不得形成强引用环，否则条目无法随控件销毁而回收。
+    # 控件 → 绑定元数据（仅 fill 反读用）。key 为弱引用；value 不得
+    # 强引用 key 或能到达 key 的对象（回调、窗口等），否则条目无法回收。
     _bindings: ClassVar[weakref.WeakKeyDictionary[QWidget, _LiveField]] = (
         weakref.WeakKeyDictionary()
     )
@@ -280,6 +283,8 @@ class LiveFormBinder:
         if signal is None:
             return
 
+        token = object()
+        cls._bindings[widget] = _LiveField(model, field_name, to_widget, token)
         # 只弱引用控件：写回闭包若强引用 widget，会与注册表 key 形成环，条目无法回收
         wref = weakref.ref(widget)
 
@@ -289,6 +294,10 @@ class LiveFormBinder:
                 return
             w = wref()
             if w is None:
+                return
+            # 该控件已被重新 bind 到别的字段，或元数据已移除：本闭包作废
+            meta = cls._bindings.get(w)
+            if meta is None or meta.token is not token:
                 return
 
             raw_val = _read_widget_value(w)
@@ -311,7 +320,6 @@ class LiveFormBinder:
 
         _set_widget_value(widget, getattr(model, field_name), to_widget)
         signal.connect(_write_back)
-        cls._bindings[widget] = _LiveField(model, field_name, to_widget, _write_back, realtime)
 
     @classmethod
     def fill(cls, parent: QWidget) -> None:
@@ -341,23 +349,15 @@ class LiveFormBinder:
 
     @classmethod
     def _unbind_widget(cls, widget: QWidget) -> None:
-        """断开并移除指定控件的既有绑定。
+        """移除指定控件的既有绑定元数据。
+
+        不需要手动 disconnect：旧写回闭包在触发时会发现 token 对不上
+        而直接返回。旧连接随控件销毁由 Qt 自动断开。
 
         Args:
             widget: 需要解除绑定的控件。
         """
-        old = cls._bindings.get(widget)
-        if old is None:
-            return
-        # 不在 _LiveField 里存 SignalInstance：它强引用 widget，
-        # 会与 WeakKeyDictionary 的 key 形成环。这里按类型重新定位信号。
-        signal = _pick_signal(widget, old.realtime)
-        if signal is not None:
-            try:
-                signal.disconnect(old.slot)
-            except (RuntimeError, TypeError):
-                pass
-        del cls._bindings[widget]
+        cls._bindings.pop(widget, None)
 
 
 class DraftFormBinder:
@@ -470,7 +470,19 @@ class DraftFormBinder:
             except Exception as e:
                 logger.warning(f"控件值转换失败 [{f.field_name}]: {e}")
                 mark_invalid(w, str(e))
-                raise ValueError(f"{f.field_name}: {e}") from e
+                # 与字段校验错误统一为 ValidationError，调用方不必分叉捕获
+                raise ValidationError.from_exception_data(
+                    model_class.__name__,
+                    [
+                        {
+                            "type": "value_error",
+                            "loc": (f.field_name,),
+                            "input": raw_val,
+                            "ctx": {"error": e},
+                            "msg": f"{e}",
+                        }
+                    ],
+                ) from e
 
         return model_class.model_validate(data)
 
