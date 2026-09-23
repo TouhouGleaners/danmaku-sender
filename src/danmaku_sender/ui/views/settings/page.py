@@ -15,15 +15,15 @@ from PySide6.QtWidgets import (
 
 from danmaku_sender.config.theme_config import ThemeMode
 from danmaku_sender.runtime.state.app_state import AppState
-from danmaku_sender.ui.framework.binder import UIBinder
+from danmaku_sender.ui.framework.form_binder import LiveFormBinder
 
 
 class SettingsPage(QWidget):
-    """全局设置页
+    """全局设置页。
 
-    配置写入走 UIBinder（Widget→Model）；主题需要即时生效，
-    故在写成功钩子里发 themeApplied——这是真广播点，不是隐式订阅。
-    刷新靠 showEvent → UIBinder.refresh_all（打开谁，谁就从状态重读）。
+    属于实时修改表单：无「保存」按钮，控件变更通过 LiveFormBinder
+    立即写入配置模型。主题需要即时生效，因此在 ``after_write`` 中
+    发射 ``themeApplied``。页面显示时调用 ``fill()`` 刷新控件值。
     """
 
     themeApplied = Signal(object)  # ThemeMode：主题已写入配置，可立即应用
@@ -32,6 +32,7 @@ class SettingsPage(QWidget):
         super().__init__()
 
         self.state = state
+        self.form = LiveFormBinder()
         self._create_ui()
 
     def _create_ui(self):
@@ -189,40 +190,37 @@ class SettingsPage(QWidget):
 
     def init_bindings(self) -> None:
         """将 UI 控件与全局状态 (AppState) 进行单向写绑定"""
+        form = self.form
+
         # 主题：写成功后立刻广播，驱动 ThemeService 应用
-        UIBinder.bind(
+        form.bind(
             self.theme_combo,
             self.state.theme_config,
             "theme_mode",
-            on_wrote=lambda _f, v: self.themeApplied.emit(v),
+            after_write=lambda _f, v: self.themeApplied.emit(v),
         )
 
         # 全局系统设置（跨发送器/监视器共享，单绑一份）
-        UIBinder.bind(self.prevent_sleep_checkbox, self.state.global_config, "prevent_sleep")
-        UIBinder.bind(self.proxy_checkbox, self.state.global_config, "use_system_proxy")
+        form.bind(self.prevent_sleep_checkbox, self.state.global_config, "prevent_sleep")
+        form.bind(self.proxy_checkbox, self.state.global_config, "use_system_proxy")
 
         # 发送延迟策略
         config = self.state.sender_config
-        UIBinder.bind(self.min_delay, config, "min_delay")
-        UIBinder.bind(self.max_delay, config, "max_delay")
-        UIBinder.bind(self.burst_enabled_cb, config, "burst_enabled")
-        UIBinder.bind(self.burst_size, config, "burst_size")
-        UIBinder.bind(self.burst_rest_min, config, "rest_min")
-        UIBinder.bind(self.burst_rest_max, config, "rest_max")
+        form.bind(self.min_delay, config, "min_delay")
+        form.bind(self.max_delay, config, "max_delay")
+        form.bind(self.burst_enabled_cb, config, "burst_enabled")
+        form.bind(self.burst_size, config, "burst_size")
+        form.bind(self.burst_rest_min, config, "rest_min")
+        form.bind(self.burst_rest_max, config, "rest_max")
 
         # 自动终止规则
-        UIBinder.bind(self.stop_count, config, "stop_after_count")
-        UIBinder.bind(self.stop_time, config, "stop_after_time")
+        form.bind(self.stop_count, config, "stop_after_count")
+        form.bind(self.stop_time, config, "stop_after_time")
 
         # 断点续传
-        UIBinder.bind(self.skip_sent_cb, config, "skip_sent")
-
-        # 初始化爆发控件状态
-        self._on_burst_toggled(self.burst_enabled_cb.isChecked())
+        form.bind(self.skip_sent_cb, config, "skip_sent")
 
     def showEvent(self, event):
         """打开页面时从状态重读控件值（无隐式同步）"""
         super().showEvent(event)
-        UIBinder.refresh_all(self)
-        # refresh 屏蔽信号防回环，依赖控件的联动需显式重算
-        self._on_burst_toggled(self.burst_enabled_cb.isChecked())
+        self.form.fill()

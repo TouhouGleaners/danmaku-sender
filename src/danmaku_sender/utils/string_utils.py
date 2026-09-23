@@ -31,3 +31,32 @@ def parse_bilibili_link(text: str) -> tuple[str | None, int | None]:
             page = p_num
 
     return bvid, page
+
+
+def parse_keywords(text: str) -> list[str]:
+    """将逗号分隔的关键词文本解析为列表。
+
+    支持中英文逗号，忽略空白项，结果去重并排序。用于文本框与
+    ``list[str]`` 配置字段之间的转换。
+
+    Args:
+        text: 原始输入文本，例如 ``"应用, 过滤"``。
+
+    Returns:
+        去重、排序后的关键词列表。
+    """
+    raw = text.replace("，", ",").lower()
+    parts = [k.strip() for k in raw.split(",") if k.strip()]
+    return sorted(set(parts))
+
+
+def join_keywords(keywords: list[str]) -> str:
+    """将关键词列表拼接为文本框展示文本。
+
+    Args:
+        keywords: 关键词列表。
+
+    Returns:
+        逗号分隔的字符串，例如 ``"应用, 过滤"``。
+    """
+    return ", ".join(keywords)

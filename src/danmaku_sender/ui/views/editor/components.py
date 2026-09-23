@@ -8,11 +8,12 @@ from PySide6.QtWidgets import (
     QGroupBox, QDoubleSpinBox, QComboBox, QTextEdit, QMessageBox
 )
 
-from danmaku_sender.ui.framework.binder import UIBinder
+from danmaku_sender.ui.framework.form_binder import LiveFormBinder
 from danmaku_sender.types.models.danmaku import Danmaku
 from danmaku_sender.runtime.state.app_state import AppState
 from danmaku_sender.types.models.editor_types import EditorField
 from danmaku_sender.utils.time_utils import format_duration
+from danmaku_sender.utils.string_utils import join_keywords, parse_keywords
 
 
 class EditorTableModel(QAbstractTableModel):
@@ -102,6 +103,7 @@ class ValidationRulesGroup(QGroupBox):
         super().__init__("校验与过滤规则", parent)
         self.setSizePolicy(QSizePolicy.Policy.Preferred, QSizePolicy.Policy.Maximum)
         self.state = state
+        self.form = LiveFormBinder()
         self._create_ui()
 
     def _create_ui(self):
@@ -125,32 +127,28 @@ class ValidationRulesGroup(QGroupBox):
         layout.addLayout(keyword_layout)
 
     def init_bindings(self):
-        """将 UI 控件与 AppState 进行双向绑定"""
+        """绑定控件与 validation_config（实时修改表单）。"""
         config = self.state.validation_config
+        form = self.form
 
-        # 通用控件绑定
-        UIBinder.bind(self.enable_custom_checkbox, config, "enabled")
-
-        # 复杂类型映射手动处理 (str <-> list[str])
-        self.keywords_input.blockSignals(True)
-        self.keywords_input.setText(", ".join(config.blocked_keywords))
-        self.keywords_input.blockSignals(False)
-        self.keywords_input.setEnabled(config.enabled)
-
-        # 绑定关键词输入的信号与开关的联动状态
-        self.keywords_input.textChanged.connect(self._on_keywords_changed)
-        self.enable_custom_checkbox.stateChanged.connect(
-            lambda val: self.keywords_input.setEnabled(bool(val))
+        form.bind(self.enable_custom_checkbox, config, "enabled")
+        # list[str] ↔ str 通过转换函数绑定，不再手动同步
+        form.bind(
+            self.keywords_input,
+            config,
+            "blocked_keywords",
+            realtime=True,
+            to_model=parse_keywords,
+            to_widget=join_keywords,
         )
 
-    @Slot(str)
-    def _on_keywords_changed(self, text: str):
-        """处理关键词文本变更"""
-        raw_text = text.replace('，', ',').lower()
-        parts = [k.strip() for k in raw_text.split(',') if k.strip()]
-        unique_keywords = sorted(list(set(parts)))
+        # 开关 → 关键词框可用性（普通联动，fill 时会自动跑）
+        self.enable_custom_checkbox.stateChanged.connect(self._on_enable_toggled)
+        self._on_enable_toggled(self.enable_custom_checkbox.isChecked())
 
-        self.state.validation_config.blocked_keywords = unique_keywords
+    @Slot(int)
+    def _on_enable_toggled(self, val: int) -> None:
+        self.keywords_input.setEnabled(bool(val))
 
 
 class DanmakuPropertyForm(QWidget):
