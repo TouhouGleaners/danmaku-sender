@@ -32,7 +32,6 @@ class SettingsPage(QWidget):
         super().__init__()
 
         self.state = state
-        self.form = LiveFormBinder()
         self._create_ui()
 
     def _create_ui(self):
@@ -190,10 +189,8 @@ class SettingsPage(QWidget):
 
     def init_bindings(self) -> None:
         """将 UI 控件与全局状态 (AppState) 进行单向写绑定"""
-        form = self.form
-
         # 主题：写成功后立刻广播，驱动 ThemeService 应用
-        form.bind(
+        LiveFormBinder.bind(
             self.theme_combo,
             self.state.theme_config,
             "theme_mode",
@@ -201,26 +198,26 @@ class SettingsPage(QWidget):
         )
 
         # 全局系统设置（跨发送器/监视器共享，单绑一份）
-        form.bind(self.prevent_sleep_checkbox, self.state.global_config, "prevent_sleep")
-        form.bind(self.proxy_checkbox, self.state.global_config, "use_system_proxy")
+        LiveFormBinder.bind(self.prevent_sleep_checkbox, self.state.global_config, "prevent_sleep")
+        LiveFormBinder.bind(self.proxy_checkbox, self.state.global_config, "use_system_proxy")
 
         # 发送延迟策略
         config = self.state.sender_config
-        form.bind(self.min_delay, config, "min_delay")
-        form.bind(self.max_delay, config, "max_delay")
-        form.bind(self.burst_enabled_cb, config, "burst_enabled")
-        form.bind(self.burst_size, config, "burst_size")
-        form.bind(self.burst_rest_min, config, "rest_min")
-        form.bind(self.burst_rest_max, config, "rest_max")
+        LiveFormBinder.bind(self.min_delay, config, "min_delay")
+        LiveFormBinder.bind(self.max_delay, config, "max_delay")
+        LiveFormBinder.bind(self.burst_enabled_cb, config, "burst_enabled")
+        LiveFormBinder.bind(self.burst_size, config, "burst_size")
+        LiveFormBinder.bind(self.burst_rest_min, config, "rest_min")
+        LiveFormBinder.bind(self.burst_rest_max, config, "rest_max")
 
         # 自动终止规则
-        form.bind(self.stop_count, config, "stop_after_count")
-        form.bind(self.stop_time, config, "stop_after_time")
+        LiveFormBinder.bind(self.stop_count, config, "stop_after_count")
+        LiveFormBinder.bind(self.stop_time, config, "stop_after_time")
 
         # 断点续传
-        form.bind(self.skip_sent_cb, config, "skip_sent")
+        LiveFormBinder.bind(self.skip_sent_cb, config, "skip_sent")
 
     def showEvent(self, event):
         """打开页面时从状态重读控件值（无隐式同步）"""
         super().showEvent(event)
-        self.form.fill()
+        LiveFormBinder.fill(self)

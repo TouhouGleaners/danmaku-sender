@@ -103,7 +103,6 @@ class ValidationRulesGroup(QGroupBox):
         super().__init__("校验与过滤规则", parent)
         self.setSizePolicy(QSizePolicy.Policy.Preferred, QSizePolicy.Policy.Maximum)
         self.state = state
-        self.form = LiveFormBinder()
         self._create_ui()
 
     def _create_ui(self):
@@ -129,11 +128,10 @@ class ValidationRulesGroup(QGroupBox):
     def init_bindings(self):
         """绑定控件与 validation_config（实时修改表单）。"""
         config = self.state.validation_config
-        form = self.form
 
-        form.bind(self.enable_custom_checkbox, config, "enabled")
+        LiveFormBinder.bind(self.enable_custom_checkbox, config, "enabled")
         # list[str] ↔ str 通过转换函数绑定，不再手动同步
-        form.bind(
+        LiveFormBinder.bind(
             self.keywords_input,
             config,
             "blocked_keywords",

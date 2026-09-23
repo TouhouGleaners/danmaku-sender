@@ -13,8 +13,9 @@
 """
 
 import logging
+import weakref
 from collections.abc import Callable
-from typing import Any, NamedTuple
+from typing import Any, ClassVar, NamedTuple
 
 from pydantic import BaseModel, ValidationError
 from PySide6.QtCore import SignalInstance
@@ -149,20 +150,26 @@ def _pick_signal(widget: QWidget, realtime: bool) -> SignalInstance | None:
 
 
 class _LiveField(NamedTuple):
-    """LiveFormBinder 的内部绑定记录。"""
+    """LiveFormBinder 的内部绑定记录。
 
-    widget: QWidget
+    不持有 widget 的强引用（widget 是注册表的 key）；写回闭包
+    通过 ``weakref.ref`` 访问控件，否则条目会互相引用、无法回收。
+    保存 realtime 是为了重绑时能重新定位到同一信号以断开连接。
+    """
+
     model: Any
     field_name: str
     to_widget: Callable[[Any], Any] | None
-    signal: SignalInstance
     slot: Callable[..., None]
+    realtime: bool
 
 
 class _DraftField(NamedTuple):
-    """DraftFormBinder 的内部映射记录。"""
+    """DraftFormBinder 的内部映射记录。
 
-    widget: QWidget
+    不持有 widget 的强引用（widget 是注册表的 key）。
+    """
+
     field_name: str
     to_widget: Callable[[Any], Any] | None
     to_model: Callable[[Any], Any] | None
@@ -171,27 +178,31 @@ class _DraftField(NamedTuple):
 class LiveFormBinder:
     """实时修改表单的绑定器：控件变更立即写入模型。
 
-    每个实例对应一张表单面板，绑定记录保存在实例上，随表单对象
-    一同销毁，调用方无需手动解绑。
+    无需实例化，直接以类方法调用。绑定记录由内部弱引用表维护，
+    控件销毁时条目自动移除。
 
     Typical usage example::
 
-        form = LiveFormBinder()
-        form.bind(self.min_delay_spin, config, "min_delay")
+        LiveFormBinder.bind(self.min_delay_spin, config, "min_delay")
+        LiveFormBinder.bind(self.max_delay_spin, config, "max_delay")
 
         def showEvent(self, event):
             super().showEvent(event)
-            form.fill()
+            LiveFormBinder.fill(self)
     """
 
-    def __init__(self) -> None:
-        self._fields: list[_LiveField] = []
-        # 程序向控件写值期间为 True，写回回调直接返回。
-        # 不屏蔽控件信号，以免打断用户连接的联动槽。
-        self._filling: bool = False
+    # 控件 → 绑定记录。key 为弱引用；value 中的 slot 只弱引用控件，
+    # 两者不得形成强引用环，否则条目无法随控件销毁而回收。
+    _bindings: ClassVar[weakref.WeakKeyDictionary[QWidget, _LiveField]] = (
+        weakref.WeakKeyDictionary()
+    )
+    # 程序向控件写值期间为 True，写回回调直接返回。
+    # 不屏蔽控件信号，以免打断用户连接的联动槽。
+    _filling: ClassVar[bool] = False
 
+    @classmethod
     def bind(
-        self,
+        cls,
         widget: QWidget,
         model: Any,
         field_name: str,
@@ -200,7 +211,7 @@ class LiveFormBinder:
         after_write: Callable[[str, Any], None] | None = None,
         to_model: Callable[[Any], Any] | None = None,
         to_widget: Callable[[Any], Any] | None = None,
-    ) -> "LiveFormBinder":
+    ) -> None:
         """绑定控件到模型字段，并注册控件变更时的自动写回。
 
         同一控件重复调用会替换原有绑定（一个控件只对应一个字段）。
@@ -218,156 +229,179 @@ class LiveFormBinder:
                 仅在控件触发的写回时调用，程序直接修改模型不会触发。
             to_model: 控件值转模型字段值。抛出异常时控件会被标红。
             to_widget: 模型字段值转控件值。
-
-        Returns:
-            self，支持链式调用。
         """
         if not hasattr(model, field_name):
             logger.error(f"bind 失败: 模型 {type(model).__name__} 不存在字段 '{field_name}'")
-            return self
+            return
 
-        self._unbind_widget(widget)
+        cls._unbind_widget(widget)
         signal = _pick_signal(widget, realtime)
         if signal is None:
-            return self
+            return
+
+        # 只弱引用控件：写回闭包若强引用 widget，会与注册表 key 形成环，条目无法回收
+        wref = weakref.ref(widget)
 
         def _write_back(*args: Any) -> None:
             # fill / 初始挂载触发的信号不写回，避免覆盖模型或误触发 after_write
-            if self._filling:
+            if cls._filling:
+                return
+            w = wref()
+            if w is None:
                 return
 
-            raw_val = _read_widget_value(widget)
+            raw_val = _read_widget_value(w)
             try:
                 new_val = to_model(raw_val) if to_model is not None else raw_val
             except Exception as e:
                 logger.warning(f"控件值转换失败 [{field_name}]: {e}")
-                mark_invalid(widget, str(e))
+                mark_invalid(w, str(e))
                 return
 
             try:
                 setattr(model, field_name, new_val)
-                clear_invalid(widget)
+                clear_invalid(w)
                 if after_write is not None:
                     after_write(field_name, new_val)
             except ValidationError as e:
                 error_msg = "\n".join(err.get("msg", "格式错误") for err in e.errors())
                 logger.warning(f"赋值触发模型校验失败 [{field_name}={new_val}]: {error_msg}")
-                mark_invalid(widget, error_msg)
+                mark_invalid(w, error_msg)
 
         _set_widget_value(widget, getattr(model, field_name), to_widget)
         signal.connect(_write_back)
-        self._fields.append(_LiveField(widget, model, field_name, to_widget, signal, _write_back))
-        return self
+        cls._bindings[widget] = _LiveField(model, field_name, to_widget, _write_back, realtime)
 
-    def fill(self) -> None:
-        """将模型当前值填充到所有已绑定控件。
+    @classmethod
+    def fill(cls, parent: QWidget) -> None:
+        """将 parent 子树内所有已绑定控件从模型重读一遍。
 
         页面 ``showEvent`` 时调用，保证打开页面时控件显示最新值。
-        填充期间抑制写回（置位 ``_filling``），但不影响用户连接的
-        信号槽，因此控件间联动无需在填充后额外刷新。
+        填充期间抑制写回，但不影响用户连接的信号槽，因此控件间联动
+        无需在填充后额外刷新。
+
+        Args:
+            parent: 表单面板或页面；其自身与所有子孙控件中的绑定都会被刷新。
         """
-        self._filling = True
+        cls._filling = True
         try:
-            for f in self._fields:
+            targets: list[QWidget] = [parent, *parent.findChildren(QWidget)]
+            for w in targets:
+                f = cls._bindings.get(w)
+                if f is None:
+                    continue
                 try:
-                    _set_widget_value(f.widget, getattr(f.model, f.field_name), f.to_widget)
-                    clear_invalid(f.widget)
+                    _set_widget_value(w, getattr(f.model, f.field_name), f.to_widget)
+                    clear_invalid(w)
                 except Exception as e:
                     logger.warning(f"fill 失败 [{f.field_name}]: {e}")
         finally:
-            self._filling = False
+            cls._filling = False
 
-    def _unbind_widget(self, widget: QWidget) -> None:
+    @classmethod
+    def _unbind_widget(cls, widget: QWidget) -> None:
         """断开并移除指定控件的既有绑定。
 
         Args:
             widget: 需要解除绑定的控件。
         """
-        for i in reversed(range(len(self._fields))):
-            field = self._fields[i]
-            if field.widget is widget:
-                try:
-                    field.signal.disconnect(field.slot)
-                except (RuntimeError, TypeError):
-                    pass
-                del self._fields[i]
+        old = cls._bindings.get(widget)
+        if old is None:
+            return
+        # 不在 _LiveField 里存 SignalInstance：它强引用 widget，
+        # 会与 WeakKeyDictionary 的 key 形成环。这里按类型重新定位信号。
+        signal = _pick_signal(widget, old.realtime)
+        if signal is not None:
+            try:
+                signal.disconnect(old.slot)
+            except (RuntimeError, TypeError):
+                pass
+        del cls._bindings[widget]
 
 
-class DraftFormBinder[T: BaseModel]:
+class DraftFormBinder:
     """草稿修改表单的绑定器：确认保存时才将控件值写入模型。
 
-    控件本身即草稿。打开时 :meth:`fill` 填充初始值，用户确认时
-    :meth:`collect` 读取并校验。取消操作直接关闭窗口即可，
-    模型自始至终不会被修改。
+    无需实例化，直接以类方法调用。控件本身即草稿：打开时
+    :meth:`fill` 填充初始值，用户确认时 :meth:`collect` 读取并校验。
+    取消操作直接关闭窗口即可，模型自始至终不会被修改。
 
-    Args:
-        model_class: 确认保存时构造的 Pydantic 模型类。
+    一张表单面板对应一组绑定（按 parent 子树收集），同一面板
+    不要混放两张草稿表单。
 
     Typical usage example::
 
-        form = DraftFormBinder(SenderConfig)
-        form.map(self.min_delay_spin, "min_delay")
-        form.fill(task.config)
+        DraftFormBinder.map(self.min_delay_spin, "min_delay")
+        DraftFormBinder.map(self.max_delay_spin, "max_delay")
 
+        # 打开对话框时
+        DraftFormBinder.fill(self, task.config)
+
+        # 用户点击保存
         try:
-            config = form.collect()
+            config = DraftFormBinder.collect(self, SenderConfig)
         except ValidationError as e:
-            form.show_errors(e)
+            rest = DraftFormBinder.show_errors(self, e)
     """
 
-    def __init__(self, model_class: type[T]) -> None:
-        self._model_class: type[T] = model_class
-        self._fields: list[_DraftField] = []
-        self._base: T | None = None
+    # 控件 → 字段映射。key 为弱引用，控件销毁后条目自动移除。
+    _fields: ClassVar[weakref.WeakKeyDictionary[QWidget, _DraftField]] = (
+        weakref.WeakKeyDictionary()
+    )
+    # 表单面板 → fill 时的基准模型。collect 时未展示字段按基准保留。
+    _bases: ClassVar[weakref.WeakKeyDictionary[QWidget, BaseModel]] = (
+        weakref.WeakKeyDictionary()
+    )
 
+    @classmethod
     def map(
-        self,
+        cls,
         widget: QWidget,
         field_name: str,
         *,
         to_model: Callable[[Any], Any] | None = None,
         to_widget: Callable[[Any], Any] | None = None,
-    ) -> "DraftFormBinder[T]":
+    ) -> None:
         """登记控件与模型字段的对应关系。
 
         不连接信号、不修改模型。该映射供 :meth:`fill`、:meth:`collect`
-        和 :meth:`show_errors` 使用。
+        和 :meth:`show_errors` 使用。同一控件重复调用会替换原有映射。
 
         Args:
             widget: 目标控件。
             field_name: 模型上的字段名。
             to_model: 控件值转模型字段值，供 :meth:`collect` 使用。
             to_widget: 模型字段值转控件值，供 :meth:`fill` 使用。
-
-        Returns:
-            self，支持链式调用。
         """
-        if field_name not in self._model_class.model_fields:
-            logger.error(
-                f"map 失败: {self._model_class.__name__} 不存在字段 '{field_name}'"
-            )
-            return self
+        cls._fields[widget] = _DraftField(field_name, to_widget, to_model)
 
-        self._unmap_widget(widget)
-        self._fields.append(_DraftField(widget, field_name, to_widget, to_model))
-        return self
-
-    def fill(self, model: T) -> None:
-        """将模型值填充到已登记的控件，并记录该模型作为 :meth:`collect` 的基准。
+    @classmethod
+    def fill(cls, parent: QWidget, model: BaseModel) -> None:
+        """将模型值填充到 parent 子树内已登记的控件，并记录该模型为基准。
 
         基准的作用：对话框未展示的字段（如任务详情未提供的配置项）
         在 :meth:`collect` 时保持原值，不会被重置为默认值。
 
         Args:
+            parent: 表单面板或对话框。
             model: 提供初始值的模型实例。
         """
-        self._base = model
-        for f in self._fields:
-            _set_widget_value(f.widget, getattr(model, f.field_name), f.to_widget)
-            clear_invalid(f.widget)
+        cls._bases[parent] = model
+        for w in cls._iter_fields(parent):
+            f = cls._fields[w]
+            try:
+                _set_widget_value(w, getattr(model, f.field_name), f.to_widget)
+                clear_invalid(w)
+            except Exception as e:
+                logger.warning(f"fill 失败 [{f.field_name}]: {e}")
 
-    def collect(self) -> T:
+    @classmethod
+    def collect[T: BaseModel](cls, parent: QWidget, model_class: type[T]) -> T:
         """读取控件值，覆盖到基准模型的字段上，构造并校验模型实例。
+
+        Args:
+            parent: 表单面板或对话框。
+            model_class: 构造目标使用的 Pydantic 模型类。
 
         Returns:
             校验通过的模型实例。
@@ -378,28 +412,37 @@ class DraftFormBinder[T: BaseModel]:
             ValueError: ``to_model`` 转换失败。对应控件已被标红。
         """
         data: dict[str, Any] = {}
-        if self._base is not None:
-            data.update(self._base.model_dump())
+        base = cls._bases.get(parent)
+        if base is not None:
+            data.update(base.model_dump())
 
-        for f in self._fields:
-            raw_val = _read_widget_value(f.widget)
+        for w in cls._iter_fields(parent):
+            f = cls._fields[w]
+            if f.field_name not in model_class.model_fields:
+                logger.error(
+                    f"collect 跳过: {model_class.__name__} 不存在字段 '{f.field_name}'"
+                )
+                continue
+            raw_val = _read_widget_value(w)
             try:
                 data[f.field_name] = f.to_model(raw_val) if f.to_model is not None else raw_val
             except Exception as e:
                 logger.warning(f"控件值转换失败 [{f.field_name}]: {e}")
-                mark_invalid(f.widget, str(e))
+                mark_invalid(w, str(e))
                 raise ValueError(f"{f.field_name}: {e}") from e
 
-        return self._model_class.model_validate(data)
+        return model_class.model_validate(data)
 
-    def show_errors(self, error: ValidationError) -> list[str]:
-        """将校验错误标红到对应控件。
+    @classmethod
+    def show_errors(cls, parent: QWidget, error: ValidationError) -> list[str]:
+        """将校验错误标红到 parent 子树内的对应控件。
 
         能通过字段名定位的错误（``loc`` 含字段名）标红对应控件；
         无法定位的错误（如跨字段校验、模型级校验）不标红，
         通过返回值交由调用方决定如何提示。
 
         Args:
+            parent: 表单面板或对话框。
             error: :meth:`collect` 抛出的校验异常。
 
         Returns:
@@ -411,17 +454,18 @@ class DraftFormBinder[T: BaseModel]:
             loc = err.get("loc") or ()
             name = str(loc[0]) if loc else ""
             msg = err.get("msg", "格式错误")
-            widget = next((f.widget for f in self._fields if f.field_name == name), None)
+            widget = next(
+                (w for w in cls._iter_fields(parent) if cls._fields[w].field_name == name),
+                None,
+            )
             if widget is not None:
                 mark_invalid(widget, msg)
             else:
                 rest.append(msg.removeprefix("Value error, "))
         return rest
 
-    def _unmap_widget(self, widget: QWidget) -> None:
-        """移除指定控件的既有映射。
-
-        Args:
-            widget: 需要移除映射的控件。
-        """
-        self._fields = [f for f in self._fields if f.widget is not widget]
+    @classmethod
+    def _iter_fields(cls, parent: QWidget) -> list[QWidget]:
+        """返回 parent 子树内已登记映射的控件（含 parent 自身）。"""
+        targets: list[QWidget] = [parent, *parent.findChildren(QWidget)]
+        return [w for w in targets if w in cls._fields]

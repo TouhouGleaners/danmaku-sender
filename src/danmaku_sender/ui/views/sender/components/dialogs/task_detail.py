@@ -48,7 +48,6 @@ class TaskDetailDialog(QDialog):
         super().__init__(parent)
         self.origin = task                  # 只读视图
         self.editing = task.to_draft()      # 保存载荷（保存那一刻才组装完）
-        self._config_form = DraftFormBinder(SenderConfig)
         self._api_auth = api_auth
         self._video_info: VideoInfo | None = None
         self._pending_part_page: int | None = None
@@ -65,7 +64,7 @@ class TaskDetailDialog(QDialog):
         self._connect_signals()
         self._load_task_info()
         # 配置区填充初始值；用户确认保存时再 collect 读回
-        self._config_form.fill(self.editing.config_snapshot)
+        DraftFormBinder.fill(self, self.editing.config_snapshot)
 
         # 非可编辑状态时禁用所有编辑控件
         if not self._is_editable:
@@ -304,9 +303,9 @@ class TaskDetailDialog(QDialog):
 
         # 读取控件值并构造 SenderConfig（pydantic 校验，含跨字段规则）
         try:
-            self.editing.config_snapshot = self._config_form.collect()
+            self.editing.config_snapshot = DraftFormBinder.collect(self, SenderConfig)
         except ValidationError as e:
-            rest = self._config_form.show_errors(e)
+            rest = DraftFormBinder.show_errors(self, e)
             if rest:
                 QMessageBox.warning(self, "配置错误", rest[0])
             return
@@ -363,8 +362,6 @@ class TaskDetailDialog(QDialog):
         group = QGroupBox("发送配置")
         layout = QVBoxLayout(group)
 
-        form = self._config_form
-
         # --- 发送延迟 ---
         delay_group = QGroupBox("发送延迟")
         delay_form = QFormLayout(delay_group)
@@ -375,14 +372,14 @@ class TaskDetailDialog(QDialog):
         self._min_delay.setRange(0.1, 60.0)
         self._min_delay.setSingleStep(0.5)
         self._min_delay.setFixedWidth(70)
-        form.map(self._min_delay, "min_delay")
+        DraftFormBinder.map(self._min_delay, "min_delay")
         delay_row.addWidget(self._min_delay)
         delay_row.addWidget(QLabel("-"))
         self._max_delay = QDoubleSpinBox()
         self._max_delay.setRange(0.1, 60.0)
         self._max_delay.setSingleStep(0.5)
         self._max_delay.setFixedWidth(70)
-        form.map(self._max_delay, "max_delay")
+        DraftFormBinder.map(self._max_delay, "max_delay")
         delay_row.addWidget(self._max_delay)
         delay_row.addWidget(QLabel("秒"))
         delay_row.addStretch()
@@ -392,25 +389,25 @@ class TaskDetailDialog(QDialog):
         burst_row.setSpacing(2)
         self._burst_cb = QCheckBox("爆发模式")
         self._burst_cb.toggled.connect(self._on_burst_toggled)
-        form.map(self._burst_cb, "burst_enabled")
+        DraftFormBinder.map(self._burst_cb, "burst_enabled")
         burst_row.addWidget(self._burst_cb)
         burst_row.addWidget(QLabel("每"))
         self._burst_size = QSpinBox()
         self._burst_size.setRange(2, 100)
         self._burst_size.setFixedWidth(70)
-        form.map(self._burst_size, "burst_size")
+        DraftFormBinder.map(self._burst_size, "burst_size")
         burst_row.addWidget(self._burst_size)
         burst_row.addWidget(QLabel("条，休息"))
         self._rest_min = QDoubleSpinBox()
         self._rest_min.setRange(0.0, 300.0)
         self._rest_min.setFixedWidth(60)
-        form.map(self._rest_min, "rest_min")
+        DraftFormBinder.map(self._rest_min, "rest_min")
         burst_row.addWidget(self._rest_min)
         burst_row.addWidget(QLabel("-"))
         self._rest_max = QDoubleSpinBox()
         self._rest_max.setRange(0.0, 300.0)
         self._rest_max.setFixedWidth(60)
-        form.map(self._rest_max, "rest_max")
+        DraftFormBinder.map(self._rest_max, "rest_max")
         burst_row.addWidget(self._rest_max)
         burst_row.addWidget(QLabel("秒"))
         burst_row.addStretch()
@@ -428,7 +425,7 @@ class TaskDetailDialog(QDialog):
         self._stop_count = QSpinBox()
         self._stop_count.setRange(0, 99999)
         self._stop_count.setFixedWidth(70)
-        form.map(self._stop_count, "stop_after_count")
+        DraftFormBinder.map(self._stop_count, "stop_after_count")
         stop_count_row.addWidget(self._stop_count)
         stop_count_row.addWidget(QLabel("条"))
         stop_count_row.addWidget(QLabel("(0为不限制)"))
@@ -440,7 +437,7 @@ class TaskDetailDialog(QDialog):
         self._stop_time = QSpinBox()
         self._stop_time.setRange(0, 99999)
         self._stop_time.setFixedWidth(70)
-        form.map(self._stop_time, "stop_after_time")
+        DraftFormBinder.map(self._stop_time, "stop_after_time")
         stop_time_row.addWidget(self._stop_time)
         stop_time_row.addWidget(QLabel("分钟"))
         stop_time_row.addWidget(QLabel("(0为不限制)"))
@@ -456,7 +453,7 @@ class TaskDetailDialog(QDialog):
         self._delay_between = QDoubleSpinBox()
         self._delay_between.setRange(0.0, 300.0)
         self._delay_between.setSingleStep(5.0)
-        form.map(self._delay_between, "delay_between_tasks")
+        DraftFormBinder.map(self._delay_between, "delay_between_tasks")
         queue_form.addRow("任务间隔:", self._delay_between)
 
         layout.addWidget(queue_group)

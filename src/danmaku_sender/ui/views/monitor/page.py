@@ -39,7 +39,6 @@ class MonitorPage(QWidget):
     def __init__(self, state: AppState, history_manager: HistoryManager):
         super().__init__()
         self.state = state
-        self.form = LiveFormBinder()
         self.logger = logging.getLogger(__name__)
         self.history_manager = history_manager
 
@@ -207,7 +206,7 @@ class MonitorPage(QWidget):
         self.state.queue_state.taskStatusChanged.connect(self._on_queue_task_status_changed)
 
     def init_bindings(self):
-        self.form.bind(self.interval_spin, self.state.monitor_config, "refresh_interval")
+        LiveFormBinder.bind(self.interval_spin, self.state.monitor_config, "refresh_interval")
 
         if self.state.stats_baseline == 0.0:
             self.state.stats_baseline = self.state.app_launch_time
@@ -222,7 +221,7 @@ class MonitorPage(QWidget):
 
     def showEvent(self, event):
         super().showEvent(event)
-        self.form.fill()
+        LiveFormBinder.fill(self)
         self._refresh_queue_table()
         # 首次显示时 viewport 已有尺寸，再定位空状态提示
         self._update_empty_hint()
