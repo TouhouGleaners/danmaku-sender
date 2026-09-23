@@ -2,14 +2,12 @@
 
 按表单的提交方式选择绑定器：
 
-- :class:`LiveFormBinder`（实时修改）：没有「保存」按钮，控件变更
-  立即写入模型（如设置页）。页面 ``showEvent`` 时调用 ``fill()`` 刷新。
-- :class:`DraftFormBinder`（草稿修改）：有「保存」按钮，控件即草稿，
-  确认时才写入模型（如任务详情对话框）。打开时 ``fill()``，
-  确认时 ``collect()``。
+- :class:`LiveFormBinder`（实时修改）：没有「保存」按钮，控件变更立即写入模型（如设置页）。
+  页面 ``showEvent`` 时调用 ``fill()`` 刷新。
+- :class:`DraftFormBinder`（草稿修改）：有「保存」按钮，控件即草稿，确认时才写入模型（如任务详情对话框）。
+  打开时 ``fill()``，确认时 ``collect()``。
 
-公共函数 :func:`mark_invalid` / :func:`clear_invalid` 提供统一的
-控件无效态视觉反馈，两个绑定器内部也会调用。
+公共函数 :func:`mark_invalid` / :func:`clear_invalid` 提供统一的控件无效态视觉反馈，两个绑定器内部也会调用。
 """
 
 import logging
@@ -82,8 +80,8 @@ def _set_widget_value(
 ) -> None:
     """将单个值写入控件。
 
-    不屏蔽控件信号，用户连接的信号槽照常触发。若该控件已绑定写回，
-    调用方需在写入前后压入/弹出 LiveFormBinder 的填充深度，避免写回模型。
+    不屏蔽控件信号，用户连接的信号槽照常触发。
+    若该控件已绑定写回，调用方需在写入前后压入/弹出 LiveFormBinder 的填充深度，避免写回模型。
 
     Args:
         widget: 目标控件。
@@ -130,13 +128,11 @@ def _set_widget_value(
 def _emit_unchanged(widget: QWidget, value: Any) -> None:
     """值未变化时补发控件信号。
 
-    Qt 在赋值结果与当前值相同时不发信号，但表单刷新仍需要驱动联动槽
-    （如勾选框控制子控件可用性）。写回代理由 LiveFormBinder 的填充深度挡住，
-    不会因此污染模型。
+    Qt 在赋值结果与当前值相同时不发信号，但表单刷新仍需要驱动联动槽（如勾选框控制子控件可用性）。
+    写回代理由 LiveFormBinder 的填充深度挡住，不会因此污染模型。
 
-    只补发 Qt「值变化」语义的信号，不伪造用户交互信号：
-    QLineEdit 补 ``textChanged`` 而非 ``editingFinished``（后者表示用户
-    结束编辑，程序灌值不应触发）。
+    只补发 Qt「值变化」语义的信号，不伪造用户交互信号。
+    QLineEdit 补 ``textChanged`` 而非 ``editingFinished``（后者表示用户结束编辑，程序灌值不应触发）。
     """
     if isinstance(widget, QCheckBox):
         widget.toggled.emit(widget.isChecked())
@@ -198,14 +194,14 @@ def _pick_signal(widget: QWidget, realtime: bool) -> SignalInstance | None:
 class _LiveField(NamedTuple):
     """LiveFormBinder 的内部绑定元数据。
 
-    **禁止**把写回闭包或 after_write 以强引用存进来：回调常捕获所在
-    窗口（如 ``lambda: self.xxx``），而本注册表是类级弱引用表（永生根），
-    一旦 value 强引用 key 就形成「注册表 → 回调 → 窗口 → 控件」的
-    强引用链，条目永远无法回收——正是拆除 UIBinder 要消灭的泄漏。
+    **禁止**把写回闭包或 after_write 以强引用存进来：回调常捕获所在窗口（如 ``lambda: self.xxx``），
+    而本注册表是类级弱引用表（永生根），一旦 value 强引用 key 就形成「注册表 → 回调 → 窗口 → 控件」的强引用链，
+    条目永远无法回收。
+    弱引用表一旦被 key 的强引用回环锁住，「key 死则条目亡」的约定就失效了。
 
-    slot_ref 是写回闭包的**弱引用**，仅供重绑时定位并 disconnect 旧连接；
-    弱引用不延长闭包寿命，不会重建上述强引用链。写回闭包本体由 Qt
-    信号连接持有（disconnect 或控件销毁后即可回收）。
+    slot_ref 是写回闭包的**弱引用**，仅供重绑时定位并 disconnect 旧连接。
+    弱引用不延长闭包寿命，不会重建上述强引用链。
+    写回闭包本体由 Qt 信号连接持有（disconnect 或控件销毁后即可回收）。
     """
 
     model: Any
@@ -230,8 +226,8 @@ class _DraftField(NamedTuple):
 class LiveFormBinder:
     """实时修改表单的绑定器：控件变更立即写入模型。
 
-    无需实例化，直接以类方法调用。绑定记录由内部弱引用表维护，
-    控件销毁时条目自动移除。
+    无需实例化，直接以类方法调用。
+    绑定记录由内部弱引用表维护，控件销毁时条目自动移除。
 
     Typical usage example::
 
@@ -243,7 +239,8 @@ class LiveFormBinder:
             LiveFormBinder.fill(self)
     """
 
-    # 控件 → 绑定元数据（仅 fill 反读用）。key 为弱引用；value 不得
+    # 控件 → 绑定元数据（fill 反读 + 重绑时定位旧 slot 断连）。
+    # key 为弱引用；value 不得
     # 强引用 key 或能到达 key 的对象（回调、窗口等），否则条目无法回收。
     _bindings: ClassVar[weakref.WeakKeyDictionary[QWidget, _LiveField]] = (
         weakref.WeakKeyDictionary()
@@ -270,17 +267,14 @@ class LiveFormBinder:
         """绑定控件到模型字段，并注册控件变更时的自动写回。
 
         同一控件重复调用会替换原有绑定（一个控件只对应一个字段）。
-        控件值与字段类型不一致时（如 ``list[str]`` 与文本框），
-        通过 ``to_model`` / ``to_widget`` 转换。
+        控件值与字段类型不一致时（如 ``list[str]`` 与文本框），通过 ``to_model`` / ``to_widget`` 转换。
 
         Args:
             widget: 目标控件。
             model: 数据模型实例。
             field_name: 模型上的字段名。
-            realtime: 仅对 ``QLineEdit`` 有效。True 表示输入即写回，
-                False 表示失焦或回车时写回。
-            after_write: 写回成功后的回调 ``(field_name, new_value)``，
-                用于需要立即生效的副作用（如应用主题）。
+            realtime: 仅对 ``QLineEdit`` 有效。True 表示输入即写回，False 表示失焦或回车时写回。
+            after_write: 写回成功后的回调 ``(field_name, new_value)``，用于需要立即生效的副作用（如应用主题）。
                 仅在控件触发的写回时调用，程序直接修改模型不会触发。
             to_model: 控件值转模型字段值。抛出异常时控件会被标红。
             to_widget: 模型字段值转控件值。
@@ -359,8 +353,7 @@ class LiveFormBinder:
         """将 parent 子树内所有已绑定控件从模型重读一遍。
 
         页面 ``showEvent`` 时调用，保证打开页面时控件显示最新值。
-        填充期间抑制写回，但不影响用户连接的信号槽，因此控件间联动
-        无需在填充后额外刷新。
+        填充期间抑制写回，但不影响用户连接的信号槽，因此控件间联动无需在填充后额外刷新。
 
         Args:
             parent: 表单面板或页面；其自身与所有子孙控件中的绑定都会被刷新。
@@ -388,8 +381,7 @@ class LiveFormBinder:
         """断开并移除指定控件的既有绑定。
 
         必须 disconnect 旧写回闭包：仅靠 token 让旧槽「不误写」是不够的，
-        旧连接仍会攥住旧闭包及其捕获的 model / after_write / 旧窗口，
-        并在重复重绑时无限累积。
+        旧连接仍会攥住旧闭包及其捕获的 model / after_write / 旧窗口，并在重复重绑时无限累积。
 
         Args:
             widget: 需要解除绑定的控件。
@@ -411,12 +403,11 @@ class LiveFormBinder:
 class DraftFormBinder:
     """草稿修改表单的绑定器：确认保存时才将控件值写入模型。
 
-    无需实例化，直接以类方法调用。控件本身即草稿：打开时
-    :meth:`fill` 填充初始值，用户确认时 :meth:`collect` 读取并校验。
+    无需实例化，直接以类方法调用。
+    控件本身即草稿：打开时 :meth:`fill` 填充初始值，用户确认时 :meth:`collect` 读取并校验。
     取消操作直接关闭窗口即可，模型自始至终不会被修改。
 
-    一张表单面板对应一组绑定（按 parent 子树收集），同一面板
-    不要混放两张草稿表单。
+    一张表单面板对应一组绑定（按 parent 子树收集），同一面板不要混放两张草稿表单。
 
     Typical usage example::
 
@@ -453,8 +444,7 @@ class DraftFormBinder:
     ) -> None:
         """登记控件与模型字段的对应关系。
 
-        不连接信号、不修改模型。该映射供 :meth:`fill`、:meth:`collect`
-        和 :meth:`show_errors` 使用。同一控件重复调用会替换原有映射。
+        不连接信号、不修改模型。该映射供 :meth:`fill`、:meth:`collect` 和 :meth:`show_errors` 使用。同一控件重复调用会替换原有映射。
 
         Args:
             widget: 目标控件。
@@ -468,8 +458,7 @@ class DraftFormBinder:
     def fill(cls, parent: QWidget, model: BaseModel) -> None:
         """将模型值填充到 parent 子树内已登记的控件，并记录该模型为基准。
 
-        基准的作用：对话框未展示的字段（如任务详情未提供的配置项）
-        在 :meth:`collect` 时保持原值，不会被重置为默认值。
+        基准的作用：对话框未展示的字段（如任务详情未提供的配置项）在 :meth:`collect` 时保持原值，不会被重置为默认值。
 
         Args:
             parent: 表单面板或对话框。
@@ -496,8 +485,7 @@ class DraftFormBinder:
             校验通过的模型实例。
 
         Raises:
-            ValidationError: 字段或模型校验失败。可传给 :meth:`show_errors`
-                定位到具体控件。
+            ValidationError: 字段或模型校验失败。可传给 :meth:`show_errors` 定位到具体控件。
             ValueError: ``to_model`` 转换失败。对应控件已被标红。
         """
         data: dict[str, Any] = {}
@@ -537,17 +525,15 @@ class DraftFormBinder:
     def show_errors(cls, parent: QWidget, error: ValidationError) -> list[str]:
         """将校验错误标红到 parent 子树内的对应控件。
 
-        能通过字段名定位的错误（``loc`` 含字段名）标红对应控件；
-        无法定位的错误（如跨字段校验、模型级校验）不标红，
-        通过返回值交由调用方决定如何提示。
+        能通过字段名定位的错误（``loc`` 含字段名）标红对应控件。
+        无法定位的错误（如跨字段校验、模型级校验）不标红，通过返回值交由调用方决定如何提示。
 
         Args:
             parent: 表单面板或对话框。
             error: :meth:`collect` 抛出的校验异常。
 
         Returns:
-            无法定位到控件的错误消息列表，已去掉 pydantic 的
-            ``"Value error, "`` 前缀。
+            无法定位到控件的错误消息列表，已去掉 pydantic 的 ``"Value error, "`` 前缀。
         """
         rest: list[str] = []
         for err in error.errors():
