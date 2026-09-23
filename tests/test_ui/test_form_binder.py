@@ -15,6 +15,7 @@ from danmaku_sender.config import SenderConfig
 from danmaku_sender.ui.framework.form_binder import (
     DraftFormBinder,
     LiveFormBinder,
+    clear_invalid,
     mark_invalid,
 )
 from danmaku_sender.utils.string_utils import join_keywords, parse_keywords
@@ -109,6 +110,34 @@ def test_fill_keeps_user_linkage_alive(qapp):
     LiveFormBinder.fill(parent)
 
     assert linked == [False], "fill 后 toggled 必须照常触发用户联动"
+
+
+def test_fill_triggers_linkage_even_when_value_unchanged(qapp):
+    """值未变化时 Qt 不发信号，fill 必须补发，否则初始联动（如禁用子控件）不会跑。"""
+    cfg = _Cfg(enabled=False)  # 与勾选框默认状态相同
+    parent = QWidget()
+    cb = QCheckBox(parent)  # 默认未勾选
+    linked: list[bool] = []
+    cb.toggled.connect(lambda on: linked.append(on))
+    LiveFormBinder.bind(cb, cfg, "enabled")
+
+    linked.clear()
+    LiveFormBinder.fill(parent)
+    assert linked == [False], "值未变化的 fill 也必须触发联动槽"
+
+
+def test_clear_invalid_preserves_permanent_tooltip(qapp):
+    """clear_invalid 不得抹掉控件自身的帮助 tooltip。"""
+    parent = QWidget()
+    cb = QCheckBox(parent)
+    cb.setToolTip("这是永久帮助文本")
+    clear_invalid(cb)  # 首次调用，控件从未标记过 invalid
+    assert cb.toolTip() == "这是永久帮助文本"
+
+    mark_invalid(cb, "坏了")
+    assert "坏了" in cb.toolTip()
+    clear_invalid(cb)  # 从 invalid → valid，此时才应清 tooltip
+    assert cb.toolTip() == ""
 
 
 def test_fill_does_not_write_back_or_call_after_write(qapp):

@@ -58,7 +58,9 @@ def _set_widget_invalid_state(widget: QWidget, is_invalid: bool, error_msg: str 
         is_invalid: 是否标记为无效。
         error_msg: 无效时显示的错误说明。
     """
-    if widget.property("invalid") == is_invalid:
+    # 未设置过 invalid 时 property 返回 None；必须按 bool 比较，
+    # 否则首次 clear_invalid 会误入下面的分支、抹掉控件的永久 tooltip
+    if bool(widget.property("invalid")) == is_invalid:
         if is_invalid:
             widget.setToolTip(f"⚠️ 输入无效:\n{error_msg}")
         return
@@ -91,19 +93,58 @@ def _set_widget_value(
     if to_widget is not None:
         value = to_widget(value)
     if isinstance(widget, QCheckBox):
-        widget.setChecked(bool(value))
+        new = bool(value)
+        old = widget.isChecked()
+        widget.setChecked(new)
+        if old == new:
+            _emit_unchanged(widget, new)
     elif isinstance(widget, QSpinBox):
-        widget.setValue(int(float(value)))
+        new = int(float(value))
+        old = widget.value()
+        widget.setValue(new)
+        if old == new:
+            _emit_unchanged(widget, new)
     elif isinstance(widget, QDoubleSpinBox):
-        widget.setValue(float(value))
+        new = float(value)
+        old = widget.value()
+        widget.setValue(new)
+        if old == new:
+            _emit_unchanged(widget, new)
     elif isinstance(widget, QLineEdit):
-        widget.setText(str(value) if value is not None else "")
+        new = str(value) if value is not None else ""
+        old = widget.text()
+        widget.setText(new)
+        if old == new:
+            _emit_unchanged(widget, new)
     elif isinstance(widget, QComboBox):
         idx = widget.findData(value)
         if idx >= 0:
+            old = widget.currentIndex()
             widget.setCurrentIndex(idx)
+            if old == idx:
+                _emit_unchanged(widget, idx)
     else:
         logger.warning(f"form_binder 尚不支持处理类型为 {type(widget)} 的控件")
+
+
+def _emit_unchanged(widget: QWidget, value: Any) -> None:
+    """值未变化时补发控件信号。
+
+    Qt 在赋值结果与当前值相同时不发信号，但表单刷新仍需要驱动联动槽
+    （如勾选框控制子控件可用性）。写回代理由 LiveFormBinder._filling 挡住，
+    不会因此污染模型。
+    """
+    if isinstance(widget, QCheckBox):
+        widget.toggled.emit(bool(value))
+        widget.stateChanged.emit(int(bool(value)))
+    elif isinstance(widget, QSpinBox):
+        widget.valueChanged.emit(int(value))
+    elif isinstance(widget, QDoubleSpinBox):
+        widget.valueChanged.emit(float(value))
+    elif isinstance(widget, QLineEdit):
+        widget.textChanged.emit(str(value))
+    elif isinstance(widget, QComboBox):
+        widget.currentIndexChanged.emit(int(value))
 
 
 def _read_widget_value(widget: QWidget) -> Any:
@@ -196,9 +237,9 @@ class LiveFormBinder:
     _bindings: ClassVar[weakref.WeakKeyDictionary[QWidget, _LiveField]] = (
         weakref.WeakKeyDictionary()
     )
-    # 程序向控件写值期间为 True，写回回调直接返回。
-    # 不屏蔽控件信号，以免打断用户连接的联动槽。
-    _filling: ClassVar[bool] = False
+    # 程序向控件写值期间的重入深度（>0 时写回回调直接返回）。
+    # 用计数而非布尔：fill 期间联动槽可能再次触发 fill。
+    _filling: ClassVar[int] = 0
 
     @classmethod
     def bind(
@@ -244,7 +285,7 @@ class LiveFormBinder:
 
         def _write_back(*args: Any) -> None:
             # fill / 初始挂载触发的信号不写回，避免覆盖模型或误触发 after_write
-            if cls._filling:
+            if cls._filling > 0:
                 return
             w = wref()
             if w is None:
@@ -283,7 +324,7 @@ class LiveFormBinder:
         Args:
             parent: 表单面板或页面；其自身与所有子孙控件中的绑定都会被刷新。
         """
-        cls._filling = True
+        cls._filling += 1
         try:
             targets: list[QWidget] = [parent, *parent.findChildren(QWidget)]
             for w in targets:
@@ -296,7 +337,7 @@ class LiveFormBinder:
                 except Exception as e:
                     logger.warning(f"fill 失败 [{f.field_name}]: {e}")
         finally:
-            cls._filling = False
+            cls._filling -= 1
 
     @classmethod
     def _unbind_widget(cls, widget: QWidget) -> None:

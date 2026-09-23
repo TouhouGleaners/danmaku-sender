@@ -51,6 +51,7 @@ class EditorDialog(QDialog):
         )
 
         self._create_ui()
+        self.init_bindings()
         self.controller.dataChanged.connect(self._refresh_table)
 
         # 加载任务的弹幕数据
