@@ -196,21 +196,24 @@ def _pick_signal(widget: QWidget, realtime: bool) -> SignalInstance | None:
 
 
 class _LiveField(NamedTuple):
-    """LiveFormBinder 的内部绑定元数据（仅供 fill 反读）。
+    """LiveFormBinder 的内部绑定元数据。
 
-    **禁止**把写回闭包或 after_write 存进来：回调常捕获所在窗口
-    （如 ``lambda: self.xxx``），而本注册表是类级弱引用表（永生根），
+    **禁止**把写回闭包或 after_write 以强引用存进来：回调常捕获所在
+    窗口（如 ``lambda: self.xxx``），而本注册表是类级弱引用表（永生根），
     一旦 value 强引用 key 就形成「注册表 → 回调 → 窗口 → 控件」的
     强引用链，条目永远无法回收——正是拆除 UIBinder 要消灭的泄漏。
 
-    写回闭包只由 Qt 信号连接持有（控件亡则连接亡），与控件形成
-    可被 Python 循环 GC 回收的环，不受注册表影响。
+    slot_ref 是写回闭包的**弱引用**，仅供重绑时定位并 disconnect 旧连接；
+    弱引用不延长闭包寿命，不会重建上述强引用链。写回闭包本体由 Qt
+    信号连接持有（disconnect 或控件销毁后即可回收）。
     """
 
     model: Any
     field_name: str
     to_widget: Callable[[Any], Any] | None
     token: object
+    realtime: bool
+    slot_ref: weakref.ReferenceType[Callable[..., None]]
 
 
 class _DraftField(NamedTuple):
@@ -292,7 +295,6 @@ class LiveFormBinder:
             return
 
         token = object()
-        cls._bindings[widget] = _LiveField(model, field_name, to_widget, token)
         # 只弱引用控件：写回闭包若强引用 widget，会与注册表 key 形成环，条目无法回收
         wref = weakref.ref(widget)
 
@@ -326,7 +328,20 @@ class LiveFormBinder:
                 logger.warning(f"赋值触发模型校验失败 [{field_name}={new_val}]: {error_msg}")
                 mark_invalid(w, error_msg)
 
-        _set_widget_value(widget, getattr(model, field_name), to_widget)
+        # slot 只以弱引用进注册表，强引用由 Qt 信号连接持有
+        cls._bindings[widget] = _LiveField(
+            model, field_name, to_widget, token, realtime, weakref.ref(_write_back)
+        )
+        # 初始灌值按 fill 的语义压入深度，避免触发任何绑定写回
+        cls._fill_depth[widget] = cls._fill_depth.get(widget, 0) + 1
+        try:
+            _set_widget_value(widget, getattr(model, field_name), to_widget)
+        finally:
+            depth = cls._fill_depth.get(widget, 0) - 1
+            if depth > 0:
+                cls._fill_depth[widget] = depth
+            else:
+                cls._fill_depth.pop(widget, None)
         signal.connect(_write_back)
 
     @classmethod
@@ -360,15 +375,27 @@ class LiveFormBinder:
 
     @classmethod
     def _unbind_widget(cls, widget: QWidget) -> None:
-        """移除指定控件的既有绑定元数据。
+        """断开并移除指定控件的既有绑定。
 
-        不需要手动 disconnect：旧写回闭包在触发时会发现 token 对不上
-        而直接返回。旧连接随控件销毁由 Qt 自动断开。
+        必须 disconnect 旧写回闭包：仅靠 token 让旧槽「不误写」是不够的，
+        旧连接仍会攥住旧闭包及其捕获的 model / after_write / 旧窗口，
+        并在重复重绑时无限累积。
 
         Args:
             widget: 需要解除绑定的控件。
         """
-        cls._bindings.pop(widget, None)
+        old = cls._bindings.pop(widget, None)
+        if old is None:
+            return
+        slot = old.slot_ref()
+        if slot is None:
+            return
+        signal = _pick_signal(widget, old.realtime)
+        if signal is not None:
+            try:
+                signal.disconnect(slot)
+            except (RuntimeError, TypeError):
+                pass
 
 
 class DraftFormBinder:

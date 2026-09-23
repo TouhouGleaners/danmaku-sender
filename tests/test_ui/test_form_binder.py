@@ -248,6 +248,33 @@ def test_rebind_same_widget_replaces_old_connection(qapp):
     assert cfg_b.count == 6
 
 
+def test_rebind_disconnects_old_after_write(qapp):
+    """重绑后旧 after_write 不得被调用，旧写回闭包应随 disconnect 释放。"""
+    import gc
+
+    parent = QWidget()
+    spin = QSpinBox(parent)
+    old_cfg = _Cfg(count=1)
+    new_cfg = _Cfg(count=2)
+    old_calls: list[object] = []
+    new_calls: list[object] = []
+
+    LiveFormBinder.bind(spin, old_cfg, "count",
+                        after_write=lambda f, v: old_calls.append(v))
+    old_slot_ref = LiveFormBinder._bindings[spin].slot_ref
+    assert old_slot_ref() is not None, "bind 后旧 slot 应存活（由 Qt 连接持有）"
+
+    LiveFormBinder.bind(spin, new_cfg, "count",
+                        after_write=lambda f, v: new_calls.append(v))
+
+    spin.setValue(6)
+    assert old_calls == [], "旧 after_write 不得触发"
+    assert new_calls == [6], "新 after_write 应正常触发"
+
+    gc.collect()
+    assert old_slot_ref() is None, "旧写回闭包应随 disconnect 被释放"
+
+
 def test_bindings_released_when_widget_destroyed(qapp):
     """控件销毁后注册表条目必须可回收（value 不得强引用 key）。"""
     import gc
