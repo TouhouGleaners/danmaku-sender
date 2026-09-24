@@ -4,6 +4,7 @@
 """
 
 import logging
+import weakref
 from collections.abc import Callable
 from typing import Any
 
@@ -18,6 +19,10 @@ from PySide6.QtWidgets import (
 )
 
 logger = logging.getLogger(__name__)
+
+# 标红前保存的常驻 tooltip，清除无效态时还回去。
+# 只存 str、不引用 key 本身，弱引用表条目随控件销毁自动移除。
+_saved_tooltips: weakref.WeakKeyDictionary[QWidget, str] = weakref.WeakKeyDictionary()
 
 
 def mark_invalid(widget: QWidget, error_msg: str) -> None:
@@ -54,6 +59,10 @@ def _set_widget_invalid_state(widget: QWidget, is_invalid: bool, error_msg: str 
             widget.setToolTip(f"⚠️ 输入无效:\n{error_msg}")
         return
 
+    # 先存常驻提示再改 invalid 属性：改完之后无法再判断「是否首次标红」
+    if is_invalid and not bool(widget.property("invalid")):
+        _saved_tooltips[widget] = widget.toolTip()
+
     widget.setProperty("invalid", is_invalid)
     widget.style().unpolish(widget)
     widget.style().polish(widget)
@@ -61,7 +70,7 @@ def _set_widget_invalid_state(widget: QWidget, is_invalid: bool, error_msg: str 
     if is_invalid:
         widget.setToolTip(f"⚠️ 输入无效:\n{error_msg}")
     else:
-        widget.setToolTip("")
+        widget.setToolTip(_saved_tooltips.pop(widget, ""))
 
 
 class _WidgetAdapter:

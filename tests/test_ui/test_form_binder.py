@@ -12,7 +12,14 @@ from collections.abc import Callable
 
 import pytest
 from pydantic import BaseModel, ConfigDict, Field, ValidationError
-from PySide6.QtWidgets import QApplication, QCheckBox, QLineEdit, QSpinBox, QWidget
+from PySide6.QtWidgets import (
+    QApplication,
+    QCheckBox,
+    QDoubleSpinBox,
+    QLineEdit,
+    QSpinBox,
+    QWidget,
+)
 
 from danmaku_sender.config import SenderConfig
 from danmaku_sender.ui.framework.form_binder import (
@@ -192,17 +199,25 @@ def test_fill_line_edit_emits_text_changed_not_editing_finished(qapp):
 
 
 def test_clear_invalid_preserves_permanent_tooltip(qapp):
-    """clear_invalid 不得抹掉控件自身的帮助 tooltip。"""
+    """标红时存下常驻提示，清除无效态后还原；从未标红时不得碰 tooltip。"""
     parent = QWidget()
     cb = QCheckBox(parent)
     cb.setToolTip("这是永久帮助文本")
+
     clear_invalid(cb)  # 首次调用，控件从未标记过 invalid
-    assert cb.toolTip() == "这是永久帮助文本"
+    assert cb.toolTip() == "这是永久帮助文本", "从未标红就 clear，不许碰 tooltip"
 
     mark_invalid(cb, "坏了")
     assert "坏了" in cb.toolTip()
-    clear_invalid(cb)  # 从 invalid → valid，此时才应清 tooltip
-    assert cb.toolTip() == ""
+    mark_invalid(cb, "又坏了")  # 重复标红不得覆盖掉已存的常驻提示
+    assert "又坏了" in cb.toolTip()
+
+    clear_invalid(cb)
+    assert cb.toolTip() == "这是永久帮助文本", "清除后应还原常驻提示"
+
+    mark_invalid(cb, "再一次")
+    clear_invalid(cb)
+    assert cb.toolTip() == "这是永久帮助文本", "第二轮标红/清除后仍应还原"
 
 
 def test_fill_does_not_write_back_or_call_after_write(qapp):
@@ -489,3 +504,33 @@ def test_fill_clears_invalid_marks(qapp):
     assert spin.property("invalid") is True
     DraftFormBinder.fill(parent, _Cfg(count=3))
     assert spin.property("invalid") is False
+
+
+def test_cross_field_assignment_keeps_model_clean(qapp):
+    """跨字段校验失败时模型不得被写脏。
+
+    回归：validate_assignment 的赋值不原子——字段级校验失败会拒绝写入，
+    但 model_validator(mode='after') 在赋值后运行、失败不回滚。
+    SenderConfig.__setattr__ 先整模型试算来堵住这个洞。
+    """
+    cfg = SenderConfig()  # min=8.0, max=8.5
+    with pytest.raises(ValidationError):
+        cfg.min_delay = 10.0
+    assert cfg.min_delay == 8.0, "校验失败不得留下脏值"
+    assert cfg.max_delay == 8.5
+    # 写脏后落盘会让下次启动整段校验失败、回退默认值
+    assert SenderConfig.model_validate(cfg.model_dump()) is not None
+
+
+def test_cross_field_assignment_via_binder_keeps_model_clean(qapp):
+    """经 LiveFormBinder 写回同样不得写脏模型。"""
+    cfg = SenderConfig()
+    parent = QWidget()
+    lo = QDoubleSpinBox(parent)
+    lo.setRange(0.1, 60.0)
+    LiveFormBinder.bind(lo, cfg, "min_delay")
+
+    lo.setValue(10.0)  # > max_delay=8.5
+    assert lo.property("invalid") is True
+    assert cfg.min_delay == 8.0
+    assert cfg.max_delay == 8.5

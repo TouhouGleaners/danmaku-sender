@@ -1,4 +1,5 @@
-from typing import Any, Callable
+from collections.abc import Callable
+from typing import Any
 
 from PySide6.QtCore import Qt, QAbstractTableModel, QModelIndex, Signal, Slot
 from PySide6.QtGui import QColor, QBrush, QPainter, QPainterPath, QFont, QPen, QFontMetrics

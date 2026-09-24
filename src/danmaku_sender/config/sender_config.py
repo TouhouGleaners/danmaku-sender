@@ -1,3 +1,5 @@
+from typing import Any
+
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 
 
@@ -33,3 +35,17 @@ class SenderConfig(BaseModel):
         if self.burst_enabled and self.rest_min > self.rest_max:
             raise ValueError("爆发休息的最小值不能大于最大值")
         return self
+
+    def __setattr__(self, name: str, value: Any) -> None:
+        """赋值前整模型试算；失败则保持原状。
+
+        ``validate_assignment`` 的赋值不原子：字段级校验失败会拒绝写入，
+        但 ``model_validator(mode='after')`` 在赋值后运行、失败不回滚，
+        跨字段规则（如最小延迟 ≤ 最大延迟）会留下脏值。
+        先在副本上试算可保证「抛异常 = 模型未被改动」。
+        """
+        if name in type(self).model_fields:
+            probe = self.model_dump()
+            probe[name] = value
+            type(self).model_validate(probe)
+        super().__setattr__(name, value)
