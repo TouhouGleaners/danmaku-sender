@@ -115,8 +115,11 @@ class _WidgetAdapter:
         def _apply_val[T](new: T, getter: Callable[[], T], setter: Callable[[T], None]) -> None:
             old = getter()
             setter(new)
-            if old == new:
-                _WidgetAdapter.emit_unchanged(widget, new)
+            # 比较控件实际接受的值，不能拿 new 比：Qt setter 可能按精度舍入、
+            # 按范围截断，导致「期望值变了、实际值没变」却不补发信号
+            actual = getter()
+            if old == actual:
+                _WidgetAdapter.emit_unchanged(widget)
 
         if isinstance(widget, QCheckBox):
             _apply_val(bool(value), widget.isChecked, widget.setChecked)
@@ -134,11 +137,12 @@ class _WidgetAdapter:
             logger.warning(f"form_binder 尚未适配控件类型: {type(widget)}")
 
     @staticmethod
-    def emit_unchanged(widget: QWidget, value: Any) -> None:
+    def emit_unchanged(widget: QWidget) -> None:
         """值未变化时主动补发 Qt 原生值变化信号，驱动依赖本控件的外部 UI 联动。
 
-        只补发「值变化」语义的信号，不伪造用户交互信号。
-        QLineEdit 补 ``textChanged`` 而非 ``editingFinished``（后者表示用户结束编辑，程序灌值不应触发）。
+        补发的参数一律读控件当前值（即实际值）。只补发「值变化」语义的信号，
+        不伪造用户交互信号：QLineEdit 补 ``textChanged`` 而非 ``editingFinished``
+        （后者表示用户结束编辑，程序写入控件值不应触发）。
         """
         if isinstance(widget, QCheckBox):
             widget.toggled.emit(widget.isChecked())

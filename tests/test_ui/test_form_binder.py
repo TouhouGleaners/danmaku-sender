@@ -534,3 +534,32 @@ def test_cross_field_assignment_via_binder_keeps_model_clean(qapp):
     assert lo.property("invalid") is True
     assert cfg.min_delay == 8.0
     assert cfg.max_delay == 8.5
+
+
+def test_fill_rounding_to_same_value_still_emits_linkage(qapp):
+    """Qt setter 按精度舍入后实际值未变时，fill 仍须补发值变化信号。
+
+    回归：_apply_val 曾拿「期望值」判断是否变化，舍入/截断成相同值时会漏发，
+    依赖该控件的联动槽不执行。
+    """
+
+    class _R(BaseModel):
+        model_config = ConfigDict(validate_assignment=True)
+
+        v: float = 1.23
+
+    parent = QWidget()
+    spin = QDoubleSpinBox(parent)
+    spin.setDecimals(2)
+    spin.setValue(1.23)
+
+    fired: list[float] = []
+    spin.valueChanged.connect(fired.append)
+
+    cfg = _R(v=1.23)
+    LiveFormBinder.bind(spin, cfg, "v")
+    fired.clear()
+
+    cfg.v = 1.234  # 舍入后仍为 1.23，实际值没变
+    LiveFormBinder.fill(parent)
+    assert fired == [1.23], "实际值未变时仍须补发值变化信号，联动槽才跑得到"
