@@ -590,3 +590,23 @@ def test_sibling_pending_input_not_lost_on_later_valid_write(qapp):
     assert cfg.max_delay == 12.0
     assert not lo.property("invalid"), "整表合法后应清掉红框"
     assert not hi.property("invalid")
+
+
+def test_exclude_field_not_clobbered_by_form_commit(qapp):
+    """exclude=True 的字段不参与 model_dump，整表落账不得用默认值把它冲掉。"""
+
+    class _E(BaseModel):
+        model_config = ConfigDict(validate_assignment=True)
+
+        shown: int = 1
+        hidden: float = Field(default=0.0, exclude=True)
+
+    m = _E()
+    m.hidden = 99.0
+    parent = QWidget()
+    spin = QSpinBox(parent)
+    LiveFormBinder.bind(spin, m, "shown")
+
+    spin.setValue(5)
+    assert m.shown == 5
+    assert m.hidden == 99.0, "exclude 字段不得被 fresh 的默认值冲掉"

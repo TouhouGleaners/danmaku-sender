@@ -162,8 +162,10 @@ class LiveFormBinder:
                 return
 
             # fresh 已整体合法，逐字段落账；走 object.__setattr__ 跳过
-            # __setattr__ 的再校验（中间态会再次失败）
-            for name in type(model).model_fields:
+            # __setattr__ 的再校验（中间态会再次失败）。
+            # 只落 data 里收集到的字段：exclude=True 等不参与 model_dump 的
+            # 字段不在 data 中，不能让 fresh 的默认值把它们冲掉。
+            for name in data:
                 object.__setattr__(model, name, getattr(fresh, name))
             for sibling, _f in siblings:
                 clear_invalid(sibling)
