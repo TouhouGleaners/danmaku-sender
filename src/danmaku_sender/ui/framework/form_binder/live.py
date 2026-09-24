@@ -113,7 +113,9 @@ class LiveFormBinder:
             to_model: 控件值转模型字段值。抛出异常时控件会被标红。
             to_widget: 模型字段值转控件值。
         """
-        if not hasattr(model, field_name):
+        # 用 model_fields 而非 hasattr：后者会放行方法名（如 "model_dump"），
+        # 后续按字段落账时会把方法本身覆盖掉
+        if field_name not in type(model).model_fields:
             logger.error(f"bind 失败: 模型 {type(model).__name__} 不存在字段 '{field_name}'")
             return
 

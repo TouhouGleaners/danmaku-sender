@@ -610,3 +610,14 @@ def test_exclude_field_not_clobbered_by_form_commit(qapp):
     spin.setValue(5)
     assert m.shown == 5
     assert m.hidden == 99.0, "exclude 字段不得被 fresh 的默认值冲掉"
+
+
+def test_bind_rejects_non_field_name(qapp):
+    """bind 只接受模型字段名，不得放行方法名（hasattr 会误放行）。"""
+    cfg = _Cfg()
+    parent = QWidget()
+    spin = QSpinBox(parent)
+    LiveFormBinder.bind(spin, cfg, "model_dump")  # 方法名，不是字段
+
+    assert spin not in LiveFormBinder._bindings, "非字段名不得建立绑定"
+    assert callable(cfg.model_dump), "模型的方法不得被覆盖"
