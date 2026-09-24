@@ -6,7 +6,7 @@ from collections.abc import Callable, Generator
 from contextlib import contextmanager
 from typing import Any, ClassVar, NamedTuple
 
-from pydantic import ValidationError
+from pydantic import BaseModel, ValidationError
 from PySide6.QtWidgets import QWidget
 
 from .base import _WidgetAdapter, clear_invalid, mark_invalid
@@ -25,11 +25,16 @@ class _LiveField(NamedTuple):
     slot_ref 是写回闭包的**弱引用**，仅供重绑时定位并 disconnect 旧连接。
     弱引用不延长闭包寿命，不会重建上述强引用链。
     写回闭包本体由 Qt 信号连接持有（disconnect 或控件销毁后即可回收）。
+
+    to_model / to_widget 是纯函数形式的类型转换，会被强引用保存；
+    **同样不得捕获所在窗口**，否则重建上述强引用链。请用模块级函数（如
+    ``parse_keywords``）而不是 ``lambda: self.xxx``。
     """
 
-    model: Any
+    model: BaseModel
     field_name: str
     to_widget: Callable[[Any], Any] | None
+    to_model: Callable[[Any], Any] | None
     token: object
     realtime: bool
     slot_ref: weakref.ReferenceType[Callable[..., None]]
@@ -85,7 +90,7 @@ class LiveFormBinder:
     def bind(
         cls,
         widget: QWidget,
-        model: Any,
+        model: BaseModel,
         field_name: str,
         *,
         realtime: bool = False,
@@ -133,27 +138,41 @@ class LiveFormBinder:
             if meta is None or meta.token is not token:
                 return
 
-            raw_val = _WidgetAdapter.read(w)
-            try:
-                new_val = to_model(raw_val) if to_model is not None else raw_val
-            except Exception as e:
-                logger.warning(f"控件值转换失败 [{field_name}]: {e}")
-                mark_invalid(w, str(e))
-                return
+            # 同一模型下的控件一起试算、整表落账。
+            # 单字段写会丢掉兄弟控件的待定输入：例如 min 先被拒、max 改对后，
+            # min 的输入就找不回来了。互约束（min ≤ max）下单字段也判不了合法性。
+            siblings = [(s, f) for s, f in list(cls._bindings.items()) if f.model is model]
+            data = model.model_dump()
+            for sibling, f in siblings:
+                try:
+                    raw_val = _WidgetAdapter.read(sibling)
+                    data[f.field_name] = f.to_model(raw_val) if f.to_model is not None else raw_val
+                except Exception as e:
+                    logger.warning(f"控件值转换失败 [{f.field_name}]: {e}")
+                    mark_invalid(sibling, str(e))
+                    return
 
+            new_val = data[field_name]
             try:
-                setattr(model, field_name, new_val)
-                clear_invalid(w)
-                if after_write is not None:
-                    after_write(field_name, new_val)
+                fresh = type(model).model_validate(data)
             except ValidationError as e:
                 error_msg = "\n".join(err.get("msg", "格式错误") for err in e.errors())
-                logger.warning(f"赋值触发模型校验失败 [{field_name}={new_val}]: {error_msg}")
+                logger.warning(f"表单整体校验失败 [{field_name}={new_val}]: {error_msg}")
                 mark_invalid(w, error_msg)
+                return
+
+            # fresh 已整体合法，逐字段落账；走 object.__setattr__ 跳过
+            # __setattr__ 的再校验（中间态会再次失败）
+            for name in type(model).model_fields:
+                object.__setattr__(model, name, getattr(fresh, name))
+            for sibling, _f in siblings:
+                clear_invalid(sibling)
+            if after_write is not None:
+                after_write(field_name, new_val)
 
         # slot 只以弱引用进注册表，强引用由 Qt 信号连接持有
         cls._bindings[widget] = _LiveField(
-            model, field_name, to_widget, token, realtime, weakref.ref(_write_back)
+            model, field_name, to_widget, to_model, token, realtime, weakref.ref(_write_back)
         )
         try:
             # 先连接再灌值：灌值触发的联动里若重绑同一控件，_unbind_widget

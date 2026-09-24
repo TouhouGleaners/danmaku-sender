@@ -43,6 +43,9 @@ class SenderConfig(BaseModel):
         但 ``model_validator(mode='after')`` 在赋值后运行、失败不回滚，
         跨字段规则（如最小延迟 ≤ 最大延迟）会留下脏值。
         先在副本上试算可保证「抛异常 = 模型未被改动」。
+
+        注意：``model_copy(update=...)`` 不经过本方法，会绕过上述保护。
+        需要原子写入请用普通属性赋值。
         """
         if name in type(self).model_fields:
             probe = self.model_dump()

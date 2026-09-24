@@ -563,3 +563,30 @@ def test_fill_rounding_to_same_value_still_emits_linkage(qapp):
     cfg.v = 1.234  # 舍入后仍为 1.23，实际值没变
     LiveFormBinder.fill(parent)
     assert fired == [1.23], "实际值未变时仍须补发值变化信号，联动槽才跑得到"
+
+
+def test_sibling_pending_input_not_lost_on_later_valid_write(qapp):
+    """一个控件写入被拒后，兄弟控件改对时不得丢掉前者的待定输入。
+
+    回归：单字段写回只提交当前字段，min 先因 max 限制被拒、max 改对后，
+    min 的输入就找不回来了——控件显示 10、模型却是 8.0，存盘即丢。
+    """
+    cfg = SenderConfig()  # 8.0 / 8.5
+    parent = QWidget()
+    lo = QDoubleSpinBox(parent)
+    hi = QDoubleSpinBox(parent)
+    lo.setRange(0.1, 60.0)
+    hi.setRange(0.1, 60.0)
+    LiveFormBinder.bind(lo, cfg, "min_delay")
+    LiveFormBinder.bind(hi, cfg, "max_delay")
+
+    lo.setValue(10.0)  # > max_delay=8.5，本次写入被拒
+    assert cfg.min_delay == 8.0
+    assert cfg.max_delay == 8.5
+    assert lo.property("invalid") is True
+
+    hi.setValue(12.0)  # 10/12 整体合法了
+    assert cfg.min_delay == 10.0, "兄弟控件的待定输入不得被丢掉"
+    assert cfg.max_delay == 12.0
+    assert not lo.property("invalid"), "整表合法后应清掉红框"
+    assert not hi.property("invalid")

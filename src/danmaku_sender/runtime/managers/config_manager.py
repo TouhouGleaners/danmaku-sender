@@ -46,19 +46,26 @@ class ConfigManager:
             logger.info("未找到配置文件或格式异常，使用默认设置。")
             return
 
-        def _load_section[T: BaseModel](key: str, model_class: type[T], default_instance: T) -> T:
-            if key in data:
-                try:
-                    return model_class.model_validate(data[key])
-                except ValidationError as e:
-                    logger.warning(f"模块 [{key}] 配置存在非法值，已回退为安全默认值。详情:\n{e}")
-            return default_instance
+        def _apply_section[T: BaseModel](key: str, model_class: type[T], target: T) -> None:
+            """把 config.json 的段校验后原地灌进 target。
 
-        # 校验配置
-        state.global_config = _load_section("global", GlobalConfig, state.global_config)
-        state.sender_config = _load_section("sender", SenderConfig, state.sender_config)
-        state.monitor_config = _load_section("monitor", MonitorConfig, state.monitor_config)
-        state.theme_config = _load_section("theme", ThemeConfig, state.theme_config)
-        state.validation_config = _load_section("validation", ValidationConfig, state.validation_config)
+            必须原地更新、不得换实例：UI 绑定表持有 target 的引用，
+            换实例会让既有绑定指向孤儿模型。
+            """
+            if key not in data:
+                return
+            try:
+                fresh = model_class.model_validate(data[key])
+            except ValidationError as e:
+                logger.warning(f"模块 [{key}] 配置存在非法值，已回退为安全默认值。详情:\n{e}")
+                return
+            for name in model_class.model_fields:
+                object.__setattr__(target, name, getattr(fresh, name))
+
+        _apply_section("global", GlobalConfig, state.global_config)
+        _apply_section("sender", SenderConfig, state.sender_config)
+        _apply_section("monitor", MonitorConfig, state.monitor_config)
+        _apply_section("theme", ThemeConfig, state.theme_config)
+        _apply_section("validation", ValidationConfig, state.validation_config)
 
         logger.info(f"配置文件加载与校验流程结束[{CONFIG_PATH}]。")
