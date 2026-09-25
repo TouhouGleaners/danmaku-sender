@@ -25,7 +25,7 @@ from danmaku_sender.controller.monitor import MonitorController
 from danmaku_sender.repo.history_manager import HistoryManager
 from danmaku_sender.runtime.state.app_state import AppState
 from danmaku_sender.types.models.common import MonitorStats
-from danmaku_sender.ui.framework.binder import UIBinder
+from danmaku_sender.ui.framework.form_binder import LiveFormBinder
 from danmaku_sender.ui.framework.icons import SvgIcon
 
 from .table import QueueMonitorModel
@@ -206,7 +206,7 @@ class MonitorPage(QWidget):
         self.state.queue_state.taskStatusChanged.connect(self._on_queue_task_status_changed)
 
     def init_bindings(self):
-        UIBinder.bind(self.interval_spin, self.state.monitor_config, "refresh_interval")
+        LiveFormBinder.bind(self.interval_spin, self.state.monitor_config, "refresh_interval")
 
         if self.state.stats_baseline == 0.0:
             self.state.stats_baseline = self.state.app_launch_time
@@ -221,7 +221,7 @@ class MonitorPage(QWidget):
 
     def showEvent(self, event):
         super().showEvent(event)
-        UIBinder.refresh_all(self)
+        LiveFormBinder.fill(self)
         self._refresh_queue_table()
         # 首次显示时 viewport 已有尺寸，再定位空状态提示
         self._update_empty_hint()

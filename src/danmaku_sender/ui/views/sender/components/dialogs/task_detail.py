@@ -1,5 +1,6 @@
 import logging
 
+from pydantic import ValidationError
 from PySide6.QtCore import Slot
 from PySide6.QtWidgets import (
     QCheckBox,
@@ -20,31 +21,33 @@ from PySide6.QtWidgets import (
     QWidget,
 )
 
+from danmaku_sender.config import SenderConfig
 from danmaku_sender.controller.video_controller import VideoController
 from danmaku_sender.service.danmaku_parser import DanmakuParser
 from danmaku_sender.types.models.common import VideoTarget
 from danmaku_sender.types.models.queue import TaskStatus, TaskView
 from danmaku_sender.types.models.video import VideoInfo
-from danmaku_sender.ui.framework.binder import UIBinder
+from danmaku_sender.ui.framework.form_binder import DraftFormBinder
 from danmaku_sender.utils.string_utils import parse_bilibili_link
 
 logger = logging.getLogger(__name__)
 
 
 class TaskDetailDialog(QDialog):
-    """任务详情与配置编辑弹窗
+    """任务详情与配置编辑对话框。
 
-    编辑沙盒模式:
-    - origin: 原始任务只读视图（TaskView，展示用）
-    - editing: 编辑沙盒（QueueTask 草稿，所有修改在这里进行）
-    - 配置区通过 UIBinder 绑定到 editing.config_snapshot，实时验证 + 自动变红
-    - 取消时丢弃 editing，不做任何修改
+    属于草稿修改表单：控件本身即草稿，确认保存时才写入模型，
+    取消操作不会修改模型。
+
+    Attributes:
+        origin: 原始任务的只读视图，仅用于展示。
+        editing: 保存时提交的 ``QueueTask``，在用户点击「保存」时组装完成。
     """
 
     def __init__(self, task: TaskView, api_auth, queue_active: bool = False, parent=None):
         super().__init__(parent)
         self.origin = task                  # 只读视图
-        self.editing = task.to_draft()      # 编辑沙盒（工作区）
+        self.editing = task.to_draft()      # 保存载荷（保存那一刻才组装完）
         self._api_auth = api_auth
         self._video_info: VideoInfo | None = None
         self._pending_part_page: int | None = None
@@ -60,17 +63,12 @@ class TaskDetailDialog(QDialog):
         self._create_ui()
         self._connect_signals()
         self._load_task_info()
+        # 配置区填充初始值；用户确认保存时再 collect 读回
+        DraftFormBinder.fill(self, self.editing.config_snapshot)
 
         # 非可编辑状态时禁用所有编辑控件
         if not self._is_editable:
             self._set_readonly_mode()
-
-    def showEvent(self, event):
-        """打开时从沙盒重读控件值（与 refresh 纪律一致）"""
-        super().showEvent(event)
-        UIBinder.refresh_all(self)
-        # refresh 屏蔽信号防回环，依赖控件的联动需显式重算
-        self._on_burst_toggled(self._burst_cb.isChecked())
 
     def _create_ui(self):
         layout = QVBoxLayout(self)
@@ -298,19 +296,24 @@ class TaskDetailDialog(QDialog):
     def _on_save(self):
         """保存编辑结果
 
-        流程: 收集UI数据到 editing → 验证 editing → 通过后写回 origin
+        流程: 读取控件值到 editing → 整体校验 → 通过后交调用方写回队列
         """
         self._apply_target_changes()
         self._apply_danmaku_changes()
+
+        # 读取控件值并构造 SenderConfig（pydantic 校验，含跨字段规则）
+        try:
+            self.editing.config_snapshot = DraftFormBinder.collect(self, SenderConfig)
+        except ValidationError as e:
+            rest = DraftFormBinder.show_errors(self, e)
+            if rest:
+                QMessageBox.warning(self, "配置错误", rest[0])
+            return
 
         # 验证任务数据
         error = self.editing.validate()
         if error:
             QMessageBox.warning(self, "任务错误", error)
-            return
-
-        # 验证配置数据
-        if not self._validate_config():
             return
 
         # 全部验证通过，由调用方通过 QueueState 应用修改
@@ -353,34 +356,11 @@ class TaskDetailDialog(QDialog):
         except Exception as e:
             logger.error(f"弹幕文件解析失败: {e}")
 
-    def _validate_config(self) -> bool:
-        """校验配置合法性，失败则弹出警告
-
-        UIBinder 已实时更新到 editing.config_snapshot，如果有 Pydantic 验证错误，
-        控件已经变红并设置了 tooltip。这里提取第一个错误信息显示给用户。
-        """
-        config_widgets: list[QWidget] = [
-            self._min_delay, self._max_delay,
-            self._burst_size, self._rest_min, self._rest_max,
-            self._stop_count, self._stop_time,
-            self._delay_between,
-        ]
-        for widget in config_widgets:
-            if widget.property("invalid"):
-                # tooltip 格式: "⚠️ 输入无效:\n{error_msg}"
-                tooltip = widget.toolTip()
-                error_msg = tooltip.split("\n", 1)[-1] if "\n" in tooltip else "配置值无效"
-                QMessageBox.warning(self, "配置错误", error_msg)
-                return False
-        return True
-
     # --- 配置编辑 ---
 
     def _create_config_section(self) -> QWidget:
         group = QGroupBox("发送配置")
         layout = QVBoxLayout(group)
-
-        config = self.editing.config_snapshot
 
         # --- 发送延迟 ---
         delay_group = QGroupBox("发送延迟")
@@ -392,14 +372,14 @@ class TaskDetailDialog(QDialog):
         self._min_delay.setRange(0.1, 60.0)
         self._min_delay.setSingleStep(0.5)
         self._min_delay.setFixedWidth(70)
-        UIBinder.bind(self._min_delay, config, "min_delay")
+        DraftFormBinder.map(self._min_delay, "min_delay")
         delay_row.addWidget(self._min_delay)
         delay_row.addWidget(QLabel("-"))
         self._max_delay = QDoubleSpinBox()
         self._max_delay.setRange(0.1, 60.0)
         self._max_delay.setSingleStep(0.5)
         self._max_delay.setFixedWidth(70)
-        UIBinder.bind(self._max_delay, config, "max_delay")
+        DraftFormBinder.map(self._max_delay, "max_delay")
         delay_row.addWidget(self._max_delay)
         delay_row.addWidget(QLabel("秒"))
         delay_row.addStretch()
@@ -409,25 +389,25 @@ class TaskDetailDialog(QDialog):
         burst_row.setSpacing(2)
         self._burst_cb = QCheckBox("爆发模式")
         self._burst_cb.toggled.connect(self._on_burst_toggled)
-        UIBinder.bind(self._burst_cb, config, "burst_enabled")
+        DraftFormBinder.map(self._burst_cb, "burst_enabled")
         burst_row.addWidget(self._burst_cb)
         burst_row.addWidget(QLabel("每"))
         self._burst_size = QSpinBox()
         self._burst_size.setRange(2, 100)
         self._burst_size.setFixedWidth(70)
-        UIBinder.bind(self._burst_size, config, "burst_size")
+        DraftFormBinder.map(self._burst_size, "burst_size")
         burst_row.addWidget(self._burst_size)
         burst_row.addWidget(QLabel("条，休息"))
         self._rest_min = QDoubleSpinBox()
         self._rest_min.setRange(0.0, 300.0)
         self._rest_min.setFixedWidth(60)
-        UIBinder.bind(self._rest_min, config, "rest_min")
+        DraftFormBinder.map(self._rest_min, "rest_min")
         burst_row.addWidget(self._rest_min)
         burst_row.addWidget(QLabel("-"))
         self._rest_max = QDoubleSpinBox()
         self._rest_max.setRange(0.0, 300.0)
         self._rest_max.setFixedWidth(60)
-        UIBinder.bind(self._rest_max, config, "rest_max")
+        DraftFormBinder.map(self._rest_max, "rest_max")
         burst_row.addWidget(self._rest_max)
         burst_row.addWidget(QLabel("秒"))
         burst_row.addStretch()
@@ -445,7 +425,7 @@ class TaskDetailDialog(QDialog):
         self._stop_count = QSpinBox()
         self._stop_count.setRange(0, 99999)
         self._stop_count.setFixedWidth(70)
-        UIBinder.bind(self._stop_count, config, "stop_after_count")
+        DraftFormBinder.map(self._stop_count, "stop_after_count")
         stop_count_row.addWidget(self._stop_count)
         stop_count_row.addWidget(QLabel("条"))
         stop_count_row.addWidget(QLabel("(0为不限制)"))
@@ -457,7 +437,7 @@ class TaskDetailDialog(QDialog):
         self._stop_time = QSpinBox()
         self._stop_time.setRange(0, 99999)
         self._stop_time.setFixedWidth(70)
-        UIBinder.bind(self._stop_time, config, "stop_after_time")
+        DraftFormBinder.map(self._stop_time, "stop_after_time")
         stop_time_row.addWidget(self._stop_time)
         stop_time_row.addWidget(QLabel("分钟"))
         stop_time_row.addWidget(QLabel("(0为不限制)"))
@@ -473,13 +453,10 @@ class TaskDetailDialog(QDialog):
         self._delay_between = QDoubleSpinBox()
         self._delay_between.setRange(0.0, 300.0)
         self._delay_between.setSingleStep(5.0)
-        UIBinder.bind(self._delay_between, config, "delay_between_tasks")
+        DraftFormBinder.map(self._delay_between, "delay_between_tasks")
         queue_form.addRow("任务间隔:", self._delay_between)
 
         layout.addWidget(queue_group)
-
-        # 初始化爆发控件状态
-        self._on_burst_toggled(config.burst_enabled)
 
         return group
 
