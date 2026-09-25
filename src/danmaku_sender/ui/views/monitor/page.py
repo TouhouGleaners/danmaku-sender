@@ -205,8 +205,13 @@ class MonitorPage(QWidget):
         self.state.queue_state.taskDataChanged.connect(self._on_queue_changed)
         self.state.queue_state.taskStatusChanged.connect(self._on_queue_task_status_changed)
 
+    @Slot(str, object)
+    def _on_config_written(self, _field: str, _value: object) -> None:
+        """配置写回成功 → 广播变更，由 MainWindow 防抖落盘。"""
+        self.state.configChanged.emit()
+
     def init_bindings(self):
-        LiveFormBinder.bind(self.interval_spin, self.state.monitor_config, "refresh_interval")
+        LiveFormBinder.bind(self.interval_spin, self.state.monitor_config, "refresh_interval", after_write=self._on_config_written)
 
         if self.state.stats_baseline == 0.0:
             self.state.stats_baseline = self.state.app_launch_time

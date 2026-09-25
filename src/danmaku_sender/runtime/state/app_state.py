@@ -21,6 +21,7 @@ class AppState(QObject):
     继承自 QObject 以支持信号槽机制，实现 UI 与 逻辑 的解耦。
     """
     credentialsChanged = Signal()
+    configChanged = Signal()  # 配置被表单写回（自动落盘等副作用的广播点）
     senderLogReceived = Signal(str)
     monitorLogReceived = Signal(str)
     senderActiveChanged = Signal()

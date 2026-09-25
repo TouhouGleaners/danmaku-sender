@@ -1,20 +1,40 @@
 from collections.abc import Callable
 from typing import Any
 
-from PySide6.QtCore import Qt, QAbstractTableModel, QModelIndex, Signal, Slot
-from PySide6.QtGui import QColor, QBrush, QPainter, QPainterPath, QFont, QPen, QFontMetrics
+from PySide6.QtCore import QAbstractTableModel, QModelIndex, Qt, Signal, Slot
+from PySide6.QtGui import (
+    QBrush,
+    QColor,
+    QFont,
+    QFontMetrics,
+    QPainter,
+    QPainterPath,
+    QPen,
+)
 from PySide6.QtWidgets import (
-    QWidget, QVBoxLayout, QHBoxLayout, QFormLayout, QPushButton,
-    QLabel, QSizePolicy, QColorDialog, QLineEdit, QCheckBox,
-    QGroupBox, QDoubleSpinBox, QComboBox, QTextEdit, QMessageBox
+    QCheckBox,
+    QColorDialog,
+    QComboBox,
+    QDoubleSpinBox,
+    QFormLayout,
+    QGroupBox,
+    QHBoxLayout,
+    QLabel,
+    QLineEdit,
+    QMessageBox,
+    QPushButton,
+    QSizePolicy,
+    QTextEdit,
+    QVBoxLayout,
+    QWidget,
 )
 
-from danmaku_sender.ui.framework.form_binder import LiveFormBinder
-from danmaku_sender.types.models.danmaku import Danmaku
 from danmaku_sender.runtime.state.app_state import AppState
+from danmaku_sender.types.models.danmaku import Danmaku
 from danmaku_sender.types.models.editor_types import EditorField
-from danmaku_sender.utils.time_utils import format_duration
+from danmaku_sender.ui.framework.form_binder import LiveFormBinder
 from danmaku_sender.utils.string_utils import join_keywords, parse_keywords
+from danmaku_sender.utils.time_utils import format_duration
 
 
 class EditorTableModel(QAbstractTableModel):
@@ -126,11 +146,16 @@ class ValidationRulesGroup(QGroupBox):
 
         layout.addLayout(keyword_layout)
 
+    @Slot(str, object)
+    def _on_config_written(self, _field: str, _value: object) -> None:
+        """配置写回成功 → 广播变更，由 MainWindow 防抖落盘。"""
+        self.state.configChanged.emit()
+
     def init_bindings(self):
         """绑定控件与 validation_config（实时修改表单）。"""
         config = self.state.validation_config
 
-        LiveFormBinder.bind(self.enable_custom_checkbox, config, "enabled")
+        LiveFormBinder.bind(self.enable_custom_checkbox, config, "enabled", after_write=self._on_config_written)
         # list[str] ↔ str 通过转换函数绑定，不再手动同步
         LiveFormBinder.bind(
             self.keywords_input,
@@ -139,6 +164,7 @@ class ValidationRulesGroup(QGroupBox):
             realtime=True,
             to_model=parse_keywords,
             to_widget=join_keywords,
+            after_write=self._on_config_written,
         )
 
         # 开关 → 关键词框可用性（普通联动，fill 时会自动跑）
@@ -269,7 +295,7 @@ class DanmakuPropertyForm(QWidget):
         self.prop_time.blockSignals(False)
 
         mode_idx = self.prop_mode.findData(dm.mode)
-        self.prop_mode.setCurrentIndex(mode_idx if mode_idx >= 0 else 0)
+        self.prop_mode.setCurrentIndex(max(mode_idx, 0))
 
         self._populate_font_sizes(dm.fontsize)
         self.current_color_val = dm.color

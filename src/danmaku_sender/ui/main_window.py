@@ -34,8 +34,8 @@ from danmaku_sender.types.models.common import MonitorStats
 from danmaku_sender.types.models.user import UserProfile
 
 from .dialogs import AboutDialog, UpdateDialog
-from .framework.image_processor import QtImageProcessor
 from .framework.icons import SvgIcon, get_app_icon
+from .framework.image_processor import QtImageProcessor
 from .framework.theme import Palette, ThemeService
 from .views.account import AccountDialog
 from .views.history import HistoryPage
@@ -84,6 +84,7 @@ class MainWindow(QMainWindow):
 
         # 信号与状态绑定
         self._init_auth_system()
+        self._init_config_autosave()
         self._bind_state_to_pages()
         self._connect_global_signals()
 
@@ -284,6 +285,23 @@ class MainWindow(QMainWindow):
         self._auth_debounce_timer = QTimer(self)
         self._auth_debounce_timer.setSingleShot(True)
         self._auth_debounce_timer.timeout.connect(self._refresh_user_info)
+
+    def _init_config_autosave(self):
+        """配置写入后防抖落盘。
+
+        连续改动只写一次文件：每次 configChanged 都重启计时器，
+        停手 800ms 后落盘。closeEvent 仍会强制存一次作为最终兜底。
+        """
+        self._config_save_timer = QTimer(self)
+        self._config_save_timer.setSingleShot(True)
+        self._config_save_timer.setInterval(800)
+        self._config_save_timer.timeout.connect(self._save_config)
+        self.state.configChanged.connect(lambda: self._config_save_timer.start())
+
+    @Slot()
+    def _save_config(self):
+        """落盘非敏感配置"""
+        self.rt.config_manager.save(self.state)
 
     def _open_account_dialog(self):
         """打开账号管理弹窗"""
