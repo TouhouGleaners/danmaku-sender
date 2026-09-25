@@ -110,6 +110,8 @@ class MainWindow(QMainWindow):
         except (OSError, ValueError) as e:
             self.logger.error(f"保存凭证失败: {e}")
 
+        # 停掉待触发的防抖落盘：显式保存已覆盖，避免同一份配置重复写盘
+        self._config_save_timer.stop()
         self.rt.config_manager.save(self.state)
 
         super().closeEvent(event)
