@@ -1,10 +1,12 @@
 """SendingContext / SendJob 单元测试"""
-import pytest
-from danmaku_sender.types.models.danmaku import Danmaku
-from danmaku_sender.types.models.common import VideoTarget
-from danmaku_sender.config import SenderConfig
-from danmaku_sender.service.sender.context import SendingContext, SendJob
 from threading import Event
+
+import pytest
+
+from danmaku_sender.config import SenderConfig, SendPolicy
+from danmaku_sender.service.sender.context import SendingContext, SendJob
+from danmaku_sender.types.models.common import VideoTarget
+from danmaku_sender.types.models.danmaku import Danmaku
 
 
 @pytest.fixture
@@ -57,7 +59,8 @@ class TestSendJob:
         job = SendJob(
             target=VideoTarget(bvid="BV1test", cid=1),
             danmakus=[Danmaku(msg="t", progress=0)],
-            config=SenderConfig(),
+            config=SenderConfig().to_task_config(),
+            policy=SendPolicy(),
             stop_event=Event()
         )
         assert job.target.bvid == "BV1test"

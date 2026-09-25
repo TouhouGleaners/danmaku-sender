@@ -9,11 +9,12 @@ import logging
 from collections.abc import Callable
 from dataclasses import replace
 
-from danmaku_sender.config import ApiAuthConfig, SenderConfig
+from danmaku_sender.config import ApiAuthConfig
 from danmaku_sender.repo.bili_api_client import BiliApiClient
 from danmaku_sender.repo.history_manager import HistoryManager
 from danmaku_sender.types.models.common import VideoTarget
 from danmaku_sender.types.models.danmaku import Danmaku
+from danmaku_sender.types.models.queue import TaskConfig
 from danmaku_sender.types.models.result import DanmakuSendResult
 
 from .context import SendingContext, SendJob
@@ -96,7 +97,7 @@ class SendPipeline:
         if result.is_success and result.dmid:
             self.history_manager.record_danmaku(target, dm, result.dmid, result.is_visible)
 
-    def _calc_eta(self, attempted: int, total: int, config: SenderConfig) -> float:
+    def _calc_eta(self, attempted: int, total: int, config: TaskConfig) -> float:
         """基于任务配置计算 ETA（秒）"""
         cfg = config
         avg_normal = (cfg.min_delay + cfg.max_delay) / 2

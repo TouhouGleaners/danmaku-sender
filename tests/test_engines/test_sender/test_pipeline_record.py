@@ -7,13 +7,12 @@ import threading
 
 import pytest
 
-from danmaku_sender.config import ApiAuthConfig, SenderConfig
+from danmaku_sender.config import ApiAuthConfig, SenderConfig, SendPolicy
 from danmaku_sender.repo.history_manager import HistoryManager
-from danmaku_sender.service.sender import SendPipeline, SendJob
+from danmaku_sender.service.sender import SendJob, SendPipeline
 from danmaku_sender.service.sender import pipeline as pipeline_mod
 from danmaku_sender.types.models.common import VideoTarget
 from danmaku_sender.types.models.danmaku import Danmaku
-
 
 SENT_DMIDS: list[str] = []
 
@@ -55,7 +54,8 @@ def _run_pipeline(hm: HistoryManager, target: VideoTarget, danmakus: list[Danmak
     job = SendJob(
         target=target,
         danmakus=danmakus,
-        config=SenderConfig(min_delay=0.1, max_delay=0.2),
+        config=SenderConfig(min_delay=0.1, max_delay=0.2).to_task_config(),
+        policy=SendPolicy(),
         stop_event=threading.Event(),
     )
     errors: list[Exception] = []

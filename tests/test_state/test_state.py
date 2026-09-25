@@ -1,4 +1,6 @@
-"""状态与配置模型单元测试 — GlobalConfig, SenderConfig, MonitorConfig, ValidationConfig, QueueState"""
+"""状态与配置模型单元测试 — GlobalConfig, SenderConfig, SendPolicy, MonitorConfig, ValidationConfig, QueueState"""
+from dataclasses import FrozenInstanceError
+
 import pytest
 from pydantic import ValidationError
 
@@ -6,6 +8,7 @@ from danmaku_sender.config import (
     GlobalConfig,
     MonitorConfig,
     SenderConfig,
+    SendPolicy,
     ValidationConfig,
 )
 from danmaku_sender.runtime.state.queue_state import QueueState
@@ -38,9 +41,6 @@ class TestSenderConfig:
         assert cfg.burst_size == 3
         assert cfg.rest_min == 40.0
         assert cfg.rest_max == 45.0
-        assert cfg.stop_after_count == 0
-        assert cfg.stop_after_time == 0
-        assert cfg.skip_sent is True
 
     def test_valid_custom_values(self):
         cfg = SenderConfig(min_delay=5.0, max_delay=10.0)
@@ -112,9 +112,20 @@ def make_task(cid: int = 1, status: TaskStatus = TaskStatus.PENDING) -> QueueTas
     return QueueTask(
         target=VideoTarget(bvid=f"BV{cid:03d}", cid=cid, title=f"T{cid}"),
         danmakus=[],
-        config_snapshot=SenderConfig(),
+        config_snapshot=SenderConfig().to_task_config(),
         status=status,
     )
+
+
+class TestSendPolicy:
+    """SendPolicy 队列发送策略"""
+
+    def test_default_values(self):
+        policy = SendPolicy()
+        assert policy.delay_between_tasks == 30.0
+        assert policy.stop_after_count == 0
+        assert policy.stop_after_time == 0
+        assert policy.skip_sent is True
 
 
 class TestQueueState:
@@ -276,16 +287,16 @@ class TestQueueState:
         qs.reorder_tasks(["nope"])
         assert [v.target.cid for v in qs.tasks] == [1]
 
-    def test_view_config_returns_copy(self):
-        """经 TaskView.config 改字段不得影响队列中的工单"""
+    def test_view_config_is_frozen(self):
+        """工单参数是冻结类型：经 TaskView.config 改写在类型层就不可能"""
         qs = QueueState()
         t = make_task(1)
-        t.config_snapshot.skip_sent = True
         qs.add_task(t)
         view = qs.get_task_by_id(t.task_id)
         assert view is not None
-        view.config.skip_sent = False
-        assert view.config.skip_sent is True
+        assert view.config.min_delay == 8.0
+        with pytest.raises(FrozenInstanceError):
+            view.config.min_delay = 99.0  # type: ignore[misc]
 
     def test_spec_danmakus_are_frozen(self):
         """Danmaku 不可变：写穿 TaskSpec 在类型层就不可能"""

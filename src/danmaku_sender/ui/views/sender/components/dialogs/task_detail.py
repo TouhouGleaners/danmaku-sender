@@ -63,8 +63,8 @@ class TaskDetailDialog(QDialog):
         self._create_ui()
         self._connect_signals()
         self._load_task_info()
-        # 配置区填充初始值；用户确认保存时再 collect 读回
-        DraftFormBinder.fill(self, self.editing.config_snapshot)
+        # 配置区填充初始值（表单用可编辑的 SenderConfig，保存时再转回 TaskConfig）
+        DraftFormBinder.fill(self, SenderConfig.from_task_config(self.editing.config_snapshot))
 
         # 非可编辑状态时禁用所有编辑控件
         if not self._is_editable:
@@ -301,9 +301,11 @@ class TaskDetailDialog(QDialog):
         self._apply_target_changes()
         self._apply_danmaku_changes()
 
-        # 读取控件值并构造 SenderConfig（pydantic 校验，含跨字段规则）
+        # 读取控件值并构造 SenderConfig（pydantic 校验，含跨字段规则），
+        # 再冻结成工单参数快照
         try:
-            self.editing.config_snapshot = DraftFormBinder.collect(self, SenderConfig)
+            collected = DraftFormBinder.collect(self, SenderConfig)
+            self.editing.config_snapshot = collected.to_task_config()
         except ValidationError as e:
             rest = DraftFormBinder.show_errors(self, e)
             if rest:
@@ -416,48 +418,6 @@ class TaskDetailDialog(QDialog):
         self._burst_controls: list[QWidget] = [self._burst_size, self._rest_min, self._rest_max]
         layout.addWidget(delay_group)
 
-        # --- 自动终止 ---
-        stop_group = QGroupBox("自动终止")
-        stop_form = QFormLayout(stop_group)
-
-        stop_count_row = QHBoxLayout()
-        stop_count_row.setSpacing(2)
-        self._stop_count = QSpinBox()
-        self._stop_count.setRange(0, 99999)
-        self._stop_count.setFixedWidth(70)
-        DraftFormBinder.map(self._stop_count, "stop_after_count")
-        stop_count_row.addWidget(self._stop_count)
-        stop_count_row.addWidget(QLabel("条"))
-        stop_count_row.addWidget(QLabel("(0为不限制)"))
-        stop_count_row.addStretch()
-        stop_form.addRow("已发送 >=", stop_count_row)
-
-        stop_time_row = QHBoxLayout()
-        stop_time_row.setSpacing(2)
-        self._stop_time = QSpinBox()
-        self._stop_time.setRange(0, 99999)
-        self._stop_time.setFixedWidth(70)
-        DraftFormBinder.map(self._stop_time, "stop_after_time")
-        stop_time_row.addWidget(self._stop_time)
-        stop_time_row.addWidget(QLabel("分钟"))
-        stop_time_row.addWidget(QLabel("(0为不限制)"))
-        stop_time_row.addStretch()
-        stop_form.addRow("已用时 >=", stop_time_row)
-
-        layout.addWidget(stop_group)
-
-        # --- 队列设置 ---
-        queue_group = QGroupBox("队列设置")
-        queue_form = QFormLayout(queue_group)
-
-        self._delay_between = QDoubleSpinBox()
-        self._delay_between.setRange(0.0, 300.0)
-        self._delay_between.setSingleStep(5.0)
-        DraftFormBinder.map(self._delay_between, "delay_between_tasks")
-        queue_form.addRow("任务间隔:", self._delay_between)
-
-        layout.addWidget(queue_group)
-
         return group
 
     def _on_burst_toggled(self, checked: bool):
@@ -472,13 +432,11 @@ class TaskDetailDialog(QDialog):
         self._part_combo.setEnabled(False)
         self._file_btn.setEnabled(False)
 
-        # 禁用配置编辑
+        # 禁用配置编辑（队列级策略不在任务里，见 SendPolicy）
         config_widgets: list[QWidget] = [
             self._min_delay, self._max_delay,
             self._burst_cb, self._burst_size,
             self._rest_min, self._rest_max,
-            self._stop_count, self._stop_time,
-            self._delay_between,
         ]
         for widget in config_widgets:
             widget.setEnabled(False)

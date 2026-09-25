@@ -1,13 +1,13 @@
 import time
-from threading import Event
-from typing import Callable
+from collections.abc import Callable
 from dataclasses import dataclass, field
+from threading import Event
 
+from danmaku_sender.config import SendPolicy
+from danmaku_sender.types.models.common import UnsentDanmakusRecord, VideoTarget
 from danmaku_sender.types.models.danmaku import Danmaku
+from danmaku_sender.types.models.queue import TaskConfig
 from danmaku_sender.types.models.result import DanmakuSendResult
-from danmaku_sender.types.models.common import VideoTarget, UnsentDanmakusRecord
-from danmaku_sender.config import SenderConfig
-
 
 # 弹幕指纹类型别名：(内容, 进度, 模式, 字号, 颜色)
 # 用于在断点续传时，精准判断两条弹幕是否在物理表现上完全一致
@@ -20,10 +20,14 @@ class SendJob:
     发送任务工单 (Parameter Object)
 
     将单次流水线所需的 [目标]、[数据]、[配置]、[回调] 打包为单一实体传入。
+
+    config 是单个任务的发送节奏（随工单定死）；policy 是整个队列的发送策略
+    （启动队列时取用一次）。两者分属不同层级，不要混。
     """
     target: VideoTarget
     danmakus: list[Danmaku]
-    config: SenderConfig
+    config: TaskConfig
+    policy: SendPolicy
     stop_event: Event
 
     # 事件回调挂载点

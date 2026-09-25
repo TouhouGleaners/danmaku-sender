@@ -5,13 +5,13 @@ import threading
 
 from PySide6.QtCore import Signal
 
-from danmaku_sender.config import ApiAuthConfig, SenderConfig
+from danmaku_sender.config import ApiAuthConfig, SendPolicy
 from danmaku_sender.controller.concurrency import WorkerThread
 from danmaku_sender.repo.history_manager import HistoryManager
 from danmaku_sender.runtime.infra.platform import KeepSystemAwake
 from danmaku_sender.service.sender import SendJob, SendPipeline
 from danmaku_sender.service.sender.delay_manager import DelayManager
-from danmaku_sender.types.models.queue import TaskSnapshot, TaskStatus
+from danmaku_sender.types.models.queue import TaskConfig, TaskSnapshot, TaskStatus
 
 logger = logging.getLogger(__name__)
 
@@ -35,7 +35,7 @@ class QueueSendWorker(WorkerThread):
         self,
         tasks: tuple[TaskSnapshot, ...],
         auth_config: ApiAuthConfig,
-        sender_config: SenderConfig,
+        send_policy: SendPolicy,
         history_manager: HistoryManager,
         stop_event: threading.Event,
         prevent_sleep: bool = True,
@@ -44,7 +44,7 @@ class QueueSendWorker(WorkerThread):
         super().__init__(parent)
         self.tasks = tasks
         self.auth_config = auth_config
-        self.sender_config = sender_config
+        self.send_policy = send_policy
         self.history_manager = history_manager
         self.stop_event = stop_event
         self.prevent_sleep = prevent_sleep
@@ -80,7 +80,7 @@ class QueueSendWorker(WorkerThread):
                         break
 
                     if not self.stop_event.is_set() and idx < total - 1:
-                        delay = snap.spec.config.delay_between_tasks
+                        delay = self.send_policy.delay_between_tasks
                         if delay > 0:
                             self.stop_event.wait(delay)
 
@@ -108,18 +108,17 @@ class QueueSendWorker(WorkerThread):
         future_tasks = self.tasks[idx + 1:]
 
         def progress_emitter(attempted: int, task_total: int, eta: float):
-            queue_eta = self._calc_queue_eta(attempted, task_total, spec.config, future_tasks)
+            queue_eta = self._calc_queue_eta(attempted, task_total, spec.config, future_tasks, self.send_policy)
             self.queueProgressUpdated.emit(idx, total, queue_eta)
             self.taskProgressUpdated.emit(task_id, attempted, task_total, eta)
 
         try:
             pipeline = SendPipeline(self.auth_config, self.history_manager)
-            config = spec.config.model_copy()
-            config.skip_sent = self.sender_config.skip_sent  # 全局策略，不走快照
             job = SendJob(
                 target=spec.target,
                 danmakus=list(spec.danmakus),  # Danmaku 不可变，无需克隆
-                config=config,
+                config=spec.config,
+                policy=self.send_policy,
                 stop_event=self.stop_event,
             )
             ctx = pipeline.execute(job, progress_emitter=progress_emitter)
@@ -143,14 +142,15 @@ class QueueSendWorker(WorkerThread):
     def _calc_queue_eta(
         current_attempted: int,
         current_total: int,
-        current_config: SenderConfig,
+        current_config: TaskConfig,
         future_tasks: tuple[TaskSnapshot, ...],
+        policy: SendPolicy,
     ) -> float:
         """计算整个队列的剩余 ETA（秒）。
 
         = 当前任务剩余 ETA + 所有未来任务的 ETA
         """
-        def _task_eta(attempted: int, total: int, config: SenderConfig) -> float:
+        def _task_eta(attempted: int, total: int, config: TaskConfig) -> float:
             avg_normal = (config.min_delay + config.max_delay) / 2
             avg_rest = (config.rest_min + config.rest_max) / 2
             return DelayManager.calc_eta(
@@ -166,11 +166,11 @@ class QueueSendWorker(WorkerThread):
         pending_future = [s for s in future_tasks if s.status == TaskStatus.PENDING]
 
         if future_tasks:
-            queue_eta += current_config.delay_between_tasks
+            queue_eta += policy.delay_between_tasks
 
         for i, s in enumerate(pending_future):
             queue_eta += _task_eta(0, s.spec.total, s.spec.config)
             if future_tasks and s is not future_tasks[-1]:
-                queue_eta += s.spec.config.delay_between_tasks
+                queue_eta += policy.delay_between_tasks
 
         return queue_eta

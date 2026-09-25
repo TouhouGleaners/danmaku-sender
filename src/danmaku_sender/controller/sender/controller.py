@@ -104,7 +104,7 @@ class SenderController(QObject):
         worker = QueueSendWorker(
             tasks=snapshots,
             auth_config=auth_config,
-            sender_config=self.state.sender_config,
+            send_policy=self.state.send_policy,
             history_manager=self.history_manager,
             stop_event=self._stop_event,
             prevent_sleep=self.state.global_config.prevent_sleep,

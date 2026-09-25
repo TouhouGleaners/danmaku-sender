@@ -134,35 +134,49 @@ class SettingsPage(QWidget):
         delay_group.setLayout(delay_layout)
         main_layout.addWidget(delay_group)
 
-        # --- 自动终止 ---
-        stop_group = QGroupBox("自动终止")
-        stop_layout = QHBoxLayout()
-        stop_layout.setContentsMargins(10, 20, 10, 20)
+        # --- 队列设置 ---
+        queue_group = QGroupBox("队列设置")
+        queue_layout = QHBoxLayout()
+        queue_layout.setContentsMargins(10, 20, 10, 20)
 
-        stop_layout.addWidget(QLabel("已发送 >="))
-        self.stop_count = QSpinBox()
-        self.stop_count.setRange(0, 99999)
-        stop_layout.addWidget(self.stop_count)
-        stop_layout.addWidget(QLabel("条"))
+        queue_layout.addWidget(QLabel("任务间隔"))
+        self.delay_between = QDoubleSpinBox()
+        self.delay_between.setRange(0.0, 300.0)
+        self.delay_between.setSingleStep(5.0)
+        queue_layout.addWidget(self.delay_between)
+        queue_layout.addWidget(QLabel("秒"))
 
-        stop_layout.addSpacing(20)
+        queue_layout.addSpacing(20)
         v_line2 = QFrame()
         v_line2.setFrameShape(QFrame.Shape.VLine)
         v_line2.setFrameShadow(QFrame.Shadow.Sunken)
-        stop_layout.addWidget(v_line2)
-        stop_layout.addSpacing(20)
+        queue_layout.addWidget(v_line2)
+        queue_layout.addSpacing(20)
 
-        stop_layout.addWidget(QLabel("已用时 >="))
+        queue_layout.addWidget(QLabel("已发送 >="))
+        self.stop_count = QSpinBox()
+        self.stop_count.setRange(0, 99999)
+        queue_layout.addWidget(self.stop_count)
+        queue_layout.addWidget(QLabel("条"))
+
+        queue_layout.addSpacing(20)
+        v_line3 = QFrame()
+        v_line3.setFrameShape(QFrame.Shape.VLine)
+        v_line3.setFrameShadow(QFrame.Shadow.Sunken)
+        queue_layout.addWidget(v_line3)
+        queue_layout.addSpacing(20)
+
+        queue_layout.addWidget(QLabel("已用时 >="))
         self.stop_time = QSpinBox()
         self.stop_time.setRange(0, 99999)
-        stop_layout.addWidget(self.stop_time)
-        stop_layout.addWidget(QLabel("分钟"))
+        queue_layout.addWidget(self.stop_time)
+        queue_layout.addWidget(QLabel("分钟"))
 
-        stop_layout.addStretch()
-        stop_layout.addWidget(QLabel("(0为不限制)"))
+        queue_layout.addStretch()
+        queue_layout.addWidget(QLabel("(0为不限制)"))
 
-        stop_group.setLayout(stop_layout)
-        main_layout.addWidget(stop_group)
+        queue_group.setLayout(queue_layout)
+        main_layout.addWidget(queue_group)
 
         # --- 断点续传 ---
         resume_group = QGroupBox("断点续传")
@@ -221,12 +235,12 @@ class SettingsPage(QWidget):
         LiveFormBinder.bind(self.burst_rest_min, config, "rest_min", after_write=self._on_config_written)
         LiveFormBinder.bind(self.burst_rest_max, config, "rest_max", after_write=self._on_config_written)
 
-        # 自动终止规则
-        LiveFormBinder.bind(self.stop_count, config, "stop_after_count", after_write=self._on_config_written)
-        LiveFormBinder.bind(self.stop_time, config, "stop_after_time", after_write=self._on_config_written)
-
-        # 断点续传
-        LiveFormBinder.bind(self.skip_sent_cb, config, "skip_sent", after_write=self._on_config_written)
+        # 队列运行策略（一次队列运行共享，不随单个任务走）
+        policy = self.state.send_policy
+        LiveFormBinder.bind(self.delay_between, policy, "delay_between_tasks", after_write=self._on_config_written)
+        LiveFormBinder.bind(self.stop_count, policy, "stop_after_count", after_write=self._on_config_written)
+        LiveFormBinder.bind(self.stop_time, policy, "stop_after_time", after_write=self._on_config_written)
+        LiveFormBinder.bind(self.skip_sent_cb, policy, "skip_sent", after_write=self._on_config_written)
 
     def showEvent(self, event):
         """打开页面时从状态重读控件值（无隐式同步）"""

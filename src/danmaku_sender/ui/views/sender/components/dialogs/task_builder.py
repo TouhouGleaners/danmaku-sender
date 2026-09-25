@@ -229,7 +229,7 @@ class TaskBuilderDialog(QDialog):
         task = QueueTask(
             target=target,
             danmakus=danmakus,
-            config_snapshot=self.state.sender_config.model_copy(),
+            config_snapshot=self.state.sender_config.to_task_config(),
             p_index=page,
             p_title=part_title,
             xml_path=xml_path,

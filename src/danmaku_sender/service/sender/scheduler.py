@@ -1,13 +1,13 @@
 import logging
 from threading import Event
 
-from .executor import DanmakuExecutor
-from .context import SendingContext, DanmakuFingerprint, SendJob
-from .delay_manager import DelayManager
-
+from danmaku_sender.config import SendPolicy
 from danmaku_sender.repo.history_manager import HistoryManager
-from danmaku_sender.config import SenderConfig
 from danmaku_sender.types.models.danmaku import Danmaku
+
+from .context import DanmakuFingerprint, SendingContext, SendJob
+from .delay_manager import DelayManager
+from .executor import DanmakuExecutor
 
 
 class DanmakuScheduler:
@@ -27,13 +27,13 @@ class DanmakuScheduler:
         """生成物理指纹，用于识别内容、位置、样式完全一样的重复弹幕"""
         return (dm.msg, dm.progress, dm.mode, dm.fontsize, dm.color)
 
-    def _should_skip(self, dm: Danmaku, ctx: SendingContext, config: SenderConfig) -> bool:
+    def _should_skip(self, dm: Danmaku, ctx: SendingContext, policy: SendPolicy) -> bool:
         """
         断点续传：智能去重逻辑
 
         对每个指纹计数，若当前发送序列中该指纹的出现次数 <= 数据库中已成功发送的次数，则跳过。
         """
-        if not config.skip_sent or not self.history_manager:
+        if not policy.skip_sent or not self.history_manager:
             return False
 
         dm_fingerprint = self._get_fingerprint(dm)
@@ -54,15 +54,15 @@ class DanmakuScheduler:
             return True
         return False
 
-    def _check_auto_stop(self, ctx: SendingContext, stop_event: Event, config: SenderConfig) -> bool:
+    def _check_auto_stop(self, ctx: SendingContext, stop_event: Event, policy: SendPolicy) -> bool:
         """检查是否满足用户配置的自动终止条件（发满 N 条或运行满 M 分钟）"""
-        if config.stop_after_count > 0 and ctx.success_count >= config.stop_after_count:
-            ctx.auto_stop_reason = f"达到数量限制 ({config.stop_after_count}条)"
+        if policy.stop_after_count > 0 and ctx.success_count >= policy.stop_after_count:
+            ctx.auto_stop_reason = f"达到数量限制 ({policy.stop_after_count}条)"
             stop_event.set()
             return True
 
-        if config.stop_after_time > 0 and ctx.elapsed_minutes >= config.stop_after_time:
-            ctx.auto_stop_reason = f"达到时间限制 ({config.stop_after_time}分钟)"
+        if policy.stop_after_time > 0 and ctx.elapsed_minutes >= policy.stop_after_time:
+            ctx.auto_stop_reason = f"达到时间限制 ({policy.stop_after_time}分钟)"
             stop_event.set()
             return True
 
@@ -103,7 +103,7 @@ class DanmakuScheduler:
                 job.progress_callback(i + 1, ctx.total)
 
             # --- 查重断点续传 ---
-            if self._should_skip(dm, ctx, job.config):
+            if self._should_skip(dm, ctx, job.policy):
                 ctx.skipped_count += 1
                 continue
 
@@ -130,7 +130,7 @@ class DanmakuScheduler:
                 ctx.success_count += 1
 
             # --- 检查用户设置的自动终止阀值 ---
-            if self._check_auto_stop(ctx, job.stop_event, job.config):
+            if self._check_auto_stop(ctx, job.stop_event, job.policy):
                 reason = ctx.auto_stop_reason if ctx.auto_stop_reason else "达到自动停止条件"
                 if i + 1 < ctx.total:
                     ctx.add_unsent(job.danmakus[i+1:], f"自动停止: {reason}")

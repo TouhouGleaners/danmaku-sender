@@ -2,8 +2,6 @@ import uuid
 from dataclasses import dataclass, field, replace
 from enum import Enum, auto
 
-from danmaku_sender.config import SenderConfig
-
 from .common import VideoTarget
 from .danmaku import Danmaku
 
@@ -26,18 +24,37 @@ class InsertPosition(Enum):
 
 
 @dataclass(frozen=True)
+class TaskConfig:
+    """任务工单的发送节奏参数（入队后不可变）。
+
+    描述**单个任务**（一个视频）里弹幕怎么发：延迟、爆发、休息。
+    队列级策略（跳过已发送、任务间隔、自动终止）作用于**整个任务队列**，
+    见 :class:`danmaku_sender.config.SendPolicy`。
+
+    由 ``SenderConfig.to_task_config()`` 派生，字段一一对应；
+    反向转换见 ``SenderConfig.from_task_config()``。
+    """
+    min_delay: float
+    max_delay: float
+    burst_enabled: bool
+    burst_size: int
+    rest_min: float
+    rest_max: float
+
+
+@dataclass(frozen=True)
 class TaskSpec:
     """任务工单（入队后不可变）。
 
     Worker 只持有 TaskSpec / TaskSnapshot，摸不到 TaskRuntime。
-    config 为入队/改单时的 model_copy 快照，入队后禁止再改其字段。
+    config 是入队那一刻定死的发送节奏，冻结类型，无需防御性拷贝。
     danmakus 为 tuple，结构上不可替换；发送管线须持有自己的 Danmaku 副本
     （见 SendJob 构造处的 clone），不得回填 dmid 写穿本工单。
     """
     task_id: str
     target: VideoTarget
     danmakus: tuple[Danmaku, ...]
-    config: SenderConfig
+    config: TaskConfig
     p_index: int = 0
     p_title: str = ""
     xml_path: str = ""
@@ -94,9 +111,9 @@ class TaskView:
         return self._record.spec.danmakus
 
     @property
-    def config(self) -> SenderConfig:
-        """配置副本。返回拷贝以防经只读视图改写队列配置（变更必须走 QueueState）。"""
-        return self._record.spec.config.model_copy()
+    def config(self) -> TaskConfig:
+        """发送节奏参数（冻结，直接给出即可）。"""
+        return self._record.spec.config
 
     @property
     def p_index(self) -> int:
@@ -137,7 +154,7 @@ class TaskView:
         return QueueTask(
             target=replace(spec.target),
             danmakus=list(spec.danmakus),
-            config_snapshot=spec.config.model_copy(),
+            config_snapshot=spec.config,
             task_id=spec.task_id,
             p_index=spec.p_index,
             p_title=spec.p_title,
@@ -162,7 +179,7 @@ class QueueTask:
     """
     target: VideoTarget
     danmakus: list[Danmaku]
-    config_snapshot: SenderConfig
+    config_snapshot: TaskConfig
     task_id: str = field(default_factory=lambda: uuid.uuid4().hex[:8])
     p_index: int = 0
     p_title: str = ""
@@ -187,12 +204,12 @@ class QueueTask:
         return None
 
     def to_spec(self) -> TaskSpec:
-        """打成不可变工单（深拷贝 target/config，弹幕收成 tuple）"""
+        """打成不可变工单（target 拷贝，config 本就冻结，弹幕收成 tuple）"""
         return TaskSpec(
             task_id=self.task_id,
             target=replace(self.target),
             danmakus=tuple(self.danmakus),
-            config=self.config_snapshot.model_copy(),
+            config=self.config_snapshot,
             p_index=self.p_index,
             p_title=self.p_title,
             xml_path=self.xml_path,

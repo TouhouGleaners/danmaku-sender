@@ -7,6 +7,7 @@ from danmaku_sender.config import (
     GlobalConfig,
     MonitorConfig,
     SenderConfig,
+    SendPolicy,
     ThemeConfig,
     ValidationConfig,
 )
@@ -38,6 +39,7 @@ class AppState(QObject):
         # 各模块配置（global_config 为跨模块共享的系统设置）
         self.global_config = GlobalConfig()
         self.sender_config = SenderConfig()
+        self.send_policy = SendPolicy()
         self.monitor_config = MonitorConfig()
         self.theme_config = ThemeConfig()
         self.validation_config = ValidationConfig()
