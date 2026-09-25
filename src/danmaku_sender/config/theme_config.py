@@ -1,6 +1,6 @@
 from enum import Enum
 
-from pydantic import BaseModel, ConfigDict
+from .base import AtomicModel
 
 
 class ThemeMode(Enum):
@@ -10,8 +10,7 @@ class ThemeMode(Enum):
     DARK = "dark"
 
 
-class ThemeConfig(BaseModel):
+class ThemeConfig(AtomicModel):
     """主题配置"""
-    model_config = ConfigDict(validate_assignment=True)
 
     theme_mode: ThemeMode = ThemeMode.SYSTEM

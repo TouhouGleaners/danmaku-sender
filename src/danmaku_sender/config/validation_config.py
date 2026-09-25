@@ -1,9 +1,10 @@
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import Field
+
+from .base import AtomicModel
 
 
-class ValidationConfig(BaseModel):
+class ValidationConfig(AtomicModel):
     """校验规则"""
-    model_config = ConfigDict(validate_assignment=True)
 
     # 用户自定义规则
     enabled: bool = True

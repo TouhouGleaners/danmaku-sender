@@ -1,8 +1,9 @@
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import Field
+
+from .base import AtomicModel
 
 
-class MonitorConfig(BaseModel):
+class MonitorConfig(AtomicModel):
     """监视器的配置数据"""
-    model_config = ConfigDict(validate_assignment=True)
 
     refresh_interval: int = Field(default=60, ge=10)

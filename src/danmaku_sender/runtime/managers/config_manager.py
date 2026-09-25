@@ -61,10 +61,7 @@ class ConfigManager:
                 return
             # 只落文件里出现过的字段：exclude=True 等不参与序列化的字段
             # 不能让 fresh 的默认值把它们冲掉
-            raw = data[key]
-            for name in model_class.model_fields:
-                if name in raw:
-                    object.__setattr__(target, name, getattr(fresh, name))
+            target.commit(fresh, data[key])
 
         _apply_section("global", GlobalConfig, state.global_config)
         _apply_section("sender", SenderConfig, state.sender_config)

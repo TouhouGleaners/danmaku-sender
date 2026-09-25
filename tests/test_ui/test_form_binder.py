@@ -11,7 +11,7 @@ import weakref
 from collections.abc import Callable
 
 import pytest
-from pydantic import BaseModel, ConfigDict, Field, ValidationError
+from pydantic import ConfigDict, Field, ValidationError
 from PySide6.QtWidgets import (
     QApplication,
     QCheckBox,
@@ -21,7 +21,7 @@ from PySide6.QtWidgets import (
     QWidget,
 )
 
-from danmaku_sender.config import SenderConfig
+from danmaku_sender.config import AtomicModel, SenderConfig
 from danmaku_sender.ui.framework.form_binder import (
     DraftFormBinder,
     LiveFormBinder,
@@ -39,7 +39,7 @@ def qapp():
     yield app
 
 
-class _Cfg(BaseModel):
+class _Cfg(AtomicModel):
     """测试用配置模型。
 
     字段故意覆盖多种形态：带约束的 int、带 default_factory 的 list、
@@ -458,7 +458,7 @@ def test_collect_validation_error_marks_widget(qapp):
 def test_collect_field_constraint_error_marks_widget(qapp):
     """loc 含字段名的约束错误应标红对应控件，不产生未映射消息。"""
 
-    class _Lo(BaseModel):
+    class _Lo(AtomicModel):
         lo: int = Field(ge=5)
 
     parent = QWidget()
@@ -543,7 +543,7 @@ def test_fill_rounding_to_same_value_still_emits_linkage(qapp):
     依赖该控件的联动槽不执行。
     """
 
-    class _R(BaseModel):
+    class _R(AtomicModel):
         model_config = ConfigDict(validate_assignment=True)
 
         v: float = 1.23
@@ -595,7 +595,7 @@ def test_sibling_pending_input_not_lost_on_later_valid_write(qapp):
 def test_exclude_field_not_clobbered_by_form_commit(qapp):
     """exclude=True 的字段不参与 model_dump，整表落账不得用默认值把它冲掉。"""
 
-    class _E(BaseModel):
+    class _E(AtomicModel):
         model_config = ConfigDict(validate_assignment=True)
 
         shown: int = 1

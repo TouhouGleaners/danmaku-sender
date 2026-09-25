@@ -6,8 +6,10 @@ from collections.abc import Callable, Generator
 from contextlib import contextmanager
 from typing import Any, ClassVar, NamedTuple
 
-from pydantic import BaseModel, ValidationError
+from pydantic import ValidationError
 from PySide6.QtWidgets import QWidget
+
+from danmaku_sender.config import AtomicModel
 
 from .base import _WidgetAdapter, clear_invalid, mark_invalid
 
@@ -31,7 +33,7 @@ class _LiveField(NamedTuple):
     ``parse_keywords``）而不是 ``lambda: self.xxx``。
     """
 
-    model: BaseModel
+    model: AtomicModel
     field_name: str
     to_widget: Callable[[Any], Any] | None
     to_model: Callable[[Any], Any] | None
@@ -90,7 +92,7 @@ class LiveFormBinder:
     def bind(
         cls,
         widget: QWidget,
-        model: BaseModel,
+        model: AtomicModel,
         field_name: str,
         *,
         realtime: bool = False,
@@ -163,12 +165,10 @@ class LiveFormBinder:
                 mark_invalid(w, error_msg)
                 return
 
-            # fresh 已整体合法，逐字段落账；走 object.__setattr__ 跳过
-            # __setattr__ 的再校验（中间态会再次失败）。
-            # 只落 data 里收集到的字段：exclude=True 等不参与 model_dump 的
-            # 字段不在 data 中，不能让 fresh 的默认值把它们冲掉。
-            for name in data:
-                object.__setattr__(model, name, getattr(fresh, name))
+            # fresh 已整体合法，整表落账。只写 data 里收集到的字段：
+            # exclude=True 等不参与 model_dump 的字段不在 data 中，
+            # 不能让 fresh 的默认值把它们冲掉。
+            model.commit(fresh, data)
             for sibling, _f in siblings:
                 clear_invalid(sibling)
             if after_write is not None:
