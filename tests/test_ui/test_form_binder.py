@@ -11,7 +11,7 @@ import weakref
 from collections.abc import Callable
 
 import pytest
-from pydantic import BaseModel, ConfigDict, Field, ValidationError
+from pydantic import Field, ValidationError, model_validator
 from PySide6.QtWidgets import (
     QApplication,
     QCheckBox,
@@ -21,7 +21,7 @@ from PySide6.QtWidgets import (
     QWidget,
 )
 
-from danmaku_sender.config import SenderConfig
+from danmaku_sender.config import AtomicModel, SenderConfig
 from danmaku_sender.ui.framework.form_binder import (
     DraftFormBinder,
     LiveFormBinder,
@@ -39,14 +39,12 @@ def qapp():
     yield app
 
 
-class _Cfg(BaseModel):
+class _Cfg(AtomicModel):
     """测试用配置模型。
 
     字段故意覆盖多种形态：带约束的 int、带 default_factory 的 list、
     界面上不展示的 hidden（用于验证 collect 保留基准值）。
     """
-
-    model_config = ConfigDict(validate_assignment=True)
 
     enabled: bool = True
     count: int = Field(default=3, ge=1, le=10)
@@ -458,7 +456,7 @@ def test_collect_validation_error_marks_widget(qapp):
 def test_collect_field_constraint_error_marks_widget(qapp):
     """loc 含字段名的约束错误应标红对应控件，不产生未映射消息。"""
 
-    class _Lo(BaseModel):
+    class _Lo(AtomicModel):
         lo: int = Field(ge=5)
 
     parent = QWidget()
@@ -543,9 +541,7 @@ def test_fill_rounding_to_same_value_still_emits_linkage(qapp):
     依赖该控件的联动槽不执行。
     """
 
-    class _R(BaseModel):
-        model_config = ConfigDict(validate_assignment=True)
-
+    class _R(AtomicModel):
         v: float = 1.23
 
     parent = QWidget()
@@ -595,9 +591,7 @@ def test_sibling_pending_input_not_lost_on_later_valid_write(qapp):
 def test_exclude_field_not_clobbered_by_form_commit(qapp):
     """exclude=True 的字段不参与 model_dump，整表落账不得用默认值把它冲掉。"""
 
-    class _E(BaseModel):
-        model_config = ConfigDict(validate_assignment=True)
-
+    class _E(AtomicModel):
         shown: int = 1
         hidden: float = Field(default=0.0, exclude=True)
 
@@ -621,3 +615,61 @@ def test_bind_rejects_non_field_name(qapp):
 
     assert spin not in LiveFormBinder._bindings, "非字段名不得建立绑定"
     assert callable(cfg.model_dump), "模型的方法不得被覆盖"
+
+
+def test_excluded_field_keeps_its_value_in_cross_field_validation(qapp):
+    """exclude=True 的字段参与跨字段校验时，试算必须用其当前值而非默认值。
+
+    回归：model_dump() 不含 exclude 字段，validate 会拿默认值去跑规则——
+    hidden=5 时按 hidden=0 判断，导致合法更新被拒 / 非法更新被放。
+    """
+    class _X(AtomicModel):
+        """表单里展示 visible，不展示 limit（exclude=True），但两者互相约束。"""
+
+        visible: int = 1
+        limit: int = Field(default=0, exclude=True)
+
+        @model_validator(mode="after")
+        def _check(self) -> "_X":
+            if self.visible > self.limit:
+                raise ValueError("visible 不能超过 limit")
+            return self
+
+    m = _X(visible=1, limit=5)  # limit 现值 5，与默认值 0 不同
+    parent = QWidget()
+    spin = QSpinBox(parent)
+    LiveFormBinder.bind(spin, m, "visible")
+
+    spin.setValue(3)  # 3 ≤ 5：按现值合法；按默认值 0 判断会被误拒
+    assert m.visible == 3, "合法更新不得被默认值误拒"
+    assert m.limit == 5, "exclude 字段不得被改动"
+
+    spin.setValue(9)  # 9 > 5：非法
+    assert m.visible == 3, "非法更新不得落账"
+    assert spin.property("invalid") is True
+
+
+def test_draft_collect_uses_current_value_of_excluded_field(qapp):
+    """DraftFormBinder.collect 的试算同样要用 exclude 字段的现值。"""
+
+    class _Y(AtomicModel):
+        """表单里展示 visible，不展示 limit（exclude=True），但两者互相约束。"""
+
+        visible: int = 1
+        limit: int = Field(default=0, exclude=True)
+
+        @model_validator(mode="after")
+        def _check(self) -> "_Y":
+            if self.visible > self.limit:
+                raise ValueError("visible 不能超过 limit")
+            return self
+
+    parent = QWidget()
+    spin = QSpinBox(parent)
+    DraftFormBinder.map(spin, "visible")
+    DraftFormBinder.fill(parent, _Y(visible=1, limit=5))  # limit 现值 5
+
+    spin.setValue(3)  # 3 ≤ 5：按现值合法
+    out = DraftFormBinder.collect(parent, _Y)
+    assert out.visible == 3
+    assert out.limit == 5, "exclude 字段按现值传递，不得回落默认值"

@@ -1,9 +1,8 @@
-from pydantic import BaseModel, ConfigDict
+from .base import AtomicModel
 
 
-class GlobalConfig(BaseModel):
+class GlobalConfig(AtomicModel):
     """全局系统设置（跨发送器/监视器共享，只此一份）"""
-    model_config = ConfigDict(validate_assignment=True)
 
     # 系统设置
     prevent_sleep: bool = True

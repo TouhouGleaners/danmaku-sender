@@ -6,8 +6,10 @@ from collections.abc import Callable, Generator
 from contextlib import contextmanager
 from typing import Any, ClassVar, NamedTuple
 
-from pydantic import BaseModel, ValidationError
+from pydantic import ValidationError
 from PySide6.QtWidgets import QWidget
+
+from danmaku_sender.config import AtomicModel
 
 from .base import _WidgetAdapter, clear_invalid, mark_invalid
 
@@ -31,7 +33,7 @@ class _LiveField(NamedTuple):
     ``parse_keywords``）而不是 ``lambda: self.xxx``。
     """
 
-    model: BaseModel
+    model: AtomicModel
     field_name: str
     to_widget: Callable[[Any], Any] | None
     to_model: Callable[[Any], Any] | None
@@ -90,7 +92,7 @@ class LiveFormBinder:
     def bind(
         cls,
         widget: QWidget,
-        model: BaseModel,
+        model: AtomicModel,
         field_name: str,
         *,
         realtime: bool = False,
@@ -144,31 +146,33 @@ class LiveFormBinder:
             # 单字段写会丢掉兄弟控件的待定输入：例如 min 先被拒、max 改对后，
             # min 的输入就找不回来了。互约束（min ≤ max）下单字段也判不了合法性。
             siblings = [(s, f) for s, f in list(cls._bindings.items()) if f.model is model]
-            data = model.model_dump()
+            # 试算输入取完整字段值：model_dump() 不含 exclude=True 的字段，
+            # 那些字段会被当成默认值参与跨字段校验，导致合法被拒或非法被放。
+            probe = model.field_values()
+            written: dict[str, Any] = {}  # 只落表单收集到的字段
             for sibling, f in siblings:
                 try:
                     raw_val = _WidgetAdapter.read(sibling)
-                    data[f.field_name] = f.to_model(raw_val) if f.to_model is not None else raw_val
+                    new_val = f.to_model(raw_val) if f.to_model is not None else raw_val
                 except Exception as e:
                     logger.warning(f"控件值转换失败 [{f.field_name}]: {e}")
                     mark_invalid(sibling, str(e))
                     return
+                probe[f.field_name] = new_val
+                written[f.field_name] = new_val
 
-            new_val = data[field_name]
+            new_val = probe[field_name]
             try:
-                fresh = type(model).model_validate(data)
+                fresh = type(model).model_validate(probe)
             except ValidationError as e:
                 error_msg = "\n".join(err.get("msg", "格式错误") for err in e.errors())
                 logger.warning(f"表单整体校验失败 [{field_name}={new_val}]: {error_msg}")
                 mark_invalid(w, error_msg)
                 return
 
-            # fresh 已整体合法，逐字段落账；走 object.__setattr__ 跳过
-            # __setattr__ 的再校验（中间态会再次失败）。
-            # 只落 data 里收集到的字段：exclude=True 等不参与 model_dump 的
-            # 字段不在 data 中，不能让 fresh 的默认值把它们冲掉。
-            for name in data:
-                object.__setattr__(model, name, getattr(fresh, name))
+            # fresh 已整体合法，只落表单收集到的字段；未收集的
+            # （如 exclude=True 且不在表单里的）保持原状。
+            model.commit(fresh, written)
             for sibling, _f in siblings:
                 clear_invalid(sibling)
             if after_write is not None:
