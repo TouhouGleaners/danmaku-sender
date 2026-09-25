@@ -11,7 +11,7 @@ import weakref
 from collections.abc import Callable
 
 import pytest
-from pydantic import ConfigDict, Field, ValidationError
+from pydantic import ConfigDict, Field, ValidationError, model_validator
 from PySide6.QtWidgets import (
     QApplication,
     QCheckBox,
@@ -621,3 +621,61 @@ def test_bind_rejects_non_field_name(qapp):
 
     assert spin not in LiveFormBinder._bindings, "非字段名不得建立绑定"
     assert callable(cfg.model_dump), "模型的方法不得被覆盖"
+
+
+def test_excluded_field_keeps_its_value_in_cross_field_validation(qapp):
+    """exclude=True 的字段参与跨字段校验时，试算必须用其当前值而非默认值。
+
+    回归：model_dump() 不含 exclude 字段，validate 会拿默认值去跑规则——
+    hidden=5 时按 hidden=0 判断，导致合法更新被拒 / 非法更新被放。
+    """
+    class _X(AtomicModel):
+        """表单里展示 visible，不展示 limit（exclude=True），但两者互相约束。"""
+
+        visible: int = 1
+        limit: int = Field(default=0, exclude=True)
+
+        @model_validator(mode="after")
+        def _check(self) -> "_X":
+            if self.visible > self.limit:
+                raise ValueError("visible 不能超过 limit")
+            return self
+
+    m = _X(visible=1, limit=5)  # limit 现值 5，与默认值 0 不同
+    parent = QWidget()
+    spin = QSpinBox(parent)
+    LiveFormBinder.bind(spin, m, "visible")
+
+    spin.setValue(3)  # 3 ≤ 5：按现值合法；按默认值 0 判断会被误拒
+    assert m.visible == 3, "合法更新不得被默认值误拒"
+    assert m.limit == 5, "exclude 字段不得被改动"
+
+    spin.setValue(9)  # 9 > 5：非法
+    assert m.visible == 3, "非法更新不得落账"
+    assert spin.property("invalid") is True
+
+
+def test_draft_collect_uses_current_value_of_excluded_field(qapp):
+    """DraftFormBinder.collect 的试算同样要用 exclude 字段的现值。"""
+
+    class _Y(AtomicModel):
+        """表单里展示 visible，不展示 limit（exclude=True），但两者互相约束。"""
+
+        visible: int = 1
+        limit: int = Field(default=0, exclude=True)
+
+        @model_validator(mode="after")
+        def _check(self) -> "_Y":
+            if self.visible > self.limit:
+                raise ValueError("visible 不能超过 limit")
+            return self
+
+    parent = QWidget()
+    spin = QSpinBox(parent)
+    DraftFormBinder.map(spin, "visible")
+    DraftFormBinder.fill(parent, _Y(visible=1, limit=5))  # limit 现值 5
+
+    spin.setValue(3)  # 3 ≤ 5：按现值合法
+    out = DraftFormBinder.collect(parent, _Y)
+    assert out.visible == 3
+    assert out.limit == 5, "exclude 字段按现值传递，不得回落默认值"

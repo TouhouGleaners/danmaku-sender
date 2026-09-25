@@ -1,9 +1,10 @@
 import json
 import logging
 
-from pydantic import BaseModel, ValidationError
+from pydantic import ValidationError
 
 from danmaku_sender.config import (
+    AtomicModel,
     GlobalConfig,
     MonitorConfig,
     SenderConfig,
@@ -46,7 +47,7 @@ class ConfigManager:
             logger.info("未找到配置文件或格式异常，使用默认设置。")
             return
 
-        def _apply_section[T: BaseModel](key: str, model_class: type[T], target: T) -> None:
+        def _apply_section[T: AtomicModel](key: str, model_class: type[T], target: T) -> None:
             """把 config.json 的段校验后原地灌进 target。
 
             必须原地更新、不得换实例：UI 绑定表持有 target 的引用，
@@ -54,13 +55,16 @@ class ConfigManager:
             """
             if key not in data:
                 return
+            # 试算输入取完整字段值再叠文件值：exclude=True 等不参与序列化的
+            # 字段若参与跨字段校验，用默认值判断会得出错误结论。
+            # 落账仍只写文件里出现过的字段，未出现的保持原状。
+            probe = target.field_values()
+            probe.update(data[key])
             try:
-                fresh = model_class.model_validate(data[key])
+                fresh = model_class.model_validate(probe)
             except ValidationError as e:
                 logger.warning(f"模块 [{key}] 配置存在非法值，已回退为安全默认值。详情:\n{e}")
                 return
-            # 只落文件里出现过的字段：exclude=True 等不参与序列化的字段
-            # 不能让 fresh 的默认值把它们冲掉
             target.commit(fresh, data[key])
 
         _apply_section("global", GlobalConfig, state.global_config)

@@ -8,6 +8,8 @@ from typing import Any, ClassVar, NamedTuple
 from pydantic import BaseModel, ValidationError
 from PySide6.QtWidgets import QWidget
 
+from danmaku_sender.config import AtomicModel
+
 from .base import _WidgetAdapter, clear_invalid, mark_invalid
 
 logger = logging.getLogger(__name__)
@@ -51,7 +53,7 @@ class DraftFormBinder:
     # 控件 → 字段映射。key 为弱引用，控件销毁后条目自动移除。
     _fields: ClassVar[weakref.WeakKeyDictionary[QWidget, _DraftField]] = weakref.WeakKeyDictionary()
     # 表单面板 → fill 时的基准模型。collect 时未展示字段按基准保留。
-    _bases: ClassVar[weakref.WeakKeyDictionary[QWidget, BaseModel]] = weakref.WeakKeyDictionary()
+    _bases: ClassVar[weakref.WeakKeyDictionary[QWidget, AtomicModel]] = weakref.WeakKeyDictionary()
 
     @classmethod
     def map(
@@ -75,7 +77,7 @@ class DraftFormBinder:
         cls._fields[widget] = _DraftField(field_name, to_widget, to_model)
 
     @classmethod
-    def fill(cls, parent: QWidget, model: BaseModel) -> None:
+    def fill(cls, parent: QWidget, model: AtomicModel) -> None:
         """将模型值填充到 parent 子树内已登记的控件，并记录该模型为基准。
 
         基准的作用：对话框未展示的字段（如任务详情未提供的配置项）在 :meth:`collect` 时保持原值，不会被重置为默认值。
@@ -111,7 +113,9 @@ class DraftFormBinder:
         data: dict[str, Any] = {}
         base = cls._bases.get(parent)
         if base is not None:
-            data.update(base.model_dump())
+            # 取完整字段值：model_dump() 不含 exclude=True 的字段，
+            # 那些字段会被当成默认值参与跨字段校验
+            data.update(base.field_values())
 
         for w in cls._iter_fields(parent):
             f = cls._fields[w]

@@ -24,12 +24,18 @@ class AtomicModel(BaseModel):
     需要原子写入请用普通属性赋值。
     """
 
+    def field_values(self) -> dict[str, Any]:
+        """返回全部字段的当前值。
+
+        包含 ``exclude=True`` 等不参与 ``model_dump()`` 序列化的字段。
+        跨字段校验的试算输入必须完整——否则那些字段会被当成默认值参与判断。
+        """
+        return {name: getattr(self, name) for name in type(self).model_fields}
+
     def __setattr__(self, name: str, value: Any) -> None:
         """写入单个字段；整模型校验失败则保持原状。"""
         if name in type(self).model_fields:
-            # 取完整字段值试算：model_dump() 不含 exclude=True 的字段，
-            # 那些字段会被当成默认值参与校验
-            probe = {n: getattr(self, n) for n in type(self).model_fields}
+            probe = self.field_values()
             probe[name] = value
             type(self).model_validate(probe)
         super().__setattr__(name, value)
