@@ -5,7 +5,7 @@ import weakref
 from collections.abc import Callable
 from typing import Any, ClassVar, NamedTuple
 
-from pydantic import BaseModel, ValidationError
+from pydantic import ValidationError
 from PySide6.QtWidgets import QWidget
 
 from danmaku_sender.config import AtomicModel
@@ -96,7 +96,7 @@ class DraftFormBinder:
                 logger.warning(f"fill 失败 [{f.field_name}]: {e}")
 
     @classmethod
-    def collect[T: BaseModel](cls, parent: QWidget, model_class: type[T]) -> T:
+    def collect[T: AtomicModel](cls, parent: QWidget, model_class: type[T]) -> T:
         """读取控件值，覆盖到基准模型的字段上，构造并校验模型实例。
 
         Args:

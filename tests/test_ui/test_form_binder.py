@@ -11,7 +11,7 @@ import weakref
 from collections.abc import Callable
 
 import pytest
-from pydantic import ConfigDict, Field, ValidationError, model_validator
+from pydantic import Field, ValidationError, model_validator
 from PySide6.QtWidgets import (
     QApplication,
     QCheckBox,
@@ -45,8 +45,6 @@ class _Cfg(AtomicModel):
     字段故意覆盖多种形态：带约束的 int、带 default_factory 的 list、
     界面上不展示的 hidden（用于验证 collect 保留基准值）。
     """
-
-    model_config = ConfigDict(validate_assignment=True)
 
     enabled: bool = True
     count: int = Field(default=3, ge=1, le=10)
@@ -544,8 +542,6 @@ def test_fill_rounding_to_same_value_still_emits_linkage(qapp):
     """
 
     class _R(AtomicModel):
-        model_config = ConfigDict(validate_assignment=True)
-
         v: float = 1.23
 
     parent = QWidget()
@@ -596,8 +592,6 @@ def test_exclude_field_not_clobbered_by_form_commit(qapp):
     """exclude=True 的字段不参与 model_dump，整表落账不得用默认值把它冲掉。"""
 
     class _E(AtomicModel):
-        model_config = ConfigDict(validate_assignment=True)
-
         shown: int = 1
         hidden: float = Field(default=0.0, exclude=True)
 
