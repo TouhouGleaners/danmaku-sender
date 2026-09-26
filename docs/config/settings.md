@@ -15,7 +15,9 @@
 
 ---
 
-## 发送策略 (SenderConfig)
+## 发送节奏 (SenderConfig)
+
+描述**单个任务**里弹幕怎么发。入队时会派生成不可变的工单参数快照，因此修改这些设置只对**新建**的任务生效，已入队任务保持入队那一刻的节奏。
 
 | 配置项 | 类型 | 默认值 | UI 控件 | 说明 |
 |:-------|:-----|:-------|:--------|:-----|
@@ -25,12 +27,45 @@
 | `burst_size` | int | 3 | QSpinBox | 突发模式下每轮连发条数 |
 | `rest_min` | float | 40.0 | QDoubleSpinBox | 突发模式休息期最小时间（秒） |
 | `rest_max` | float | 45.0 | QDoubleSpinBox | 突发模式休息期最大时间（秒） |
+
+---
+
+## 队列发送策略 (SendPolicy)
+
+描述**整个任务队列**怎么跑。启动队列时取一次快照，运行期间修改这些设置不影响正在跑的队列（下次运行生效）。
+
+| 配置项 | 类型 | 默认值 | UI 控件 | 说明 |
+|:-------|:-----|:-------|:--------|:-----|
+| `delay_between_tasks` | float | 30 | QDoubleSpinBox | 两个任务之间的等待时间（秒） |
 | `stop_after_count` | int | 0 | QSpinBox | 发送 N 条后自动停止（0=不限） |
 | `stop_after_time` | int | 0 | QSpinBox | 运行 N 分钟后自动停止（0=不限） |
-| `delay_between_tasks` | float | 30 | QDoubleSpinBox | 两个任务之间的等待时间（秒） |
 | `skip_sent` | bool | true | QCheckBox | 是否启用断点续传（发送前查重） |
 
 详细说明见 [频率控制与并发策略](../features/sender/delay-control.md) 和 [断点续传与智能去重](../features/sender/resume.md)。
+
+两者在 `config.json` 中分属不同的段：
+
+```json
+{
+  "sender": {
+    "min_delay": 8.0,
+    "max_delay": 8.5,
+    "burst_enabled": false,
+    "burst_size": 3,
+    "rest_min": 40.0,
+    "rest_max": 45.0
+  },
+  "send_policy": {
+    "delay_between_tasks": 30.0,
+    "stop_after_count": 0,
+    "stop_after_time": 0,
+    "skip_sent": true
+  }
+}
+```
+
+!!! note "旧配置不做迁移"
+    缺少 `send_policy` 段时这些策略项会回退为默认值，不会从旧 `sender` 段里搬过来。
 
 ---
 
