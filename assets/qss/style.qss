@@ -78,6 +78,22 @@ QPushButton[action="true"][state="running"]:hover {
     background-color: #c0392b;
 }
 
+/* 主操作按钮（如「新建任务」）：与维护操作区分层 */
+*[primary="true"] {
+    color: white;
+    font-weight: 600;
+    padding: 4px 12px;
+    border-radius: 4px;
+    border: none;
+    background-color: {success};
+}
+*[primary="true"]:hover {
+    background-color: #27ae60;
+}
+*[primary="true"]:disabled {
+    background-color: {border_color};
+}
+
 /* ========================================= */
 /* UIBinder 动态错误状态样式 (Invalid State)  */
 /* ========================================= */

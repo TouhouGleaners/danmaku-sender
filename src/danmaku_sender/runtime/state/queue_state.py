@@ -244,6 +244,16 @@ class QueueState(QObject):
             self.tasksChanged.emit()
             logger.info(f"已清除 {removed} 个已完成任务")
 
+    def clear_all(self):
+        """清空整个队列（所有状态的任务都移除）"""
+        with self._lock:
+            removed = len(self._records)
+            if removed == 0:
+                return
+            self._records.clear()
+        self.tasksChanged.emit()
+        logger.info(f"已清空队列（{removed} 个任务）")
+
     # ── 数据变更（发射 taskDataChanged）───────────────────────
 
     def assign_danmakus(self, task_id: str, danmakus: list[Danmaku], xml_path: str = ""):
