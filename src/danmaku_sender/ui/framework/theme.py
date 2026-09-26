@@ -47,6 +47,7 @@ class Palette:
         p.setColor(QPalette.ColorRole.ToolTipBase, QColor(self.bg_surface))
         p.setColor(QPalette.ColorRole.ToolTipText, QColor(self.text_main))
         p.setColor(QPalette.ColorRole.Text, QColor(self.text_main))
+        p.setColor(QPalette.ColorRole.PlaceholderText, QColor(self.text_secondary))
         p.setColor(QPalette.ColorRole.Button, QColor(self.bg_hover))
         p.setColor(QPalette.ColorRole.ButtonText, QColor(self.text_main))
         p.setColor(QPalette.ColorRole.BrightText, QColor(self.primary))
