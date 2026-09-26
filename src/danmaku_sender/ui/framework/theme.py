@@ -23,6 +23,35 @@ THEMES_DIR = AppInfo.Paths.ASSETS / "themes"
 QSS_PATH = AppInfo.Paths.ASSETS / "qss" / "style.qss"
 
 
+# QPalette.ColorRole 到颜色来源的映射：取值为 Palette 的属性名，
+# 或以 # 开头的字面色。须覆盖 Qt 全部 ColorRole，未覆盖的角色会被 Qt 回退为系统默认值。
+ROLE_SOURCES: dict[QPalette.ColorRole, str] = {
+    QPalette.ColorRole.Window: "bg_base",
+    QPalette.ColorRole.WindowText: "text_main",
+    QPalette.ColorRole.Base: "bg_surface",
+    QPalette.ColorRole.AlternateBase: "bg_base",
+    QPalette.ColorRole.Text: "text_main",
+    QPalette.ColorRole.Button: "bg_hover",
+    QPalette.ColorRole.ButtonText: "text_main",
+    QPalette.ColorRole.BrightText: "primary",
+    QPalette.ColorRole.Highlight: "primary",
+    QPalette.ColorRole.HighlightedText: "#ffffff",
+    QPalette.ColorRole.ToolTipBase: "bg_surface",
+    QPalette.ColorRole.ToolTipText: "text_main",
+    QPalette.ColorRole.PlaceholderText: "text_secondary",
+    QPalette.ColorRole.Link: "primary",
+    QPalette.ColorRole.LinkVisited: "primary",
+    QPalette.ColorRole.Accent: "primary",
+    # Light / Midlight / Mid / Dark / Shadow 服务于立体边框与阴影。
+    # 本项目为平面化界面，这些角色统一取中性色。
+    QPalette.ColorRole.Light: "bg_hover",
+    QPalette.ColorRole.Midlight: "bg_surface",
+    QPalette.ColorRole.Mid: "border_color",
+    QPalette.ColorRole.Dark: "border_color",
+    QPalette.ColorRole.Shadow: "border_color",
+}
+
+
 @dataclass(frozen=True)
 class Palette:
     """系统色彩语义 Token（不可变）"""
@@ -38,20 +67,18 @@ class Palette:
     danger_bg: str
 
     def to_qpalette(self) -> QPalette:
-        """映射为 Qt 原生调色板，让未被 QSS 覆盖的原生部件也能协调显示"""
+        """映射为 Qt 原生调色板，供未被 QSS 覆盖的控件使用。
+
+        按 :data:`ROLE_SOURCES` 设置全部 ColorRole。
+        未设置的角色会被 Qt回退为系统默认值，因此映射表必须保持完整。
+
+        Returns:
+            填充了全部 ColorRole 的调色板。
+        """
         p = QPalette()
-        p.setColor(QPalette.ColorRole.Window, QColor(self.bg_base))
-        p.setColor(QPalette.ColorRole.WindowText, QColor(self.text_main))
-        p.setColor(QPalette.ColorRole.Base, QColor(self.bg_surface))
-        p.setColor(QPalette.ColorRole.AlternateBase, QColor(self.bg_base))
-        p.setColor(QPalette.ColorRole.ToolTipBase, QColor(self.bg_surface))
-        p.setColor(QPalette.ColorRole.ToolTipText, QColor(self.text_main))
-        p.setColor(QPalette.ColorRole.Text, QColor(self.text_main))
-        p.setColor(QPalette.ColorRole.Button, QColor(self.bg_hover))
-        p.setColor(QPalette.ColorRole.ButtonText, QColor(self.text_main))
-        p.setColor(QPalette.ColorRole.BrightText, QColor(self.primary))
-        p.setColor(QPalette.ColorRole.Highlight, QColor(self.primary))
-        p.setColor(QPalette.ColorRole.HighlightedText, QColor("#ffffff"))
+        for role, source in ROLE_SOURCES.items():
+            color = source if source.startswith("#") else getattr(self, source)
+            p.setColor(role, QColor(color))
         return p
 
 
