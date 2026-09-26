@@ -121,34 +121,36 @@ class SenderPage(QWidget):
         # 键盘删除
         QShortcut(QKeySequence.StandardKey.Delete, self._queue_table, self._delete_selected_task)
 
-        # 队列工具栏：管理列表的操作（增删）。
+        # 队列工具栏：管理列表的操作（增删）。运行队列的操作在底部操作区。
+        # 图标 + 文字：清除已完成没有通用图标，单靠图标意图不明。
+        # 主操作与维护操作分层：新建为实心按钮靠左，删除/清除为扁平按钮靠右。
+        def _tool_button(text: str, icon, *, primary: bool = False) -> QToolButton:
+            btn = QToolButton()
+            btn.setIcon(icon)
+            btn.setText(text)
+            btn.setToolButtonStyle(Qt.ToolButtonStyle.ToolButtonTextBesideIcon)
+            btn.setCursor(Qt.CursorShape.PointingHandCursor)
+            if primary:
+                btn.setProperty("primary", "true")
+            else:
+                btn.setAutoRaise(True)  # 平时无边框，悬停才显形
+            return btn
+
         queue_toolbar = QHBoxLayout()
 
-        self._btn_add_to_queue = QToolButton()
-        self._btn_add_to_queue.setIcon(SvgIcon.NOTE_ADD)
-        self._btn_add_to_queue.setToolTip("新建任务")
-        self._btn_add_to_queue.setCursor(Qt.CursorShape.PointingHandCursor)
-        self._btn_add_to_queue.setAutoRaise(True)
+        self._btn_add_to_queue = _tool_button("新建任务", SvgIcon.NOTE_ADD, primary=True)
 
         self._delete_menu = QMenu(self)
         self._delete_menu.addAction("删除选定", self._delete_selected_task)
         self._delete_menu.addAction("删除全部", self._delete_all_tasks)
-        self._btn_delete = QToolButton()
-        self._btn_delete.setIcon(SvgIcon.DELETE)
-        self._btn_delete.setToolTip("删除任务")
-        self._btn_delete.setCursor(Qt.CursorShape.PointingHandCursor)
-        self._btn_delete.setAutoRaise(True)
+        self._btn_delete = _tool_button("删除", SvgIcon.DELETE)
         self._btn_delete.setPopupMode(QToolButton.ToolButtonPopupMode.InstantPopup)
         self._btn_delete.setMenu(self._delete_menu)
 
-        self._btn_clear_completed = QToolButton()
-        self._btn_clear_completed.setIcon(SvgIcon.FORMAT_CLEAR)
-        self._btn_clear_completed.setToolTip("清除已完成")
-        self._btn_clear_completed.setCursor(Qt.CursorShape.PointingHandCursor)
-        self._btn_clear_completed.setAutoRaise(True)
+        self._btn_clear_completed = _tool_button("清除已完成", SvgIcon.FORMAT_CLEAR)
 
-        queue_toolbar.addStretch()
         queue_toolbar.addWidget(self._btn_add_to_queue)
+        queue_toolbar.addStretch()
         queue_toolbar.addWidget(self._btn_delete)
         queue_toolbar.addWidget(self._btn_clear_completed)
         queue_layout.addLayout(queue_toolbar)
