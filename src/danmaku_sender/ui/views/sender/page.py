@@ -31,6 +31,7 @@ from PySide6.QtWidgets import (
     QPushButton,
     QTableView,
     QTextEdit,
+    QToolButton,
     QVBoxLayout,
     QWidget,
 )
@@ -120,6 +121,38 @@ class SenderPage(QWidget):
         # 键盘删除
         QShortcut(QKeySequence.StandardKey.Delete, self._queue_table, self._delete_selected_task)
 
+        # 队列工具栏：管理列表的操作（增删）。
+        queue_toolbar = QHBoxLayout()
+
+        self._btn_add_to_queue = QToolButton()
+        self._btn_add_to_queue.setIcon(SvgIcon.NOTE_ADD)
+        self._btn_add_to_queue.setToolTip("新建任务")
+        self._btn_add_to_queue.setCursor(Qt.CursorShape.PointingHandCursor)
+        self._btn_add_to_queue.setAutoRaise(True)
+
+        self._delete_menu = QMenu(self)
+        self._delete_menu.addAction("删除选定", self._delete_selected_task)
+        self._delete_menu.addAction("删除全部", self._delete_all_tasks)
+        self._btn_delete = QToolButton()
+        self._btn_delete.setIcon(SvgIcon.DELETE)
+        self._btn_delete.setToolTip("删除任务")
+        self._btn_delete.setCursor(Qt.CursorShape.PointingHandCursor)
+        self._btn_delete.setAutoRaise(True)
+        self._btn_delete.setPopupMode(QToolButton.ToolButtonPopupMode.InstantPopup)
+        self._btn_delete.setMenu(self._delete_menu)
+
+        self._btn_clear_completed = QToolButton()
+        self._btn_clear_completed.setIcon(SvgIcon.FORMAT_CLEAR)
+        self._btn_clear_completed.setToolTip("清除已完成")
+        self._btn_clear_completed.setCursor(Qt.CursorShape.PointingHandCursor)
+        self._btn_clear_completed.setAutoRaise(True)
+
+        queue_toolbar.addStretch()
+        queue_toolbar.addWidget(self._btn_add_to_queue)
+        queue_toolbar.addWidget(self._btn_delete)
+        queue_toolbar.addWidget(self._btn_clear_completed)
+        queue_layout.addLayout(queue_toolbar)
+
         queue_layout.addWidget(self._queue_table)
 
         # 空状态引导
@@ -132,24 +165,6 @@ class SenderPage(QWidget):
         # 布局完成后再定位，避免 viewport geometry 为零
         QTimer.singleShot(0, self._update_empty_hint)
 
-        queue_btn_layout = QHBoxLayout()
-
-        self._btn_add_to_queue = QPushButton("新建任务")
-        self._btn_add_to_queue.setIcon(SvgIcon.START)
-        self._btn_add_to_queue.setFixedWidth(120)
-        self._btn_add_to_queue.setCursor(Qt.CursorShape.PointingHandCursor)
-        self._btn_add_to_queue.setProperty("action", "true")
-        self._btn_add_to_queue.setProperty("state", "ready")
-
-        self._btn_clear_completed = QPushButton("清除已完成")
-        self._btn_clear_completed.setFixedWidth(100)
-        self._btn_clear_completed.setCursor(Qt.CursorShape.PointingHandCursor)
-
-        queue_btn_layout.addWidget(self._btn_add_to_queue)
-        queue_btn_layout.addWidget(self._btn_clear_completed)
-        queue_btn_layout.addStretch()
-
-        queue_layout.addLayout(queue_btn_layout)
         main_layout.addWidget(queue_group)
 
         # --- 日志区 ---
@@ -282,13 +297,30 @@ class SenderPage(QWidget):
     def _remove_task(self, task_id: str):
         self.state.queue_state.remove_task(task_id)
 
+    @Slot()
     def _delete_selected_task(self):
-        indexes = self._queue_table.selectedIndexes()
-        if not indexes:
+        """删除选中的任务（仅待发送 / 未配置状态可删）"""
+        rows = sorted({i.row() for i in self._queue_table.selectedIndexes()}, reverse=True)
+        for row in rows:
+            task = self._queue_model.get_task_at(row)
+            if task and task.status in (TaskStatus.PENDING, TaskStatus.UNCONFIGURED):
+                self._remove_task(task.task_id)
+
+    @Slot()
+    def _delete_all_tasks(self):
+        """清空队列中的全部任务（需确认，不可撤销）"""
+        total = len(self.state.queue_state.tasks)
+        if total == 0:
             return
-        task = self._queue_model.get_task_at(indexes[0].row())
-        if task and task.status in (TaskStatus.PENDING, TaskStatus.UNCONFIGURED):
-            self._remove_task(task.task_id)
+        reply = QMessageBox.question(
+            self,
+            "删除全部任务",
+            f"确定删除队列中的全部 {total} 个任务？此操作不可撤销。",
+            QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
+            QMessageBox.StandardButton.No,
+        )
+        if reply == QMessageBox.StandardButton.Yes:
+            self.state.queue_state.clear_all()
 
     @Slot()
     def _add_to_queue(self):
