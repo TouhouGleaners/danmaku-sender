@@ -29,7 +29,6 @@ from PySide6.QtWidgets import (
     QMessageBox,
     QProgressBar,
     QPushButton,
-    QTableView,
     QTextEdit,
     QToolButton,
     QVBoxLayout,
@@ -49,7 +48,7 @@ from danmaku_sender.utils.time_utils import format_duration
 
 from .components.dialogs.task_builder import TaskBuilderDialog
 from .components.dialogs.task_detail import TaskDetailDialog
-from .components.queue_table import ProgressBarDelegate, QueueTableModel
+from .components.queue_table import ProgressBarDelegate, QueueTableModel, QueueTableView
 
 
 class SenderPage(QWidget):
@@ -82,10 +81,11 @@ class SenderPage(QWidget):
 
         self._queue_model = QueueTableModel()
         self._queue_model.on_reorder = self._on_queue_reorder
-        self._queue_table = QTableView()
+        self._queue_table = QueueTableView()
         self._queue_table.setModel(self._queue_model)
         self._queue_table.setSelectionBehavior(QAbstractItemView.SelectionBehavior.SelectRows)
-        self._queue_table.setSelectionMode(QAbstractItemView.SelectionMode.SingleSelection)
+        # 多选支持批量删除；多选拖拽由 QueueTableView.startDrag 拦下
+        self._queue_table.setSelectionMode(QAbstractItemView.SelectionMode.ExtendedSelection)
         self._queue_table.setAlternatingRowColors(True)
         self._queue_table.verticalHeader().setVisible(False)
 
@@ -118,7 +118,7 @@ class SenderPage(QWidget):
         # 双击查看详情
         self._queue_table.doubleClicked.connect(self._on_queue_double_clicked)
 
-        # 键盘删除
+        # 键盘删除。禁用快捷键与函数对 Delete 键是同样的静默表现，
         QShortcut(QKeySequence.StandardKey.Delete, self._queue_table, self._delete_selected_task)
 
         # 队列工具栏：管理列表的操作（增删）。运行队列的操作在底部操作区。
@@ -302,6 +302,8 @@ class SenderPage(QWidget):
     @Slot()
     def _delete_selected_task(self):
         """删除选中的任务（仅待发送 / 未配置状态可删）"""
+        if self.state.sender_is_active:
+            return
         rows = sorted({i.row() for i in self._queue_table.selectedIndexes()}, reverse=True)
         for row in rows:
             task = self._queue_model.get_task_at(row)
@@ -311,6 +313,8 @@ class SenderPage(QWidget):
     @Slot()
     def _delete_all_tasks(self):
         """清空队列中的全部任务（需确认，不可撤销）"""
+        if self.state.sender_is_active:
+            return
         total = len(self.state.queue_state.tasks)
         if total == 0:
             return
@@ -589,7 +593,10 @@ class SenderPage(QWidget):
             send_windows_notification("弹幕队列发送完毕", summary)
 
     def _update_queue_ui(self, running: bool):
+        # 运行中禁用维护按钮：可见反馈 + 挡住下拉展开。
+        # sender_is_active，Delete 键不经按钮也能被拦下。
         self._btn_add_to_queue.setEnabled(not running)
+        self._btn_delete.setEnabled(not running)
         self._btn_clear_completed.setEnabled(not running)
         self._queue_model.queue_running = running
 
