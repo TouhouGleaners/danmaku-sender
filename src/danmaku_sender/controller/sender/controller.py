@@ -101,10 +101,14 @@ class SenderController(QObject):
             logger.warning("队列中没有可执行的任务快照。")
             return False
 
+        # 队列策略同样取启动时快照：运行期间改设置不影响本次运行，
+        # 也避免设置页与 Worker 跨线程共享同一个可变对象。
+        send_policy = self.state.send_policy.model_copy(deep=True)
+
         worker = QueueSendWorker(
             tasks=snapshots,
             auth_config=auth_config,
-            send_policy=self.state.send_policy,
+            send_policy=send_policy,
             history_manager=self.history_manager,
             stop_event=self._stop_event,
             prevent_sleep=self.state.global_config.prevent_sleep,

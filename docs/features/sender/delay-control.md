@@ -54,6 +54,8 @@ B 站对弹幕发送有严格的频率限制。过快的发送会触发风控（
 
 当发送达到指定条件时，程序会自动停止队列。适用于测试场景或分批发送。
 
+> 属于**队列发送策略**（`SendPolicy`）：启动队列时取一次快照，运行期间修改不影响正在跑的队列。
+
 | 配置项 | 说明 | 默认值 |
 |:-------|:-----|:-------|
 | `stop_after_count` | 发送 N 条后自动停止 | 0（不限） |
@@ -66,6 +68,8 @@ B 站对弹幕发送有严格的频率限制。过快的发送会触发风控（
 ## 任务间隔
 
 当队列中有多个任务时，一个任务发送完毕后，程序会等待一段时间再开始下一个任务。
+
+> 属于**队列发送策略**（`SendPolicy`）：启动队列时取一次快照。
 
 | 配置项 | 说明 | 默认值 |
 |:-------|:-----|:-------|
@@ -110,9 +114,11 @@ ETA 根据当前延时设置（随机间隔 + 突发模式的动态变化）实�
 === "安全模式（推荐新手）"
 
     ```yaml
+    # sender: 发送节奏
     min_delay: 8.0
     max_delay: 8.5
     burst_enabled: false
+    # send_policy: 队列策略
     stop_after_count: 0
     stop_after_time: 0
     ```
@@ -120,12 +126,14 @@ ETA 根据当前延时设置（随机间隔 + 突发模式的动态变化）实�
 === "高效模式（适合大批量）"
 
     ```yaml
+    # sender: 发送节奏
     min_delay: 8.5
     max_delay: 9.5
     burst_enabled: true
     burst_size: 5
     rest_min: 30
     rest_max: 35
+    # send_policy: 队列策略
     stop_after_count: 0
     stop_after_time: 0
     ```
@@ -133,9 +141,11 @@ ETA 根据当前延时设置（随机间隔 + 突发模式的动态变化）实�
 === "测试模式（小批量试水）"
 
     ```yaml
+    # sender: 发送节奏
     min_delay: 10.0
     max_delay: 12.0
     burst_enabled: false
+    # send_policy: 队列策略
     stop_after_count: 10
     stop_after_time: 0
     ```

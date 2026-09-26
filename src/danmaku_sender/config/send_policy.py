@@ -14,8 +14,9 @@ class SendPolicy(AtomicModel):
     - ``delay_between_tasks``: 相邻两个任务之间的间隔；
     - ``stop_after_count`` / ``stop_after_time``: 整个队列发到多少停。
 
-    与 :class:`SenderConfig`（单个任务的发送节奏）分属不同层级：
-    策略在启动队列时取用一次，节奏则随任务入队时定死。
+    与 :class:`SenderConfig`（单个任务的发送节奏）分属不同层级。
+    生命周期：**启动队列时取快照**，运行期间修改本对象不影响正在跑的
+    队列（下次运行生效）；节奏则随任务入队时定死。
     """
 
     skip_sent: bool = True
