@@ -47,6 +47,20 @@ class TestSenderConfig:
         assert cfg.min_delay == 5.0
         assert cfg.max_delay == 10.0
 
+    def test_to_task_config_is_snapshot(self):
+        """入队后修改 SenderConfig 不得影响已派生的工单参数。
+
+        工单参数在入队时定死；改全局发送节奏只对新建任务生效。
+        """
+        cfg = SenderConfig(min_delay=8.0, max_delay=8.5)
+        snapshot = cfg.to_task_config()
+
+        cfg.max_delay = 10.5
+        cfg.min_delay = 10.0
+
+        assert (cfg.min_delay, cfg.max_delay) == (10.0, 10.5), "全局设置应已更新"
+        assert (snapshot.min_delay, snapshot.max_delay) == (8.0, 8.5), "工单参数不受影响"
+
     def test_min_delay_too_small(self):
         with pytest.raises(ValidationError):
             SenderConfig(min_delay=0.0)

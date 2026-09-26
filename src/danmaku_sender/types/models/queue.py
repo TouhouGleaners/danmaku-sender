@@ -41,6 +41,9 @@ class TaskConfig:
     rest_min: float
     rest_max: float
 
+    # 校验不在此处：types/ 一贯是纯数据类型，合法性由 config 层与
+    # 表单边界保证（SenderConfig 校验后再派生本快照）。
+
 
 @dataclass(frozen=True)
 class TaskSpec:
