@@ -148,7 +148,8 @@ class QueueSendWorker(WorkerThread):
     ) -> float:
         """计算整个队列的剩余 ETA（秒）。
 
-        = 当前任务剩余 ETA + 所有未来任务的 ETA
+        = 当前任务剩余 ETA + 后续每个待发任务的「任务间隔 + 任务自身 ETA」
+        只统计 PENDING 的任务；COMPLETED/FAILED/SKIPPED 等不会占时间。
         """
         def _task_eta(attempted: int, total: int, config: TaskConfig) -> float:
             avg_normal = (config.min_delay + config.max_delay) / 2
@@ -165,12 +166,10 @@ class QueueSendWorker(WorkerThread):
         queue_eta = _task_eta(current_attempted, current_total, current_config)
         pending_future = [s for s in future_tasks if s.status == TaskStatus.PENDING]
 
-        if future_tasks:
+        for s in pending_future:
+            # 与上一个任务之间的间隔；只对真正要跑的任务算，
+            # 否则「剩余全是非 PENDING」时会多算一次间隔
             queue_eta += policy.delay_between_tasks
-
-        for i, s in enumerate(pending_future):
             queue_eta += _task_eta(0, s.spec.total, s.spec.config)
-            if future_tasks and s is not future_tasks[-1]:
-                queue_eta += policy.delay_between_tasks
 
         return queue_eta
