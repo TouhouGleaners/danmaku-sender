@@ -194,6 +194,65 @@ class TestQueueState:
         qs.clear_completed()
         assert [t.status for t in qs.tasks] == [TaskStatus.PENDING, TaskStatus.PAUSED]
 
+    def test_reset_queue_semantics(self):
+        """重置：移除已完成、失败转待发；跳过/未配置保留，其余不动"""
+        qs = QueueState()
+        for t in (
+            make_task(1, TaskStatus.COMPLETED),
+            make_task(2, TaskStatus.FAILED),
+            make_task(3, TaskStatus.SKIPPED),
+            make_task(4, TaskStatus.UNCONFIGURED),
+            make_task(5, TaskStatus.PENDING),
+            make_task(6, TaskStatus.PAUSED),
+        ):
+            qs.add_task(t)
+        qs.reset_queue()
+        assert [t.status for t in qs.tasks] == [
+            TaskStatus.PENDING,
+            TaskStatus.SKIPPED,
+            TaskStatus.UNCONFIGURED,
+            TaskStatus.PENDING,
+            TaskStatus.PAUSED,
+        ]
+        assert [t.target.cid for t in qs.tasks] == [2, 3, 4, 5, 6]
+
+    def test_reset_queue_clears_failed_runtime(self):
+        """失败转待发要清零进度与错误信息，不能把旧账带进新一轮"""
+        qs = QueueState()
+        t = make_task(1, TaskStatus.FAILED)
+        qs.add_task(t)
+        qs.update_task_progress(t.task_id, 5, 10)
+        qs.update_task_status(t.task_id, TaskStatus.FAILED, "网络错误")
+        qs.reset_queue()
+        view = qs.get_task_by_id(t.task_id)
+        assert view is not None
+        assert view.status is TaskStatus.PENDING
+        assert view.attempted == 0
+        assert view.error_msg == ""
+
+    def test_reset_queue_noop_when_nothing_to_do(self):
+        """没有已完成/失败任务时不发信号，也不动其它状态"""
+        qs = QueueState()
+        qs.add_task(make_task(1, TaskStatus.PENDING))
+        qs.add_task(make_task(2, TaskStatus.SKIPPED))
+        events: list[object] = []
+        qs.tasksChanged.connect(lambda: events.append("tasks"))
+        qs.taskStatusChanged.connect(lambda tid, s: events.append("status"))
+        qs.reset_queue()
+        assert events == []
+        assert [t.status for t in qs.tasks] == [TaskStatus.PENDING, TaskStatus.SKIPPED]
+
+    def test_reset_queue_emits_status_then_structure(self):
+        """转待发发 taskStatusChanged，队列结构变更发 tasksChanged"""
+        qs = QueueState()
+        qs.add_task(make_task(1, TaskStatus.FAILED))
+        qs.add_task(make_task(2, TaskStatus.COMPLETED))
+        events: list[str] = []
+        qs.taskStatusChanged.connect(lambda tid, s: events.append("status"))
+        qs.tasksChanged.connect(lambda: events.append("tasks"))
+        qs.reset_queue()
+        assert events == ["status", "tasks"]
+
     def test_update_task_status(self):
         qs = QueueState()
         t = make_task(1)

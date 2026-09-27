@@ -254,6 +254,36 @@ class QueueState(QObject):
         self.tasksChanged.emit()
         logger.info(f"已清空队列（{removed} 个任务）")
 
+    def reset_queue(self):
+        """重置队列：移除已完成、失败任务转待发。
+
+        SKIPPED / UNCONFIGURED 保留——它们缺配置，转待发没有意义；
+        PENDING / PAUSED / RUNNING 不动。转待发清零进度与错误信息，
+        失败任务按工单从头再发。
+        """
+        revived: list[str] = []
+        removed = 0
+        with self._lock:
+            kept: list[TaskRecord] = []
+            for record in self._records:
+                if record.runtime.status is TaskStatus.COMPLETED:
+                    removed += 1
+                    continue
+                if record.runtime.status is TaskStatus.FAILED:
+                    record.runtime.status = TaskStatus.PENDING
+                    record.runtime.error_msg = ""
+                    record.runtime.attempted = 0
+                    revived.append(record.spec.task_id)
+                kept.append(record)
+            self._records = kept
+
+        if not removed and not revived:
+            return
+        for task_id in revived:
+            self.taskStatusChanged.emit(task_id, TaskStatus.PENDING)
+        self.tasksChanged.emit()
+        logger.info(f"队列已重置：移除 {removed} 个已完成任务，{len(revived)} 个失败任务转待发")
+
     # ── 数据变更（发射 taskDataChanged）───────────────────────
 
     def assign_danmakus(self, task_id: str, danmakus: list[Danmaku], xml_path: str = ""):

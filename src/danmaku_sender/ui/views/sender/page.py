@@ -148,11 +148,13 @@ class SenderPage(QWidget):
         self._btn_delete.setMenu(self._delete_menu)
 
         self._btn_clear_completed = _tool_button("清除已完成", SvgIcon.FORMAT_CLEAR)
+        self._btn_reset_queue = _tool_button("重置队列", SvgIcon.UNDO)
 
         queue_toolbar.addWidget(self._btn_add_to_queue)
         queue_toolbar.addStretch()
         queue_toolbar.addWidget(self._btn_delete)
         queue_toolbar.addWidget(self._btn_clear_completed)
+        queue_toolbar.addWidget(self._btn_reset_queue)
         queue_layout.addLayout(queue_toolbar)
 
         queue_layout.addWidget(self._queue_table)
@@ -212,6 +214,7 @@ class SenderPage(QWidget):
         # 队列按钮
         self._btn_add_to_queue.clicked.connect(self._add_to_queue)
         self._btn_clear_completed.clicked.connect(self._clear_completed)
+        self._btn_reset_queue.clicked.connect(self._reset_queue)
         self._btn_start_queue.clicked.connect(self._start_queue)
         self._btn_stop_queue.clicked.connect(self._stop_queue)
 
@@ -378,6 +381,50 @@ class SenderPage(QWidget):
     def _clear_completed(self):
         """清除已完成的任务"""
         self.state.queue_state.clear_completed()
+
+    @Slot()
+    def _reset_queue(self):
+        """重置队列：移除已完成、失败任务转待发（弹窗说明将执行的变更）"""
+        if self.state.sender_is_active:
+            return
+
+        counts = self.state.queue_state.status_counts
+        completed = counts.get(TaskStatus.COMPLETED, 0)
+        failed = counts.get(TaskStatus.FAILED, 0)
+        if completed == 0 and failed == 0:
+            QMessageBox.information(self, "重置队列", "队列无需重置：没有已完成或失败的任务。")
+            return
+
+        lines = ["将执行以下变更："]
+        if completed:
+            lines.append(f"· 移除 {completed} 个已完成任务")
+        if failed:
+            lines.append(f"· {failed} 个失败任务转为待发（进度与错误信息清零）")
+
+        # SKIPPED / UNCONFIGURED 不参与重置，缺配置得用户自己补
+        needs_user = []
+        if counts.get(TaskStatus.SKIPPED, 0):
+            needs_user.append(f"{counts[TaskStatus.SKIPPED]} 个跳过任务")
+        if counts.get(TaskStatus.UNCONFIGURED, 0):
+            needs_user.append(f"{counts[TaskStatus.UNCONFIGURED]} 个未配置任务")
+        if needs_user:
+            lines += [
+                "",
+                "需要你处理：",
+                f"· {'、'.join(needs_user)}保持原样——缺少配置，补完后才会转待发",
+            ]
+        lines += ["", "待发、暂停中的任务不受影响。"]
+
+        reply = QMessageBox.question(
+            self,
+            "重置队列",
+            "\n".join(lines),
+            QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
+            QMessageBox.StandardButton.No,
+        )
+        if reply == QMessageBox.StandardButton.Yes:
+            self.state.queue_state.reset_queue()
+            self.logger.info("队列已重置")
 
     # endregion
     # region Slots Queue
@@ -598,6 +645,7 @@ class SenderPage(QWidget):
         self._btn_add_to_queue.setEnabled(not running)
         self._btn_delete.setEnabled(not running)
         self._btn_clear_completed.setEnabled(not running)
+        self._btn_reset_queue.setEnabled(not running)
         self._queue_model.queue_running = running
 
         # 底部按钮切换
