@@ -186,7 +186,7 @@ class QueueState(QObject):
             f"{record.spec.target.display_string} ({record.spec.total} 条弹幕)"
         )
 
-    def remove_task(self, task_id: str) -> bool:
+    def remove_task(self, task_id: str):
         """移除指定任务(非 RUNNING 任务)"""
         removed = False
         with self._lock:
@@ -199,9 +199,8 @@ class QueueState(QObject):
         if removed:
             self.tasksChanged.emit()
             logger.info(f"任务已从队列移除: [{task_id}]")
-        return removed
 
-    def move_task(self, task_id: str, direction: int) -> bool:
+    def move_task(self, task_id: str, direction: int):
         """移动任务位置（direction: -1 上移, +1 下移）"""
         moved = False
         with self._lock:
@@ -219,7 +218,6 @@ class QueueState(QObject):
                     break
         if moved:
             self.tasksChanged.emit()
-        return moved
 
     def reorder_tasks(self, task_ids: list[str]):
         """按给定的 task_id 顺序重排；列表必须是当前队列的全排列。"""
@@ -298,10 +296,10 @@ class QueueState(QObject):
         self.taskDataChanged.emit(task_id)
         logger.info(f"已分配弹幕: {task_id} ({total} 条)")
 
-    def apply_edit(self, task_id: str, source: QueueTask) -> bool:
+    def apply_edit(self, task_id: str, source: QueueTask):
         """全量应用来自详情弹窗沙盒的修改结果（换新 Spec）。
 
-        发送中等非可编辑状态拒绝，返回 False。
+        发送中等非可编辑状态拒绝并记警告，队列保持原样。
         """
         old_status: TaskStatus | None = None
         new_status: TaskStatus | None = None
@@ -309,10 +307,10 @@ class QueueState(QObject):
         with self._lock:
             record = self._find(task_id)
             if record is None:
-                return False
+                return
             if record.runtime.status not in _EDITABLE_STATUSES:
                 logger.warning(f"任务 [{task_id}] 处于 {record.runtime.status.value}，已忽略编辑结果。")
-                return False
+                return
 
             old_status = record.runtime.status
             # 以队列中的 task_id 为准，防止沙盒误带其它 id
@@ -325,7 +323,6 @@ class QueueState(QObject):
         if new_status != old_status:
             self.taskStatusChanged.emit(task_id, new_status)
         self.taskDataChanged.emit(task_id)
-        return True
 
     # ── 状态变更（发射 taskStatusChanged）─────────────────
 

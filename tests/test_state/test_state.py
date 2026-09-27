@@ -160,7 +160,8 @@ class TestQueueState:
         qs = QueueState()
         running = make_task(1, TaskStatus.RUNNING)
         qs.add_task(running)
-        assert qs.remove_task(running.task_id) is False
+        qs.remove_task(running.task_id)
+        assert qs.get_task_by_id(running.task_id) is not None
 
         for status in (
             TaskStatus.PENDING,
@@ -172,17 +173,18 @@ class TestQueueState:
         ):
             task = make_task(2, status)
             qs.add_task(task)
-            assert qs.remove_task(task.task_id) is True, f"{status} 应可删除"
-            assert qs.get_task_by_id(task.task_id) is None
+            qs.remove_task(task.task_id)
+            assert qs.get_task_by_id(task.task_id) is None, f"{status} 应可删除"
 
     def test_move_task(self):
         qs = QueueState()
         t1, t2, t3 = make_task(1), make_task(2), make_task(3)
         for t in (t1, t2, t3):
             qs.add_task(t)
-        assert qs.move_task(t3.task_id, -1) is True
+        qs.move_task(t3.task_id, -1)
         assert [t.target.cid for t in qs.tasks] == [1, 3, 2]
-        assert qs.move_task(t1.task_id, -1) is False  # 已在顶端
+        qs.move_task(t1.task_id, -1)  # 已在顶端，顺序不变
+        assert [t.target.cid for t in qs.tasks] == [1, 3, 2]
 
     def test_move_non_movable_task(self):
         qs = QueueState()
@@ -190,7 +192,8 @@ class TestQueueState:
         other = make_task(2)
         qs.add_task(done)
         qs.add_task(other)
-        assert qs.move_task(done.task_id, 1) is False  # 已完成任务不可移动
+        qs.move_task(done.task_id, 1)  # 已完成任务不可移动
+        assert [t.target.cid for t in qs.tasks] == [1, 2]
 
     def test_reset_queue_semantics(self):
         """重置：移除已完成、失败转待发；跳过/未配置保留，其余不动"""
@@ -321,7 +324,7 @@ class TestQueueState:
         qs.update_task_status(t.task_id, TaskStatus.RUNNING)
         draft = make_task(99)
         draft.p_title = "hacked"
-        assert qs.apply_edit(t.task_id, draft) is False
+        qs.apply_edit(t.task_id, draft)
         view = qs.get_task_by_id(t.task_id)
         assert view is not None
         assert view.p_title != "hacked"
@@ -336,7 +339,7 @@ class TestQueueState:
         draft.p_title = "新标题"
         draft.danmakus = [Danmaku(msg="x", progress=1000)]
         draft.total = 1
-        assert qs.apply_edit(t.task_id, draft) is True
+        qs.apply_edit(t.task_id, draft)
         view = qs.get_task_by_id(t.task_id)
         assert view is not None
         assert view.p_title == "新标题"
