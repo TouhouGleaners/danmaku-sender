@@ -29,8 +29,8 @@ from PySide6.QtWidgets import (
     QMessageBox,
     QProgressBar,
     QPushButton,
-    QTableView,
     QTextEdit,
+    QToolButton,
     QVBoxLayout,
     QWidget,
 )
@@ -48,7 +48,7 @@ from danmaku_sender.utils.time_utils import format_duration
 
 from .components.dialogs.task_builder import TaskBuilderDialog
 from .components.dialogs.task_detail import TaskDetailDialog
-from .components.queue_table import ProgressBarDelegate, QueueTableModel
+from .components.queue_table import ProgressBarDelegate, QueueTableModel, QueueTableView
 
 
 class SenderPage(QWidget):
@@ -81,10 +81,11 @@ class SenderPage(QWidget):
 
         self._queue_model = QueueTableModel()
         self._queue_model.on_reorder = self._on_queue_reorder
-        self._queue_table = QTableView()
+        self._queue_table = QueueTableView()
         self._queue_table.setModel(self._queue_model)
         self._queue_table.setSelectionBehavior(QAbstractItemView.SelectionBehavior.SelectRows)
-        self._queue_table.setSelectionMode(QAbstractItemView.SelectionMode.SingleSelection)
+        # 多选支持批量删除；多选拖拽由 QueueTableView.startDrag 拦下
+        self._queue_table.setSelectionMode(QAbstractItemView.SelectionMode.ExtendedSelection)
         self._queue_table.setAlternatingRowColors(True)
         self._queue_table.verticalHeader().setVisible(False)
 
@@ -117,8 +118,42 @@ class SenderPage(QWidget):
         # 双击查看详情
         self._queue_table.doubleClicked.connect(self._on_queue_double_clicked)
 
-        # 键盘删除
+        # 键盘删除。禁用快捷键与函数对 Delete 键是同样的静默表现，
         QShortcut(QKeySequence.StandardKey.Delete, self._queue_table, self._delete_selected_task)
+
+        # 队列工具栏：管理列表的操作（增删）。运行队列的操作在底部操作区。
+        # 图标 + 文字：清除已完成没有通用图标，单靠图标意图不明。
+        # 主操作与维护操作分层：新建为实心按钮靠左，删除/清除为扁平按钮靠右。
+        def _tool_button(text: str, icon, *, primary: bool = False) -> QToolButton:
+            btn = QToolButton()
+            btn.setIcon(icon)
+            btn.setText(text)
+            btn.setToolButtonStyle(Qt.ToolButtonStyle.ToolButtonTextBesideIcon)
+            btn.setCursor(Qt.CursorShape.PointingHandCursor)
+            if primary:
+                btn.setProperty("primary", "true")
+            else:
+                btn.setAutoRaise(True)  # 平时无边框，悬停才显形
+            return btn
+
+        queue_toolbar = QHBoxLayout()
+
+        self._btn_add_to_queue = _tool_button("新建任务", SvgIcon.NOTE_ADD, primary=True)
+
+        self._delete_menu = QMenu(self)
+        self._delete_menu.addAction("删除选定", self._delete_selected_task)
+        self._delete_menu.addAction("删除全部", self._delete_all_tasks)
+        self._btn_delete = _tool_button("删除", SvgIcon.DELETE)
+        self._btn_delete.setPopupMode(QToolButton.ToolButtonPopupMode.InstantPopup)
+        self._btn_delete.setMenu(self._delete_menu)
+
+        self._btn_clear_completed = _tool_button("清除已完成", SvgIcon.FORMAT_CLEAR)
+
+        queue_toolbar.addWidget(self._btn_add_to_queue)
+        queue_toolbar.addStretch()
+        queue_toolbar.addWidget(self._btn_delete)
+        queue_toolbar.addWidget(self._btn_clear_completed)
+        queue_layout.addLayout(queue_toolbar)
 
         queue_layout.addWidget(self._queue_table)
 
@@ -132,24 +167,6 @@ class SenderPage(QWidget):
         # 布局完成后再定位，避免 viewport geometry 为零
         QTimer.singleShot(0, self._update_empty_hint)
 
-        queue_btn_layout = QHBoxLayout()
-
-        self._btn_add_to_queue = QPushButton("新建任务")
-        self._btn_add_to_queue.setIcon(SvgIcon.START)
-        self._btn_add_to_queue.setFixedWidth(120)
-        self._btn_add_to_queue.setCursor(Qt.CursorShape.PointingHandCursor)
-        self._btn_add_to_queue.setProperty("action", "true")
-        self._btn_add_to_queue.setProperty("state", "ready")
-
-        self._btn_clear_completed = QPushButton("清除已完成")
-        self._btn_clear_completed.setFixedWidth(100)
-        self._btn_clear_completed.setCursor(Qt.CursorShape.PointingHandCursor)
-
-        queue_btn_layout.addWidget(self._btn_add_to_queue)
-        queue_btn_layout.addWidget(self._btn_clear_completed)
-        queue_btn_layout.addStretch()
-
-        queue_layout.addLayout(queue_btn_layout)
         main_layout.addWidget(queue_group)
 
         # --- 日志区 ---
@@ -282,13 +299,34 @@ class SenderPage(QWidget):
     def _remove_task(self, task_id: str):
         self.state.queue_state.remove_task(task_id)
 
+    @Slot()
     def _delete_selected_task(self):
-        indexes = self._queue_table.selectedIndexes()
-        if not indexes:
+        """删除选中的任务（仅待发送 / 未配置状态可删）"""
+        if self.state.sender_is_active:
             return
-        task = self._queue_model.get_task_at(indexes[0].row())
-        if task and task.status in (TaskStatus.PENDING, TaskStatus.UNCONFIGURED):
-            self._remove_task(task.task_id)
+        rows = sorted({i.row() for i in self._queue_table.selectedIndexes()}, reverse=True)
+        for row in rows:
+            task = self._queue_model.get_task_at(row)
+            if task and task.status in (TaskStatus.PENDING, TaskStatus.UNCONFIGURED):
+                self._remove_task(task.task_id)
+
+    @Slot()
+    def _delete_all_tasks(self):
+        """清空队列中的全部任务（需确认，不可撤销）"""
+        if self.state.sender_is_active:
+            return
+        total = len(self.state.queue_state.tasks)
+        if total == 0:
+            return
+        reply = QMessageBox.question(
+            self,
+            "删除全部任务",
+            f"确定删除队列中的全部 {total} 个任务？此操作不可撤销。",
+            QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
+            QMessageBox.StandardButton.No,
+        )
+        if reply == QMessageBox.StandardButton.Yes:
+            self.state.queue_state.clear_all()
 
     @Slot()
     def _add_to_queue(self):
@@ -555,7 +593,10 @@ class SenderPage(QWidget):
             send_windows_notification("弹幕队列发送完毕", summary)
 
     def _update_queue_ui(self, running: bool):
+        # 运行中禁用维护按钮：可见反馈 + 挡住下拉展开。
+        # sender_is_active，Delete 键不经按钮也能被拦下。
         self._btn_add_to_queue.setEnabled(not running)
+        self._btn_delete.setEnabled(not running)
         self._btn_clear_completed.setEnabled(not running)
         self._queue_model.queue_running = running
 

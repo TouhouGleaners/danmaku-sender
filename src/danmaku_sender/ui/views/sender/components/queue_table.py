@@ -1,9 +1,16 @@
+from collections.abc import Callable
 from enum import IntEnum
-from typing import Callable
 
-from PySide6.QtCore import Qt, QAbstractTableModel, QModelIndex, QSize, QMimeData
+from PySide6.QtCore import QAbstractTableModel, QMimeData, QModelIndex, QSize, Qt
 from PySide6.QtGui import QBrush, QColor, QPainter
-from PySide6.QtWidgets import QStyledItemDelegate, QStyleOptionProgressBar, QStyleOptionViewItem, QStyle, QApplication
+from PySide6.QtWidgets import (
+    QApplication,
+    QStyle,
+    QStyledItemDelegate,
+    QStyleOptionProgressBar,
+    QStyleOptionViewItem,
+    QTableView,
+)
 
 from danmaku_sender.types.models.queue import TaskStatus, TaskView
 
@@ -62,6 +69,19 @@ class ProgressBarDelegate(QStyledItemDelegate):
 
     def sizeHint(self, option: QStyleOptionViewItem, index: QModelIndex) -> QSize:
         return QSize(120, 24)
+
+
+class QueueTableView(QTableView):
+    """队列表格视图。
+
+    单选拖拽排序契约不变；多选时不启动拖拽移动——
+    多行整体移动的落点语义不明确，批量整理走「删除选定」。
+    """
+
+    def startDrag(self, supported_actions: Qt.DropAction) -> None:
+        if len({index.row() for index in self.selectedIndexes()}) > 1:
+            return
+        super().startDrag(supported_actions)
 
 
 class QueueTableModel(QAbstractTableModel):
