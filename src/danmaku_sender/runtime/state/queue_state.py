@@ -186,21 +186,21 @@ class QueueState(QObject):
             f"{record.spec.target.display_string} ({record.spec.total} 条弹幕)"
         )
 
-    def remove_task(self, task_id: str) -> bool:
-        """移除指定任务（仅 PENDING/UNCONFIGURED 状态可移除）"""
+    def remove_task(self, task_id: str):
+        """移除指定任务(非 RUNNING 任务)"""
         removed = False
         with self._lock:
             for i, r in enumerate(self._records):
-                if r.spec.task_id == task_id and r.runtime.status in _EDITABLE_STATUSES:
+                if r.spec.task_id == task_id and r.runtime.status is not TaskStatus.RUNNING:
                     self._records.pop(i)
                     removed = True
                     break
+
         if removed:
             self.tasksChanged.emit()
             logger.info(f"任务已从队列移除: [{task_id}]")
-        return removed
 
-    def move_task(self, task_id: str, direction: int) -> bool:
+    def move_task(self, task_id: str, direction: int):
         """移动任务位置（direction: -1 上移, +1 下移）"""
         moved = False
         with self._lock:
@@ -218,7 +218,6 @@ class QueueState(QObject):
                     break
         if moved:
             self.tasksChanged.emit()
-        return moved
 
     def reorder_tasks(self, task_ids: list[str]):
         """按给定的 task_id 顺序重排；列表必须是当前队列的全排列。"""
@@ -230,20 +229,6 @@ class QueueState(QObject):
             self._records = [by_id[tid] for tid in task_ids]
         self.tasksChanged.emit()
 
-    def clear_completed(self):
-        """清除已完成/失败/跳过的任务（保留 PENDING、PAUSED、UNCONFIGURED）"""
-        removed = 0
-        with self._lock:
-            before = len(self._records)
-            self._records = [
-                r for r in self._records
-                if r.runtime.status in (TaskStatus.PENDING, TaskStatus.PAUSED, TaskStatus.UNCONFIGURED)
-            ]
-            removed = before - len(self._records)
-        if removed > 0:
-            self.tasksChanged.emit()
-            logger.info(f"已清除 {removed} 个已完成任务")
-
     def clear_all(self):
         """清空整个队列（所有状态的任务都移除）"""
         with self._lock:
@@ -253,6 +238,36 @@ class QueueState(QObject):
             self._records.clear()
         self.tasksChanged.emit()
         logger.info(f"已清空队列（{removed} 个任务）")
+
+    def reset_queue(self):
+        """重置队列：移除已完成、失败任务转待发。
+
+        SKIPPED / UNCONFIGURED 保留——它们缺配置，转待发没有意义；
+        PENDING / PAUSED / RUNNING 不动。转待发清零进度与错误信息，
+        失败任务按工单从头再发。
+        """
+        revived: list[str] = []
+        removed = 0
+        with self._lock:
+            kept: list[TaskRecord] = []
+            for record in self._records:
+                if record.runtime.status is TaskStatus.COMPLETED:
+                    removed += 1
+                    continue
+                if record.runtime.status is TaskStatus.FAILED:
+                    record.runtime.status = TaskStatus.PENDING
+                    record.runtime.error_msg = ""
+                    record.runtime.attempted = 0
+                    revived.append(record.spec.task_id)
+                kept.append(record)
+            self._records = kept
+
+        if not removed and not revived:
+            return
+        for task_id in revived:
+            self.taskStatusChanged.emit(task_id, TaskStatus.PENDING)
+        self.tasksChanged.emit()
+        logger.info(f"队列已重置：移除 {removed} 个已完成任务，{len(revived)} 个失败任务转待发")
 
     # ── 数据变更（发射 taskDataChanged）───────────────────────
 
@@ -281,10 +296,10 @@ class QueueState(QObject):
         self.taskDataChanged.emit(task_id)
         logger.info(f"已分配弹幕: {task_id} ({total} 条)")
 
-    def apply_edit(self, task_id: str, source: QueueTask) -> bool:
+    def apply_edit(self, task_id: str, source: QueueTask):
         """全量应用来自详情弹窗沙盒的修改结果（换新 Spec）。
 
-        发送中等非可编辑状态拒绝，返回 False。
+        发送中等非可编辑状态拒绝并记警告，队列保持原样。
         """
         old_status: TaskStatus | None = None
         new_status: TaskStatus | None = None
@@ -292,10 +307,10 @@ class QueueState(QObject):
         with self._lock:
             record = self._find(task_id)
             if record is None:
-                return False
+                return
             if record.runtime.status not in _EDITABLE_STATUSES:
                 logger.warning(f"任务 [{task_id}] 处于 {record.runtime.status.value}，已忽略编辑结果。")
-                return False
+                return
 
             old_status = record.runtime.status
             # 以队列中的 task_id 为准，防止沙盒误带其它 id
@@ -308,7 +323,6 @@ class QueueState(QObject):
         if new_status != old_status:
             self.taskStatusChanged.emit(task_id, new_status)
         self.taskDataChanged.emit(task_id)
-        return True
 
     # ── 状态变更（发射 taskStatusChanged）─────────────────
 

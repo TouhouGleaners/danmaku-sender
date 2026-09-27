@@ -61,13 +61,10 @@ class SenderController(QObject):
 
     # region Queue
 
-    def start_queue(self, auth_config: ApiAuthConfig, reset_failed: bool = False) -> bool:
+    def start_queue(self, auth_config: ApiAuthConfig) -> bool:
         """启动队列发送。
 
         始终使用 AppState.queue_state；Worker 事件也只落账到该队列。
-
-        Args:
-            reset_failed: 是否重置之前失败/跳过的任务。默认 False，只重置残留的 RUNNING 状态。
 
         Returns:
             成功启动返回 True；拒绝启动返回 False。
@@ -80,12 +77,12 @@ class SenderController(QObject):
             return False
 
         queue_state = self.state.queue_state
-        resettable = {TaskStatus.RUNNING, TaskStatus.PAUSED}
-        if reset_failed:
-            resettable |= {TaskStatus.FAILED, TaskStatus.SKIPPED}
 
+        # 只清理残留运行态（崩溃留下的 RUNNING、暂停中的 PAUSED）。
+        # 失败/跳过转待发必须显式——用户没改动就重跑只会得到同样结果，
+        # 重置只由「重置队列」按钮触发（QueueState.reset_queue）。
         for task in queue_state.tasks:
-            if task.status in resettable:
+            if task.status in (TaskStatus.RUNNING, TaskStatus.PAUSED):
                 queue_state.update_task_status(task.task_id, TaskStatus.PENDING)
         queue_state.current_index = -1
 

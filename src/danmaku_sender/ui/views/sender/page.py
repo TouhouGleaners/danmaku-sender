@@ -140,19 +140,17 @@ class SenderPage(QWidget):
 
         self._btn_add_to_queue = _tool_button("新建任务", SvgIcon.NOTE_ADD, primary=True)
 
-        self._delete_menu = QMenu(self)
-        self._delete_menu.addAction("删除选定", self._delete_selected_task)
-        self._delete_menu.addAction("删除全部", self._delete_all_tasks)
-        self._btn_delete = _tool_button("删除", SvgIcon.DELETE)
-        self._btn_delete.setPopupMode(QToolButton.ToolButtonPopupMode.InstantPopup)
-        self._btn_delete.setMenu(self._delete_menu)
-
-        self._btn_clear_completed = _tool_button("清除已完成", SvgIcon.FORMAT_CLEAR)
+        # 三个按钮各管一件事：删除选定 / 重置队列 / 清空队列。
+        # 「清除已完成」并入重置队列，不再单列。
+        self._btn_delete = _tool_button("删除选中", SvgIcon.DELETE)
+        self._btn_reset_queue = _tool_button("重置队列", SvgIcon.SYNC_ALT)
+        self._btn_clear_all = _tool_button("清空队列", SvgIcon.FORMAT_CLEAR)
 
         queue_toolbar.addWidget(self._btn_add_to_queue)
         queue_toolbar.addStretch()
         queue_toolbar.addWidget(self._btn_delete)
-        queue_toolbar.addWidget(self._btn_clear_completed)
+        queue_toolbar.addWidget(self._btn_reset_queue)
+        queue_toolbar.addWidget(self._btn_clear_all)
         queue_layout.addLayout(queue_toolbar)
 
         queue_layout.addWidget(self._queue_table)
@@ -211,7 +209,9 @@ class SenderPage(QWidget):
     def _connect_signals(self):
         # 队列按钮
         self._btn_add_to_queue.clicked.connect(self._add_to_queue)
-        self._btn_clear_completed.clicked.connect(self._clear_completed)
+        self._btn_delete.clicked.connect(self._delete_selected_task)
+        self._btn_reset_queue.clicked.connect(self._reset_queue)
+        self._btn_clear_all.clicked.connect(self._clear_all_tasks)
         self._btn_start_queue.clicked.connect(self._start_queue)
         self._btn_stop_queue.clicked.connect(self._stop_queue)
 
@@ -246,15 +246,16 @@ class SenderPage(QWidget):
         index = self._queue_table.indexAt(pos)
         if not index.isValid():
             return
+
         task = self._queue_model.get_task_at(index.row())
         if not task:
             return
 
         menu = QMenu(self)
-        is_editable = (
-            not self.state.sender_is_active
-            and task.status in (TaskStatus.PENDING, TaskStatus.UNCONFIGURED)
-        )
+        idle = not self.state.sender_is_active
+        # 编辑/移动只对未定稿的任务有意义；删除放宽到所有非发送中状态
+        is_editable = idle and task.status in (TaskStatus.PENDING, TaskStatus.UNCONFIGURED)
+        can_remove = idle and task.status is not TaskStatus.RUNNING
 
         menu.addAction("查看详情/编辑配置", lambda: self._show_task_detail(task))  # 所有状态都能查看
         menu.addAction("编辑弹幕", lambda: self._edit_danmakus(task)).setEnabled(is_editable)
@@ -262,7 +263,7 @@ class SenderPage(QWidget):
         menu.addAction("上移", lambda: self._move_task(task.task_id, -1)).setEnabled(is_editable)
         menu.addAction("下移", lambda: self._move_task(task.task_id, 1)).setEnabled(is_editable)
         menu.addSeparator()
-        can_insert = not self.state.sender_is_active
+        can_insert = idle
         menu.addAction("在上方插入任务", lambda: self._open_task_builder(
             ref_task_id=task.task_id, insert_position=InsertPosition.ABOVE
         )).setEnabled(can_insert)
@@ -270,7 +271,7 @@ class SenderPage(QWidget):
             ref_task_id=task.task_id, insert_position=InsertPosition.BELOW
         )).setEnabled(can_insert)
         menu.addSeparator()
-        menu.addAction("删除", lambda: self._remove_task(task.task_id)).setEnabled(is_editable)
+        menu.addAction("删除", lambda: self._remove_task(task.task_id)).setEnabled(can_remove)
 
         menu.exec(self._queue_table.mapToGlobal(pos))
 
@@ -301,27 +302,30 @@ class SenderPage(QWidget):
 
     @Slot()
     def _delete_selected_task(self):
-        """删除选中的任务（仅待发送 / 未配置状态可删）"""
+        """删除选中的任务（发送中的不可删，其余状态均可）"""
         if self.state.sender_is_active:
             return
+
         rows = sorted({i.row() for i in self._queue_table.selectedIndexes()}, reverse=True)
         for row in rows:
             task = self._queue_model.get_task_at(row)
-            if task and task.status in (TaskStatus.PENDING, TaskStatus.UNCONFIGURED):
+            if task:
                 self._remove_task(task.task_id)
 
     @Slot()
-    def _delete_all_tasks(self):
+    def _clear_all_tasks(self):
         """清空队列中的全部任务（需确认，不可撤销）"""
         if self.state.sender_is_active:
             return
+
         total = len(self.state.queue_state.tasks)
         if total == 0:
             return
+
         reply = QMessageBox.question(
             self,
-            "删除全部任务",
-            f"确定删除队列中的全部 {total} 个任务？此操作不可撤销。",
+            "清空队列",
+            f"确定清空队列中的所有任务(共 {total} 个)？此操作不可撤销。",
             QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
             QMessageBox.StandardButton.No,
         )
@@ -375,9 +379,48 @@ class SenderPage(QWidget):
             self.logger.info("队列: 正在请求中止...")
 
     @Slot()
-    def _clear_completed(self):
-        """清除已完成的任务"""
-        self.state.queue_state.clear_completed()
+    def _reset_queue(self):
+        """重置队列：移除已完成、失败任务转待发（弹窗说明将执行的变更）"""
+        if self.state.sender_is_active:
+            return
+
+        counts = self.state.queue_state.status_counts
+        completed = counts.get(TaskStatus.COMPLETED, 0)
+        failed = counts.get(TaskStatus.FAILED, 0)
+        if completed == 0 and failed == 0:
+            QMessageBox.information(self, "重置队列", "队列无需重置：没有已完成或失败的任务。")
+            return
+
+        lines = ["将执行以下变更："]
+        if completed:
+            lines.append(f"· 移除 {completed} 个已完成任务")
+        if failed:
+            lines.append(f"· {failed} 个失败任务转为待发（进度与错误信息清零）")
+
+        # SKIPPED / UNCONFIGURED 不参与重置，缺配置得用户自己补
+        needs_user = []
+        if counts.get(TaskStatus.SKIPPED, 0):
+            needs_user.append(f"{counts[TaskStatus.SKIPPED]} 个跳过任务")
+        if counts.get(TaskStatus.UNCONFIGURED, 0):
+            needs_user.append(f"{counts[TaskStatus.UNCONFIGURED]} 个未配置任务")
+        if needs_user:
+            lines += [
+                "",
+                "需要你处理：",
+                f"· {'、'.join(needs_user)}保持原样——缺少配置，补完后才会转待发",
+            ]
+        lines += ["", "待发、暂停中的任务不受影响。"]
+
+        reply = QMessageBox.question(
+            self,
+            "重置队列",
+            "\n".join(lines),
+            QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
+            QMessageBox.StandardButton.No,
+        )
+        if reply == QMessageBox.StandardButton.Yes:
+            self.state.queue_state.reset_queue()
+            self.logger.info("队列已重置")
 
     # endregion
     # region Slots Queue
@@ -597,7 +640,8 @@ class SenderPage(QWidget):
         # sender_is_active，Delete 键不经按钮也能被拦下。
         self._btn_add_to_queue.setEnabled(not running)
         self._btn_delete.setEnabled(not running)
-        self._btn_clear_completed.setEnabled(not running)
+        self._btn_reset_queue.setEnabled(not running)
+        self._btn_clear_all.setEnabled(not running)
         self._queue_model.queue_running = running
 
         # 底部按钮切换
