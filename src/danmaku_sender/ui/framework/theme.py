@@ -51,6 +51,14 @@ ROLE_SOURCES: dict[QPalette.ColorRole, str] = {
     QPalette.ColorRole.Shadow: "border_color",
 }
 
+# setColor(role, color) 连 Disabled 组一起写入，禁用态文字会与正常态同色，
+# Qt 原生置灰被抹掉。这些文字角色须在 Disabled 组另行赋弱化色（见 to_qpalette）。
+DISABLED_TEXT_ROLES: tuple[QPalette.ColorRole, ...] = (
+    QPalette.ColorRole.WindowText,
+    QPalette.ColorRole.Text,
+    QPalette.ColorRole.ButtonText,
+)
+
 
 @dataclass(frozen=True)
 class Palette:
@@ -79,6 +87,9 @@ class Palette:
         for role, source in ROLE_SOURCES.items():
             color = source if source.startswith("#") else getattr(self, source)
             p.setColor(role, QColor(color))
+        # 覆写 Disabled 组文字色，恢复禁用态的置灰观感（见 DISABLED_TEXT_ROLES）
+        for role in DISABLED_TEXT_ROLES:
+            p.setColor(QPalette.ColorGroup.Disabled, role, QColor(self.text_secondary))
         return p
 
 

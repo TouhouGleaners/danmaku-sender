@@ -2,7 +2,11 @@
 from PySide6.QtGui import QPalette
 
 from danmaku_sender.config.theme_config import ThemeMode
-from danmaku_sender.ui.framework.theme import ROLE_SOURCES, ThemeService
+from danmaku_sender.ui.framework.theme import (
+    DISABLED_TEXT_ROLES,
+    ROLE_SOURCES,
+    ThemeService,
+)
 
 
 class TestPaletteCoverage:
@@ -26,3 +30,24 @@ class TestPaletteCoverage:
             for role in ROLE_SOURCES:
                 color = qpal.color(role)
                 assert color.isValid(), f"{mode} 下 {role} 解析失败"
+
+
+class TestDisabledGroup:
+    def test_disabled_text_roles_are_weakened(self):
+        """Disabled 组文字色必须弱于正常态，否则禁用控件看不出置灰。
+
+        回归：QPalette.setColor(role, color) 连 Disabled 组一起写入，
+        正常映射会把禁用态文字涂成与正常态同色（#415）。
+        """
+        svc = ThemeService()
+        for mode in (ThemeMode.LIGHT, ThemeMode.DARK):
+            svc.apply_theme(mode)
+            palette = svc.current_palette
+            qpal = palette.to_qpalette()
+            for role in DISABLED_TEXT_ROLES:
+                normal = qpal.color(QPalette.ColorGroup.Active, role)
+                disabled = qpal.color(QPalette.ColorGroup.Disabled, role)
+                assert disabled.name() == palette.text_secondary, (
+                    f"{mode} 下 {role} 的 Disabled 色应为 text_secondary"
+                )
+                assert disabled != normal, f"{mode} 下 {role} 禁用态未弱化"
