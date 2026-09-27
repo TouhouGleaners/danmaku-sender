@@ -155,15 +155,25 @@ class TestQueueState:
         assert view is not None
         assert view.task_id == t.task_id
 
-    def test_remove_only_pending_or_unconfigured(self):
+    def test_remove_refuses_only_running(self):
+        """删除不看可编辑白名单，只挡发送中（其余状态都能删）"""
         qs = QueueState()
         running = make_task(1, TaskStatus.RUNNING)
-        pending = make_task(2)
         qs.add_task(running)
-        qs.add_task(pending)
         assert qs.remove_task(running.task_id) is False
-        assert qs.remove_task(pending.task_id) is True
-        assert qs.get_task_by_id(pending.task_id) is None
+
+        for status in (
+            TaskStatus.PENDING,
+            TaskStatus.UNCONFIGURED,
+            TaskStatus.PAUSED,
+            TaskStatus.COMPLETED,
+            TaskStatus.FAILED,
+            TaskStatus.SKIPPED,
+        ):
+            task = make_task(2, status)
+            qs.add_task(task)
+            assert qs.remove_task(task.task_id) is True, f"{status} 应可删除"
+            assert qs.get_task_by_id(task.task_id) is None
 
     def test_move_task(self):
         qs = QueueState()
@@ -181,18 +191,6 @@ class TestQueueState:
         qs.add_task(done)
         qs.add_task(other)
         assert qs.move_task(done.task_id, 1) is False  # 已完成任务不可移动
-
-    def test_clear_completed_keeps_pending_and_paused(self):
-        qs = QueueState()
-        for t in (
-            make_task(1, TaskStatus.COMPLETED),
-            make_task(2, TaskStatus.FAILED),
-            make_task(3, TaskStatus.PENDING),
-            make_task(4, TaskStatus.PAUSED),
-        ):
-            qs.add_task(t)
-        qs.clear_completed()
-        assert [t.status for t in qs.tasks] == [TaskStatus.PENDING, TaskStatus.PAUSED]
 
     def test_reset_queue_semantics(self):
         """重置：移除已完成、失败转待发；跳过/未配置保留，其余不动"""

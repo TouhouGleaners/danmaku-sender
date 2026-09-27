@@ -187,14 +187,15 @@ class QueueState(QObject):
         )
 
     def remove_task(self, task_id: str) -> bool:
-        """移除指定任务（仅 PENDING/UNCONFIGURED 状态可移除）"""
+        """移除指定任务(非 RUNNING 任务)"""
         removed = False
         with self._lock:
             for i, r in enumerate(self._records):
-                if r.spec.task_id == task_id and r.runtime.status in _EDITABLE_STATUSES:
+                if r.spec.task_id == task_id and r.runtime.status is not TaskStatus.RUNNING:
                     self._records.pop(i)
                     removed = True
                     break
+
         if removed:
             self.tasksChanged.emit()
             logger.info(f"任务已从队列移除: [{task_id}]")
@@ -229,20 +230,6 @@ class QueueState(QObject):
                 return
             self._records = [by_id[tid] for tid in task_ids]
         self.tasksChanged.emit()
-
-    def clear_completed(self):
-        """清除已完成/失败/跳过的任务（保留 PENDING、PAUSED、UNCONFIGURED）"""
-        removed = 0
-        with self._lock:
-            before = len(self._records)
-            self._records = [
-                r for r in self._records
-                if r.runtime.status in (TaskStatus.PENDING, TaskStatus.PAUSED, TaskStatus.UNCONFIGURED)
-            ]
-            removed = before - len(self._records)
-        if removed > 0:
-            self.tasksChanged.emit()
-            logger.info(f"已清除 {removed} 个已完成任务")
 
     def clear_all(self):
         """清空整个队列（所有状态的任务都移除）"""
