@@ -128,6 +128,7 @@ class SvgIcon:
     UNDO = _IconDescriptor("undo.svg")
     VERTICAL_ALIGN_BOTTOM = _IconDescriptor("vertical_align_bottom.svg")
     VERTICAL_ALIGN_TOP = _IconDescriptor("vertical_align_top.svg")
+    WARNING = _IconDescriptor("warning.svg")
 
     @staticmethod
     def clear_cache() -> None:

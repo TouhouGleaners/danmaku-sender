@@ -10,7 +10,8 @@ class SendPolicy(AtomicModel):
 
     描述「这个队列怎么跑」：
 
-    - ``skip_sent``: 按历史记录去重，跳过已发送的弹幕；
+    - ``allow_duplicates``: 允许重复发送
+        ——发送前不再比对数据库，已发出的弹幕会再次发送到视频上；
     - ``delay_between_tasks``: 相邻两个任务之间的间隔；
     - ``stop_after_count`` / ``stop_after_time``: 整个队列发到多少停。
 
@@ -19,7 +20,7 @@ class SendPolicy(AtomicModel):
     队列（下次运行生效）；节奏则随任务入队时定死。
     """
 
-    skip_sent: bool = True
+    allow_duplicates: bool = False
     delay_between_tasks: float = Field(default=30.0, ge=0.0)
     stop_after_count: int = Field(default=0, ge=0)
     stop_after_time: int = Field(default=0, ge=0)

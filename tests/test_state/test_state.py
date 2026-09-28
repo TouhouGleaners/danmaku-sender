@@ -139,7 +139,7 @@ class TestSendPolicy:
         assert policy.delay_between_tasks == 30.0
         assert policy.stop_after_count == 0
         assert policy.stop_after_time == 0
-        assert policy.skip_sent is True
+        assert policy.allow_duplicates is False
 
 
 class TestQueueState:
