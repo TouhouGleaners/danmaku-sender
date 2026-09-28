@@ -2,6 +2,7 @@
 
 import logging
 import threading
+from collections.abc import Collection
 
 from PySide6.QtCore import QObject, Signal, Slot
 
@@ -38,6 +39,7 @@ class MonitorController(QObject):
 
     def start_queue_monitor(
         self,
+        recorded_targets: Collection[tuple[str, int]],
         auth_config: ApiAuthConfig | None = None,
         send_done: threading.Event | None = None,
         post_send_watch_seconds: float = 300.0,
@@ -45,7 +47,9 @@ class MonitorController(QObject):
         """启动队列监视 Worker。成功返回 True；拒绝启动返回 False。
 
         Args:
-            send_done: 「发送+监视」时传入的发送结束标记；发送后再盯
+            recorded_targets: 核销范围，调用方查好后传入，本方法不再查库。
+                Worker 每轮仍自行重查，以纳入发送中新出现的目标。
+            send_done: 「发送+监视」时传入的发送结束标记；发送结束后再监视
                 ``post_send_watch_seconds`` 自动停。传 None 表示独立监视，跑到手动停。
         """
         if self.is_running():
@@ -56,6 +60,10 @@ class MonitorController(QObject):
             logger.warning("上一个监视 Worker 仍在清理中，稍后再试。")
             return False
 
+        if not recorded_targets:
+            logger.warning("核销范围为空，没有可监视的目标。")
+            return False
+
         if auth_config is None:
             auth_config = self.state.get_api_auth()
 
@@ -63,11 +71,7 @@ class MonitorController(QObject):
             logger.warning("凭证缺失，无法启动队列监视。")
             return False
 
-        # 核销范围来自数据库而非队列：没有记录 = 没发过 = 没得核销
         baseline = float(self.state.stats_baseline)
-        if not self.history_manager.get_recorded_targets(baseline):
-            logger.warning("数据库里没有可核销的存证（尚未发送过弹幕）。")
-            return False
 
         self._stop_event.clear()
         worker = QueueMonitorWorker(
@@ -95,8 +99,8 @@ class MonitorController(QObject):
         self.state.monitor_is_active = True
         worker.start()
         logger.info(
-            f"▶ 队列监视已启动：轮询间隔 {self.state.monitor_config.refresh_interval} 秒，"
-            f"统计起点 {'全量历史' if baseline <= 0 else f'{baseline:.0f}'}"
+            f"▶ 队列监视已启动：{len(recorded_targets)} 个目标，"
+            f"轮询间隔 {self.state.monitor_config.refresh_interval} 秒"
         )
         return True
 

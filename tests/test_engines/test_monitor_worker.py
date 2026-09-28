@@ -66,3 +66,22 @@ class TestPostSendWatch:
 
         # post_send_watch_seconds=0：若发送后监视提前起算，首轮就到期退出
         assert 0.3 <= elapsed < 1.0, f"该被手动停在 0.5s，实际 {elapsed:.2f}s"
+
+    def test_deadline_armed_when_send_ends_during_round(self, tmp_path):
+        """发送正好在一轮核销期间结束：本轮返回后就该起算，不等满轮询间隔"""
+        send_done = threading.Event()
+        worker = _make_worker(
+            tmp_path, poll_interval=3.0, send_done=send_done, post_send_watch_seconds=0.5
+        )
+
+        def slow_round(_deadline=None):
+            time.sleep(0.3)
+            send_done.set()  # 本轮执行期间发送结束
+
+        worker._run_round = slow_round  # type: ignore[method-assign]
+
+        started = time.monotonic()
+        worker.run()
+        elapsed = time.monotonic() - started
+
+        assert elapsed < 1.5, f"本轮结束后就该起算，实际 {elapsed:.1f}s（被 3s 轮询拖了）"

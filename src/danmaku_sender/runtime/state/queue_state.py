@@ -59,7 +59,7 @@ class QueueState(QObject):
         self,
         statuses: Collection[TaskStatus],
     ) -> tuple[TaskSnapshot, ...]:
-        """锁内定死 status 的不可变采样，供 Worker 等跨线程消费者使用。"""
+        """定死 status 的不可变采样，交给 Worker 后与后续变更隔离。"""
         return tuple(
             TaskSnapshot(spec=r.spec, status=r.runtime.status)
             for r in self._records

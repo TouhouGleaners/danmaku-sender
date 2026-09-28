@@ -82,19 +82,16 @@ class QueueMonitorWorker(WorkerThread):
             with KeepSystemAwake(self.prevent_sleep):
                 deadline: float | None = None
                 while not self.stop_event.is_set():
-                    if deadline is None and self.send_done is not None and self.send_done.is_set():
-                        deadline = time.monotonic() + self.post_send_watch_seconds
-                    if deadline is not None and time.monotonic() >= deadline:
+                    deadline = self._arm_deadline(deadline)
+                    if self._expired(deadline):
                         logger.info("发送后监视时限已到，队列监视终止。")
                         break
 
-                    self._run_round()
+                    self._run_round(deadline)
+                    # 发送可能正好在本轮核销期间结束，返回后要再武装一次
+                    deadline = self._arm_deadline(deadline)
 
-                    # 等待既不超下一轮间隔，也不越过监视截止
-                    wait_seconds = self.poll_interval
-                    if deadline is not None:
-                        wait_seconds = min(wait_seconds, max(0.0, deadline - time.monotonic()))
-                    if self.stop_event.wait(wait_seconds):
+                    if self._wait(self.poll_interval, deadline):
                         logger.info("收到停止信号，队列监视终止。")
                         break
         except Exception as e:
@@ -108,7 +105,23 @@ class QueueMonitorWorker(WorkerThread):
             if failed:
                 logger.warning("队列监视已异常退出，需人工重新启动。")
 
-    def _run_round(self):
+    def _arm_deadline(self, deadline: float | None) -> float | None:
+        """发送结束后给本轮监视记下截止时刻；已有截止则原样返回。"""
+        if deadline is None and self.send_done is not None and self.send_done.is_set():
+            return time.monotonic() + self.post_send_watch_seconds
+        return deadline
+
+    @staticmethod
+    def _expired(deadline: float | None) -> bool:
+        return deadline is not None and time.monotonic() >= deadline
+
+    def _wait(self, seconds: float, deadline: float | None) -> bool:
+        """等待 seconds，但不越过截止时间。返回 True = 收到停止信号。"""
+        if deadline is not None:
+            seconds = min(seconds, max(0.0, deadline - time.monotonic()))
+        return self.stop_event.wait(seconds)
+
+    def _run_round(self, deadline: float | None):
         try:
             samples = self.targets
         except Exception as e:
@@ -128,7 +141,7 @@ class QueueMonitorWorker(WorkerThread):
             verifier = DanmakuVerifier(api_client=client, history_manager=self.history_manager)
 
             for i, sample in enumerate(samples):
-                if self.stop_event.is_set():
+                if self.stop_event.is_set() or self._expired(deadline):
                     return
 
                 try:
@@ -150,7 +163,7 @@ class QueueMonitorWorker(WorkerThread):
                 overall["pending"] += stats.get("pending", 0)
                 overall["lost"] += stats.get("lost", 0)
 
-                if i + 1 < len(samples) and self.stop_event.wait(random.uniform(1.0, 3.0)):
+                if i + 1 < len(samples) and self._wait(random.uniform(1.0, 3.0), deadline):
                     return
 
         self.overallStatsUpdated.emit(overall)

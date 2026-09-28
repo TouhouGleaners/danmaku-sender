@@ -336,7 +336,7 @@ class MonitorPage(QWidget):
             QMessageBox.warning(self, "凭证缺失", "请先配置 Cookie。")
             return
 
-        if not self.monitor_controller.start_queue_monitor(self.state.get_api_auth()):
+        if not self.monitor_controller.start_queue_monitor(scope, self.state.get_api_auth()):
             self._refresh_table()
             self._sync_overall_stats()
             self._set_ui_running(False)
