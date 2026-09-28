@@ -21,8 +21,8 @@ def hm(tmp_path) -> HistoryManager:
     return HistoryManager(tmp_path / "history.db")
 
 
-def _record(hm: HistoryManager, target: VideoTarget, dmid: str, msg: str = "弹幕") -> bool:
-    return hm.record_danmaku(target, Danmaku(msg=msg, progress=1000), dmid)
+def _record(hm: HistoryManager, target: VideoTarget, dmid: str, msg: str = "弹幕") -> None:
+    hm.record_danmaku(target, Danmaku(msg=msg, progress=1000), dmid)
 
 
 class TestRecordDanmaku:
@@ -85,9 +85,54 @@ class TestVerifyAndLost:
         assert n == 1
 
 
+class TestTargetsWithEvidence:
+    """核销范围来自存证，不是队列
+
+    发送与监视互不认识，只通过数据库交接：
+    数据库里有的才需要对账，未发送的不是成员。
+    """
+
+    def test_empty_ledger_returns_empty(self, hm):
+        assert hm.get_recorded_targets() == []
+
+    def test_returns_targets_holding_evidence(self, hm, target):
+        other = VideoTarget(bvid="BV2xx", cid=2002, title="T2")
+        _record(hm, target, "dm1")
+        assert hm.get_recorded_targets() == [("BV1xx411c7mD", 1001)]
+        _record(hm, other, "dm2")
+        assert hm.get_recorded_targets() == [("BV1xx411c7mD", 1001), ("BV2xx", 2002)]
+
+    def test_dedupes_targets(self, hm, target):
+        _record(hm, target, "dm1")
+        _record(hm, target, "dm2")
+        assert hm.get_recorded_targets() == [("BV1xx411c7mD", 1001)]
+
+    def test_baseline_filters_out_old_evidence(self, hm, target):
+        import time
+        _record(hm, target, "dm1")
+        conn = sqlite3.connect(hm.db_path)
+        conn.execute("UPDATE sent_danmaku SET ctime=? WHERE dmid='dm1'", (time.time() - 3600,))
+        conn.commit()
+        conn.close()
+        assert hm.get_recorded_targets() == [("BV1xx411c7mD", 1001)]
+        assert hm.get_recorded_targets(baseline=time.time() - 60) == []
+
+    def test_ordered_by_first_evidence(self, hm, target):
+        """行序跟首条存证时间一致（跟发送顺序），不随后续写入改变"""
+        import time
+        other = VideoTarget(bvid="BV2xx", cid=2002, title="T2")
+        _record(hm, target, "dm1")
+        _record(hm, other, "dm2")
+        _record(hm, target, "dm3")  # 第二个目标晚发，但不改变谁排前面
+        conn = sqlite3.connect(hm.db_path)
+        conn.execute("UPDATE sent_danmaku SET ctime=? WHERE dmid='dm2'", (time.time() + 10,))
+        conn.commit()
+        conn.close()
+        assert hm.get_recorded_targets() == [("BV1xx411c7mD", 1001), ("BV2xx", 2002)]
+
+
 class TestStatsAndDedup:
     """统计与断点续传查重"""
-
     def test_get_stats_with_baseline(self, hm, target):
         _record(hm, target, "dm1")
         import time

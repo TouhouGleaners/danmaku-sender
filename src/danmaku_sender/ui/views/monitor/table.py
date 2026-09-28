@@ -1,12 +1,27 @@
-"""监视器表格模型 - 用于显示队列任务的监视状态"""
+"""监视器表格模型 - 显示核销目标的存活统计"""
 
+from dataclasses import dataclass
 from enum import IntEnum
 
-from PySide6.QtCore import Qt, QAbstractTableModel, QModelIndex
+from PySide6.QtCore import QAbstractTableModel, QModelIndex, Qt
 from PySide6.QtGui import QColor
 
 from danmaku_sender.types.models.common import MonitorStats
-from danmaku_sender.types.models.queue import TaskView
+
+
+@dataclass(frozen=True)
+class MonitorRow:
+    """表格一行 = 一个核销目标（数据库里有存证的 (bvid, cid)）。
+
+    ``name`` / ``status`` 是 UI 从队列反查到的上下文，查不到就退化显示
+    （bvid/cid、"—"）——核销本身不需要它们。
+    """
+
+    bvid: str
+    cid: int
+    name: str
+    status: str
+    stats: MonitorStats
 
 
 class Column(IntEnum):
@@ -22,60 +37,19 @@ class Column(IntEnum):
 
 
 class QueueMonitorModel(QAbstractTableModel):
-    """队列监视表格模型"""
+    """队列监视表格模型（纯渲染：行由页面拼装）"""
 
     HEADERS = ["序号", "目标视频", "状态", "已发送", "已存活", "待验证", "疑似丢失", "存活率"]
-    _DEFAULT_STATS: MonitorStats = {'total': 0, 'verified': 0, 'pending': 0, 'lost': 0}
 
     def __init__(self):
         super().__init__()
-        self._data: list[dict] = []
+        self._data: list[MonitorRow] = []
 
-    def update_data(self, tasks: list[TaskView], stats_map: dict[str, MonitorStats]):
-        """更新表格数据
-
-        Args:
-            tasks: 队列任务列表
-            stats_map: 任务ID -> 统计数据 的映射
-        """
+    def update_data(self, rows: list[MonitorRow]):
+        """整体替换表格行（行序 = 页面给出的顺序）"""
         self.beginResetModel()
-        self._data = [self._build_row(i, task, stats_map) for i, task in enumerate(tasks)]
+        self._data = list(rows)
         self.endResetModel()
-
-    def _build_row(self, index: int, task: TaskView, stats_map: dict) -> dict:
-        """构建单行数据"""
-        stats: MonitorStats = stats_map.get(task.task_id, self._DEFAULT_STATS)
-        total = stats.get('total', 0)
-        verified = stats.get('verified', 0)
-
-        return {
-            'seq': index + 1,
-            'name': self._format_target(task),
-            'status': task.status.value,
-            'tooltip': self._format_tooltip(task),
-            'total': total,
-            'verified': verified,
-            'pending': stats.get('pending', 0),
-            'lost': stats.get('lost', 0),
-            'rate': f"{verified / total:.0%}" if total > 0 else "-",
-        }
-
-    @staticmethod
-    def _format_target(task: TaskView) -> str:
-        """目标视频列：视频标题 + 分P标题"""
-        parts = [task.target.display_string]
-        if task.p_title:
-            parts.append(task.p_title)
-        return " - ".join(parts)
-
-    @staticmethod
-    def _format_tooltip(task: TaskView) -> str:
-        """完整定位信息：视频标题、BV号、分P、CID"""
-        lines = [task.target.display_string, f"BV号: {task.target.bvid}"]
-        if task.p_title:
-            lines.append(f"分P: {task.p_title}")
-        lines.append(f"CID: {task.target.cid}")
-        return "\n".join(lines)
 
     # --- Qt Model 接口 ---
 
@@ -94,11 +68,11 @@ class QueueMonitorModel(QAbstractTableModel):
 
         match role:
             case Qt.ItemDataRole.DisplayRole:
-                return self._get_display_text(item, col)
+                return self._get_display_text(item, col, index.row())
             case Qt.ItemDataRole.TextAlignmentRole:
                 return self._get_alignment(col)
             case Qt.ItemDataRole.ToolTipRole:
-                return item['tooltip'] if col == Column.TARGET else None
+                return self._format_tooltip(item) if col == Column.TARGET else None
             case Qt.ItemDataRole.ForegroundRole:
                 return self._get_color(item, col)
 
@@ -112,20 +86,28 @@ class QueueMonitorModel(QAbstractTableModel):
     # --- 数据提取辅助方法 ---
 
     @staticmethod
-    def _get_display_text(item: dict, col: Column) -> str:
+    def _get_display_text(item: MonitorRow, col: Column, row: int) -> str:
         """获取单元格显示文本"""
-        key_map = {
-            Column.SEQ: 'seq',
-            Column.TARGET: 'name',
-            Column.STATUS: 'status',
-            Column.TOTAL: 'total',
-            Column.VERIFIED: 'verified',
-            Column.PENDING: 'pending',
-            Column.LOST: 'lost',
-            Column.RATE: 'rate',
-        }
-        key = key_map.get(col)
-        return str(item[key]) if key else ""
+        total = item.stats.get("total", 0)
+        verified = item.stats.get("verified", 0)
+        match col:
+            case Column.SEQ:
+                return str(row + 1)
+            case Column.TARGET:
+                return item.name
+            case Column.STATUS:
+                return item.status
+            case Column.TOTAL:
+                return str(total)
+            case Column.VERIFIED:
+                return str(verified)
+            case Column.PENDING:
+                return str(item.stats.get("pending", 0))
+            case Column.LOST:
+                return str(item.stats.get("lost", 0))
+            case Column.RATE:
+                return f"{verified / total:.0%}" if total > 0 else "-"
+        return ""
 
     @staticmethod
     def _get_alignment(col: Column) -> int:
@@ -135,13 +117,19 @@ class QueueMonitorModel(QAbstractTableModel):
         return int(Qt.AlignmentFlag.AlignCenter)
 
     @staticmethod
-    def _get_color(item: dict, col: Column):
+    def _format_tooltip(item: MonitorRow) -> str:
+        """完整定位信息：标签、BV号、CID"""
+        lines = [item.name, f"BV号: {item.bvid}", f"CID: {item.cid}"]
+        return "\n".join(lines)
+
+    @staticmethod
+    def _get_color(item: MonitorRow, col: Column):
         """获取单元格前景色"""
         match col:
-            case Column.LOST if item['lost'] > 0:
+            case Column.LOST if item.stats.get("lost", 0) > 0:
                 return QColor("#c0392b")  # 红色
-            case Column.VERIFIED if item['verified'] > 0:
+            case Column.VERIFIED if item.stats.get("verified", 0) > 0:
                 return QColor("#27ae60")  # 绿色
-            case Column.PENDING if item['pending'] > 0:
+            case Column.PENDING if item.stats.get("pending", 0) > 0:
                 return QColor("#f39c12")  # 橙色
         return None
