@@ -1,7 +1,6 @@
 """发送任务队列状态管理"""
 
 import logging
-import threading
 from collections import Counter
 from collections.abc import Collection
 from dataclasses import replace
@@ -32,8 +31,9 @@ class QueueState(QObject):
     以确保信号正确发射，所有观察者（发射器、监视器等）自动同步。
 
     内部存 TaskRecord = TaskSpec(不可变工单) + TaskRuntime(可变运行时)。
-    对外只暴露 TaskView 只读门面；跨线程读取用 snapshots()。
-    QueueState 只允许在主线程变更。
+    对外只暴露 TaskView 只读门面。
+
+    只允许主线程访问；给 Worker 数据用 snapshots() 取不可变拷贝。
     """
 
     # ── 信号 ──────────────────────────────────────────────
@@ -47,96 +47,83 @@ class QueueState(QObject):
         super().__init__(parent)
         self._records: list[TaskRecord] = []
         self._current_index: int = -1
-        self._lock = threading.RLock()
 
     # ── 只读访问 ──────────────────────────────────────────
 
     @property
     def tasks(self) -> list[TaskView]:
         """只读视图列表。元素是 live 门面，可反复读到新值；禁止经此写入。"""
-        with self._lock:
-            return [TaskView(r) for r in self._records]
+        return [TaskView(r) for r in self._records]
 
     def snapshots(
         self,
         statuses: Collection[TaskStatus],
     ) -> tuple[TaskSnapshot, ...]:
-        """锁内定死 status 的不可变采样，供 Worker 等跨线程消费者使用。"""
-        with self._lock:
-            return tuple(
-                TaskSnapshot(spec=r.spec, status=r.runtime.status)
-                for r in self._records
-                if r.runtime.status in statuses
-            )
+        """定死 status 的不可变采样，交给 Worker 后与后续变更隔离。"""
+        return tuple(
+            TaskSnapshot(spec=r.spec, status=r.runtime.status)
+            for r in self._records
+            if r.runtime.status in statuses
+        )
 
     @property
     def current_index(self) -> int:
-        with self._lock:
-            return self._current_index
+        return self._current_index
 
     @current_index.setter
     def current_index(self, value: int):
         emit = False
-        with self._lock:
-            if self._current_index != value:
-                self._current_index = value
-                emit = True
+        if self._current_index != value:
+            self._current_index = value
+            emit = True
         if emit:
             self.currentTaskChanged.emit(value)
 
     @property
     def is_empty(self) -> bool:
-        with self._lock:
-            return len(self._records) == 0
+        return len(self._records) == 0
 
     # ── 统计属性 ──────────────────────────────────────────
 
     @property
     def pending_count(self) -> int:
         """等待发送的任务数"""
-        with self._lock:
-            return sum(1 for r in self._records if r.runtime.status == TaskStatus.PENDING)
+        return sum(1 for r in self._records if r.runtime.status == TaskStatus.PENDING)
 
     @property
     def has_pending_tasks(self) -> bool:
         """队列中是否有待发送的任务"""
-        with self._lock:
-            return any(r.runtime.status == TaskStatus.PENDING for r in self._records)
+        return any(r.runtime.status == TaskStatus.PENDING for r in self._records)
 
     @property
     def total_danmaku_count(self) -> int:
         """全队列弹幕总数"""
-        with self._lock:
-            return sum(r.spec.total for r in self._records)
+        return sum(r.spec.total for r in self._records)
 
     @property
     def processed_danmaku_count(self) -> int:
         """全队列已处理弹幕数（不含 PENDING、UNCONFIGURED 和 PAUSED）"""
-        with self._lock:
-            return sum(
-                r.runtime.attempted for r in self._records
-                if r.runtime.status not in (TaskStatus.PENDING, TaskStatus.UNCONFIGURED, TaskStatus.PAUSED)
-            )
+        return sum(
+            r.runtime.attempted for r in self._records
+            if r.runtime.status not in (TaskStatus.PENDING, TaskStatus.UNCONFIGURED, TaskStatus.PAUSED)
+        )
 
     @property
     def status_counts(self) -> dict[TaskStatus, int]:
         """各状态的任务数量"""
         counts: dict[TaskStatus, int] = Counter()
-        with self._lock:
-            for r in self._records:
-                counts[r.runtime.status] += 1
+        for r in self._records:
+            counts[r.runtime.status] += 1
         return dict(counts)
 
     # ── 查询 ─────────────────────────────────────────────
 
     def get_task_by_id(self, task_id: str) -> TaskView | None:
         """按 ID 查找任务"""
-        with self._lock:
-            record = self._find(task_id)
-            return TaskView(record) if record else None
+        record = self._find(task_id)
+        return TaskView(record) if record else None
 
     def _find(self, task_id: str) -> TaskRecord | None:
-        """调用方必须已持有 self._lock"""
         for record in self._records:
             if record.spec.task_id == task_id:
                 return record
@@ -147,8 +134,7 @@ class QueueState(QObject):
     def add_task(self, task: QueueTask):
         """添加任务到队列末尾（入队瞬间拆成 Spec + Runtime）"""
         record = self._to_record(task)
-        with self._lock:
-            self._records.append(record)
+        self._records.append(record)
         self.tasksChanged.emit()
         logger.info(
             f"任务已加入队列: [{record.spec.task_id}] "
@@ -166,20 +152,19 @@ class QueueState(QObject):
         这是队列插入的唯一公开入口，调用方不接触绝对下标。
         """
         record = self._to_record(task)
-        with self._lock:
-            ref_index = -1
-            for i, r in enumerate(self._records):
-                if r.spec.task_id == ref_task_id:
-                    ref_index = i
-                    break
-            if ref_index < 0:
+        ref_index = -1
+        for i, r in enumerate(self._records):
+            if r.spec.task_id == ref_task_id:
+                ref_index = i
+                break
+        if ref_index < 0:
+            self._records.append(record)
+        else:
+            index = ref_index if position is InsertPosition.ABOVE else ref_index + 1
+            if index >= len(self._records):
                 self._records.append(record)
             else:
-                index = ref_index if position is InsertPosition.ABOVE else ref_index + 1
-                if index >= len(self._records):
-                    self._records.append(record)
-                else:
-                    self._records.insert(max(0, index), record)
+                self._records.insert(max(0, index), record)
         self.tasksChanged.emit()
         logger.info(
             f"任务已插入队列 (相对 {ref_task_id} {position.name}): [{record.spec.task_id}] "
@@ -189,12 +174,11 @@ class QueueState(QObject):
     def remove_task(self, task_id: str):
         """移除指定任务(非 RUNNING 任务)"""
         removed = False
-        with self._lock:
-            for i, r in enumerate(self._records):
-                if r.spec.task_id == task_id and r.runtime.status is not TaskStatus.RUNNING:
-                    self._records.pop(i)
-                    removed = True
-                    break
+        for i, r in enumerate(self._records):
+            if r.spec.task_id == task_id and r.runtime.status is not TaskStatus.RUNNING:
+                self._records.pop(i)
+                removed = True
+                break
 
         if removed:
             self.tasksChanged.emit()
@@ -203,39 +187,36 @@ class QueueState(QObject):
     def move_task(self, task_id: str, direction: int):
         """移动任务位置（direction: -1 上移, +1 下移）"""
         moved = False
-        with self._lock:
-            for i, r in enumerate(self._records):
-                if r.spec.task_id == task_id and r.runtime.status in _EDITABLE_STATUSES:
-                    new_index = i + direction
-                    if (
-                        0 <= new_index < len(self._records)
-                        and self._records[new_index].runtime.status in _EDITABLE_STATUSES
-                    ):
-                        self._records[i], self._records[new_index] = (
-                            self._records[new_index], self._records[i]
-                        )
-                        moved = True
-                    break
+        for i, r in enumerate(self._records):
+            if r.spec.task_id == task_id and r.runtime.status in _EDITABLE_STATUSES:
+                new_index = i + direction
+                if (
+                    0 <= new_index < len(self._records)
+                    and self._records[new_index].runtime.status in _EDITABLE_STATUSES
+                ):
+                    self._records[i], self._records[new_index] = (
+                        self._records[new_index], self._records[i]
+                    )
+                    moved = True
+                break
         if moved:
             self.tasksChanged.emit()
 
     def reorder_tasks(self, task_ids: list[str]):
         """按给定的 task_id 顺序重排；列表必须是当前队列的全排列。"""
-        with self._lock:
-            by_id = {r.spec.task_id: r for r in self._records}
-            if set(task_ids) != set(by_id) or len(task_ids) != len(self._records):
-                logger.warning("reorder_tasks 忽略：task_id 列表与当前队列不一致。")
-                return
-            self._records = [by_id[tid] for tid in task_ids]
+        by_id = {r.spec.task_id: r for r in self._records}
+        if set(task_ids) != set(by_id) or len(task_ids) != len(self._records):
+            logger.warning("reorder_tasks 忽略：task_id 列表与当前队列不一致。")
+            return
+        self._records = [by_id[tid] for tid in task_ids]
         self.tasksChanged.emit()
 
     def clear_all(self):
         """清空整个队列（所有状态的任务都移除）"""
-        with self._lock:
-            removed = len(self._records)
-            if removed == 0:
-                return
-            self._records.clear()
+        removed = len(self._records)
+        if removed == 0:
+            return
+        self._records.clear()
         self.tasksChanged.emit()
         logger.info(f"已清空队列（{removed} 个任务）")
 
@@ -248,19 +229,18 @@ class QueueState(QObject):
         """
         revived: list[str] = []
         removed = 0
-        with self._lock:
-            kept: list[TaskRecord] = []
-            for record in self._records:
-                if record.runtime.status is TaskStatus.COMPLETED:
-                    removed += 1
-                    continue
-                if record.runtime.status is TaskStatus.FAILED:
-                    record.runtime.status = TaskStatus.PENDING
-                    record.runtime.error_msg = ""
-                    record.runtime.attempted = 0
-                    revived.append(record.spec.task_id)
-                kept.append(record)
-            self._records = kept
+        kept: list[TaskRecord] = []
+        for record in self._records:
+            if record.runtime.status is TaskStatus.COMPLETED:
+                removed += 1
+                continue
+            if record.runtime.status is TaskStatus.FAILED:
+                record.runtime.status = TaskStatus.PENDING
+                record.runtime.error_msg = ""
+                record.runtime.attempted = 0
+                revived.append(record.spec.task_id)
+            kept.append(record)
+        self._records = kept
 
         if not removed and not revived:
             return
@@ -278,17 +258,16 @@ class QueueState(QObject):
         """
         need_status = False
         total = 0
-        with self._lock:
-            record = self._find(task_id)
-            if record is None or record.runtime.status not in _EDITABLE_STATUSES:
-                return
-            record.spec = replace(
-                record.spec,
-                danmakus=tuple(danmakus),
-                xml_path=xml_path or record.spec.xml_path,
-            )
-            total = record.spec.total
-            need_status = record.runtime.status == TaskStatus.UNCONFIGURED and total > 0
+        record = self._find(task_id)
+        if record is None or record.runtime.status not in _EDITABLE_STATUSES:
+            return
+        record.spec = replace(
+            record.spec,
+            danmakus=tuple(danmakus),
+            xml_path=xml_path or record.spec.xml_path,
+        )
+        total = record.spec.total
+        need_status = record.runtime.status == TaskStatus.UNCONFIGURED and total > 0
 
         if need_status:
             self.update_task_status(task_id, TaskStatus.PENDING)
@@ -304,21 +283,20 @@ class QueueState(QObject):
         old_status: TaskStatus | None = None
         new_status: TaskStatus | None = None
         error_msg = ""
-        with self._lock:
-            record = self._find(task_id)
-            if record is None:
-                return
-            if record.runtime.status not in _EDITABLE_STATUSES:
-                logger.warning(f"任务 [{task_id}] 处于 {record.runtime.status.value}，已忽略编辑结果。")
-                return
+        record = self._find(task_id)
+        if record is None:
+            return
+        if record.runtime.status not in _EDITABLE_STATUSES:
+            logger.warning(f"任务 [{task_id}] 处于 {record.runtime.status.value}，已忽略编辑结果。")
+            return
 
-            old_status = record.runtime.status
-            # 以队列中的 task_id 为准，防止沙盒误带其它 id
-            record.spec = replace(source.to_spec(), task_id=task_id)
-            new_status = source.status
-            error_msg = source.error_msg
-            record.runtime.status = new_status
-            record.runtime.error_msg = error_msg
+        old_status = record.runtime.status
+        # 以队列中的 task_id 为准，防止沙盒误带其它 id
+        record.spec = replace(source.to_spec(), task_id=task_id)
+        new_status = source.status
+        error_msg = source.error_msg
+        record.runtime.status = new_status
+        record.runtime.error_msg = error_msg
 
         if new_status != old_status:
             self.taskStatusChanged.emit(task_id, new_status)
@@ -328,22 +306,20 @@ class QueueState(QObject):
 
     def update_task_status(self, task_id: str, status: TaskStatus, error_msg: str = ""):
         """更新任务状态"""
-        with self._lock:
-            record = self._find(task_id)
-            if record is None:
-                return
-            record.runtime.status = status
-            record.runtime.error_msg = error_msg
+        record = self._find(task_id)
+        if record is None:
+            return
+        record.runtime.status = status
+        record.runtime.error_msg = error_msg
         self.taskStatusChanged.emit(task_id, status)
 
     def update_task_progress(self, task_id: str, attempted: int, total: int):
         """更新发送进度并通知观察者（total 以 Spec 为准，入参仅作展示一致校验）"""
-        with self._lock:
-            record = self._find(task_id)
-            if record is None:
-                return
-            record.runtime.attempted = attempted
-            actual_total = record.spec.total or total
+        record = self._find(task_id)
+        if record is None:
+            return
+        record.runtime.attempted = attempted
+        actual_total = record.spec.total or total
         self.taskProgressChanged.emit(task_id, attempted, actual_total)
 
     # ── 内部转换 ─────────────────────────────────────────

@@ -386,3 +386,12 @@ class TestQueueState:
         snap = qs.snapshots({TaskStatus.PENDING})[0]
         with pytest.raises(dataclasses.FrozenInstanceError):
             snap.spec.danmakus[0].msg = "hacked"  # type: ignore[misc]
+
+    def test_queue_state_has_no_lock(self):
+        """QueueState 只允许主线程访问：跨线程读的 RLock 已删除。
+
+        Worker 要数据用 snapshots() 取不可变拷贝，监视器的核销范围来自数据库。
+        若有人把「Worker 自己采样」加回来，这个锁也会跟着回来。
+        """
+        qs = QueueState()
+        assert not hasattr(qs, "_lock")

@@ -2,6 +2,7 @@
 
 import logging
 import threading
+from collections.abc import Collection
 
 from PySide6.QtCore import QObject, Signal, Slot
 
@@ -9,7 +10,7 @@ from danmaku_sender.config import ApiAuthConfig
 from danmaku_sender.repo.history_manager import HistoryManager
 from danmaku_sender.runtime.state.app_state import AppState
 
-from .workers import MONITORABLE_STATUSES, QueueMonitorWorker
+from .workers import QueueMonitorWorker
 
 logger = logging.getLogger(__name__)
 
@@ -17,14 +18,15 @@ logger = logging.getLogger(__name__)
 class MonitorController(QObject):
     """队列监视控制器：持有 QueueMonitorWorker，信号转发给 UI。
 
-    QueueState 只读；核销与统计查询在 Worker 线程执行。
+    本类在主线程运行，`stats_baseline` / `refresh_interval` 由这里取值
+    并作为冻结参数交给 Worker——Worker 不持有 AppState，也不写 QueueState。
     """
 
-    taskStatsUpdated = Signal(str, object)   # (task_id, MonitorStats)
-    taskVerifyFailed = Signal(str)           # task_id
-    overallStatsUpdated = Signal(object)     # MonitorStats
+    targetStatsUpdated = Signal(str, int, object)  # (bvid, cid, MonitorStats)
+    targetVerifyFailed = Signal(str, int)          # (bvid, cid)
+    overallStatsUpdated = Signal(object)           # MonitorStats
     statusUpdated = Signal(str)
-    monitorFailed = Signal(str)              # 异常终止
+    monitorFailed = Signal(str)                    # 异常终止
     monitorFinished = Signal()
     monitorReady = Signal()
 
@@ -35,14 +37,31 @@ class MonitorController(QObject):
         self._worker: QueueMonitorWorker | None = None
         self._stop_event = threading.Event()
 
-    def start_queue_monitor(self, auth_config: ApiAuthConfig | None = None) -> bool:
-        """启动队列监视 Worker。成功返回 True；拒绝启动返回 False。"""
+    def start_queue_monitor(
+        self,
+        recorded_targets: Collection[tuple[str, int]],
+        auth_config: ApiAuthConfig | None = None,
+        send_done: threading.Event | None = None,
+        post_send_watch_seconds: float = 300.0,
+    ) -> bool:
+        """启动队列监视 Worker。成功返回 True；拒绝启动返回 False。
+
+        Args:
+            recorded_targets: 核销范围，调用方查好后传入，本方法不再查库。
+                Worker 每轮仍自行重查，以纳入发送中新出现的目标。
+            send_done: 「发送+监视」时传入的发送结束标记；发送结束后再监视
+                ``post_send_watch_seconds`` 自动停。传 None 表示独立监视，跑到手动停。
+        """
         if self.is_running():
             logger.warning("队列监视已在运行中。")
             return False
 
         if self._worker is not None:
             logger.warning("上一个监视 Worker 仍在清理中，稍后再试。")
+            return False
+
+        if not recorded_targets:
+            logger.warning("核销范围为空，没有可监视的目标。")
             return False
 
         if auth_config is None:
@@ -52,26 +71,22 @@ class MonitorController(QObject):
             logger.warning("凭证缺失，无法启动队列监视。")
             return False
 
-        if self.state.queue_state.is_empty:
-            logger.warning("队列为空，没有任务可以监视。")
-            return False
-        if not self.state.queue_state.snapshots(set(MONITORABLE_STATUSES)):
-            logger.warning(
-                "队列中没有可监视的任务（需要已完成/发送中/失败/暂停的任务）。"
-            )
-            return False
+        baseline = float(self.state.stats_baseline)
 
         self._stop_event.clear()
         worker = QueueMonitorWorker(
-            state=self.state,
             auth_config=auth_config,
             history_manager=self.history_manager,
             stop_event=self._stop_event,
+            baseline=baseline,
+            poll_interval=float(self.state.monitor_config.refresh_interval),
             prevent_sleep=self.state.global_config.prevent_sleep,
+            send_done=send_done,
+            post_send_watch_seconds=post_send_watch_seconds,
         )
 
-        worker.taskStatsUpdated.connect(self._on_task_stats)
-        worker.taskVerifyFailed.connect(self._on_task_verify_failed)
+        worker.targetStatsUpdated.connect(self._on_target_stats)
+        worker.targetVerifyFailed.connect(self._on_target_verify_failed)
         worker.overallStatsUpdated.connect(self._on_overall_stats)
         worker.statusUpdated.connect(self._on_status)
         worker.monitorFailed.connect(self._on_monitor_failed)
@@ -84,7 +99,7 @@ class MonitorController(QObject):
         self.state.monitor_is_active = True
         worker.start()
         logger.info(
-            f"▶ 队列监视已启动：{len(self.state.queue_state.tasks)} 个任务，"
+            f"▶ 队列监视已启动：{len(recorded_targets)} 个目标，"
             f"轮询间隔 {self.state.monitor_config.refresh_interval} 秒"
         )
         return True
@@ -97,13 +112,13 @@ class MonitorController(QObject):
     def is_running(self) -> bool:
         return self._worker is not None and self._worker.isRunning()
 
-    @Slot(str, object)
-    def _on_task_stats(self, task_id: str, stats):
-        self.taskStatsUpdated.emit(task_id, stats)
+    @Slot(str, int, object)
+    def _on_target_stats(self, bvid: str, cid: int, stats):
+        self.targetStatsUpdated.emit(bvid, cid, stats)
 
-    @Slot(str)
-    def _on_task_verify_failed(self, task_id: str):
-        self.taskVerifyFailed.emit(task_id)
+    @Slot(str, int)
+    def _on_target_verify_failed(self, bvid: str, cid: int):
+        self.targetVerifyFailed.emit(bvid, cid)
 
     @Slot(object)
     def _on_overall_stats(self, stats):

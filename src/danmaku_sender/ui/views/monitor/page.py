@@ -28,7 +28,7 @@ from danmaku_sender.types.models.common import MonitorStats
 from danmaku_sender.ui.framework.form_binder import LiveFormBinder
 from danmaku_sender.ui.framework.icons import SvgIcon
 
-from .table import QueueMonitorModel
+from .table import MonitorRow, QueueMonitorModel
 
 
 class MonitorPage(QWidget):
@@ -46,7 +46,9 @@ class MonitorPage(QWidget):
 
         self._queue_monitoring = False
         self._monitor_failed = False
-        self._queue_stats: dict[str, MonitorStats] = {}  # task_id -> stats
+        # 核销范围（插入序）：启动时取一次，之后随 Worker 上报累积。
+        # 值为最新统计；None = 尚无统计
+        self._rows: dict[tuple[str, int], MonitorStats | None] = {}
 
         self._create_ui()
         self._connect_signals()
@@ -192,8 +194,8 @@ class MonitorPage(QWidget):
         self.btn_reset_anchor.clicked.connect(self._on_reset_anchor_clicked)
 
         # MonitorController
-        self.monitor_controller.taskStatsUpdated.connect(self._on_task_stats_updated)
-        self.monitor_controller.taskVerifyFailed.connect(self._on_task_verify_failed)
+        self.monitor_controller.targetStatsUpdated.connect(self._on_target_stats_updated)
+        self.monitor_controller.targetVerifyFailed.connect(self._on_target_verify_failed)
         self.monitor_controller.overallStatsUpdated.connect(self._on_overall_stats_updated)
         self.monitor_controller.statusUpdated.connect(self.status_label.setText)
         self.monitor_controller.monitorFailed.connect(self._on_monitor_failed)
@@ -227,7 +229,7 @@ class MonitorPage(QWidget):
     def showEvent(self, event):
         super().showEvent(event)
         LiveFormBinder.fill(self)
-        self._refresh_queue_table()
+        self._refresh_table()
         # 首次显示时 viewport 已有尺寸，再定位空状态提示
         self._update_empty_hint()
 
@@ -245,9 +247,20 @@ class MonitorPage(QWidget):
             dt_str = datetime.fromtimestamp(baseline).strftime('%m-%d %H:%M:%S')
             self.anchor_display.setText(dt_str)
 
-    def _refresh_queue_table(self):
-        tasks = self.state.queue_state.tasks
-        self._queue_model.update_data(tasks, self._queue_stats)
+    def _refresh_table(self):
+        """按核销范围拼行，标签从队列反查"""
+        labels: dict[tuple[str, int], tuple[str, str]] = {}
+        for task in self.state.queue_state.tasks:
+            name = task.target.display_string
+            if task.p_title:
+                name = f"{name} - {task.p_title}"
+            labels[(task.target.bvid, task.target.cid)] = (name, task.status.value)
+
+        rows = []
+        for (bvid, cid), stats in self._rows.items():
+            name, status = labels.get((bvid, cid), (f"{bvid} / CID {cid}", "—"))
+            rows.append(MonitorRow(bvid=bvid, cid=cid, name=name, status=status, stats=stats))
+        self._queue_model.update_data(rows)
 
     def _update_empty_hint(self):
         self._empty_hint.setVisible(self._queue_model.rowCount() == 0)
@@ -261,8 +274,8 @@ class MonitorPage(QWidget):
         self._reposition_empty_hint()
 
     def _update_overall_stats(self) -> dict:
-        current_ids = {t.task_id for t in self.state.queue_state.tasks}
-        totals = [s for tid, s in self._queue_stats.items() if tid in current_ids]
+        # 尚无统计的行不计入合计
+        totals = [s for s in self._rows.values() if s is not None]
 
         total = sum(s.get('total', 0) for s in totals)
         verified = sum(s.get('verified', 0) for s in totals)
@@ -306,17 +319,25 @@ class MonitorPage(QWidget):
             self.logger.info("⏹ 队列监视停止请求已发送")
             return
 
-        if not self.state.queue_state.tasks:
-            QMessageBox.information(self, "队列为空", "没有任务可以监视。")
+        # 填入核销范围；查询失败与「没发过」分开报
+        try:
+            scope = self.history_manager.get_recorded_targets(self.state.stats_baseline)
+            self._rows = {(bvid, cid): None for bvid, cid in scope}
+        except Exception:
+            self.logger.error("读取发送记录失败", exc_info=True)
+            QMessageBox.warning(self, "数据库查询失败", "无法读取发送记录，详见日志。")
+            return
+
+        if not self._rows:
+            QMessageBox.information(self, "暂无可核销内容", "统计范围内还没有发送过弹幕。")
             return
 
         if not self.state.sessdata:
             QMessageBox.warning(self, "凭证缺失", "请先配置 Cookie。")
             return
 
-        self._queue_stats.clear()
-        if not self.monitor_controller.start_queue_monitor(self.state.get_api_auth()):
-            self._refresh_queue_table()
+        if not self.monitor_controller.start_queue_monitor(scope, self.state.get_api_auth()):
+            self._refresh_table()
             self._sync_overall_stats()
             self._set_ui_running(False)
             self.logger.warning("队列监视未能启动")
@@ -324,20 +345,20 @@ class MonitorPage(QWidget):
 
         self._queue_monitoring = True
         self._set_ui_running(True)
-        self._refresh_queue_table()
+        self._refresh_table()
         self._sync_overall_stats()
 
-    @Slot(str, object)
-    def _on_task_stats_updated(self, task_id: str, stats):
-        self._queue_stats[task_id] = stats
-        self._refresh_queue_table()
+    @Slot(str, int, object)
+    def _on_target_stats_updated(self, bvid: str, cid: int, stats: MonitorStats):
+        self._rows[(bvid, cid)] = stats
+        self._refresh_table()
         self._sync_overall_stats()
 
-    @Slot(str)
-    def _on_task_verify_failed(self, task_id: str):
-        """本轮核销失败：丢弃缓存，行与合计都不用旧库数据冒充最新结果"""
-        self._queue_stats.pop(task_id, None)
-        self._refresh_queue_table()
+    @Slot(str, int)
+    def _on_target_verify_failed(self, bvid: str, cid: int):
+        """本轮核销失败：清掉统计，行保留"""
+        self._rows[(bvid, cid)] = None
+        self._refresh_table()
         self._sync_overall_stats()
 
     @Slot(object)
@@ -388,13 +409,13 @@ class MonitorPage(QWidget):
     @Slot()
     def _on_queue_changed(self):
         """队列结构变化：刷新表格并广播当前队列聚合（托盘不残留旧值）"""
-        self._refresh_queue_table()
+        self._refresh_table()
         self._sync_overall_stats()
 
     @Slot(str, object)
     def _on_queue_task_status_changed(self, task_id: str, status):
         if self._queue_monitoring:
-            self._refresh_queue_table()
+            self._refresh_table()
             self._sync_overall_stats()
 
     # endregion

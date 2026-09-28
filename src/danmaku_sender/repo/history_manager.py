@@ -93,6 +93,33 @@ class HistoryManager:
         except Exception as e:
             logger.error(f"存证失败: {e}", exc_info=True)
 
+    def get_recorded_targets(self, baseline: float = 0.0) -> list[tuple[str, int]]:
+        """
+        [核销] 返回 baseline 之后有记录的目标，即监视器的核销范围。
+
+        发送进行中新增的记录，下一轮自动纳入。
+
+        Args:
+            baseline: 统计基线时间（0 表示不限）
+
+        Returns:
+            list[tuple[str, int]]: (bvid, cid)，按首次记录时间排序
+
+        Raises:
+            Exception: 查询失败原样上抛，不吞成空列表
+        """
+        query = (
+            SentDanmaku
+                .select(SentDanmaku.bvid, SentDanmaku.cid)
+                .group_by(SentDanmaku.bvid, SentDanmaku.cid)
+                .order_by(fn.MIN(SentDanmaku.ctime))
+        )
+        if baseline > 0:
+            # peewee 的 where() 不接受空条件
+            query = query.where(SentDanmaku.ctime >= baseline)
+
+        return [(row.bvid, row.cid) for row in query]
+
     def verify_dmids(self, verified_dmids: list[str]) -> int:
         """
         [核销] 监视器确认存活后，批量更新状态。
