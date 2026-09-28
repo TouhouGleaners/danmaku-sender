@@ -33,8 +33,7 @@ class QueueState(QObject):
     内部存 TaskRecord = TaskSpec(不可变工单) + TaskRuntime(可变运行时)。
     对外只暴露 TaskView 只读门面。
 
-    **只允许主线程访问**（读写皆然）。要给 Worker 数据用 snapshots()
-    取一份不可变拷贝交出去——Worker 不持有本对象，也不回头摸它。
+    只允许主线程访问；给 Worker 数据用 snapshots() 取不可变拷贝。
     """
 
     # ── 信号 ──────────────────────────────────────────────

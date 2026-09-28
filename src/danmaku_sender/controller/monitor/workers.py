@@ -19,10 +19,9 @@ logger = logging.getLogger(__name__)
 
 @dataclass(frozen=True)
 class MonitorSample:
-    """一个核销目标：来自数据库的 (bvid, cid)。
+    """一个核销目标 (bvid, cid)，来自数据库。
 
-    标签（标题 / 分P）不是数据库内容，由 UI 反查队列补齐，
-    查不到就退回 bvid/cid——核销本身不需要它们。
+    标题/分P 由 UI 从队列反查补齐，核销本身不需要。
     """
 
     bvid: str
@@ -36,9 +35,7 @@ class MonitorSample:
 class QueueMonitorWorker(WorkerThread):
     """队列监视 Worker：按间隔轮询在线核销并 emit，不写 QueueState。
 
-    核销范围每轮从**数据库**读（`get_recorded_targets`），
-    不摸 `AppState`/`QueueState`：发都没发的从来不是成员，
-    发送进行中写入的存证会让下一轮自动纳入。
+    核销范围每轮从数据库读（get_recorded_targets），不碰队列状态。
     """
 
     targetStatsUpdated = Signal(str, int, object)  # (bvid, cid, MonitorStats)
@@ -75,11 +72,13 @@ class QueueMonitorWorker(WorkerThread):
 
     @property
     def targets(self) -> list[MonitorSample]:
-        """本轮核销范围：数据库里 baseline 后有存证的目标，按首条存证时间排序。"""
-        return [
-            MonitorSample(bvid=bvid, cid=cid)
-            for bvid, cid in self.history_manager.get_recorded_targets(self.baseline)
-        ]
+        """本轮核销范围：数据库里 baseline 后有记录的目标。"""
+        try:
+            rows = self.history_manager.get_recorded_targets(self.baseline)
+        except Exception as e:
+            logger.warning(f"读取核销范围失败，本轮跳过: {e}", exc_info=True)
+            return []
+        return [MonitorSample(bvid=bvid, cid=cid) for bvid, cid in rows]
 
     def run(self):
         failed = False
@@ -88,14 +87,18 @@ class QueueMonitorWorker(WorkerThread):
                 deadline: float | None = None
                 while not self.stop_event.is_set():
                     if deadline is None and self.send_done is not None and self.send_done.is_set():
-                        # 一轮最多迟 poll_interval 才发现发送结束；对「盯多久」无实质影响
                         deadline = time.monotonic() + self.tail_seconds
                     if deadline is not None and time.monotonic() >= deadline:
                         logger.info("发送后监视时限已到，队列监视终止。")
                         break
 
                     self._run_round()
-                    if self.stop_event.wait(self.poll_interval):
+
+                    # 等待既不超下一轮间隔，也不越过尾巴截止
+                    wait_seconds = self.poll_interval
+                    if deadline is not None:
+                        wait_seconds = min(wait_seconds, max(0.0, deadline - time.monotonic()))
+                    if self.stop_event.wait(wait_seconds):
                         logger.info("收到停止信号，队列监视终止。")
                         break
         except Exception as e:

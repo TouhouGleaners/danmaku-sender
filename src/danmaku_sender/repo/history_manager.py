@@ -95,33 +95,30 @@ class HistoryManager:
 
     def get_recorded_targets(self, baseline: float = 0.0) -> list[tuple[str, int]]:
         """
-        [核销] 返回数据库里 baseline 之后有记录的目标 (bvid, cid)，即监视器的核销范围。
+        [核销] 返回 baseline 之后有记录的目标，即监视器的核销范围。
 
-        监视器的输入来自**数据库**而不是队列：有记录的才需要对账，发都没发的从来不是成员。
-        发送进行中，新写入的记录会让下一轮自动纳入，无需任何通知。
+        发送进行中新增的记录，下一轮自动纳入。
 
         Args:
             baseline: 统计基线时间（0 表示不限）
 
         Returns:
             list[tuple[str, int]]: (bvid, cid)，按首次记录时间排序
+
+        Raises:
+            Exception: 查询失败原样上抛，不吞成空列表
         """
-        try:
-            query = (
-                SentDanmaku
-                    .select(SentDanmaku.bvid, SentDanmaku.cid)
-                    .group_by(SentDanmaku.bvid, SentDanmaku.cid)
-                    .order_by(fn.MIN(SentDanmaku.ctime))
-            )
-            if baseline > 0:
-                # 空条件不能调 where（peewee 会 reduce 空序列）
-                query = query.where(SentDanmaku.ctime >= baseline)
+        query = (
+            SentDanmaku
+                .select(SentDanmaku.bvid, SentDanmaku.cid)
+                .group_by(SentDanmaku.bvid, SentDanmaku.cid)
+                .order_by(fn.MIN(SentDanmaku.ctime))
+        )
+        if baseline > 0:
+            # peewee 的 where() 不接受空条件
+            query = query.where(SentDanmaku.ctime >= baseline)
 
-            return [(row.bvid, row.cid) for row in query]
-
-        except Exception as e:
-            logger.error(f"获取核销范围失败: {e}", exc_info=True)
-            return []
+        return [(row.bvid, row.cid) for row in query]
 
     def verify_dmids(self, verified_dmids: list[str]) -> int:
         """

@@ -11,17 +11,17 @@ from danmaku_sender.types.models.common import MonitorStats
 
 @dataclass(frozen=True)
 class MonitorRow:
-    """表格一行 = 一个核销目标（数据库里有存证的 (bvid, cid)）。
+    """表格一行 = 一个核销目标 (bvid, cid)。
 
-    ``name`` / ``status`` 是 UI 从队列反查到的上下文，查不到就退化显示
-    （bvid/cid、"—"）——核销本身不需要它们。
+    name/status 由 UI 从队列反查，查不到退化为 bvid/CID 与 "—"；
+    stats 为 None 表示尚无统计。
     """
 
     bvid: str
     cid: int
     name: str
     status: str
-    stats: MonitorStats
+    stats: MonitorStats | None = None
 
 
 class Column(IntEnum):
@@ -88,8 +88,6 @@ class QueueMonitorModel(QAbstractTableModel):
     @staticmethod
     def _get_display_text(item: MonitorRow, col: Column, row: int) -> str:
         """获取单元格显示文本"""
-        total = item.stats.get("total", 0)
-        verified = item.stats.get("verified", 0)
         match col:
             case Column.SEQ:
                 return str(row + 1)
@@ -97,14 +95,23 @@ class QueueMonitorModel(QAbstractTableModel):
                 return item.name
             case Column.STATUS:
                 return item.status
+
+        stats = item.stats
+        if stats is None:
+            # 尚无统计
+            return "—"
+
+        total = stats.get("total", 0)
+        verified = stats.get("verified", 0)
+        match col:
             case Column.TOTAL:
                 return str(total)
             case Column.VERIFIED:
                 return str(verified)
             case Column.PENDING:
-                return str(item.stats.get("pending", 0))
+                return str(stats.get("pending", 0))
             case Column.LOST:
-                return str(item.stats.get("lost", 0))
+                return str(stats.get("lost", 0))
             case Column.RATE:
                 return f"{verified / total:.0%}" if total > 0 else "-"
         return ""
@@ -125,6 +132,8 @@ class QueueMonitorModel(QAbstractTableModel):
     @staticmethod
     def _get_color(item: MonitorRow, col: Column):
         """获取单元格前景色"""
+        if item.stats is None:
+            return None
         match col:
             case Column.LOST if item.stats.get("lost", 0) > 0:
                 return QColor("#c0392b")  # 红色
