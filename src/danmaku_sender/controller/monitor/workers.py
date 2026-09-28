@@ -73,11 +73,7 @@ class QueueMonitorWorker(WorkerThread):
     @property
     def targets(self) -> list[MonitorSample]:
         """本轮核销范围：数据库里 baseline 后有记录的目标。"""
-        try:
-            rows = self.history_manager.get_recorded_targets(self.baseline)
-        except Exception as e:
-            logger.warning(f"读取核销范围失败，本轮跳过: {e}", exc_info=True)
-            return []
+        rows = self.history_manager.get_recorded_targets(self.baseline)
         return [MonitorSample(bvid=bvid, cid=cid) for bvid, cid in rows]
 
     def run(self):
@@ -113,7 +109,13 @@ class QueueMonitorWorker(WorkerThread):
                 logger.warning("队列监视已异常退出，需人工重新启动。")
 
     def _run_round(self):
-        samples = self.targets
+        try:
+            samples = self.targets
+        except Exception as e:
+            # 查询失败跳过本轮；状态栏同步说明，免得看着像空转
+            logger.warning(f"读取发送记录失败，本轮跳过: {e}", exc_info=True)
+            self.statusUpdated.emit("监视中（读取发送记录失败，本轮跳过）")
+            return
         if not samples:
             # 开跑初期数据库可能是空的（还没发出存证），安静等下一轮
             logger.debug("本轮无存证目标，跳过核销。")
