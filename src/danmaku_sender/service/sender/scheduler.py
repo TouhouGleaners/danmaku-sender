@@ -33,7 +33,7 @@ class DanmakuScheduler:
 
         对每个指纹计数，若当前发送序列中该指纹的出现次数 <= 数据库中已成功发送的次数，则跳过。
         """
-        if not policy.skip_sent or not self.history_manager:
+        if policy.allow_duplicates or not self.history_manager:
             return False
 
         dm_fingerprint = self._get_fingerprint(dm)

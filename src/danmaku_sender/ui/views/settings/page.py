@@ -16,6 +16,7 @@ from PySide6.QtWidgets import (
 from danmaku_sender.config.theme_config import ThemeMode
 from danmaku_sender.runtime.state.app_state import AppState
 from danmaku_sender.ui.framework.form_binder import LiveFormBinder
+from danmaku_sender.ui.framework.icons import SvgIcon
 
 
 class SettingsPage(QWidget):
@@ -178,16 +179,45 @@ class SettingsPage(QWidget):
         queue_group.setLayout(queue_layout)
         main_layout.addWidget(queue_group)
 
-        # --- 断点续传 ---
-        resume_group = QGroupBox("断点续传")
-        resume_layout = QFormLayout()
+        # --- 危险区 ---
+        danger_header = QHBoxLayout()
+        danger_header.setSpacing(6)
+        danger_icon = QLabel()
+        danger_icon.setPixmap(SvgIcon.WARNING(color="#e74c3c").pixmap(20, 20))
+        danger_header.addWidget(danger_icon)
+        danger_label = QLabel("危险区")
+        danger_label.setObjectName("dangerTitle")
+        danger_header.addWidget(danger_label)
+        danger_header.addStretch()
 
-        self.skip_sent_cb = QCheckBox("跳过已发送的弹幕（基于历史记录去重）")
-        self.skip_sent_cb.setToolTip("启用后，发送前会查询历史记录，自动跳过已成功发送过的弹幕。")
+        self.allow_duplicates = QCheckBox()
+        danger_title = QLabel("允许重复发送")
+        danger_title.setStyleSheet("font-weight: bold;")
+        danger_hint = QLabel("开启后，发送将不再比对数据库。已经发出的弹幕会允许再次发送，视频内会出现重复。")
+        danger_hint.setObjectName("dangerHint")
+        danger_hint.setWordWrap(True)
 
-        resume_layout.addRow(self.skip_sent_cb)
-        resume_group.setLayout(resume_layout)
-        main_layout.addWidget(resume_group)
+        danger_text = QVBoxLayout()
+        danger_text.setSpacing(2)
+        danger_text.addWidget(danger_title)
+        danger_text.addWidget(danger_hint)
+
+        danger_row = QHBoxLayout()
+        danger_row.addWidget(self.allow_duplicates)
+        danger_row.addLayout(danger_text, 1)
+
+        danger_frame = QFrame()
+        danger_frame.setObjectName("dangerFrame")
+        danger_inner = QVBoxLayout()
+        danger_inner.setContentsMargins(12, 10, 12, 12)
+        danger_inner.addLayout(danger_row)
+        danger_frame.setLayout(danger_inner)
+
+        danger_box = QVBoxLayout()
+        danger_box.setSpacing(6)
+        danger_box.addLayout(danger_header)
+        danger_box.addWidget(danger_frame)
+        main_layout.addLayout(danger_box)
 
         main_layout.addStretch()
 
@@ -240,7 +270,7 @@ class SettingsPage(QWidget):
         LiveFormBinder.bind(self.delay_between, policy, "delay_between_tasks", after_write=self._on_config_written)
         LiveFormBinder.bind(self.stop_count, policy, "stop_after_count", after_write=self._on_config_written)
         LiveFormBinder.bind(self.stop_time, policy, "stop_after_time", after_write=self._on_config_written)
-        LiveFormBinder.bind(self.skip_sent_cb, policy, "skip_sent", after_write=self._on_config_written)
+        LiveFormBinder.bind(self.allow_duplicates, policy, "allow_duplicates", after_write=self._on_config_written)
 
     def showEvent(self, event):
         """打开页面时从状态重读控件值（无隐式同步）"""
