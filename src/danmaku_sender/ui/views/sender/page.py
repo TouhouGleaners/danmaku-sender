@@ -1,4 +1,6 @@
 import logging
+from dataclasses import dataclass
+from pathlib import Path
 
 from PySide6.QtCore import (
     QDateTime,
@@ -21,6 +23,7 @@ from PySide6.QtGui import (
 from PySide6.QtWidgets import (
     QAbstractItemView,
     QDialog,
+    QFileDialog,
     QGroupBox,
     QHBoxLayout,
     QHeaderView,
@@ -41,14 +44,24 @@ from danmaku_sender.runtime.infra.platform import send_windows_notification
 from danmaku_sender.runtime.state.app_state import AppState
 from danmaku_sender.service.danmaku_parser import DanmakuParser
 from danmaku_sender.service.sender import SendingContext
+from danmaku_sender.types.models.common import UnsentDanmakusRecord
 from danmaku_sender.types.models.queue import InsertPosition, TaskStatus, TaskView
 from danmaku_sender.ui.framework.icons import SvgIcon
 from danmaku_sender.ui.views.editor import EditorDialog
+from danmaku_sender.utils.string_utils import safe_filename
 from danmaku_sender.utils.time_utils import format_duration
 
 from .components.dialogs.task_builder import TaskBuilderDialog
 from .components.dialogs.task_detail import TaskDetailDialog
 from .components.queue_table import ProgressBarDelegate, QueueTableModel, QueueTableView
+
+
+@dataclass
+class TaskUnsent:
+    """一个任务的未发送成功弹幕，供导出 XML。"""
+
+    label: str
+    records: list[UnsentDanmakusRecord]
 
 
 class SenderPage(QWidget):
@@ -64,6 +77,8 @@ class SenderPage(QWidget):
         self._queue_current = 0
         self._queue_total_dm: int = 0
         self._queue_eta: float = 0.0
+
+        self._unsent_by_task: dict[str, TaskUnsent] = {}  # 本轮队列各任务的未发送成功弹幕（key = task_id）
 
         self._create_ui()
         self._connect_signals()
@@ -121,8 +136,7 @@ class SenderPage(QWidget):
         # 键盘删除。禁用快捷键与函数对 Delete 键是同样的静默表现，
         QShortcut(QKeySequence.StandardKey.Delete, self._queue_table, self._delete_selected_task)
 
-        # 队列工具栏：管理列表的操作（增删）。运行队列的操作在底部操作区。
-        # 图标 + 文字：清除已完成没有通用图标，单靠图标意图不明。
+        # 队列工具栏：管理列表的操作（增删）。
         # 主操作与维护操作分层：新建为实心按钮靠左，删除/清除为扁平按钮靠右。
         def _tool_button(text: str, icon, *, primary: bool = False) -> QToolButton:
             btn = QToolButton()
@@ -140,15 +154,17 @@ class SenderPage(QWidget):
 
         self._btn_add_to_queue = _tool_button("新建任务", SvgIcon.NOTE_ADD, primary=True)
 
-        # 三个按钮各管一件事：删除选定 / 重置队列 / 清空队列。
-        # 「清除已完成」并入重置队列，不再单列。
         self._btn_delete = _tool_button("删除选中", SvgIcon.DELETE)
         self._btn_reset_queue = _tool_button("重置队列", SvgIcon.SYNC_ALT)
         self._btn_clear_all = _tool_button("清空队列", SvgIcon.FORMAT_CLEAR)
+        self._btn_export_unsent = _tool_button("导出未发送", SvgIcon.FILE_SAVE)
+        self._btn_export_unsent.setToolTip("导出所有任务里未发送成功的弹幕，每个任务一个 XML")
+        self._btn_export_unsent.setEnabled(False)  # 初始化时禁用，队列跑完后有未发送成功时启用
 
         queue_toolbar.addWidget(self._btn_add_to_queue)
         queue_toolbar.addStretch()
         queue_toolbar.addWidget(self._btn_delete)
+        queue_toolbar.addWidget(self._btn_export_unsent)
         queue_toolbar.addWidget(self._btn_reset_queue)
         queue_toolbar.addWidget(self._btn_clear_all)
         queue_layout.addLayout(queue_toolbar)
@@ -212,6 +228,7 @@ class SenderPage(QWidget):
         self._btn_delete.clicked.connect(self._delete_selected_task)
         self._btn_reset_queue.clicked.connect(self._reset_queue)
         self._btn_clear_all.clicked.connect(self._clear_all_tasks)
+        self._btn_export_unsent.clicked.connect(self._export_all_unsent)
         self._btn_start_queue.clicked.connect(self._start_queue)
         self._btn_stop_queue.clicked.connect(self._stop_queue)
 
@@ -271,6 +288,9 @@ class SenderPage(QWidget):
             ref_task_id=task.task_id, insert_position=InsertPosition.BELOW
         )).setEnabled(can_insert)
         menu.addSeparator()
+        menu.addAction(
+            "导出未发送成功", lambda: self._export_single_unsent(task.task_id)
+        ).setEnabled(task.task_id in self._unsent_by_task)
         menu.addAction("删除", lambda: self._remove_task(task.task_id)).setEnabled(can_remove)
 
         menu.exec(self._queue_table.mapToGlobal(pos))
@@ -332,6 +352,70 @@ class SenderPage(QWidget):
         if reply == QMessageBox.StandardButton.Yes:
             self.state.queue_state.clear_all()
 
+    # region 导出未发送成功
+
+    def _prompt_export_unsent(self):
+        """队列跑完后，若有未发送成功的弹幕，询问是否导出"""
+        if not self._unsent_by_task:
+            return
+
+        total = sum(len(unsent.records) for unsent in self._unsent_by_task.values())
+        reply = QMessageBox.question(
+            self,
+            "导出未发送成功的弹幕",
+            f"有 {total} 条未发送成功，分布在 {len(self._unsent_by_task)} 个任务。要导出吗？\n"
+            f"每个任务导出一个 XML，可修改后重新导入。",
+            QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
+            QMessageBox.StandardButton.Yes,
+        )
+        if reply == QMessageBox.StandardButton.Yes:
+            self._export_all_unsent()
+
+    @Slot()
+    def _export_single_unsent(self, task_id: str):
+        """导出单个任务的未发送成功弹幕"""
+        unsent = self._unsent_by_task.get(task_id)
+        if not unsent:
+            return
+
+        default_name = f"{safe_filename(unsent.label)}_Unsent.xml"
+        path, _ = QFileDialog.getSaveFileName(
+            self, "导出未发送成功的弹幕", default_name, "XML Files (*.xml)"
+        )
+        if not path:
+            return
+
+        self._write_unsent([(path, unsent)])
+
+    @Slot()
+    def _export_all_unsent(self):
+        """导出全部未发送成功弹幕：每个任务一个 XML"""
+        directory = QFileDialog.getExistingDirectory(self, "选择导出目录")
+        if not directory:
+            return
+
+        jobs: list[tuple[str, TaskUnsent]] = []
+        used: set[str] = set()
+        for unsent in self._unsent_by_task.values():
+            name = f"{safe_filename(unsent.label)}_Unsent.xml"
+            if name in used:
+                name = f"{name[:-4]}_{len(used) + 1}.xml"
+            used.add(name)
+            jobs.append((str(Path(directory) / name), unsent))
+        self._write_unsent(jobs)
+
+    def _write_unsent(self, jobs: list[tuple[str, TaskUnsent]]):
+        for path, unsent in jobs:
+            count = len(unsent.records)
+            self.sender_controller.export_unsent_xml(
+                unsent.records,
+                path,
+                lambda _=None, p=path, n=count: self.logger.info(f"已导出 {n} 条到 {p}"),
+                lambda err, p=path: self.logger.error(f"导出失败 {p}: {err}"),
+            )
+
+    # endregion
+
     @Slot()
     def _add_to_queue(self):
         """打开任务构建弹窗（追加到末尾）"""
@@ -365,6 +449,8 @@ class SenderPage(QWidget):
             QMessageBox.information(self, "队列为空", "没有待发送的任务。")
             return
 
+        self._unsent_by_task.clear()
+        self._btn_export_unsent.setEnabled(False)
         self._queue_total_dm = self.state.queue_state.total_danmaku_count
         if not self.sender_controller.start_queue(auth_config):
             self.logger.warning("队列发送未能启动")
@@ -576,6 +662,19 @@ class SenderPage(QWidget):
         task = self.state.queue_state.get_task_by_id(task_id)
         if task:
             self.logger.info(f"完成: {task.target.display_string} (成功 {ctx.success_count}/{ctx.total})")
+        if ctx.unsent_records:
+            self._unsent_by_task[task_id] = TaskUnsent(
+                label=self._unsent_label(task), records=list(ctx.unsent_records)
+            )
+            self._btn_export_unsent.setEnabled(True)
+            self.logger.info(f"未发送成功 {len(ctx.unsent_records)} 条，右键任务可导出")
+
+    @staticmethod
+    def _unsent_label(task: TaskView | None) -> str:
+        """导出文件名的主体：优先用导入的 XML 文件名，其次视频标题"""
+        if task and task.xml_path:
+            return Path(task.xml_path).stem
+        return task.target.display_string if task else ""
 
     @Slot(str, str)
     def _on_queue_task_failed(self, task_id: str, error_msg: str):
@@ -587,6 +686,7 @@ class SenderPage(QWidget):
     def _on_queue_finished(self):
         self.logger.info("队列执行完毕。")
         self._send_queue_notification()
+        self._prompt_export_unsent()
         # UI 解锁延迟到 _on_queue_cleanup，避免竞态
 
     @Slot(int, int, float)

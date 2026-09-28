@@ -7,6 +7,14 @@ BV_PATTERN = re.compile(r"(BV[a-zA-Z0-9]{10})")  # BV + 10 位字母数字
 P_PATTERN = re.compile(r"[?&]p=(\d+)")  # B 站 URL 分P参数
 
 
+def safe_filename(name: str, max_length: int = 80) -> str:
+    """把任意文本转成可用的文件名：去掉路径分隔符、Windows 保留字符与控制字符。"""
+    cleaned = "".join(
+        "_" if ch in '\\/:*?"<>|' or ord(ch) < 32 else ch for ch in name
+    )
+    return cleaned.strip(" .")[:max_length] or "未命名"
+
+
 def parse_bilibili_link(text: str) -> tuple[str | None, int | None]:
     """
     从文本中提取 BVID 和分P序号（B 站 URL 的 p 参数）。
