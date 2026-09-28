@@ -411,8 +411,12 @@ class SenderPage(QWidget):
                 unsent.records,
                 path,
                 lambda _=None, p=path, n=count: self.logger.info(f"已导出 {n} 条到 {p}"),
-                lambda err, p=path: self.logger.error(f"导出失败 {p}: {err}"),
+                lambda err, p=path: self._on_export_failed(p, err),
             )
+
+    def _on_export_failed(self, path: str, error: str):
+        self.logger.error(f"导出失败 {path}: {error}")
+        QMessageBox.warning(self, "导出失败", f"{Path(path).name}：{error}")
 
     # endregion
 
