@@ -319,7 +319,7 @@ class MonitorPage(QWidget):
             self.logger.info("⏹ 队列监视停止请求已发送")
             return
 
-        # 播种核销范围；查询失败与「没发过」分开报
+        # 填入核销范围；查询失败与「没发过」分开报
         try:
             scope = self.history_manager.get_recorded_targets(self.state.stats_baseline)
             self._rows = {(bvid, cid): None for bvid, cid in scope}

@@ -40,13 +40,13 @@ class MonitorController(QObject):
         self,
         auth_config: ApiAuthConfig | None = None,
         send_done: threading.Event | None = None,
-        tail_seconds: float = 300.0,
+        post_send_watch_seconds: float = 300.0,
     ) -> bool:
         """启动队列监视 Worker。成功返回 True；拒绝启动返回 False。
 
         Args:
             send_done: 「发送+监视」时传入的发送结束标记；发送后再盯
-                ``tail_seconds`` 自动停。传 None 表示独立监视，跑到手动停。
+                ``post_send_watch_seconds`` 自动停。传 None 表示独立监视，跑到手动停。
         """
         if self.is_running():
             logger.warning("队列监视已在运行中。")
@@ -78,7 +78,7 @@ class MonitorController(QObject):
             poll_interval=float(self.state.monitor_config.refresh_interval),
             prevent_sleep=self.state.global_config.prevent_sleep,
             send_done=send_done,
-            tail_seconds=tail_seconds,
+            post_send_watch_seconds=post_send_watch_seconds,
         )
 
         worker.targetStatsUpdated.connect(self._on_target_stats)

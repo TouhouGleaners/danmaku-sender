@@ -55,7 +55,7 @@ class QueueMonitorWorker(WorkerThread):
         poll_interval: float = 60.0,
         prevent_sleep: bool = True,
         send_done: threading.Event | None = None,
-        tail_seconds: float = 300.0,
+        post_send_watch_seconds: float = 300.0,
         parent=None,
     ):
         super().__init__(parent)
@@ -65,10 +65,10 @@ class QueueMonitorWorker(WorkerThread):
         self.baseline = baseline
         self.poll_interval = max(1.0, poll_interval)
         self.prevent_sleep = prevent_sleep
-        # 「发送+监视」才传：发送结束后再盯 tail_seconds 自动停。
+        # 「发送+监视」才传：发送结束后再盯 post_send_watch_seconds 自动停。
         # 传 None 表示独立监视，跑到用户手动停为止。
         self.send_done = send_done
-        self.tail_seconds = tail_seconds
+        self.post_send_watch_seconds = post_send_watch_seconds
 
     @property
     def targets(self) -> list[MonitorSample]:
@@ -87,14 +87,14 @@ class QueueMonitorWorker(WorkerThread):
                 deadline: float | None = None
                 while not self.stop_event.is_set():
                     if deadline is None and self.send_done is not None and self.send_done.is_set():
-                        deadline = time.monotonic() + self.tail_seconds
+                        deadline = time.monotonic() + self.post_send_watch_seconds
                     if deadline is not None and time.monotonic() >= deadline:
                         logger.info("发送后监视时限已到，队列监视终止。")
                         break
 
                     self._run_round()
 
-                    # 等待既不超下一轮间隔，也不越过尾巴截止
+                    # 等待既不超下一轮间隔，也不越过监视截止
                     wait_seconds = self.poll_interval
                     if deadline is not None:
                         wait_seconds = min(wait_seconds, max(0.0, deadline - time.monotonic()))
