@@ -39,7 +39,7 @@
 | `delay_between_tasks` | float | 30 | QDoubleSpinBox | 两个任务之间的等待时间（秒） |
 | `stop_after_count` | int | 0 | QSpinBox | 发送 N 条后自动停止（0=不限） |
 | `stop_after_time` | int | 0 | QSpinBox | 运行 N 分钟后自动停止（0=不限） |
-| `skip_sent` | bool | true | QCheckBox | 是否启用断点续传（发送前查重） |
+| `allow_duplicates` | bool | false | QCheckBox | 允许重复发送（危险区，见下） |
 
 详细说明见 [频率控制与并发策略](../features/sender/delay-control.md) 和 [断点续传与智能去重](../features/sender/resume.md)。
 
@@ -59,13 +59,16 @@
     "delay_between_tasks": 30.0,
     "stop_after_count": 0,
     "stop_after_time": 0,
-    "skip_sent": true
+    "allow_duplicates": false
   }
 }
 ```
 
+!!! warning "危险区：允许重复发送"
+    该项位于设置页的「危险区」，**默认关闭**。启用后发送前不再比对数据库，已发送的弹幕会被再次发送到同一视频，视频中会出现重复弹幕。仅在确需重复发送同一批弹幕时启用，用毕请关闭。
+
 !!! note "旧配置不做迁移"
-    缺少 `send_policy` 段时这些策略项会回退为默认值，不会从旧 `sender` 段里搬过来。
+    缺少 `send_policy` 段时这些策略项回退为默认值，不会从旧 `sender` 段迁移。更早版本的 `skip_sent` 已废弃移除，写入配置将被忽略；其默认行为（跳过已发送弹幕）等同于 `allow_duplicates` 关闭时的行为。
 
 ---
 
