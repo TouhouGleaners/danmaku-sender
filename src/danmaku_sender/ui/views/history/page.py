@@ -16,6 +16,7 @@ from danmaku_sender.runtime.state.app_state import AppState
 from danmaku_sender.repo.history_manager import HistoryManager
 from danmaku_sender.controller.video_controller import VideoController
 from danmaku_sender.controller.history_controller import HistoryController
+from danmaku_sender.ui.framework.empty_state import EmptyStateHint
 
 
 logger = logging.getLogger(__name__)
@@ -88,10 +89,7 @@ class HistoryPage(QWidget):
         layout.addWidget(self._table_view)
 
         # 空状态提示
-        self._empty_hint = QLabel("暂无数据", self._table_view.viewport())
-        self._empty_hint.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        self._empty_hint.setStyleSheet("color: #888; font-size: 14px;")
-        self._empty_hint.setVisible(False)
+        self._empty_hint = EmptyStateHint(self._table_view, title="暂无数据")
 
         self._model.modelReset.connect(self._update_empty_hint)
 
@@ -206,17 +204,7 @@ class HistoryPage(QWidget):
 
     def _update_empty_hint(self):
         """模型重置后根据数据量切换空状态提示"""
-        self._empty_hint.setVisible(self._model.rowCount() == 0)
-        self._reposition_empty_hint()
-
-    def _reposition_empty_hint(self):
-        """将提示文字居中到表格可视区域"""
-        rect = self._table_view.viewport().rect()
-        self._empty_hint.setGeometry(rect)
-
-    def resizeEvent(self, event):
-        super().resizeEvent(event)
-        self._reposition_empty_hint()
+        self._empty_hint.set_empty(self._model.rowCount() == 0)
 
     @Slot(dict)
     def _on_verify_completed(self, result: VerifyResult):

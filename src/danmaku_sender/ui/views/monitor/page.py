@@ -25,6 +25,7 @@ from danmaku_sender.controller.monitor import MonitorController
 from danmaku_sender.repo.history_manager import HistoryManager
 from danmaku_sender.runtime.state.app_state import AppState
 from danmaku_sender.types.models.common import MonitorStats
+from danmaku_sender.ui.framework.empty_state import EmptyStateHint
 from danmaku_sender.ui.framework.form_binder import LiveFormBinder
 from danmaku_sender.ui.framework.icons import SvgIcon
 
@@ -83,10 +84,11 @@ class MonitorPage(QWidget):
         header.setSectionResizeMode(7, QHeaderView.ResizeMode.ResizeToContents)
 
         # 空状态引导
-        self._empty_hint = QLabel("当前队列暂无任务  请先在「发射器」页面添加任务", self.queue_table.viewport())
-        self._empty_hint.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        self._empty_hint.setStyleSheet("color: #888; font-size: 14px;")
-        self._empty_hint.setVisible(False)
+        self._empty_hint = EmptyStateHint(
+            self.queue_table,
+            title="当前队列暂无任务",
+            description="请先在「发射器」页面添加任务",
+        )
         self._queue_model.modelReset.connect(self._update_empty_hint)
 
         queue_layout.addWidget(self.queue_table)
@@ -230,8 +232,6 @@ class MonitorPage(QWidget):
         super().showEvent(event)
         LiveFormBinder.fill(self)
         self._refresh_table()
-        # 首次显示时 viewport 已有尺寸，再定位空状态提示
-        self._update_empty_hint()
 
     def _update_btn_style(self, running: bool):
         state = "running" if running else "ready"
@@ -263,15 +263,7 @@ class MonitorPage(QWidget):
         self._queue_model.update_data(rows)
 
     def _update_empty_hint(self):
-        self._empty_hint.setVisible(self._queue_model.rowCount() == 0)
-        self._reposition_empty_hint()
-
-    def _reposition_empty_hint(self):
-        self._empty_hint.setGeometry(self.queue_table.viewport().rect())
-
-    def resizeEvent(self, event):
-        super().resizeEvent(event)
-        self._reposition_empty_hint()
+        self._empty_hint.set_empty(self._queue_model.rowCount() == 0)
 
     def _update_overall_stats(self) -> dict:
         # 尚无统计的行不计入合计
