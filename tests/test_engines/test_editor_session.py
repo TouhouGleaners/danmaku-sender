@@ -283,6 +283,30 @@ class TestInsertItem:
 
 
 # ============================================================
+# append_sample
+# ============================================================
+
+class TestAppendSample:
+    def test_appends_to_empty_session(self, session: EditorSession):
+        """insert_item 依赖参考弹幕，空工作区只能走 append_sample"""
+        uid = session.append_sample()
+        assert isinstance(uid, str)
+        assert session.item_order == [uid]
+
+    def test_appends_at_end(self, loaded_session: EditorSession):
+        uid = loaded_session.append_sample()
+        assert loaded_session.item_order[-1] == uid
+
+    def test_default_message(self, loaded_session: EditorSession):
+        uid = loaded_session.append_sample()
+        assert loaded_session.items[uid].working.msg == "示例弹幕"
+
+    def test_marks_dirty(self, loaded_session: EditorSession):
+        loaded_session.append_sample()
+        assert loaded_session.is_dirty is True
+
+
+# ============================================================
 # delete_items
 # ============================================================
 

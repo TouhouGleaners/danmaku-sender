@@ -6,14 +6,12 @@
 另外覆盖 fill 不阻断用户信号槽（控件联动）、转换函数、重复绑定替换。
 """
 import gc
-import os
 import weakref
 from collections.abc import Callable
 
 import pytest
 from pydantic import Field, ValidationError, model_validator
 from PySide6.QtWidgets import (
-    QApplication,
     QCheckBox,
     QDoubleSpinBox,
     QLineEdit,
@@ -29,14 +27,6 @@ from danmaku_sender.ui.framework.form_binder import (
     mark_invalid,
 )
 from danmaku_sender.utils.string_utils import join_keywords, parse_keywords
-
-
-@pytest.fixture(scope="module")
-def qapp():
-    """创建 QApplication。无头 CI 没有显示服务器，必须先切到 offscreen。"""
-    os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
-    app = QApplication.instance() or QApplication([])
-    yield app
 
 
 class _Cfg(AtomicModel):

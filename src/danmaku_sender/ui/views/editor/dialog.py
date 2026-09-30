@@ -2,7 +2,8 @@ import logging
 from pathlib import Path
 from typing import Any
 
-from PySide6.QtCore import QModelIndex, QPoint, Qt, Slot
+from PySide6.QtCore import QEvent, QModelIndex, QObject, QPoint, Qt, Slot
+from PySide6.QtGui import QDropEvent
 from PySide6.QtWidgets import (
     QAbstractItemView,
     QCheckBox,
@@ -24,6 +25,8 @@ from danmaku_sender.controller.editor_controller import EditorController
 from danmaku_sender.runtime.state.app_state import AppState
 from danmaku_sender.types.models.editor_types import EditorField, InsertPosition
 from danmaku_sender.types.models.queue import TaskView
+from danmaku_sender.ui.framework.drag_drop import DropOverlay, xml_files_from_drop
+from danmaku_sender.ui.framework.empty_state import EmptyStateHint
 from danmaku_sender.ui.framework.icons import SvgIcon
 
 from .components import EditorTableModel, PropertyInspectorGroup, ValidationRulesGroup
@@ -156,6 +159,28 @@ class EditorDialog(QDialog):
         self.table.setContextMenuPolicy(Qt.ContextMenuPolicy.CustomContextMenu)
         self.table.customContextMenuRequested.connect(self._open_context_menu)
 
+        # 拖入 XML 文件直接导入工作区
+        self.table.setAcceptDrops(True)
+        self.table.installEventFilter(self)
+
+        # 空状态引导
+        self._empty_hint = EmptyStateHint(
+            self.table,
+            title="当前任务无弹幕",
+            description="选择 XML 文件导入，或添加一条示例弹幕",
+            action_text="导入 XML",
+            on_action=self._import_xml,
+            secondary_text="添加示例弹幕",
+            on_secondary=self._add_sample_danmaku,
+        )
+
+        # 拖放覆盖层
+        self._drop_overlay = DropOverlay(
+            self.table,
+            title="松开以导入文件",
+            hint="支持 .xml 格式的弹幕文件",
+        )
+
         header = self.table.horizontalHeader()
         header.setSectionResizeMode(0, QHeaderView.ResizeMode.ResizeToContents)
         header.setSectionResizeMode(1, QHeaderView.ResizeMode.ResizeToContents)
@@ -223,6 +248,7 @@ class EditorDialog(QDialog):
         self.btn_export.setEnabled(ctrl.has_data)
         self.undo_btn.setEnabled(ctrl.can_undo)
         self.apply_btn.setEnabled(ctrl.is_dirty)
+        self._empty_hint.set_empty(not ctrl.has_data)
 
         # 更新状态提示文本和样式
         # 脏数据
@@ -280,26 +306,103 @@ class EditorDialog(QDialog):
 
     @Slot()
     def _import_xml(self):
-        if self.controller.is_dirty:
-            reply = QMessageBox.question(
-                self, "放弃修改?",
-                "当前有未应用的修改，导入新文件将覆盖并丢失这些数据。\n是否继续？",
-                QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No
-            )
-            if reply == QMessageBox.StandardButton.No:
-                return
-
+        """弹出文件选择框，将选中的 XML 导入工作区。"""
         file_path, _ = QFileDialog.getOpenFileName(
             self, "导入弹幕 XML", "", "XML Files (*.xml);;All Files (*.*)"
         )
-
         if file_path:
-            self.logger.info(f"📥 正在解析文件: {Path(file_path).name}")
-            self.controller.import_xml_to_workspace(
-                file_path,
-                on_success=self._on_import_success,
-                on_error=self._on_import_error,
-            )
+            self._import_file(file_path)
+
+    def _import_file(self, file_path: str):
+        """将指定 XML 文件导入工作区，覆盖当前内容。
+
+        Args:
+            file_path: 待导入的 XML 文件路径。
+        """
+        if not self._confirm_discard_changes():
+            return
+
+        self.logger.info(f"📥 正在解析文件: {Path(file_path).name}")
+        self.controller.import_xml_to_workspace(
+            file_path,
+            on_success=self._on_import_success,
+            on_error=self._on_import_error,
+        )
+
+    def _confirm_discard_changes(self) -> bool:
+        """存在未应用的修改时询问用户是否放弃。
+
+        Returns:
+            bool: 可以继续导入返回 True；用户取消返回 False。
+        """
+        if not self.controller.is_dirty:
+            return True
+
+        reply = QMessageBox.question(
+            self, "放弃修改?",
+            "当前有未应用的修改，导入新文件将覆盖并丢失这些数据。\n是否继续？",
+            QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No
+        )
+        return reply == QMessageBox.StandardButton.Yes
+
+    @Slot()
+    def _add_sample_danmaku(self):
+        """空状态引导入口：追加一条示例弹幕并选中。"""
+        uid = self.controller.append_sample()
+        # 预览模式关闭时表格只保留有问题的行，示例弹幕会被滤掉，点了看不到
+        self.preview_mode_cb.setChecked(True)
+        self._refresh_table()
+        if uid:
+            self._select_row_by_uid(uid)
+
+    def eventFilter(self, watched: QObject, event: QEvent) -> bool:
+        """拦截表格的拖放事件，实现拖入 XML 导入工作区。
+
+        Args:
+            watched: 被监听的控件。
+            event: 到达的事件。
+
+        Returns:
+            bool: 命中并处理的拖放事件返回 True，其余交回父类。
+        """
+        if watched is not self.table:
+            return super().eventFilter(watched, event)
+
+        if event.type() == QEvent.Type.DragLeave:
+            self._drop_overlay.hide()
+            return False
+
+        # QDragEnterEvent 与 QDragMoveEvent 均派生自 QDropEvent，一次判断即可收窄
+        if isinstance(event, QDropEvent):
+            if event.type() == QEvent.Type.Drop:
+                self._drop_overlay.hide()
+                return self._on_table_drop(event)
+            if xml_files_from_drop(event):
+                event.acceptProposedAction()
+                self._drop_overlay.show_overlay()
+                return True
+            return False
+        return super().eventFilter(watched, event)
+
+    def _on_table_drop(self, event: QDropEvent) -> bool:
+        """处理拖入的 XML 文件。
+
+        Args:
+            event: 拖放事件。
+
+        Returns:
+            bool: 事件已处理返回 True。
+        """
+        files = xml_files_from_drop(event)
+        if not files:
+            return False
+
+        if not self._confirm_discard_changes():
+            return True
+
+        event.acceptProposedAction()
+        self._import_file(files[0])
+        return True
 
     @Slot(int)
     def _on_import_success(self, count: int):

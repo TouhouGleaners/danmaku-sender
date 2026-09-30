@@ -46,6 +46,7 @@ from danmaku_sender.service.danmaku_parser import DanmakuParser
 from danmaku_sender.service.sender import SendingContext
 from danmaku_sender.types.models.common import UnsentDanmakusRecord
 from danmaku_sender.types.models.queue import InsertPosition, TaskStatus, TaskView
+from danmaku_sender.ui.framework.drag_drop import xml_files_from_drop
 from danmaku_sender.ui.framework.icons import SvgIcon
 from danmaku_sender.ui.views.editor import EditorDialog
 from danmaku_sender.utils.string_utils import safe_filename
@@ -534,28 +535,18 @@ class SenderPage(QWidget):
 
         return super().eventFilter(obj, event)
 
-    @staticmethod
-    def _get_xml_files(event: QDragEnterEvent | QDragMoveEvent | QDropEvent) -> list[str]:
-        """从拖放事件中提取所有本地 XML 文件路径"""
-        result = []
-        for url in event.mimeData().urls():
-            if url.isLocalFile() and url.toLocalFile().lower().endswith('.xml'):
-                result.append(url.toLocalFile())
-
-        return result
-
     def _on_table_drag_enter(self, event: QDragEnterEvent | QDragMoveEvent | QDropEvent) -> bool:
         if self.state.sender_is_active:
             return False
 
-        if self._get_xml_files(event):
+        if xml_files_from_drop(event):
             event.acceptProposedAction()
             return True
 
         return False
 
     def _on_table_drag_move(self, event: QDragEnterEvent | QDragMoveEvent | QDropEvent) -> bool:
-        if self.state.sender_is_active or not self._get_xml_files(event):
+        if self.state.sender_is_active or not xml_files_from_drop(event):
             return False
 
         viewport_pos = self._queue_table.viewport().mapFrom(self._queue_table, event.pos())
@@ -574,7 +565,7 @@ class SenderPage(QWidget):
     def _on_table_drop(self, event: QDragEnterEvent | QDragMoveEvent | QDropEvent) -> bool:
         self._queue_table.clearSelection()
         self._queue_table.unsetCursor()
-        xml_files = self._get_xml_files(event)
+        xml_files = xml_files_from_drop(event)
         if not xml_files:
             return False
 

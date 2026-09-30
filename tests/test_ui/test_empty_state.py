@@ -2,20 +2,10 @@
 
 覆盖：默认隐藏、set_empty 控显隐、随可视区重定位、CTA 按钮形态与回调接线。
 """
-import os
-
 import pytest
-from PySide6.QtWidgets import QApplication, QLabel, QPushButton, QTableView
+from PySide6.QtWidgets import QLabel, QPushButton, QTableView
 
 from danmaku_sender.ui.framework.empty_state import EmptyStateHint
-
-
-@pytest.fixture(scope="module")
-def qapp():
-    """创建 QApplication。无头 CI 没有显示服务器，必须先切到 offscreen。"""
-    os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
-    app = QApplication.instance() or QApplication([])
-    yield app
 
 
 @pytest.fixture
