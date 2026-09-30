@@ -1729,12 +1729,20 @@
 <p>「发送成功」只表示 B 站服务器接受了请求，弹幕还需要通过审核系统。审核可能需要几分钟到几小时。如果长时间未显示，可能是弹幕内容触发了审核拦截。使用「弹幕监视器」可以追踪弹幕的存活状态。</p>
 </details>
 <details class="question" open="open">
-<summary>发送中断了，能接着发吗？</summary>
-<p>可以。程序支持断点续传——重新启动队列后，已成功发送的弹幕会被自动跳过，从未发送的弹幕继续。详见 <a href="../features/sender/resume/">断点续传与智能去重</a>。</p>
+<summary>手动停止后，能接着发吗？</summary>
+<p>可以。重新启动队列即可，已成功发送的弹幕会被自动跳过，未发送的弹幕继续发送。详见 <a href="../features/sender/resume/">断点续传与智能去重</a>。</p>
+</details>
+<details class="question" open="open">
+<summary>网络中断后，能接着发吗？</summary>
+<p>不能直接接着发。网络重试耗尽后，剩余弹幕不会被自动补发。请使用同一个 XML 文件重新创建任务，已成功发送的弹幕会被自动跳过。</p>
+</details>
+<details class="question" open="open">
+<summary>程序异常退出后，能接着发吗？</summary>
+<p>不能直接接着发。程序退出后队列连同进度一并丢失。请使用同一个 XML 文件重新创建任务，已成功发送的弹幕会被自动跳过。</p>
 </details>
 <details class="question" open="open">
 <summary>失败的弹幕怎么处理？</summary>
-<p>任务完成后，程序会弹出对话框询问是否保存失败弹幕。选择「是」会将失败弹幕导出为新的 XML 文件，修复后可以重新发送。</p>
+<p>任务完成后若存在未发送成功的弹幕（发送失败与未轮到发送的弹幕；查重跳过的不计入），程序会询问是否导出。选择「是」将按任务导出 <code>{原文件名}_Unsent.xml</code>，修正后可重新导入创建任务发送。</p>
 </details>
 <hr />
 <h2 id="_4">弹幕编辑器相关</h2>
@@ -1811,7 +1819,7 @@
     <span class="md-icon" title="最后更新">
       <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M21 13.1c-.1 0-.3.1-.4.2l-1 1 2.1 2.1 1-1c.2-.2.2-.6 0-.8l-1.3-1.3c-.1-.1-.2-.2-.4-.2m-1.9 1.8-6.1 6V23h2.1l6.1-6.1zM12.5 7v5.2l4 2.4-1 1L11 13V7zM11 21.9c-5.1-.5-9-4.8-9-9.9C2 6.5 6.5 2 12 2c5.3 0 9.6 4.1 10 9.3-.3-.1-.6-.2-1-.2s-.7.1-1 .2C19.6 7.2 16.2 4 12 4c-4.4 0-8 3.6-8 8 0 4.1 3.1 7.5 7.1 7.9l-.1.2z"/></svg>
     </span>
-    <span class="git-revision-date-localized-plugin git-revision-date-localized-plugin-date" title="2026年9月14日 08:10:05 CST">2026年9月14日</span>
+    <span class="git-revision-date-localized-plugin git-revision-date-localized-plugin-date" title="2026年9月30日 17:47:57 CST">2026年9月30日</span>
   </span>
 
     
