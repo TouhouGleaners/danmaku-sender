@@ -89,7 +89,6 @@ class MonitorPage(QWidget):
             title="当前队列暂无任务",
             description="请先在「发射器」页面添加任务",
         )
-        self._queue_model.modelReset.connect(self._update_empty_hint)
 
         queue_layout.addWidget(self.queue_table)
         main_layout.addWidget(queue_group)
@@ -259,9 +258,6 @@ class MonitorPage(QWidget):
             name, status = labels.get((bvid, cid), (f"{bvid} / CID {cid}", "—"))
             rows.append(MonitorRow(bvid=bvid, cid=cid, name=name, status=status, stats=stats))
         self._queue_model.update_data(rows)
-
-    def _update_empty_hint(self):
-        self._empty_hint.set_empty(self._queue_model.rowCount() == 0)
 
     def _update_overall_stats(self) -> dict:
         # 尚无统计的行不计入合计

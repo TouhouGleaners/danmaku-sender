@@ -176,6 +176,8 @@ class EditorDialog(QDialog):
             description="选择或拖入 XML 文件，也可添加一条示例弹幕",
             action=action_btn,
             secondary=secondary_btn,
+            is_empty=lambda: not self.controller.has_data,  # 预览模式关闭时表格可能0行但数据非空
+            on_change=self.controller.dataChanged,
         )
 
         # 拖放覆盖层
@@ -252,7 +254,6 @@ class EditorDialog(QDialog):
         self.btn_export.setEnabled(ctrl.has_data)
         self.undo_btn.setEnabled(ctrl.can_undo)
         self.apply_btn.setEnabled(ctrl.is_dirty)
-        self._empty_hint.set_empty(not ctrl.has_data)
 
         # 更新状态提示文本和样式
         # 脏数据

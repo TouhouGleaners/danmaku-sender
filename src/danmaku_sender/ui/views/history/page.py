@@ -1,23 +1,32 @@
 import logging
 
-from PySide6.QtWidgets import (
-    QWidget, QVBoxLayout, QHBoxLayout, QLabel, QLineEdit, QComboBox,
-    QPushButton, QTableView, QHeaderView, QAbstractItemView, QMenu, QApplication
-)
-from PySide6.QtCore import Qt, QModelIndex, QUrl, Slot, QPoint
+from PySide6.QtCore import QModelIndex, QPoint, Qt, QUrl, Slot
 from PySide6.QtGui import QAction, QDesktopServices
+from PySide6.QtWidgets import (
+    QAbstractItemView,
+    QApplication,
+    QComboBox,
+    QHBoxLayout,
+    QHeaderView,
+    QLabel,
+    QLineEdit,
+    QMenu,
+    QPushButton,
+    QTableView,
+    QVBoxLayout,
+    QWidget,
+)
+
+from danmaku_sender.controller.history_controller import HistoryController
+from danmaku_sender.controller.video_controller import VideoController
+from danmaku_sender.repo.history_manager import HistoryManager
+from danmaku_sender.runtime.state.app_state import AppState
+from danmaku_sender.types.models.common import DanmakuStatus, VerifyResult
+from danmaku_sender.types.models.video import VideoInfo
+from danmaku_sender.ui.framework.empty_state import EmptyStateHint
 
 from .components import Col, HistoryTableModel
 from .dialogs import DanmakuDetailDialog
-
-from danmaku_sender.types.models.common import DanmakuStatus, VerifyResult
-from danmaku_sender.types.models.video import VideoInfo
-from danmaku_sender.runtime.state.app_state import AppState
-from danmaku_sender.repo.history_manager import HistoryManager
-from danmaku_sender.controller.video_controller import VideoController
-from danmaku_sender.controller.history_controller import HistoryController
-from danmaku_sender.ui.framework.empty_state import EmptyStateHint
-
 
 logger = logging.getLogger(__name__)
 
@@ -90,8 +99,6 @@ class HistoryPage(QWidget):
 
         # 空状态提示
         self._empty_hint = EmptyStateHint(self._table_view, title="暂无数据")
-
-        self._model.modelReset.connect(self._update_empty_hint)
 
     def _connect_signals(self):
         """信号连接"""
@@ -179,7 +186,7 @@ class HistoryPage(QWidget):
 
         通常因数据库锁定或文件损坏导致。
         """
-        logger.error(f"历史记录数据库查询失败: {str(err)}")
+        logger.error(f"历史记录数据库查询失败: {err!s}")
 
     # endregion
 
@@ -201,10 +208,6 @@ class HistoryPage(QWidget):
             return
         logger.info("开始批量验证所有待验证弹幕...")
         self.history_controller.verify_all(auth_config)
-
-    def _update_empty_hint(self):
-        """模型重置后根据数据量切换空状态提示"""
-        self._empty_hint.set_empty(self._model.rowCount() == 0)
 
     @Slot(dict)
     def _on_verify_completed(self, result: VerifyResult):
