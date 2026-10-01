@@ -1,12 +1,21 @@
 """添加/编辑账号弹窗（共用）"""
 from PySide6.QtCore import Qt, Signal
 from PySide6.QtWidgets import (
-    QDialog, QVBoxLayout, QHBoxLayout, QStackedWidget,
-    QPushButton, QLabel, QLineEdit, QTabBar, QFormLayout, QWidget,
+    QDialog,
+    QFormLayout,
+    QHBoxLayout,
+    QLabel,
+    QLineEdit,
+    QPushButton,
+    QStackedWidget,
+    QTabBar,
+    QVBoxLayout,
+    QWidget,
 )
 
 from danmaku_sender.types.models.account import AccountCredential
 from danmaku_sender.ui.dialogs import QRLoginDialog
+from danmaku_sender.ui.framework.icons import SvgIcon
 
 
 class AccountFormDialog(QDialog):
@@ -74,7 +83,7 @@ class AccountFormDialog(QDialog):
         self._qr_status.setStyleSheet("color: #666;")
         layout.addWidget(self._qr_status)
 
-        self._qr_btn = QPushButton("开始扫码")
+        self._qr_btn = QPushButton(SvgIcon.QR_SCAN, "开始扫码")
         self._qr_btn.setFixedWidth(120)
         self._qr_btn.clicked.connect(self._start_qr)
         btn_row = QHBoxLayout()

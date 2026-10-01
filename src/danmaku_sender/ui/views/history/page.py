@@ -24,6 +24,7 @@ from danmaku_sender.runtime.state.app_state import AppState
 from danmaku_sender.types.models.common import DanmakuStatus, VerifyResult
 from danmaku_sender.types.models.video import VideoInfo
 from danmaku_sender.ui.framework.empty_state import EmptyStateHint
+from danmaku_sender.ui.framework.icons import SvgIcon
 
 from .components import Col, HistoryTableModel
 from .dialogs import DanmakuDetailDialog
@@ -58,10 +59,10 @@ class HistoryPage(QWidget):
         self._status_combo.addItem("已丢失", DanmakuStatus.LOST.value)
         self._status_combo.currentIndexChanged.connect(self._refresh_table)
 
-        btn_refresh = QPushButton("刷新数据")
+        btn_refresh = QPushButton(SvgIcon.REFRESH, "刷新数据")
         btn_refresh.clicked.connect(self._refresh_table)
 
-        btn_verify_all = QPushButton("🔍 验证全部")
+        btn_verify_all = QPushButton(SvgIcon.FACT_CHECK, "验证全部")
         btn_verify_all.clicked.connect(self._verify_all)
 
         filter_layout.addWidget(QLabel("搜索:"))
@@ -246,16 +247,16 @@ class HistoryPage(QWidget):
                 url += f"?p={part.page}"
                 part_txt = f"(P{part.page})"
 
-        action_open = QAction(f"🌐 浏览器打开 {part_txt}", self)
+        action_open = QAction(SvgIcon.OPEN_IN_NEW, f"浏览器打开 {part_txt}", self)
         action_open.triggered.connect(lambda: QDesktopServices.openUrl(QUrl(url)))
         menu.addAction(action_open)
 
         menu.addSeparator()
 
-        menu.addAction("📋 查看完整详情", lambda: self._show_detail_dialog(record))
-        menu.addAction("🔍 验证该分P所有弹幕", lambda: self._verify_records(record))
-        menu.addAction("复制 BVID", lambda: QApplication.clipboard().setText(record['bvid']))
-        menu.addAction("复制 内容", lambda: QApplication.clipboard().setText(record['msg']))
+        menu.addAction(SvgIcon.SUBJECT, "查看完整详情", lambda: self._show_detail_dialog(record))
+        menu.addAction(SvgIcon.SEARCH_CHECK, "验证该分P所有弹幕", lambda: self._verify_records(record))
+        menu.addAction(SvgIcon.CONTENT_COPY, "复制 BVID", lambda: QApplication.clipboard().setText(record['bvid']))
+        menu.addAction(SvgIcon.CONTENT_COPY, "复制 内容", lambda: QApplication.clipboard().setText(record['msg']))
 
         menu.exec(self._table_view.mapToGlobal(pos))
 

@@ -33,6 +33,7 @@ from danmaku_sender.runtime.state.app_state import AppState
 from danmaku_sender.types.models.danmaku import Danmaku
 from danmaku_sender.types.models.editor_types import EditorField
 from danmaku_sender.ui.framework.form_binder import LiveFormBinder
+from danmaku_sender.ui.framework.icons import SvgIcon
 from danmaku_sender.utils.string_utils import join_keywords, parse_keywords
 from danmaku_sender.utils.time_utils import format_duration
 
@@ -342,7 +343,7 @@ class PropertyInspectorGroup(QGroupBox):
         layout = QVBoxLayout(self)
         layout.addWidget(self.editor_widget)
 
-        self.prop_save_btn = QPushButton("保存属性修改")
+        self.prop_save_btn = QPushButton(SvgIcon.SAVE, "保存属性修改")
         self.prop_save_btn.setStyleSheet("""
             QPushButton { background-color: #3498db; color: white; font-weight: bold; padding: 6px; border-radius: 4px; }
             QPushButton:hover { background-color: #2980b9; }

@@ -101,7 +101,7 @@ class AccountRow(QFrame):
         actions = [
             (SvgIcon.HOW_TO_REG, "使用", self.use_clicked),
             (SvgIcon.TROUBLESHOOT, "检测", self.check_clicked),
-            (SvgIcon.EDIT, "编辑", self.edit_clicked),
+            (SvgIcon.EDIT_LINE, "编辑", self.edit_clicked),
             (SvgIcon.DELETE, "删除", self.delete_clicked),
         ]
         for icon, tooltip, signal in actions:

@@ -155,8 +155,8 @@ class SenderPage(QWidget):
         self._btn_add_to_queue = _tool_button("新建任务", SvgIcon.NOTE_ADD, primary=True)
 
         self._btn_delete = _tool_button("删除选中", SvgIcon.DELETE)
-        self._btn_reset_queue = _tool_button("重置队列", SvgIcon.SYNC_ALT)
-        self._btn_clear_all = _tool_button("清空队列", SvgIcon.FORMAT_CLEAR)
+        self._btn_reset_queue = _tool_button("重置队列", SvgIcon.RESTART_ALT)
+        self._btn_clear_all = _tool_button("清空队列", SvgIcon.DELETE_SWEEP)
         self._btn_export_unsent = _tool_button("导出未发送", SvgIcon.FILE_SAVE)
         self._btn_export_unsent.setToolTip("导出所有任务里未发送成功的弹幕，每个任务一个 XML")
         self._btn_export_unsent.setEnabled(False)  # 初始化时禁用，队列跑完后有未发送成功时启用
@@ -273,24 +273,24 @@ class SenderPage(QWidget):
         is_editable = idle and task.status in (TaskStatus.PENDING, TaskStatus.UNCONFIGURED)
         can_remove = idle and task.status is not TaskStatus.RUNNING
 
-        menu.addAction("查看详情/编辑配置", lambda: self._show_task_detail(task))  # 所有状态都能查看
-        menu.addAction("编辑弹幕", lambda: self._edit_danmakus(task)).setEnabled(is_editable)
+        menu.addAction(SvgIcon.TUNE, "查看详情/编辑配置", lambda: self._show_task_detail(task))  # 所有状态都能查看
+        menu.addAction(SvgIcon.EDIT_DOCUMENT, "编辑弹幕", lambda: self._edit_danmakus(task)).setEnabled(is_editable)
         menu.addSeparator()
-        menu.addAction("上移", lambda: self._move_task(task.task_id, -1)).setEnabled(is_editable)
-        menu.addAction("下移", lambda: self._move_task(task.task_id, 1)).setEnabled(is_editable)
+        menu.addAction(SvgIcon.ARROW_UPWARD, "上移", lambda: self._move_task(task.task_id, -1)).setEnabled(is_editable)
+        menu.addAction(SvgIcon.ARROW_DOWNWARD, "下移", lambda: self._move_task(task.task_id, 1)).setEnabled(is_editable)
         menu.addSeparator()
         can_insert = idle
-        menu.addAction("在上方插入任务", lambda: self._open_task_builder(
+        menu.addAction(SvgIcon.EDIT_ARROW_UP, "在上方插入任务", lambda: self._open_task_builder(
             ref_task_id=task.task_id, insert_position=InsertPosition.ABOVE
         )).setEnabled(can_insert)
-        menu.addAction("在下方插入任务", lambda: self._open_task_builder(
+        menu.addAction(SvgIcon.EDIT_ARROW_DOWN, "在下方插入任务", lambda: self._open_task_builder(
             ref_task_id=task.task_id, insert_position=InsertPosition.BELOW
         )).setEnabled(can_insert)
         menu.addSeparator()
         menu.addAction(
-            "导出未发送成功", lambda: self._export_single_unsent(task.task_id)
+            SvgIcon.FILE_SAVE, "导出未发送成功", lambda: self._export_single_unsent(task.task_id)
         ).setEnabled(task.task_id in self._unsent_by_task)
-        menu.addAction("删除", lambda: self._remove_task(task.task_id)).setEnabled(can_remove)
+        menu.addAction(SvgIcon.DELETE, "删除", lambda: self._remove_task(task.task_id)).setEnabled(can_remove)
 
         menu.exec(self._queue_table.mapToGlobal(pos))
 

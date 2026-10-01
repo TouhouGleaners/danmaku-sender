@@ -168,7 +168,7 @@ class EditorDialog(QDialog):
         # 空状态引导
         action_btn = QPushButton(SvgIcon.FILE_OPEN, "导入 XML")
         action_btn.clicked.connect(self._import_xml)
-        secondary_btn = QPushButton(SvgIcon.NOTE_ADD, "添加示例弹幕")
+        secondary_btn = QPushButton(SvgIcon.PLAYLIST_ADD, "添加示例弹幕")
         secondary_btn.clicked.connect(self._add_sample_danmaku)
         self._empty_hint = EmptyStateHint(
             self.table,
@@ -558,10 +558,10 @@ class EditorDialog(QDialog):
         menu = QMenu(self)
         row = index.row()
 
-        menu.addAction(SvgIcon.EDIT_DOCUMENT, "编辑内容", lambda: self._edit_row(row))
+        menu.addAction(SvgIcon.EDIT_LINE, "编辑内容", lambda: self._edit_row(row))
         menu.addSeparator()
-        menu.addAction(SvgIcon.VERTICAL_ALIGN_TOP, "在上方插入新弹幕", lambda: self._insert_row(row, InsertPosition.ABOVE))
-        menu.addAction(SvgIcon.VERTICAL_ALIGN_BOTTOM, "在下方插入新弹幕", lambda: self._insert_row(row, InsertPosition.BELOW))
+        menu.addAction(SvgIcon.EDIT_ARROW_UP, "在上方插入新弹幕", lambda: self._insert_row(row, InsertPosition.ABOVE))
+        menu.addAction(SvgIcon.EDIT_ARROW_DOWN, "在下方插入新弹幕", lambda: self._insert_row(row, InsertPosition.BELOW))
         menu.addSeparator()
         menu.addAction(SvgIcon.SYNC_ALT, "平移选中弹幕的时间轴", self._shift_selected_items_time)
         adv_menu = menu.addMenu(SvgIcon.AUTO_AWESOME, "高级生成工具")
