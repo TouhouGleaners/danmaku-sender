@@ -159,9 +159,10 @@ class EditorDialog(QDialog):
         self.table.setContextMenuPolicy(Qt.ContextMenuPolicy.CustomContextMenu)
         self.table.customContextMenuRequested.connect(self._open_context_menu)
 
-        # 拖入 XML 文件直接导入工作区
+        # 拖入 XML 文件直接导入工作区（拖放事件可能落在表格或其可视区）
         self.table.setAcceptDrops(True)
         self.table.installEventFilter(self)
+        self.table.viewport().installEventFilter(self)
 
         # 空状态引导
         action_btn = QPushButton(SvgIcon.FILE_OPEN, "导入 XML")
@@ -171,7 +172,7 @@ class EditorDialog(QDialog):
         self._empty_hint = EmptyStateHint(
             self.table,
             title="当前任务无弹幕",
-            description="选择 XML 文件导入，或添加一条示例弹幕",
+            description="选择或拖入 XML 文件，也可添加一条示例弹幕",
             action=action_btn,
             secondary=secondary_btn,
         )
@@ -367,7 +368,7 @@ class EditorDialog(QDialog):
         Returns:
             bool: 命中并处理的拖放事件返回 True，其余交回父类。
         """
-        if watched is not self.table:
+        if watched not in (self.table, self.table.viewport()):
             return super().eventFilter(watched, event)
 
         if event.type() == QEvent.Type.DragLeave:

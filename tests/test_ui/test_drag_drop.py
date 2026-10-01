@@ -88,3 +88,19 @@ class TestDropOverlay:
             "松开以导入文件",
             "支持 .xml 格式的弹幕文件",
         ]
+
+    def test_scrim_composites_into_parent(self, host, qapp):
+        """遮罩必须真的盖在父控件上
+
+        QWidget 子类的 QSS 背景色默认不绘制，缺 WA_StyledBackground 时
+        遮罩自身抓图有底色、父控件抓图却一片空白，用户看不到任何遮罩。
+        """
+        overlay = DropOverlay(host, title="松开以导入文件", hint="支持 .xml 格式的弹幕文件")
+        qapp.processEvents()
+        bare = host.grab().toImage().pixelColor(host.width() // 2, host.height() // 2)
+
+        overlay.show_overlay()
+        qapp.processEvents()
+        covered = host.grab().toImage().pixelColor(host.width() // 2, host.height() // 2)
+
+        assert covered.getRgb() != bare.getRgb()

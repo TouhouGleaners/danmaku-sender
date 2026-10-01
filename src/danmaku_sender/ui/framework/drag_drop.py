@@ -1,7 +1,7 @@
 """拖放事件的文件提取与拖放覆盖层"""
 
 from PySide6.QtCore import QEvent, QObject, Qt
-from PySide6.QtGui import QDropEvent
+from PySide6.QtGui import QDropEvent, QPalette
 from PySide6.QtWidgets import QLabel, QVBoxLayout, QWidget
 
 from .icons import SvgIcon
@@ -41,28 +41,36 @@ class DropOverlay(QWidget):
         super().__init__(parent)
         self.setObjectName("dropOverlay")
 
+        # 文字与图标取调色板前景色，深浅色主题下都保持可读；遮罩只做柔化，
+        # 不承担对比度
+        fg = self.palette().color(QPalette.ColorRole.WindowText)
+        fg_css = fg.name()
+        fg_dim_css = f"rgba({fg.red()}, {fg.green()}, {fg.blue()}, 0.65)"
+
         layout = QVBoxLayout(self)
         layout.setContentsMargins(0, 0, 0, 0)
         layout.setAlignment(Qt.AlignmentFlag.AlignCenter)
         layout.setSpacing(8)
 
         icon_label = QLabel()
-        icon_label.setPixmap(SvgIcon.FILE_OPEN(color="#ffffff").pixmap(48, 48))
+        icon_label.setPixmap(SvgIcon.FILE_OPEN(color=fg_css).pixmap(48, 48))
         icon_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
         icon_label.setStyleSheet("background: transparent;")
         layout.addWidget(icon_label)
 
         title_label = QLabel(title)
         title_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        title_label.setStyleSheet("color: white; font-size: 16px; font-weight: bold; background: transparent;")
+        title_label.setStyleSheet(f"color: {fg_css}; font-size: 16px; font-weight: bold; background: transparent;")
         layout.addWidget(title_label)
 
         hint_label = QLabel(hint)
         hint_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        hint_label.setStyleSheet("color: rgba(255, 255, 255, 0.7); font-size: 12px; background: transparent;")
+        hint_label.setStyleSheet(f"color: {fg_dim_css}; font-size: 12px; background: transparent;")
         layout.addWidget(hint_label)
 
-        self.setStyleSheet("background-color: rgba(0, 0, 0, 0.4);")
+        self.setStyleSheet("background-color: rgba(0, 0, 0, 0.18);")
+        # QWidget 子类的 QSS 背景色默认不绘制，必须显式声明才合成到父控件上
+        self.setAttribute(Qt.WidgetAttribute.WA_StyledBackground, True)
         self.hide()
         parent.installEventFilter(self)
 
