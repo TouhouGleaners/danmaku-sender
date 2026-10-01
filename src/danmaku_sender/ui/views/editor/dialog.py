@@ -401,10 +401,11 @@ class EditorDialog(QDialog):
         if not files:
             return False
 
-        if not self._confirm_discard_changes():
+        event.acceptProposedAction()
+        if len(files) > 1:
+            QMessageBox.warning(self, "导入提示", "一次只能导入一个 XML 文件。")
             return True
 
-        event.acceptProposedAction()
         self._import_file(files[0])
         return True
 

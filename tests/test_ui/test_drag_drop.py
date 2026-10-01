@@ -36,16 +36,20 @@ class TestXmlFilesFromDrop:
     """XML 文件提取的筛选规则"""
 
     def test_keeps_local_xml(self, qapp):
-        mime = _mime([QUrl.fromLocalFile("C:/tmp/a.xml"), QUrl.fromLocalFile("C:/tmp/b.XML")])
-        assert xml_files_from_drop(_make_drop(mime)) == ["C:/tmp/a.xml", "C:/tmp/b.XML"]
+        src = ["/tmp/a.xml", "/tmp/b.XML"]
+        mime = _mime([QUrl.fromLocalFile(p) for p in src])
+        # 路径形态随平台而异，期望值同样经 toLocalFile() 换算
+        expected = [QUrl.fromLocalFile(p).toLocalFile() for p in src]
+        assert xml_files_from_drop(_make_drop(mime)) == expected
 
     def test_drops_non_xml_and_remote(self, qapp):
         mime = _mime([
             QUrl("https://example.com/c.xml"),
-            QUrl.fromLocalFile("C:/tmp/a.txt"),
-            QUrl.fromLocalFile("C:/tmp/b.xml"),
+            QUrl.fromLocalFile("/tmp/a.txt"),
+            QUrl.fromLocalFile("/tmp/b.xml"),
         ])
-        assert xml_files_from_drop(_make_drop(mime)) == ["C:/tmp/b.xml"]
+        expected = QUrl.fromLocalFile("/tmp/b.xml").toLocalFile()
+        assert xml_files_from_drop(_make_drop(mime)) == [expected]
 
     def test_empty_result(self, qapp):
         mime = _mime([])
