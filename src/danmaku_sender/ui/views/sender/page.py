@@ -174,7 +174,7 @@ class SenderPage(QWidget):
         # 空状态引导
         action_btn = QPushButton(SvgIcon.NOTE_ADD, "新建任务")
         action_btn.clicked.connect(self._add_to_queue)
-        self._sync_queue_model()
+        self._refresh_table()
         self._empty_hint = EmptyStateHint(
             self._queue_table,
             title="队列为空",
@@ -609,14 +609,14 @@ class SenderPage(QWidget):
 
         self.state.queue_state.assign_danmakus(task.task_id, danmakus, xml_path=file_path)
 
-    def _sync_queue_model(self):
+    def _refresh_table(self):
         """将队列任务同步进表格模型。"""
         self._queue_model.set_tasks(self.state.queue_state.tasks)
 
     @Slot()
     def _on_queue_changed(self):
         """队列变更信号的处理。"""
-        self._sync_queue_model()
+        self._refresh_table()
 
     @Slot(str)
     def _on_queue_task_updated(self, task_id: str):
