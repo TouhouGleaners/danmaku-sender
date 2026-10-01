@@ -1,6 +1,6 @@
 """EmptyStateHint 的行为测试。
 
-覆盖：默认隐藏、set_empty 控显隐、随可视区重定位、CTA 按钮形态与回调接线。
+覆盖：默认隐藏、set_empty 控显隐、随可视区重定位、CTA 按钮形态与样式。
 """
 import pytest
 from PySide6.QtWidgets import QLabel, QPushButton, QTableView
@@ -52,23 +52,12 @@ class TestEmptyStateHint:
         assert [label.text() for label in hint.findChildren(QLabel)] == ["暂无数据"]
         assert hint.findChildren(QPushButton) == []
 
-    def test_cta_buttons_are_wired(self, view):
-        calls: list[str] = []
-        hint = EmptyStateHint(
-            view,
-            title="当前任务无弹幕",
-            action_text="导入 XML",
-            on_action=lambda: calls.append("main"),
-            secondary_text="添加示例弹幕",
-            on_secondary=lambda: calls.append("secondary"),
-        )
+    def test_cta_buttons_are_styled(self, view):
+        action = QPushButton("导入 XML")
+        secondary = QPushButton("添加示例弹幕")
+        hint = EmptyStateHint(view, title="当前任务无弹幕", action=action, secondary=secondary)
 
-        buttons = hint.findChildren(QPushButton)
-        assert [b.text() for b in buttons] == ["导入 XML", "添加示例弹幕"]
+        assert [b.text() for b in hint.findChildren(QPushButton)] == ["导入 XML", "添加示例弹幕"]
         # 主按钮挂 primary="true"，交给既有 QSS；次按钮不挂
-        assert buttons[0].property("primary") == "true"
-        assert buttons[1].property("primary") is None
-
-        for button in buttons:
-            button.click()
-        assert calls == ["main", "secondary"]
+        assert action.property("primary") == "true"
+        assert secondary.property("primary") is None

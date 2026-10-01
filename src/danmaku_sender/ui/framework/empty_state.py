@@ -4,8 +4,6 @@
 调用方仅需控制显隐，无需重复实现 resizeEvent 与 setGeometry。
 """
 
-from collections.abc import Callable
-
 from PySide6.QtCore import QEvent, QObject, Qt
 from PySide6.QtWidgets import (
     QAbstractItemView,
@@ -23,7 +21,7 @@ class EmptyStateHint(QWidget):
     """表格数据为空时的居中引导块。
 
     仅需提示时传入 ``title`` （可选 ``description``）；
-    需要空状态 CTA 时再传``action_text`` / ``secondary_text``，主按钮沿用 ``primary="true"`` 的既有样式。
+    需要空状态 CTA 时再传``action`` / ``secondary``，主按钮沿用 ``primary="true"`` 的既有样式。
 
     组件监听表格及其可视区的 Resize / Show 事件并自动重定位——首次显示时
     可视区才有确定尺寸，构造阶段无法取得正确位置。
@@ -34,10 +32,8 @@ class EmptyStateHint(QWidget):
         view: QAbstractItemView,
         title: str,
         description: str = "",
-        action_text: str = "",
-        on_action: Callable[[], None] | None = None,
-        secondary_text: str = "",
-        on_secondary: Callable[[], None] | None = None,
+        action: QPushButton | None = None,
+        secondary: QPushButton | None = None,
     ) -> None:
         """创建引导块并挂载到表格可视区。
 
@@ -45,10 +41,8 @@ class EmptyStateHint(QWidget):
             view: 承载空状态的表格视图，引导块作为其可视区的子控件叠加显示。
             title: 主标题，纯提示与 CTA 两种形态均需提供。
             description: 副标题，用于说明缺失内容或后续操作；留空则不显示。
-            action_text: 主按钮文字；留空则不显示按钮。
-            on_action: 主按钮点击回调。
-            secondary_text: 次按钮文字；留空则不显示。
-            on_secondary: 次按钮点击回调。
+            action: 主操作按钮，由调用方组装（图标、文字、回调）；留空则不显示。
+            secondary: 次操作按钮，同上。主按钮会挂 ``primary="true"`` 复用既有样式。
         """
         super().__init__(view.viewport())
         self.setObjectName("emptyStateHint")
@@ -69,13 +63,15 @@ class EmptyStateHint(QWidget):
             desc_label.setStyleSheet(_HINT_STYLE)
             layout.addWidget(desc_label)
 
-        if action_text or secondary_text:
+        if action is not None or secondary is not None:
             buttons = QHBoxLayout()
             buttons.setSpacing(8)
-            if action_text:
-                buttons.addWidget(self._make_button(action_text, on_action, primary=True))
-            if secondary_text:
-                buttons.addWidget(self._make_button(secondary_text, on_secondary, primary=False))
+            for button, primary in ((action, True), (secondary, False)):
+                if button is None:
+                    continue
+                if primary:
+                    button.setProperty("primary", "true")
+                buttons.addWidget(button)
             layout.addLayout(buttons)
 
         self.setVisible(False)
@@ -84,25 +80,6 @@ class EmptyStateHint(QWidget):
         # 滚动条的出现与消失也会单独改变可视区尺寸
         view.installEventFilter(self)
         view.viewport().installEventFilter(self)
-
-    @staticmethod
-    def _make_button(text: str, on_click: Callable[[], None] | None, primary: bool) -> QPushButton:
-        """创建空状态按钮。
-
-        Args:
-            text: 按钮文字。
-            on_click: 点击回调；留空则不连接信号。
-            primary: 是否为主操作，为真时挂 ``primary="true"`` 复用既有样式。
-
-        Returns:
-            QPushButton: 配置完成的按钮，由调用方负责布局。
-        """
-        button = QPushButton(text)
-        if primary:
-            button.setProperty("primary", "true")
-        if on_click is not None:
-            button.clicked.connect(on_click)
-        return button
 
     def set_empty(self, empty: bool) -> None:
         """切换空状态显隐；显示时立即按当前可视区重新定位。

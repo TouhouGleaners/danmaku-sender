@@ -164,14 +164,16 @@ class EditorDialog(QDialog):
         self.table.installEventFilter(self)
 
         # 空状态引导
+        action_btn = QPushButton(SvgIcon.FILE_OPEN, "导入 XML")
+        action_btn.clicked.connect(self._import_xml)
+        secondary_btn = QPushButton(SvgIcon.NOTE_ADD, "添加示例弹幕")
+        secondary_btn.clicked.connect(self._add_sample_danmaku)
         self._empty_hint = EmptyStateHint(
             self.table,
             title="当前任务无弹幕",
             description="选择 XML 文件导入，或添加一条示例弹幕",
-            action_text="导入 XML",
-            on_action=self._import_xml,
-            secondary_text="添加示例弹幕",
-            on_secondary=self._add_sample_danmaku,
+            action=action_btn,
+            secondary=secondary_btn,
         )
 
         # 拖放覆盖层
