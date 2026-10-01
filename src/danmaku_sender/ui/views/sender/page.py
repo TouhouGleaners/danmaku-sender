@@ -144,7 +144,6 @@ class SenderPage(QWidget):
             btn.setIcon(icon)
             btn.setText(text)
             btn.setToolButtonStyle(Qt.ToolButtonStyle.ToolButtonTextBesideIcon)
-            btn.setCursor(Qt.CursorShape.PointingHandCursor)
             if primary:
                 btn.setProperty("primary", "true")
             else:
@@ -204,14 +203,12 @@ class SenderPage(QWidget):
         self._btn_start_queue = QPushButton("启动队列")
         self._btn_start_queue.setIcon(SvgIcon.START)
         self._btn_start_queue.setFixedWidth(100)
-        self._btn_start_queue.setCursor(Qt.CursorShape.PointingHandCursor)
         self._btn_start_queue.setProperty("action", "true")
         self._btn_start_queue.setProperty("state", "ready")
 
         self._btn_stop_queue = QPushButton("停止队列")
         self._btn_stop_queue.setIcon(SvgIcon.STOP)
         self._btn_stop_queue.setFixedWidth(100)
-        self._btn_stop_queue.setCursor(Qt.CursorShape.PointingHandCursor)
         self._btn_stop_queue.setProperty("action", "true")
         self._btn_stop_queue.setProperty("state", "running")
         self._btn_stop_queue.setVisible(False)

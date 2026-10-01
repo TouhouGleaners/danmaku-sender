@@ -219,7 +219,6 @@ class DanmakuPropertyForm(QWidget):
 
         # 颜色
         self.prop_color_btn = QPushButton()
-        self.prop_color_btn.setCursor(Qt.CursorShape.PointingHandCursor)
         self.prop_color_btn.setFixedHeight(24)
         self.prop_color_btn.clicked.connect(self._choose_color)
         form_layout.addRow("弹幕颜色:", self.prop_color_btn)

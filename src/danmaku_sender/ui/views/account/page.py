@@ -91,14 +91,12 @@ class AccountDialog(QDialog):
         btn_row = QHBoxLayout()
         self._btn_clear = QPushButton("清除失效")
         self._btn_clear.setIcon(SvgIcon.DELETE)
-        self._btn_clear.setCursor(Qt.CursorShape.PointingHandCursor)
         self._btn_clear.clicked.connect(self._clear_invalid)
         self._btn_clear.setEnabled(False)
         btn_row.addWidget(self._btn_clear)
 
         self._btn_check_all = QPushButton("全部检测")
         self._btn_check_all.setIcon(SvgIcon.TROUBLESHOOT)
-        self._btn_check_all.setCursor(Qt.CursorShape.PointingHandCursor)
         self._btn_check_all.clicked.connect(self._check_all)
         btn_row.addWidget(self._btn_check_all)
 
@@ -106,7 +104,6 @@ class AccountDialog(QDialog):
 
         btn_add = QPushButton("添加账号")
         btn_add.setIcon(SvgIcon.PERSON_ADD)
-        btn_add.setCursor(Qt.CursorShape.PointingHandCursor)
         btn_add.clicked.connect(self._add_account)
         btn_row.addWidget(btn_add)
         layout.addLayout(btn_row)
