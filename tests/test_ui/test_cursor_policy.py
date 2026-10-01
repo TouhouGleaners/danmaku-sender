@@ -47,3 +47,10 @@ class TestAutoHandCursorFilter:
         widget.setCursor(Qt.CursorShape.CrossCursor)
         _polished(app_with_policy, widget)
         assert widget.cursor().shape() == Qt.CursorShape.CrossCursor
+
+    def test_explicit_arrow_is_preserved(self, app_with_policy):
+        """显式设为箭头是关闭本约定的手段，不得改成小手"""
+        widget = QPushButton("x")
+        widget.setCursor(Qt.CursorShape.ArrowCursor)
+        _polished(app_with_policy, widget)
+        assert widget.cursor().shape() == Qt.CursorShape.ArrowCursor

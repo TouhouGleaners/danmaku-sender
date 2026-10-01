@@ -21,6 +21,9 @@ class AutoHandCursorFilter(QObject):
     覆盖 QPushButton 与 QToolButton。
     QCheckBox、QRadioButton、QComboBox等改变值的控件不在此列；
     响应点击的 QLabel、头像区等非按钮控件同样不属于本约定，仍需各自调用 ``setCursor``。
+
+    调用方自行设置过光标的按钮一律让位（含显式设为箭头）：
+    ``setCursor`` 会置 ``WA_SetCursor``，本约定据此识别「已被指定」，不覆盖显式选择。
     """
 
     def eventFilter(self, obj: QObject, event: QEvent) -> bool:
@@ -37,7 +40,7 @@ class AutoHandCursorFilter(QObject):
             return False
 
         # 用字面量元组收窄类型，obj 的静态类型是 QObject，没有 setCursor
-        if isinstance(obj, (QPushButton, QToolButton)) and obj.cursor().shape() == Qt.CursorShape.ArrowCursor:
+        if isinstance(obj, (QPushButton, QToolButton)) and not obj.testAttribute(Qt.WidgetAttribute.WA_SetCursor):
             obj.setCursor(Qt.CursorShape.PointingHandCursor)
 
         return False
