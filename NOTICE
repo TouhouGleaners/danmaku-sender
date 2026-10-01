@@ -1,0 +1,24 @@
+BiliDanmakuSender 第三方资源署名
+================================
+
+本仓库与发行物包含下列第三方资源。它们的许可条件独立于本项目的 GNU GPLv3 许可（见 LICENSE），不因本项目的许可而改变，也不得移除本署名。
+
+
+Material Symbols
+----------------
+
+版权：Google LLC
+
+许可：Apache License, Version 2.0（全文见 LICENSE-APACHE-2.0）
+
+位置：assets/icons/*.svg，不含 assets/icons/account_levels/ 子目录
+
+来源：https://developers.google.com/fonts/docs/material_symbols
+
+程序在运行时改写这些 SVG 的 fill 属性以适配主题配色，磁盘上的文件未作修改。
+
+
+assets/icons/account_levels/
+----------------------------
+
+该目录下的图标带有 iconfont 平台的导出标记，非 Material Symbols。其授权条件由图标在该平台上的作者声明决定，与上述 Apache 2.0 无关；纳入发行物前请自行确认授权。

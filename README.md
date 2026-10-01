@@ -194,7 +194,7 @@ A: 队列完成后，失败的弹幕记录会保留在任务中。也可前往"�
 
 ## 🤝 贡献
 
-本项目基于 [MIT License](LICENSE) 开源。
+本项目基于 [GNU GPLv3](LICENSE)（或任何后续版本）开源；界面图标等第三方资源的许可见 [NOTICE](NOTICE)。
 
 - 遇到 Bug？请提交 [Issue](https://github.com/TouhouGleaners/danmaku-sender/issues)
 - 有新功能想法？欢迎提交 PR！
