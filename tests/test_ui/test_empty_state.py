@@ -3,9 +3,16 @@
 覆盖：默认隐藏、set_empty 控显隐、随可视区重定位、CTA 按钮形态与样式。
 """
 import pytest
+from PySide6.QtCore import QObject, QStringListModel, Signal
 from PySide6.QtWidgets import QLabel, QPushButton, QTableView
 
 from danmaku_sender.ui.framework.empty_state import EmptyStateHint
+
+
+class _Emitter(QObject):
+    """测试用信号源，模拟调用方的数据变化通知。"""
+
+    changed = Signal()
 
 
 @pytest.fixture
@@ -61,3 +68,45 @@ class TestEmptyStateHint:
         # 主按钮挂 primary="true"，交给既有 QSS；次按钮不挂
         assert action.property("primary") == "true"
         assert secondary.property("primary") is None
+
+    def test_follows_model_rows(self, qapp):
+        """表格有 model 时按行数自动显隐，构造即求值一次"""
+        table = QTableView()
+        model = QStringListModel()
+        table.setModel(model)
+        table.resize(300, 150)
+        table.show()
+        hint = EmptyStateHint(table, title="暂无数据")
+
+        assert hint.isVisible()
+
+        model.setStringList(["a", "b"])
+        assert not hint.isVisible()
+
+        model.setStringList([])
+        assert hint.isVisible()
+
+        table.close()
+        table.deleteLater()
+
+    def test_custom_predicate_and_signal(self, qapp):
+        """「空」的口径不同时由调用方给出判定与刷新时机"""
+        table = QTableView()
+        table.show()
+        emitter = _Emitter()
+        state = {"empty": False}
+
+        hint = EmptyStateHint(
+            table,
+            title="暂无数据",
+            is_empty=lambda: state["empty"],
+            on_change=emitter.changed,
+        )
+        assert not hint.isVisible()
+
+        state["empty"] = True
+        emitter.changed.emit()
+        assert hint.isVisible()
+
+        table.close()
+        table.deleteLater()

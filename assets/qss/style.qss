@@ -206,3 +206,11 @@ QLabel#dropOverlayTitle {
 QLabel#dropOverlayHint {
     font-size: 12px;
 }
+
+/* 表格空状态引导：文字颜色跟随调色板，只定字号层级 */
+QLabel#emptyStateHintTitle {
+    font-size: 14px;
+}
+QLabel#emptyStateHintDesc {
+    font-size: 12px;
+}
