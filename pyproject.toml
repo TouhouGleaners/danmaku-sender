@@ -1,5 +1,5 @@
 [build-system]
-requires = ["setuptools>=61.0", "wheel"]
+requires = ["setuptools>=77.0", "wheel"]
 build-backend = "setuptools.build_meta"
 
 [project]
@@ -10,7 +10,8 @@ readme = "README.md"
 authors = [
     { name = "Miku_oso", email = "mikuoso@qq.com" }
 ]
-license = { text = "GPL-3.0-or-later" }
+license = "GPL-3.0-or-later"
+license-files = ["LICENSE", "LICENSE-APACHE-2.0", "NOTICE"]
 requires-python = ">=3.12"
 
 dependencies = [
