@@ -45,7 +45,7 @@ from danmaku_sender.service.danmaku_parser import DanmakuParser
 from danmaku_sender.service.sender import SendingContext
 from danmaku_sender.types.models.common import UnsentDanmakusRecord
 from danmaku_sender.types.models.queue import InsertPosition, TaskStatus, TaskView
-from danmaku_sender.ui.framework.drag_drop import DropOverlay, xml_files_from_drop
+from danmaku_sender.ui.framework.drag_drop import xml_files_from_drop
 from danmaku_sender.ui.framework.empty_state import EmptyStateHint
 from danmaku_sender.ui.framework.icons import SvgIcon
 from danmaku_sender.ui.views.editor import EditorDialog
@@ -181,15 +181,8 @@ class SenderPage(QWidget):
             action=action_btn,
         )
         self._queue_model.modelReset.connect(self._update_empty_hint)
-        # 启动时队列可能本来就是空的，tasksChanged 不会发射，先落一次显隐
-        self._update_empty_hint()
-
-        # 拖放覆盖层
-        self._drop_overlay = DropOverlay(
-            self._queue_table,
-            title="松开以分配弹幕",
-            hint="弹幕将导入到目标任务",
-        )
+        # 启动时队列可能已有任务，先落一次模型数据；空状态显隐随 modelReset 刷新
+        self._on_queue_changed()
 
         main_layout.addWidget(queue_group)
 
@@ -537,9 +530,6 @@ class SenderPage(QWidget):
                 return self._on_table_drag_enter(event)
             case QEvent.Type.DragMove:
                 return self._on_table_drag_move(event)
-            case QEvent.Type.DragLeave:
-                self._drop_overlay.hide()
-                return False
             case QEvent.Type.Drop:
                 return self._on_table_drop(event)
 
@@ -557,7 +547,6 @@ class SenderPage(QWidget):
 
     def _on_table_drag_move(self, event: QDragEnterEvent | QDragMoveEvent | QDropEvent) -> bool:
         if self.state.sender_is_active or not xml_files_from_drop(event):
-            self._drop_overlay.hide()
             return False
 
         viewport_pos = self._queue_table.viewport().mapFrom(self._queue_table, event.pos())
@@ -567,17 +556,13 @@ class SenderPage(QWidget):
         if task and task.status in (TaskStatus.UNCONFIGURED, TaskStatus.PENDING):
             self._queue_table.selectRow(index.row())
             event.acceptProposedAction()
-            # 只在确认落点后显示：覆盖层只应出现在真正能放下的地方
-            self._drop_overlay.show_overlay()
         else:
             self._queue_table.clearSelection()
             event.ignore()
-            self._drop_overlay.hide()
 
         return True
 
     def _on_table_drop(self, event: QDragEnterEvent | QDragMoveEvent | QDropEvent) -> bool:
-        self._drop_overlay.hide()
         self._queue_table.clearSelection()
         self._queue_table.unsetCursor()
         xml_files = xml_files_from_drop(event)
