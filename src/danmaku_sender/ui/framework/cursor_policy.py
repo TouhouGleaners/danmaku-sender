@@ -18,9 +18,9 @@ from PySide6.QtWidgets import QPushButton, QToolButton
 class AutoHandCursorFilter(QObject):
     """为推压式按钮自动设置手型光标。
 
-    覆盖 QPushButton 与 QToolButton。QCheckBox、QRadioButton、QComboBox
-    等改变值的控件不在此列；响应点击的 QLabel、头像区等非按钮控件同样
-    不属于本约定，仍需各自调用 ``setCursor``。
+    覆盖 QPushButton 与 QToolButton。
+    QCheckBox、QRadioButton、QComboBox等改变值的控件不在此列；
+    响应点击的 QLabel、头像区等非按钮控件同样不属于本约定，仍需各自调用 ``setCursor``。
     """
 
     def eventFilter(self, obj: QObject, event: QEvent) -> bool:

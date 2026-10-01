@@ -1,10 +1,10 @@
 """拖放事件的文件提取与拖放覆盖层"""
 
 from PySide6.QtCore import QEvent, QObject, Qt
-from PySide6.QtGui import QDropEvent, QPalette
+from PySide6.QtGui import QDropEvent
 from PySide6.QtWidgets import QLabel, QVBoxLayout, QWidget
 
-from .icons import SvgIcon
+from .icons import SvgIcon, get_current_text_color
 
 
 def xml_files_from_drop(event: QDropEvent) -> list[str]:
@@ -28,6 +28,8 @@ class DropOverlay(QWidget):
 
     平时隐藏；拖入接受的文件类型时由调用方调用 :meth:`show_overlay` 显示，
     拖离或放下时调用 :meth:`hide` 收起。
+
+    外观一律由 ``style.qss`` 提供，本类只决定 ``theme`` 动态属性。
     """
 
     def __init__(self, parent: QWidget, title: str, hint: str) -> None:
@@ -41,44 +43,59 @@ class DropOverlay(QWidget):
         super().__init__(parent)
         self.setObjectName("dropOverlay")
 
-        # 文字与图标取调色板前景色，深浅色主题下都保持可读；遮罩只做柔化，
-        # 不承担对比度
-        fg = self.palette().color(QPalette.ColorRole.WindowText)
-        fg_css = fg.name()
-        fg_dim_css = f"rgba({fg.red()}, {fg.green()}, {fg.blue()}, 0.65)"
-
         layout = QVBoxLayout(self)
         layout.setContentsMargins(0, 0, 0, 0)
         layout.setAlignment(Qt.AlignmentFlag.AlignCenter)
         layout.setSpacing(8)
 
-        icon_label = QLabel()
-        icon_label.setPixmap(SvgIcon.FILE_OPEN(color=fg_css).pixmap(48, 48))
-        icon_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        icon_label.setStyleSheet("background: transparent;")
-        layout.addWidget(icon_label)
+        self._icon_label = QLabel()
+        self._icon_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        layout.addWidget(self._icon_label)
 
         title_label = QLabel(title)
+        title_label.setObjectName("dropOverlayTitle")
         title_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        title_label.setStyleSheet(f"color: {fg_css}; font-size: 16px; font-weight: bold; background: transparent;")
         layout.addWidget(title_label)
 
         hint_label = QLabel(hint)
+        hint_label.setObjectName("dropOverlayHint")
         hint_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        hint_label.setStyleSheet(f"color: {fg_dim_css}; font-size: 12px; background: transparent;")
         layout.addWidget(hint_label)
 
-        self.setStyleSheet("background-color: rgba(0, 0, 0, 0.18);")
-        # QWidget 子类的 QSS 背景色默认不绘制，必须显式声明才合成到父控件上
+        # QWidget 子类不绘制 QSS 背景，需显式声明
         self.setAttribute(Qt.WidgetAttribute.WA_StyledBackground, True)
+        # 覆盖层只有文字，不接收输入；否则遮罩一出现，落点就从承载控件移到遮罩自身，承载控件收到 DragLeave，遮罩随之收起
+        self.setAttribute(Qt.WidgetAttribute.WA_TransparentForMouseEvents, True)
         self.hide()
         parent.installEventFilter(self)
 
     def show_overlay(self) -> None:
-        """铺满目标控件并显示，保证盖在其内容之上。"""
+        """铺满目标控件并显示，保证盖在其内容之上。
+
+        幂等：DragMove 会反复触发本方法，已显示时直接返回。
+        """
+        if self.isVisible():
+            return
+
+        self._apply_theme()
         self._reflow()
         self.show()
         self.raise_()
+
+    def _apply_theme(self) -> None:
+        """按当前主题设定 ``theme`` 动态属性，并重绘图标。
+
+        主题取自被覆盖的父控件：本控件的 QSS 会改写自身调色板。
+        """
+        parent = self.parentWidget()
+        source = parent if parent is not None else self
+        is_dark = source.palette().color(source.backgroundRole()).lightness() < 128
+
+        self.setProperty("theme", "dark" if is_dark else "light")
+        self.style().unpolish(self)
+        self.style().polish(self)
+
+        self._icon_label.setPixmap(SvgIcon.FILE_OPEN(color=get_current_text_color()).pixmap(48, 48))
 
     def eventFilter(self, watched: QObject, event: QEvent) -> bool:
         """目标控件尺寸变化、显示时重新定位。

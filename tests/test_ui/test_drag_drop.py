@@ -1,9 +1,12 @@
 """拖放事件的 XML 文件提取与拖放覆盖层测试。"""
+import re
+
 import pytest
 from PySide6.QtCore import QMimeData, QPointF, Qt, QUrl
-from PySide6.QtGui import QDropEvent
+from PySide6.QtGui import QColor, QDropEvent, QPalette
 from PySide6.QtWidgets import QLabel, QTableView
 
+from danmaku_sender.config.app_meta import AppInfo
 from danmaku_sender.ui.framework.drag_drop import DropOverlay, xml_files_from_drop
 
 
@@ -49,8 +52,17 @@ class TestXmlFilesFromDrop:
         assert xml_files_from_drop(_make_drop(mime)) == []
 
 
+@pytest.fixture(scope="module")
+def themed_qapp(qapp):
+    """载入 style.qss：遮罩的外观由 QSS 提供，测试需自带主题管线。"""
+    css = (AppInfo.Paths.ASSETS / "qss" / "style.qss").read_text(encoding="utf-8")
+    qapp.setStyleSheet(re.sub(r"\{[a-z_]+\}", "#888888", css))
+    yield qapp
+    qapp.setStyleSheet("")
+
+
 @pytest.fixture
-def host(qapp):
+def host(themed_qapp):
     table = QTableView()
     table.resize(400, 200)
     table.show()
@@ -90,11 +102,7 @@ class TestDropOverlay:
         ]
 
     def test_scrim_composites_into_parent(self, host, qapp):
-        """遮罩必须真的盖在父控件上
-
-        QWidget 子类的 QSS 背景色默认不绘制，缺 WA_StyledBackground 时
-        遮罩自身抓图有底色、父控件抓图却一片空白，用户看不到任何遮罩。
-        """
+        """遮罩必须合成到父控件，而非只在自身绘制。"""
         overlay = DropOverlay(host, title="松开以导入文件", hint="支持 .xml 格式的弹幕文件")
         qapp.processEvents()
         bare = host.grab().toImage().pixelColor(host.width() // 2, host.height() // 2)
@@ -104,3 +112,27 @@ class TestDropOverlay:
         covered = host.grab().toImage().pixelColor(host.width() // 2, host.height() // 2)
 
         assert covered.getRgb() != bare.getRgb()
+
+    @pytest.mark.parametrize("dark", [False, True], ids=["浅色主题", "深色主题"])
+    def test_scrim_colour_is_stable_across_show_hide(self, host, themed_qapp, dark):
+        """遮罩颜色在反复显隐下必须稳定：取色读自身调色板会与 QSS 形成正反馈。"""
+        if dark:
+            palette = host.palette()
+            palette.setColor(QPalette.ColorRole.Window, QColor("#1e1e1e"))
+            palette.setColor(QPalette.ColorRole.Base, QColor("#1e1e1e"))
+            palette.setColor(QPalette.ColorRole.WindowText, QColor("#e0e0e0"))
+            host.setPalette(palette)
+            themed_qapp.processEvents()
+
+        overlay = DropOverlay(host, title="松开以导入文件", hint="支持 .xml 格式的弹幕文件")
+        cx, cy = host.width() // 2, host.height() // 2
+        seen: set[tuple[int, int, int]] = set()
+        for _ in range(10):
+            overlay.hide()
+            themed_qapp.processEvents()
+            overlay.show_overlay()
+            themed_qapp.processEvents()
+            pixel = overlay.grab().toImage().pixelColor(cx, cy)
+            seen.add((pixel.red(), pixel.green(), pixel.blue()))
+
+        assert len(seen) == 1, f"遮罩颜色在显隐间翻转: {seen}"
