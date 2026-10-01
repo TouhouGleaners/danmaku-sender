@@ -381,12 +381,29 @@ class EditorDialog(QDialog):
             if event.type() == QEvent.Type.Drop:
                 self._drop_overlay.hide()
                 return self._on_table_drop(event)
-            if xml_files_from_drop(event):
+
+            if self._droppable_xml(event) is not None:
                 event.acceptProposedAction()
                 self._drop_overlay.show_overlay()
                 return True
             return False
         return super().eventFilter(watched, event)
+
+    @staticmethod
+    def _droppable_xml(event: QDropEvent) -> str | None:
+        """可接受的 XML 路径。
+
+        工作区只承载一份弹幕列表，因此仅当恰好命中一个 XML 时才接受拖放，
+        其余情况交回系统拒绝——拖放期间光标即显示为禁止，无需另做提示。
+
+        Args:
+            event: 拖放相关事件。
+
+        Returns:
+            str | None: 命中的 XML 路径；数量不为一时为 None。
+        """
+        files = xml_files_from_drop(event)
+        return files[0] if len(files) == 1 else None
 
     def _on_table_drop(self, event: QDropEvent) -> bool:
         """处理拖入的 XML 文件。
@@ -397,16 +414,12 @@ class EditorDialog(QDialog):
         Returns:
             bool: 事件已处理返回 True。
         """
-        files = xml_files_from_drop(event)
-        if not files:
+        path = self._droppable_xml(event)
+        if path is None:
             return False
 
         event.acceptProposedAction()
-        if len(files) > 1:
-            QMessageBox.warning(self, "导入提示", "一次只能导入一个 XML 文件。")
-            return True
-
-        self._import_file(files[0])
+        self._import_file(path)
         return True
 
     @Slot(int)
