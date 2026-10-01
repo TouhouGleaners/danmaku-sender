@@ -194,11 +194,11 @@ class EditorSession:
         )
         return self._append(new_dm)
 
-    def append_sample(self) -> str:
-        """在末尾追加一条示例弹幕。
+    def start_with_sample(self) -> str:
+        """以一条示例弹幕开启工作区。
 
-        与 `insert_item` 的区别：本方法不依赖参考弹幕，因此可用于空工作区
-        （空状态引导的「添加示例弹幕」入口）。
+        仅用于空工作区（空状态引导的「添加示例弹幕」入口）；已有弹幕时
+        应走 `insert_item`，它依赖参考弹幕定位。
 
         Returns:
             str: 新弹幕的 id。

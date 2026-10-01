@@ -352,8 +352,7 @@ class EditorDialog(QDialog):
     @Slot()
     def _add_sample_danmaku(self):
         """空状态引导入口：追加一条示例弹幕并选中。"""
-        uid = self.controller.append_sample()
-        # 预览模式关闭时表格只保留有问题的行，示例弹幕会被滤掉，点了看不到
+        uid = self.controller.start_with_sample()
         self.preview_mode_cb.setChecked(True)
         self._refresh_table()
         if uid:

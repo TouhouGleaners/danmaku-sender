@@ -167,13 +167,13 @@ class EditorController(QObject):
             self.run_validation()
         return uid
 
-    def append_sample(self) -> str:
-        """在工作区末尾追加一条示例弹幕，供空状态引导使用。
+    def start_with_sample(self) -> str:
+        """以一条示例弹幕开启工作区，供空状态引导使用。
 
         Returns:
             str: 新弹幕的 id。
         """
-        uid = self.session.append_sample()
+        uid = self.session.start_with_sample()
         self.run_validation()
         return uid
 
