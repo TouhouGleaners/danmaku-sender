@@ -8,7 +8,6 @@ from PySide6.QtCore import (
     QModelIndex,
     QPoint,
     Qt,
-    QTimer,
     Signal,
     Slot,
 )
@@ -47,6 +46,7 @@ from danmaku_sender.service.sender import SendingContext
 from danmaku_sender.types.models.common import UnsentDanmakusRecord
 from danmaku_sender.types.models.queue import InsertPosition, TaskStatus, TaskView
 from danmaku_sender.ui.framework.drag_drop import xml_files_from_drop
+from danmaku_sender.ui.framework.empty_state import EmptyStateHint
 from danmaku_sender.ui.framework.icons import SvgIcon
 from danmaku_sender.ui.views.editor import EditorDialog
 from danmaku_sender.utils.string_utils import safe_filename
@@ -172,14 +172,17 @@ class SenderPage(QWidget):
         queue_layout.addWidget(self._queue_table)
 
         # 空状态引导
-        self._empty_hint = QLabel("队列为空  点击「新建任务」添加发送任务", self._queue_table.viewport())
-        self._empty_hint.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        self._empty_hint.setStyleSheet("color: #888; font-size: 14px;")
-        self._empty_hint.setVisible(False)
+        action_btn = QPushButton(SvgIcon.NOTE_ADD, "新建任务")
+        action_btn.clicked.connect(self._add_to_queue)
+        self._empty_hint = EmptyStateHint(
+            self._queue_table,
+            title="队列为空",
+            description="点击下方按钮新建任务",
+            action=action_btn,
+        )
         self._queue_model.modelReset.connect(self._update_empty_hint)
-
-        # 布局完成后再定位，避免 viewport geometry 为零
-        QTimer.singleShot(0, self._update_empty_hint)
+        # 启动时队列可能已有任务，先落一次模型数据；空状态显隐随 modelReset 刷新
+        self._on_queue_changed()
 
         main_layout.addWidget(queue_group)
 
@@ -609,15 +612,7 @@ class SenderPage(QWidget):
         self.state.queue_state.assign_danmakus(task.task_id, danmakus, xml_path=file_path)
 
     def _update_empty_hint(self):
-        self._empty_hint.setVisible(self._queue_model.rowCount() == 0)
-        self._reposition_empty_hint()
-
-    def _reposition_empty_hint(self):
-        self._empty_hint.setGeometry(self._queue_table.viewport().rect())
-
-    def resizeEvent(self, event):
-        super().resizeEvent(event)
-        self._reposition_empty_hint()
+        self._empty_hint.set_empty(self._queue_model.rowCount() == 0)
 
     def _on_queue_changed(self):
         self._queue_model.set_tasks(self.state.queue_state.tasks)
