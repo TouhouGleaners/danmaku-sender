@@ -153,7 +153,6 @@ class MonitorPage(QWidget):
 
         self.btn_reset_anchor = QPushButton("设为当前")
         self.btn_reset_anchor.setToolTip("重置为当前时间，仅统计现在之后的发送记录，用于多批次任务对账。")
-        self.btn_reset_anchor.setCursor(Qt.CursorShape.PointingHandCursor)
         param_layout.addWidget(self.btn_reset_anchor)
 
         self.anchor_display = QLabel("(尚未设置)")
@@ -179,7 +178,6 @@ class MonitorPage(QWidget):
         self.btn_monitor_queue = QPushButton("监视队列")
         self.btn_monitor_queue.setIcon(SvgIcon.START)
         self.btn_monitor_queue.setFixedWidth(120)
-        self.btn_monitor_queue.setCursor(Qt.CursorShape.PointingHandCursor)
         self.btn_monitor_queue.setProperty("action", "true")
         self.btn_monitor_queue.setProperty("state", "ready")
 

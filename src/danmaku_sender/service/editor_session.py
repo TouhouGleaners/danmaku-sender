@@ -169,7 +169,15 @@ class EditorSession:
         return True
 
     def insert_item(self, reference_uid: str, position: InsertPosition = InsertPosition.BELOW) -> str | None:
-        """在指定弹幕附近插入一条新弹幕"""
+        """在指定弹幕附近插入一条新弹幕。
+
+        Args:
+            reference_uid: 参考弹幕的 id，不存在时返回 None。
+            position: 插在参考弹幕的上方还是下方，时间轴随之偏移 500 毫秒。
+
+        Returns:
+            str | None: 新弹幕的 id；参考弹幕不存在时为 None。
+        """
         ref_item = self.items.get(reference_uid)
         if not ref_item:
             return None
@@ -184,7 +192,28 @@ class EditorSession:
             mode=ref_item.working.mode,
             progress=new_progress
         )
+        return self._append(new_dm)
 
+    def start_with_sample(self) -> str:
+        """以一条示例弹幕开启工作区。
+
+        仅用于空工作区（空状态引导的「添加示例弹幕」入口）；已有弹幕时
+        应走 `insert_item`，它依赖参考弹幕定位。
+
+        Returns:
+            str: 新弹幕的 id。
+        """
+        return self._append(Danmaku(msg="示例弹幕", progress=0))
+
+    def _append(self, new_dm: Danmaku) -> str:
+        """将一条弹幕追加到末尾，并登记撤销记录。
+
+        Args:
+            new_dm: 待追加的弹幕，头部副本与工作副本同时指向它。
+
+        Returns:
+            str: 新弹幕的 id。
+        """
         new_item = EditorItem(head=new_dm, working=new_dm)
         new_uid = new_item.id
 

@@ -47,7 +47,6 @@ class AboutDialog(QDialog):
 
         # 链接区域
         repo_btn = QPushButton("GitHub 仓库")
-        repo_btn.setCursor(Qt.CursorShape.PointingHandCursor)
         repo_btn.setStyleSheet("color: #00a1d6; border: none; text-decoration: underline; background: transparent;")
         repo_btn.clicked.connect(lambda: QDesktopServices.openUrl(QUrl(Links.GITHUB_REPO)))
         layout.addWidget(repo_btn, alignment=Qt.AlignmentFlag.AlignCenter)
@@ -65,7 +64,6 @@ class AboutDialog(QDialog):
 
         # Issue 链接
         issue_btn = QPushButton(">>> 前往反馈页面 <<<")
-        issue_btn.setCursor(Qt.CursorShape.PointingHandCursor)
         issue_btn.setStyleSheet("color: #00a1d6; border: none; background: transparent;")
         issue_btn.clicked.connect(lambda: QDesktopServices.openUrl(QUrl(Links.GITHUB_ISSUES)))
         layout.addWidget(issue_btn)
@@ -207,7 +205,6 @@ class QRLoginDialog(QDialog):
         # 取消按钮
         self.cancel_btn = QPushButton("取消")
         self.cancel_btn.setFixedWidth(120)
-        self.cancel_btn.setCursor(Qt.CursorShape.PointingHandCursor)
         self.cancel_btn.clicked.connect(self.reject)
         layout.addWidget(self.cancel_btn, alignment=Qt.AlignmentFlag.AlignCenter)
 

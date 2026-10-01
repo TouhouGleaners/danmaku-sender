@@ -76,7 +76,6 @@ class AccountFormDialog(QDialog):
 
         self._qr_btn = QPushButton("开始扫码")
         self._qr_btn.setFixedWidth(120)
-        self._qr_btn.setCursor(Qt.CursorShape.PointingHandCursor)
         self._qr_btn.clicked.connect(self._start_qr)
         btn_row = QHBoxLayout()
         btn_row.addStretch()

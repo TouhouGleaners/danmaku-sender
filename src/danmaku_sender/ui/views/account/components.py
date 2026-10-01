@@ -109,7 +109,6 @@ class AccountRow(QFrame):
             btn.setIcon(icon)
             btn.setIconSize(QSize(20, 20))
             btn.setToolTip(tooltip)
-            btn.setCursor(Qt.CursorShape.PointingHandCursor)
             btn.setFixedSize(32, 32)
             btn.setObjectName("accountIconBtn")
             btn.clicked.connect(lambda checked=False, s=signal: s.emit(self.account))

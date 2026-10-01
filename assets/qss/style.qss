@@ -191,3 +191,18 @@ QLabel#dangerHint {
     color: {danger};
     font-size: 11px;
 }
+
+/* 拖放覆盖层：遮罩色随主题反向取，浅色压暗、深色提亮 */
+#dropOverlay[theme="light"] {
+    background-color: rgba(0, 0, 0, 0.18);
+}
+#dropOverlay[theme="dark"] {
+    background-color: rgba(255, 255, 255, 0.20);
+}
+QLabel#dropOverlayTitle {
+    font-size: 16px;
+    font-weight: bold;
+}
+QLabel#dropOverlayHint {
+    font-size: 12px;
+}

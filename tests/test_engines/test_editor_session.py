@@ -283,6 +283,23 @@ class TestInsertItem:
 
 
 # ============================================================
+# start_with_sample
+# ============================================================
+
+class TestStartWithSample:
+    def test_starts_empty_session_with_sample(self, session: EditorSession):
+        """insert_item 依赖参考弹幕，空工作区走 start_with_sample"""
+        uid = session.start_with_sample()
+        assert isinstance(uid, str)
+        assert session.item_order == [uid]
+        assert session.items[uid].working.msg == "示例弹幕"
+
+    def test_marks_dirty(self, session: EditorSession):
+        session.start_with_sample()
+        assert session.is_dirty is True
+
+
+# ============================================================
 # delete_items
 # ============================================================
 

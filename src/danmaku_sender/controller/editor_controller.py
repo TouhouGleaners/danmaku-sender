@@ -153,9 +153,28 @@ class EditorController(QObject):
     # region Atomic Operation Routing
 
     def insert_item(self, ref_uid: str, pos: InsertPosition) -> str | None:
+        """在参考弹幕附近插入一条新弹幕。
+
+        Args:
+            ref_uid: 参考弹幕的 id。
+            pos: 插在参考弹幕的上方还是下方。
+
+        Returns:
+            str | None: 新弹幕的 id；参考弹幕不存在时为 None。
+        """
         uid = self.session.insert_item(ref_uid, pos)
         if uid:
             self.run_validation()
+        return uid
+
+    def start_with_sample(self) -> str:
+        """以一条示例弹幕开启工作区，供空状态引导使用。
+
+        Returns:
+            str: 新弹幕的 id。
+        """
+        uid = self.session.start_with_sample()
+        self.run_validation()
         return uid
 
     def update_properties(self, uid: str, props: dict) -> bool:
