@@ -4,7 +4,7 @@ from PySide6.QtCore import QEvent, QObject, Qt
 from PySide6.QtGui import QDropEvent
 from PySide6.QtWidgets import QLabel, QVBoxLayout, QWidget
 
-from .icons import SvgIcon, get_current_text_color
+from .icons import SvgIcon
 
 
 def xml_files_from_drop(event: QDropEvent) -> list[str]:
@@ -83,9 +83,10 @@ class DropOverlay(QWidget):
         self.raise_()
 
     def _apply_theme(self) -> None:
-        """按当前主题设定 ``theme`` 动态属性，并重绘图标。
+        """按当前主题设定 ``theme`` 动态属性，并按前景色重绘图标。
 
-        主题取自被覆盖的父控件：本控件的 QSS 会改写自身调色板。
+        主题与前景色均取自被覆盖的父控件：本控件的 QSS 会改写自身调色板，
+        一律不从自身读取。
         """
         parent = self.parentWidget()
         source = parent if parent is not None else self
@@ -95,7 +96,9 @@ class DropOverlay(QWidget):
         self.style().unpolish(self)
         self.style().polish(self)
 
-        self._icon_label.setPixmap(SvgIcon.FILE_OPEN(color=get_current_text_color()).pixmap(48, 48))
+        self._icon_label.setPixmap(
+            SvgIcon.FILE_OPEN(color=source.palette().color(source.foregroundRole()).name()).pixmap(48, 48)
+        )
 
     def eventFilter(self, watched: QObject, event: QEvent) -> bool:
         """目标控件尺寸变化、显示时重新定位。
