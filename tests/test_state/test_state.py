@@ -395,3 +395,17 @@ class TestQueueState:
         """
         qs = QueueState()
         assert not hasattr(qs, "_lock")
+
+    def test_startable_covers_paused(self):
+        """PAUSED 属于可启动范围：start_queue 会先把残留运行态转回 PENDING"""
+        qs = QueueState()
+        qs.add_task(make_task(1, TaskStatus.PAUSED))
+        assert qs.has_startable_tasks is True
+        assert qs.has_pending_tasks is False
+
+    def test_startable_ignores_terminal_states(self):
+        """终态与未配置都不构成可启动的任务"""
+        qs = QueueState()
+        for status in (TaskStatus.COMPLETED, TaskStatus.FAILED, TaskStatus.SKIPPED, TaskStatus.UNCONFIGURED):
+            qs.add_task(make_task(1, status))
+        assert qs.has_startable_tasks is False

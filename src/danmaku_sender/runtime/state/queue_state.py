@@ -96,6 +96,15 @@ class QueueState(QObject):
         return any(r.runtime.status == TaskStatus.PENDING for r in self._records)
 
     @property
+    def has_startable_tasks(self) -> bool:
+        """启动队列后是否存在可执行的任务。
+
+        PENDING 与 PAUSED 均计入：`SenderController.start_queue` 启动时会把
+        残留运行态转回 PENDING 再取快照，PAUSED 因此属于可启动范围。
+        """
+        return any(r.runtime.status in (TaskStatus.PENDING, TaskStatus.PAUSED) for r in self._records)
+
+    @property
     def total_danmaku_count(self) -> int:
         """全队列弹幕总数"""
         return sum(r.spec.total for r in self._records)

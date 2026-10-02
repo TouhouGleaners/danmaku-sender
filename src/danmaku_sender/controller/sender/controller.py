@@ -21,10 +21,10 @@ from .workers import QueueSendWorker
 logger = logging.getLogger(__name__)
 
 
-class SenderStatus(Enum):
-    """发送校验状态"""
+class QueueStartStatus(Enum):
+    """队列能否启动的状态"""
     READY = "ready"
-    NOT_READY = "not_ready"
+    NO_RUNNABLE_TASKS = "no_runnable_tasks"
     NO_CREDENTIALS = "no_credentials"
 
 
@@ -51,13 +51,16 @@ class SenderController(QObject):
         self._stop_event = threading.Event()
 
     @property
-    def send_status(self) -> SenderStatus:
-        """当前发送状态，READY 表示队列可以启动。"""
+    def start_status(self) -> QueueStartStatus:
+        """队列能否启动。
+
+        凭证缺失与队列无可执行任务是两种独立的不可启动原因，调用方据此给出不同提示。
+        """
         if not self.state.sessdata or not self.state.bili_jct:
-            return SenderStatus.NO_CREDENTIALS
-        if self.state.queue_state.pending_count == 0:
-            return SenderStatus.NOT_READY
-        return SenderStatus.READY
+            return QueueStartStatus.NO_CREDENTIALS
+        if not self.state.queue_state.has_startable_tasks:
+            return QueueStartStatus.NO_RUNNABLE_TASKS
+        return QueueStartStatus.READY
 
     # region Queue
 

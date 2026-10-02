@@ -37,7 +37,7 @@ from PySide6.QtWidgets import (
     QWidget,
 )
 
-from danmaku_sender.controller.sender import SenderController
+from danmaku_sender.controller.sender import QueueStartStatus, SenderController
 from danmaku_sender.repo.history_manager import HistoryManager
 from danmaku_sender.runtime.infra.platform import send_windows_notification
 from danmaku_sender.runtime.state.app_state import AppState
@@ -444,13 +444,13 @@ class SenderPage(QWidget):
             return
 
         auth_config = self.state.get_api_auth()
-        if not auth_config.sessdata or not auth_config.bili_jct:
-            QMessageBox.warning(self, "凭证缺失", "请先登入账号。")
-            return
-
-        if self.state.queue_state.pending_count == 0:
-            QMessageBox.information(self, "队列为空", "没有待发送的任务。")
-            return
+        match self.sender_controller.start_status:
+            case QueueStartStatus.NO_CREDENTIALS:
+                QMessageBox.warning(self, "凭证缺失", "请先登入账号。")
+                return
+            case QueueStartStatus.NO_RUNNABLE_TASKS:
+                QMessageBox.information(self, "无法启动", "队列里没有可执行的任务。")
+                return
 
         self._unsent_by_task.clear()
         self._btn_export_unsent.setEnabled(False)
