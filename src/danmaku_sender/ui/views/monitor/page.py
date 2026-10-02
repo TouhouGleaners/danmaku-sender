@@ -334,13 +334,13 @@ class MonitorPage(QWidget):
         self._refresh_table()
         self._sync_overall_stats()
 
-    @Slot(str, int, object)
+    @Slot(str, object, object)
     def _on_target_stats_updated(self, bvid: str, cid: int, stats: MonitorStats):
         self._rows[(bvid, cid)] = stats
         self._refresh_table()
         self._sync_overall_stats()
 
-    @Slot(str, int)
+    @Slot(str, object)
     def _on_target_verify_failed(self, bvid: str, cid: int):
         """本轮核销失败：清掉统计，行保留"""
         self._rows[(bvid, cid)] = None

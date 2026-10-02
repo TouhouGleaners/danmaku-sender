@@ -38,8 +38,9 @@ class QueueMonitorWorker(WorkerThread):
     核销范围每轮从数据库读（get_recorded_targets），不碰队列状态。
     """
 
-    targetStatsUpdated = Signal(str, int, object)  # (bvid, cid, MonitorStats)
-    targetVerifyFailed = Signal(str, int)          # (bvid, cid)：本轮核销失败
+    # cid 用 object 传：Qt 信号的 int 是 32 位，B 站新视频的 cid 会溢出绕回
+    targetStatsUpdated = Signal(str, object, object)  # (bvid, cid, MonitorStats)
+    targetVerifyFailed = Signal(str, object)          # (bvid, cid)：本轮核销失败
     overallStatsUpdated = Signal(object)           # MonitorStats 合计
     statusUpdated = Signal(str)
     monitorFailed = Signal(str)                    # 异常终止原因（非用户停止）
