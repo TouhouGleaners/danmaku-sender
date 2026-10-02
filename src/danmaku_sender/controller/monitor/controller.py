@@ -22,8 +22,9 @@ class MonitorController(QObject):
     并作为冻结参数交给 Worker——Worker 不持有 AppState，也不写 QueueState。
     """
 
-    targetStatsUpdated = Signal(str, int, object)  # (bvid, cid, MonitorStats)
-    targetVerifyFailed = Signal(str, int)          # (bvid, cid)
+    # cid 用 object 传：Qt 信号的 int 是 32 位，B 站新视频的 cid 会溢出绕回
+    targetStatsUpdated = Signal(str, object, object)  # (bvid, cid, MonitorStats)
+    targetVerifyFailed = Signal(str, object)          # (bvid, cid)
     overallStatsUpdated = Signal(object)           # MonitorStats
     statusUpdated = Signal(str)
     monitorFailed = Signal(str)                    # 异常终止
@@ -112,11 +113,11 @@ class MonitorController(QObject):
     def is_running(self) -> bool:
         return self._worker is not None and self._worker.isRunning()
 
-    @Slot(str, int, object)
+    @Slot(str, object, object)
     def _on_target_stats(self, bvid: str, cid: int, stats):
         self.targetStatsUpdated.emit(bvid, cid, stats)
 
-    @Slot(str, int)
+    @Slot(str, object)
     def _on_target_verify_failed(self, bvid: str, cid: int):
         self.targetVerifyFailed.emit(bvid, cid)
 
