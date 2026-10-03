@@ -21,7 +21,8 @@ from danmaku_sender.types.models.queue import (
 logger = logging.getLogger(__name__)
 
 # 结构可变（增删/改弹幕/改配置）只允许在这些状态下进行
-_EDITABLE_STATUSES = (TaskStatus.PENDING, TaskStatus.UNCONFIGURED)
+# 都表示「缺配置」：UNCONFIGURED 在建任务时即知，SKIPPED 是跳过时才发现；补完配置一律转回待发
+_EDITABLE_STATUSES = (TaskStatus.PENDING, TaskStatus.UNCONFIGURED, TaskStatus.SKIPPED)
 
 
 class QueueState(QObject):
@@ -133,6 +134,14 @@ class QueueState(QObject):
         return TaskView(record) if record else None
 
     def _find(self, task_id: str) -> TaskRecord | None:
+        """按 task_id 查找存储单元；不存在返回 None。
+
+        Args:
+            task_id: 任务标识。
+
+        Returns:
+            TaskRecord | None: 命中的存储单元。
+        """
         for record in self._records:
             if record.spec.task_id == task_id:
                 return record
@@ -268,15 +277,20 @@ class QueueState(QObject):
         need_status = False
         total = 0
         record = self._find(task_id)
-        if record is None or record.runtime.status not in _EDITABLE_STATUSES:
+        if record is None:
             return
+
+        # SKIPPED 也放行：因缺配置而被跳过的任务，补完配置要能回到待发
+        if record.runtime.status not in _EDITABLE_STATUSES and record.runtime.status is not TaskStatus.SKIPPED:
+            return
+
         record.spec = replace(
             record.spec,
             danmakus=tuple(danmakus),
             xml_path=xml_path or record.spec.xml_path,
         )
         total = record.spec.total
-        need_status = record.runtime.status == TaskStatus.UNCONFIGURED and total > 0
+        need_status = record.runtime.status in (TaskStatus.UNCONFIGURED, TaskStatus.SKIPPED) and total > 0
 
         if need_status:
             self.update_task_status(task_id, TaskStatus.PENDING)

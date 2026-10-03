@@ -396,6 +396,16 @@ class TestQueueState:
         qs = QueueState()
         assert not hasattr(qs, "_lock")
 
+    def test_skipped_becomes_pending_on_config(self):
+        """因缺配置被跳过的任务，补完配置后回到待发"""
+        qs = QueueState()
+        t = make_task(1, TaskStatus.SKIPPED)
+        qs.add_task(t)
+        qs.assign_danmakus(t.task_id, [Danmaku(msg="hi", progress=0)], xml_path="a.xml")
+        view = qs.get_task_by_id(t.task_id)
+        assert view is not None
+        assert view.status is TaskStatus.PENDING
+
     def test_startable_covers_paused(self):
         """PAUSED 属于可启动范围：start_queue 会先把残留运行态转回 PENDING"""
         qs = QueueState()
