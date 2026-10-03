@@ -319,8 +319,9 @@ class QueueState(QObject):
         if record.runtime.status in (TaskStatus.UNCONFIGURED, TaskStatus.SKIPPED) and record.spec.danmakus:
             record.runtime.status = TaskStatus.PENDING
 
-        if new_status != old_status:
-            self.taskStatusChanged.emit(task_id, new_status)
+        # 比较转换后的最终状态：配置到位时会从 UNCONFIGURED / SKIPPED 转回 PENDING
+        if record.runtime.status != old_status:
+            self.taskStatusChanged.emit(task_id, record.runtime.status)
         self.taskDataChanged.emit(task_id)
 
     # ── 状态变更（发射 taskStatusChanged）─────────────────
