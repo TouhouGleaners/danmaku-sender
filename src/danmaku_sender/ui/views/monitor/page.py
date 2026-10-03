@@ -245,18 +245,23 @@ class MonitorPage(QWidget):
             self.anchor_display.setText(dt_str)
 
     def _refresh_table(self):
-        """按核销范围拼行，标签从队列反查"""
-        labels: dict[tuple[str, int], tuple[str, str]] = {}
+        """按队列任务拼行，存活统计从账本回填。
+
+        名称、状态、行的有无都由队列决定；账本只贡献存活统计，取不到即尚未发送。
+        """
+        rows = []
         for task in self.state.queue_state.tasks:
             name = task.target.display_string
             if task.p_title:
                 name = f"{name} - {task.p_title}"
-            labels[(task.target.bvid, task.target.cid)] = (name, task.status.value)
-
-        rows = []
-        for (bvid, cid), stats in self._rows.items():
-            name, status = labels.get((bvid, cid), (f"{bvid} / CID {cid}", "—"))
-            rows.append(MonitorRow(bvid=bvid, cid=cid, name=name, status=status, stats=stats))
+            bvid, cid = task.target.bvid, task.target.cid
+            rows.append(MonitorRow(
+                bvid=bvid,
+                cid=cid,
+                name=name,
+                status=task.status.value,
+                stats=self._rows.get((bvid, cid)),
+            ))
         self._queue_model.update_data(rows)
 
     def _update_overall_stats(self) -> dict:
@@ -305,24 +310,17 @@ class MonitorPage(QWidget):
             self.logger.info("⏹ 队列监视停止请求已发送")
             return
 
-        # 填入核销范围；查询失败与「没发过」分开报
-        try:
-            scope = self.history_manager.get_recorded_targets(self.state.stats_baseline)
-            self._rows = {(bvid, cid): None for bvid, cid in scope}
-        except Exception:
-            self.logger.error("读取发送记录失败", exc_info=True)
-            QMessageBox.warning(self, "数据库查询失败", "无法读取发送记录，详见日志。")
+        # 行清单来自队列，账本只提供核销范围与存活统计
+        if not self.state.queue_state.tasks:
+            QMessageBox.information(self, "队列为空", "请先在「发射器」页面添加任务。")
             return
 
-        if not self._rows:
-            QMessageBox.information(self, "暂无可核销内容", "统计范围内还没有发送过弹幕。")
-            return
 
         if not self.state.sessdata:
             QMessageBox.warning(self, "凭证缺失", "请先配置 Cookie。")
             return
 
-        if not self.monitor_controller.start_queue_monitor(scope, self.state.get_api_auth()):
+        if not self.monitor_controller.start_queue_monitor(self.state.get_api_auth()):
             self._refresh_table()
             self._sync_overall_stats()
             self._set_ui_running(False)

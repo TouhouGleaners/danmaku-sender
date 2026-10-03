@@ -2,7 +2,6 @@
 
 import logging
 import threading
-from collections.abc import Collection
 
 from PySide6.QtCore import QObject, Signal, Slot
 
@@ -40,7 +39,6 @@ class MonitorController(QObject):
 
     def start_queue_monitor(
         self,
-        recorded_targets: Collection[tuple[str, int]],
         auth_config: ApiAuthConfig | None = None,
         send_done: threading.Event | None = None,
         post_send_watch_seconds: float = 300.0,
@@ -48,7 +46,6 @@ class MonitorController(QObject):
         """启动队列监视 Worker。成功返回 True；拒绝启动返回 False。
 
         Args:
-            recorded_targets: 核销范围，调用方查好后传入，本方法不再查库。
                 Worker 每轮仍自行重查，以纳入发送中新出现的目标。
             send_done: 「发送+监视」时传入的发送结束标记；发送结束后再监视
                 ``post_send_watch_seconds`` 自动停。传 None 表示独立监视，跑到手动停。
@@ -59,10 +56,6 @@ class MonitorController(QObject):
 
         if self._worker is not None:
             logger.warning("上一个监视 Worker 仍在清理中，稍后再试。")
-            return False
-
-        if not recorded_targets:
-            logger.warning("核销范围为空，没有可监视的目标。")
             return False
 
         if auth_config is None:
@@ -100,7 +93,7 @@ class MonitorController(QObject):
         self.state.monitor_is_active = True
         worker.start()
         logger.info(
-            f"▶ 队列监视已启动：{len(recorded_targets)} 个目标，"
+            f"▶ 队列监视已启动：{len(self.state.queue_state.tasks)} 个任务，"
             f"轮询间隔 {self.state.monitor_config.refresh_interval} 秒"
         )
         return True
