@@ -238,7 +238,7 @@ class QueueTableModel(QAbstractTableModel):
         if len(source_rows) != len(set(source_rows)):
             return False
 
-        # 只允许拖动 PENDING 或 UNCONFIGURED 任务
+        # 只允许拖动可编辑状态的任务（TaskStatus.is_editable，含 SKIPPED）
         for r in source_rows:
             if not self._tasks[r].status.is_editable:
                 return False

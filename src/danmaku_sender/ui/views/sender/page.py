@@ -270,7 +270,7 @@ class SenderPage(QWidget):
         menu = QMenu(self)
         idle = not self.state.sender_is_active
         # 编辑/移动只对未定稿的任务有意义；删除放宽到所有非发送中状态
-        is_editable = idle and task.status in (TaskStatus.PENDING, TaskStatus.UNCONFIGURED)
+        is_editable = idle and task.status.is_editable
         can_remove = idle and task.status is not TaskStatus.RUNNING
 
         menu.addAction(SvgIcon.TUNE, "查看详情/编辑配置", lambda: self._show_task_detail(task))  # 所有状态都能查看

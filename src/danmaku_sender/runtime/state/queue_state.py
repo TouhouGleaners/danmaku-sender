@@ -20,8 +20,6 @@ from danmaku_sender.types.models.queue import (
 
 logger = logging.getLogger(__name__)
 
-# 结构可变（增删/改弹幕/改配置）只允许在 TaskStatus.is_editable 的状态下进行
-
 
 class QueueState(QObject):
     """发送任务队列的响应式状态中心。
