@@ -55,7 +55,7 @@ class TaskDetailDialog(QDialog):
         self._video_controller = VideoController(self)
         self._is_editable = (
             not queue_active
-            and task.status in (TaskStatus.PENDING, TaskStatus.UNCONFIGURED)
+            and task.status.is_editable
         )
 
         self.setWindowTitle(f"编辑任务 — {task.target.display_string}")

@@ -270,7 +270,7 @@ class SenderPage(QWidget):
         menu = QMenu(self)
         idle = not self.state.sender_is_active
         # 编辑/移动只对未定稿的任务有意义；删除放宽到所有非发送中状态
-        is_editable = idle and task.status in (TaskStatus.PENDING, TaskStatus.UNCONFIGURED)
+        is_editable = idle and task.status.is_editable
         can_remove = idle and task.status is not TaskStatus.RUNNING
 
         menu.addAction(SvgIcon.TUNE, "查看详情/编辑配置", lambda: self._show_task_detail(task))  # 所有状态都能查看
@@ -551,7 +551,7 @@ class SenderPage(QWidget):
         index = self._queue_table.indexAt(viewport_pos)
         task = self._queue_model.get_task_at(index.row()) if index.isValid() else None
 
-        if task and task.status in (TaskStatus.UNCONFIGURED, TaskStatus.PENDING):
+        if task and task.status.is_editable:
             self._queue_table.selectRow(index.row())
             event.acceptProposedAction()
         else:
@@ -571,7 +571,7 @@ class SenderPage(QWidget):
         index = self._queue_table.indexAt(viewport_pos)
         task = self._queue_model.get_task_at(index.row()) if index.isValid() else None
 
-        if not task or task.status not in (TaskStatus.UNCONFIGURED, TaskStatus.PENDING):
+        if not task or not task.status.is_editable:
             return False
 
         if len(xml_files) == 1:
@@ -587,7 +587,7 @@ class SenderPage(QWidget):
         tasks = self.state.queue_state.tasks
         pending_from_start = [
             t for t in tasks[start_row:]
-            if t.status in (TaskStatus.UNCONFIGURED, TaskStatus.PENDING)
+            if t.status.is_editable
         ]
         for i, file_path in enumerate(file_paths):
             if i >= len(pending_from_start):

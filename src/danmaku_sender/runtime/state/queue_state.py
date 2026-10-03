@@ -20,9 +20,6 @@ from danmaku_sender.types.models.queue import (
 
 logger = logging.getLogger(__name__)
 
-# 结构可变（增删/改弹幕/改配置）只允许在这些状态下进行
-_EDITABLE_STATUSES = (TaskStatus.PENDING, TaskStatus.UNCONFIGURED)
-
 
 class QueueState(QObject):
     """发送任务队列的响应式状态中心。
@@ -133,6 +130,14 @@ class QueueState(QObject):
         return TaskView(record) if record else None
 
     def _find(self, task_id: str) -> TaskRecord | None:
+        """按 task_id 查找存储单元；不存在返回 None。
+
+        Args:
+            task_id: 任务标识。
+
+        Returns:
+            TaskRecord | None: 命中的存储单元。
+        """
         for record in self._records:
             if record.spec.task_id == task_id:
                 return record
@@ -197,11 +202,11 @@ class QueueState(QObject):
         """移动任务位置（direction: -1 上移, +1 下移）"""
         moved = False
         for i, r in enumerate(self._records):
-            if r.spec.task_id == task_id and r.runtime.status in _EDITABLE_STATUSES:
+            if r.spec.task_id == task_id and r.runtime.status.is_editable:
                 new_index = i + direction
                 if (
                     0 <= new_index < len(self._records)
-                    and self._records[new_index].runtime.status in _EDITABLE_STATUSES
+                    and self._records[new_index].runtime.status.is_editable
                 ):
                     self._records[i], self._records[new_index] = (
                         self._records[new_index], self._records[i]
@@ -268,15 +273,19 @@ class QueueState(QObject):
         need_status = False
         total = 0
         record = self._find(task_id)
-        if record is None or record.runtime.status not in _EDITABLE_STATUSES:
+        if record is None:
             return
+
+        if not record.runtime.status.is_editable:
+            return
+
         record.spec = replace(
             record.spec,
             danmakus=tuple(danmakus),
             xml_path=xml_path or record.spec.xml_path,
         )
         total = record.spec.total
-        need_status = record.runtime.status == TaskStatus.UNCONFIGURED and total > 0
+        need_status = record.runtime.status in (TaskStatus.UNCONFIGURED, TaskStatus.SKIPPED) and total > 0
 
         if need_status:
             self.update_task_status(task_id, TaskStatus.PENDING)
@@ -295,7 +304,7 @@ class QueueState(QObject):
         record = self._find(task_id)
         if record is None:
             return
-        if record.runtime.status not in _EDITABLE_STATUSES:
+        if not record.runtime.status.is_editable:
             logger.warning(f"任务 [{task_id}] 处于 {record.runtime.status.value}，已忽略编辑结果。")
             return
 
@@ -306,9 +315,13 @@ class QueueState(QObject):
         error_msg = source.error_msg
         record.runtime.status = new_status
         record.runtime.error_msg = error_msg
+        # 补完配置即回到待发：UNCONFIGURED / SKIPPED 都表示「缺配置」
+        if record.runtime.status in (TaskStatus.UNCONFIGURED, TaskStatus.SKIPPED) and record.spec.danmakus:
+            record.runtime.status = TaskStatus.PENDING
 
-        if new_status != old_status:
-            self.taskStatusChanged.emit(task_id, new_status)
+        # 比较转换后的最终状态：配置到位时会从 UNCONFIGURED / SKIPPED 转回 PENDING
+        if record.runtime.status != old_status:
+            self.taskStatusChanged.emit(task_id, record.runtime.status)
         self.taskDataChanged.emit(task_id)
 
     # ── 状态变更（发射 taskStatusChanged）─────────────────

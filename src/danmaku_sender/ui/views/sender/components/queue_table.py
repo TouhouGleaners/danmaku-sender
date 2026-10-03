@@ -203,7 +203,7 @@ class QueueTableModel(QAbstractTableModel):
         if self.queue_running:
             return default
         task = self._tasks[index.row()]
-        if task.status in (TaskStatus.PENDING, TaskStatus.UNCONFIGURED):
+        if task.status.is_editable:
             return default | Qt.ItemFlag.ItemIsDragEnabled
         return default
 
@@ -238,9 +238,9 @@ class QueueTableModel(QAbstractTableModel):
         if len(source_rows) != len(set(source_rows)):
             return False
 
-        # 只允许拖动 PENDING 或 UNCONFIGURED 任务
+        # 只允许拖动可编辑状态的任务（TaskStatus.is_editable，含 SKIPPED）
         for r in source_rows:
-            if self._tasks[r].status not in (TaskStatus.PENDING, TaskStatus.UNCONFIGURED):
+            if not self._tasks[r].status.is_editable:
                 return False
 
         dest_row = row if row >= 0 else parent.row()
@@ -248,7 +248,7 @@ class QueueTableModel(QAbstractTableModel):
             dest_row = len(self._tasks)
 
         # 只能插入到 PENDING 或 UNCONFIGURED 区域或队列末尾
-        if dest_row < len(self._tasks) and self._tasks[dest_row].status not in (TaskStatus.PENDING, TaskStatus.UNCONFIGURED):
+        if dest_row < len(self._tasks) and not self._tasks[dest_row].status.is_editable:
             return False
 
         moved = [self._tasks[r] for r in source_rows]
