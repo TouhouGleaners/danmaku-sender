@@ -315,18 +315,12 @@ class MonitorPage(QWidget):
             QMessageBox.information(self, "队列为空", "请先在「发射器」页面添加任务。")
             return
 
-        try:
-            scope = self.history_manager.get_recorded_targets(self.state.stats_baseline)
-        except Exception:
-            self.logger.error("读取发送记录失败", exc_info=True)
-            QMessageBox.warning(self, "数据库查询失败", "无法读取发送记录，详见日志。")
-            return
 
         if not self.state.sessdata:
             QMessageBox.warning(self, "凭证缺失", "请先配置 Cookie。")
             return
 
-        if not self.monitor_controller.start_queue_monitor(scope, self.state.get_api_auth()):
+        if not self.monitor_controller.start_queue_monitor(self.state.get_api_auth()):
             self._refresh_table()
             self._sync_overall_stats()
             self._set_ui_running(False)
