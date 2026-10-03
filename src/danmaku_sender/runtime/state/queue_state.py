@@ -20,9 +20,7 @@ from danmaku_sender.types.models.queue import (
 
 logger = logging.getLogger(__name__)
 
-# 结构可变（增删/改弹幕/改配置）只允许在这些状态下进行
-# 都表示「缺配置」：UNCONFIGURED 在建任务时即知，SKIPPED 是跳过时才发现；补完配置一律转回待发
-_EDITABLE_STATUSES = (TaskStatus.PENDING, TaskStatus.UNCONFIGURED, TaskStatus.SKIPPED)
+# 结构可变（增删/改弹幕/改配置）只允许在 TaskStatus.is_editable 的状态下进行
 
 
 class QueueState(QObject):
@@ -206,11 +204,11 @@ class QueueState(QObject):
         """移动任务位置（direction: -1 上移, +1 下移）"""
         moved = False
         for i, r in enumerate(self._records):
-            if r.spec.task_id == task_id and r.runtime.status in _EDITABLE_STATUSES:
+            if r.spec.task_id == task_id and r.runtime.status.is_editable:
                 new_index = i + direction
                 if (
                     0 <= new_index < len(self._records)
-                    and self._records[new_index].runtime.status in _EDITABLE_STATUSES
+                    and self._records[new_index].runtime.status.is_editable
                 ):
                     self._records[i], self._records[new_index] = (
                         self._records[new_index], self._records[i]
@@ -280,8 +278,7 @@ class QueueState(QObject):
         if record is None:
             return
 
-        # SKIPPED 也放行：因缺配置而被跳过的任务，补完配置要能回到待发
-        if record.runtime.status not in _EDITABLE_STATUSES and record.runtime.status is not TaskStatus.SKIPPED:
+        if not record.runtime.status.is_editable:
             return
 
         record.spec = replace(
@@ -309,7 +306,7 @@ class QueueState(QObject):
         record = self._find(task_id)
         if record is None:
             return
-        if record.runtime.status not in _EDITABLE_STATUSES:
+        if not record.runtime.status.is_editable:
             logger.warning(f"任务 [{task_id}] 处于 {record.runtime.status.value}，已忽略编辑结果。")
             return
 
@@ -320,6 +317,9 @@ class QueueState(QObject):
         error_msg = source.error_msg
         record.runtime.status = new_status
         record.runtime.error_msg = error_msg
+        # 补完配置即回到待发：UNCONFIGURED / SKIPPED 都表示「缺配置」
+        if record.runtime.status in (TaskStatus.UNCONFIGURED, TaskStatus.SKIPPED) and record.spec.danmakus:
+            record.runtime.status = TaskStatus.PENDING
 
         if new_status != old_status:
             self.taskStatusChanged.emit(task_id, new_status)

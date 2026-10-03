@@ -16,6 +16,14 @@ class TaskStatus(Enum):
     FAILED = "失败"
     SKIPPED = "已跳过"
 
+    @property
+    def is_editable(self) -> bool:
+        """结构可变（改弹幕、改配置、移动）的状态。
+
+        UNCONFIGURED 与 SKIPPED 都表示「缺配置」，补完配置一律转回 PENDING。
+        """
+        return self in (TaskStatus.PENDING, TaskStatus.UNCONFIGURED, TaskStatus.SKIPPED)
+
 
 class InsertPosition(Enum):
     """队列任务相对插入位置（相对参考任务）"""
