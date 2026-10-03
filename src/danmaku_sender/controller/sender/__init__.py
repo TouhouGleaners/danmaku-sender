@@ -1,6 +1,6 @@
 """发送任务控制器包"""
 
-from .controller import SenderController, SenderStatus
+from .controller import QueueReadiness, SenderController
 from .workers import QueueSendWorker
 
-__all__ = ["QueueSendWorker", "SenderController", "SenderStatus"]
+__all__ = ["QueueReadiness", "QueueSendWorker", "SenderController"]
