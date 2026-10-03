@@ -61,10 +61,6 @@ class MonitorController(QObject):
             logger.warning("上一个监视 Worker 仍在清理中，稍后再试。")
             return False
 
-        if not recorded_targets:
-            logger.warning("核销范围为空，没有可监视的目标。")
-            return False
-
         if auth_config is None:
             auth_config = self.state.get_api_auth()
 
@@ -100,7 +96,7 @@ class MonitorController(QObject):
         self.state.monitor_is_active = True
         worker.start()
         logger.info(
-            f"▶ 队列监视已启动：{len(recorded_targets)} 个目标，"
+            f"▶ 队列监视已启动：{len(self.state.queue_state.tasks)} 个任务，"
             f"轮询间隔 {self.state.monitor_config.refresh_interval} 秒"
         )
         return True
