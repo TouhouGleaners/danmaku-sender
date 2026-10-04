@@ -41,7 +41,8 @@ dev = [
     "nuitka>=2.0",
     "zstandard>=0.15.0",
     "types-peewee",
-    "ruff>=0.16.7"
+    "ruff>=0.16.7",
+    "import-linter>=2.0",
 ]
 
 docs = [
@@ -66,3 +67,19 @@ include = ["src/**/*.py", "tests/**/*.py"]
 
 [tool.ruff.lint.isort]
 known-first-party = ["danmaku_sender"]
+
+[tool.importlinter]
+root_packages = ["danmaku_sender"]
+
+[[tool.importlinter.contracts]]
+name = "分层依赖方向"
+type = "layers"
+layers = [
+    "danmaku_sender.ui",
+    "danmaku_sender.controller",
+    "danmaku_sender.runtime",
+    "danmaku_sender.service",
+    "danmaku_sender.repo",
+    "danmaku_sender.config",
+    "danmaku_sender.types | danmaku_sender.utils",
+]
