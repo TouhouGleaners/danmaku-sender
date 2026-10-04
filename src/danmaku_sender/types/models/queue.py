@@ -1,6 +1,7 @@
 import uuid
 from dataclasses import dataclass, field, replace
 from enum import Enum, auto
+from pathlib import Path
 
 from .common import VideoTarget
 from .danmaku import Danmaku
@@ -68,7 +69,7 @@ class TaskSpec:
     config: TaskConfig
     p_index: int = 0
     p_title: str = ""
-    xml_path: str = ""
+    xml_path: Path | None = None
     duration_ms: int = 0
 
     @property
@@ -154,7 +155,7 @@ class TaskView:
         return self._record.spec.p_title
 
     @property
-    def xml_path(self) -> str:
+    def xml_path(self) -> Path | None:
         return self._record.spec.xml_path
 
     @property
@@ -223,7 +224,7 @@ class QueueTask:
     task_id: str = field(default_factory=lambda: uuid.uuid4().hex[:8])
     p_index: int = 0
     p_title: str = ""
-    xml_path: str = ""
+    xml_path: Path | None = None
     duration_ms: int = 0  # 视频时长（毫秒），用于弹幕时间越界校验
     status: TaskStatus = TaskStatus.PENDING
     error_msg: str = ""

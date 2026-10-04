@@ -316,9 +316,9 @@ class EditorDialog(QDialog):
             self, "导入弹幕 XML", "", "XML Files (*.xml);;All Files (*.*)"
         )
         if file_path:
-            self._import_file(file_path)
+            self._import_file(Path(file_path))
 
-    def _import_file(self, file_path: str):
+    def _import_file(self, file_path: Path):
         """将指定 XML 文件导入工作区，覆盖当前内容。
 
         Args:
@@ -390,7 +390,7 @@ class EditorDialog(QDialog):
         return super().eventFilter(watched, event)
 
     @staticmethod
-    def _droppable_xml(event: QDropEvent) -> str | None:
+    def _droppable_xml(event: QDropEvent) -> Path | None:
         """可接受的 XML 路径。
 
         工作区只承载一份弹幕列表，因此仅当恰好命中一个 XML 时才接受拖放，
@@ -455,15 +455,16 @@ class EditorDialog(QDialog):
         )
 
         if file_path:
+            target = Path(file_path)
             count = len(working_dms)
             self.controller.export_to_xml(
-                working_dms, file_path,
-                on_success=lambda _: self._on_export_success(count, file_path),
+                working_dms, target,
+                on_success=lambda _: self._on_export_success(count, target),
                 on_error=self._on_export_error,
             )
 
-    @Slot(int, str)
-    def _on_export_success(self, count: int, file_path: str):
+    @Slot(int, object)
+    def _on_export_success(self, count: int, file_path: Path):
         QMessageBox.information(
             self,
             "导出成功",

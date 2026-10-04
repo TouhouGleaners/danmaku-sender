@@ -1,4 +1,5 @@
 import logging
+from pathlib import Path
 
 from pydantic import ValidationError
 from PySide6.QtCore import Slot
@@ -51,7 +52,7 @@ class TaskDetailDialog(QDialog):
         self._api_auth = api_auth
         self._video_info: VideoInfo | None = None
         self._pending_part_page: int | None = None
-        self._selected_file: str | None = None
+        self._selected_file: Path | None = None
         self._video_controller = VideoController(self)
         self._is_editable = (
             not queue_active
@@ -128,8 +129,8 @@ class TaskDetailDialog(QDialog):
         file_row = QHBoxLayout()
         self._file_input = QLineEdit()
         self._file_input.setReadOnly(True)
-        if self.origin.xml_path:
-            self._file_input.setText(self.origin.xml_path)
+        if self.origin.xml_path is not None:
+            self._file_input.setText(str(self.origin.xml_path))
         elif self.origin.danmakus:
             self._file_input.setText(f"已加载 {len(self.origin.danmakus)} 条弹幕")
         self._file_btn = QPushButton("选择文件")
@@ -272,7 +273,7 @@ class TaskDetailDialog(QDialog):
     def _select_file(self):
         files, _ = QFileDialog.getOpenFileNames(self, "选择弹幕XML文件", "", "XML Files (*.xml)")
         if files:
-            self._selected_file = files[0]
+            self._selected_file = Path(files[0])
             self._file_input.setText(files[0].split("/")[-1].split("\\")[-1])
             # 预览弹幕数量
             parser = DanmakuXml

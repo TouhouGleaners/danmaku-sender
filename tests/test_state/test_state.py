@@ -1,5 +1,6 @@
 """状态与配置模型单元测试 — GlobalConfig, SenderConfig, SendPolicy, MonitorConfig, ValidationConfig, QueueState"""
 from dataclasses import FrozenInstanceError
+from pathlib import Path
 
 import pytest
 from pydantic import ValidationError
@@ -331,11 +332,11 @@ class TestQueueState:
         t = make_task(1, TaskStatus.UNCONFIGURED, danmaku_count=0)
         qs.add_task(t)
         dms = [Danmaku(msg="hi", progress=0)]
-        qs.assign_danmakus(t.task_id, dms, xml_path="a.xml")
+        qs.assign_danmakus(t.task_id, dms, xml_path=Path("a.xml"))
         view = qs.get_task_by_id(t.task_id)
         assert view is not None
         assert view.total == 1
-        assert view.xml_path == "a.xml"
+        assert view.xml_path == Path("a.xml")
         assert view.status == TaskStatus.PENDING  # UNCONFIGURED → PENDING
 
     def test_apply_edit_refused_when_running(self):
@@ -423,7 +424,7 @@ class TestQueueState:
         qs = QueueState()
         t = make_task(1, TaskStatus.SKIPPED, danmaku_count=0)
         qs.add_task(t)
-        qs.assign_danmakus(t.task_id, [Danmaku(msg="hi", progress=0)], xml_path="a.xml")
+        qs.assign_danmakus(t.task_id, [Danmaku(msg="hi", progress=0)], xml_path=Path("a.xml"))
         view = qs.get_task_by_id(t.task_id)
         assert view is not None
         assert view.status is TaskStatus.PENDING
@@ -433,7 +434,7 @@ class TestQueueState:
         qs = QueueState()
         t = make_incomplete_task()
         qs.add_task(t)
-        qs.assign_danmakus(t.task_id, [Danmaku(msg="hi", progress=0)], xml_path="a.xml")
+        qs.assign_danmakus(t.task_id, [Danmaku(msg="hi", progress=0)], xml_path=Path("a.xml"))
         view = qs.get_task_by_id(t.task_id)
         assert view is not None
         assert view.total == 1
@@ -445,7 +446,7 @@ class TestQueueState:
         t = make_incomplete_task(status=TaskStatus.SKIPPED)
         qs.add_task(t)
         qs.update_task_status(t.task_id, TaskStatus.SKIPPED, "未指定视频目标")
-        qs.assign_danmakus(t.task_id, [Danmaku(msg="hi", progress=0)], xml_path="a.xml")
+        qs.assign_danmakus(t.task_id, [Danmaku(msg="hi", progress=0)], xml_path=Path("a.xml"))
         view = qs.get_task_by_id(t.task_id)
         assert view is not None
         assert view.status is TaskStatus.SKIPPED
@@ -470,7 +471,7 @@ class TestQueueState:
         qs = QueueState()
         t = make_task(1)
         qs.add_task(t)
-        qs.assign_danmakus(t.task_id, [Danmaku(msg="hi", progress=0)], xml_path="a.xml")
+        qs.assign_danmakus(t.task_id, [Danmaku(msg="hi", progress=0)], xml_path=Path("a.xml"))
         draft = qs.get_task_by_id(t.task_id).to_draft()
         draft.danmakus = []
         draft.total = 0
@@ -483,7 +484,7 @@ class TestQueueState:
         qs = QueueState()
         t = make_task(1)
         qs.add_task(t)
-        qs.assign_danmakus(t.task_id, [Danmaku(msg="hi", progress=0)], xml_path="a.xml")
+        qs.assign_danmakus(t.task_id, [Danmaku(msg="hi", progress=0)], xml_path=Path("a.xml"))
         draft = qs.get_task_by_id(t.task_id).to_draft()
         draft.target = VideoTarget.unset()
         qs.apply_edit(t.task_id, draft)

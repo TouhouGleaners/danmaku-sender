@@ -1,5 +1,6 @@
 import logging
-from typing import Callable
+from collections.abc import Callable
+from pathlib import Path
 
 from PySide6.QtCore import QObject, Signal
 
@@ -76,7 +77,7 @@ class EditorController(QObject):
         self.dataChanged.emit()
         return self.active_error_count > 0
 
-    def import_xml_to_workspace(self, file_path: str, on_success: Callable[[int], None], on_error: Callable[[str], None]):
+    def import_xml_to_workspace(self, file_path: Path, on_success: Callable[[int], None], on_error: Callable[[str], None]):
         """
         异步导入 XML 文件到工作区：解析在后台线程执行，状态更新在 UI 线程回调。
 
@@ -115,7 +116,7 @@ class EditorController(QObject):
     def export_to_xml(
         self,
         danmakus: list[Danmaku],
-        file_path: str,
+        file_path: Path,
         on_success: Callable[[None], None],
         on_error: Callable[[str], None],
     ):

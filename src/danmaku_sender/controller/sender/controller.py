@@ -4,6 +4,7 @@ import logging
 import threading
 from collections.abc import Callable
 from enum import Enum
+from pathlib import Path
 
 from PySide6.QtCore import QObject, Signal, Slot
 
@@ -195,7 +196,7 @@ class SenderController(QObject):
     def export_unsent_xml(
         self,
         unsent_danmakus: list[UnsentDanmakusRecord],
-        file_path: str,
+        file_path: Path,
         on_success: Callable[[None], None],
         on_error: Callable[[str], None],
     ):

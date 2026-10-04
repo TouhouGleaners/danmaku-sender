@@ -22,10 +22,10 @@ EMPTY_XML = """<?xml version="1.0" encoding="UTF-8"?>
 """
 
 
-def write_xml(tmp_path: Path, name: str, content: str) -> str:
+def write_xml(tmp_path: Path, name: str, content: str) -> Path:
     path = tmp_path / name
     path.write_text(content, encoding="utf-8")
-    return str(path)
+    return path
 
 
 class TestParseFile:
@@ -37,7 +37,7 @@ class TestParseFile:
 
     def test_missing_file_raises(self, tmp_path):
         with pytest.raises(FileNotFoundError):
-            DanmakuXml.parse_file(str(tmp_path / "nope.xml"))
+            DanmakuXml.parse_file(tmp_path / "nope.xml")
 
     def test_malformed_xml_raises(self, tmp_path):
         path = write_xml(tmp_path, "bad.xml", "<i><d>没关上")
@@ -81,14 +81,14 @@ class TestLoadTask:
 
     def test_missing_file_yields_none(self, tmp_path):
         assert DanmakuXml.load_task(
-            str(tmp_path / "nope.xml"), SenderConfig().to_task_config()
+            tmp_path / "nope.xml", SenderConfig().to_task_config()
         ) is None
 
 
 class TestExport:
     def test_export_danmakus_round_trips(self, tmp_path):
         danmakus = [Danmaku(msg="第二条", progress=2000), Danmaku(msg="第一条", progress=1000)]
-        out = str(tmp_path / "out.xml")
+        out = tmp_path / "out.xml"
         DanmakuXml.export_danmakus(danmakus, out)
 
         reparsed = DanmakuXml.parse_file(out)
@@ -101,7 +101,7 @@ class TestExport:
             {"dm": Danmaku(msg="b", progress=2000), "reason": "网络错误"},
             {"dm": Danmaku(msg="c", progress=3000), "reason": "被拦截"},
         ]
-        out = str(tmp_path / "unsent.xml")
+        out = tmp_path / "unsent.xml"
         DanmakuXml.export_unsent(records, out)
 
         content = Path(out).read_text(encoding="utf-8")

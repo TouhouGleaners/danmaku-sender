@@ -4,6 +4,7 @@ import logging
 from collections import Counter
 from collections.abc import Collection
 from dataclasses import replace
+from pathlib import Path
 
 from PySide6.QtCore import QObject, Signal
 
@@ -283,7 +284,7 @@ class QueueState(QObject):
 
     # ── 数据变更（发射 taskDataChanged）───────────────────────
 
-    def assign_danmakus(self, task_id: str, danmakus: list[Danmaku], xml_path: str = ""):
+    def assign_danmakus(self, task_id: str, danmakus: list[Danmaku], xml_path: Path | None = None):
         """为任务分配/更新弹幕列表（换新 Spec），自动联动就绪状态。
 
         拖放 XML、编辑器保存等场景的统一入口。
@@ -299,7 +300,7 @@ class QueueState(QObject):
         record.spec = replace(
             record.spec,
             danmakus=tuple(danmakus),
-            xml_path=xml_path or record.spec.xml_path,
+            xml_path=xml_path if xml_path is not None else record.spec.xml_path,
         )
         if self._reconcile_config_status(record):
             self.taskStatusChanged.emit(record.spec.task_id, record.runtime.status)

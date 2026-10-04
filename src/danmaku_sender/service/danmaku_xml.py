@@ -2,6 +2,7 @@
 
 import logging
 import xml.etree.ElementTree as ET
+from pathlib import Path
 from xml.dom import minidom
 
 from danmaku_sender.types.models.common import UnsentDanmakusRecord, VideoTarget
@@ -15,7 +16,7 @@ class DanmakuXml:
     """B 站弹幕 XML 文档的读写。"""
 
     @staticmethod
-    def parse_file(xml_path: str) -> list[Danmaku]:
+    def parse_file(xml_path: Path) -> list[Danmaku]:
         """读取本地 XML 文件并解析其中的弹幕。
 
         Args:
@@ -63,7 +64,7 @@ class DanmakuXml:
         return dmids
 
     @staticmethod
-    def load_task(xml_path: str, config: TaskConfig) -> QueueTask | None:
+    def load_task(xml_path: Path, config: TaskConfig) -> QueueTask | None:
         """读取本地 XML 文件并组装成一条未指定视频目标的任务草稿。
 
         解析失败或文件中没有弹幕时返回 None。任务状态为 UNCONFIGURED。
@@ -95,7 +96,7 @@ class DanmakuXml:
         return task
 
     @staticmethod
-    def export_unsent(records: list[UnsentDanmakusRecord], filepath: str) -> None:
+    def export_unsent(records: list[UnsentDanmakusRecord], filepath: Path) -> None:
         """将未发送弹幕按失败原因分组写出为 XML 文件。
 
         Args:
@@ -122,7 +123,7 @@ class DanmakuXml:
         )
 
     @staticmethod
-    def export_danmakus(danmakus: list[Danmaku], filepath: str) -> None:
+    def export_danmakus(danmakus: list[Danmaku], filepath: Path) -> None:
         """将弹幕写出为 XML 文件。
 
         Args:
@@ -207,7 +208,7 @@ class DanmakuXml:
             d_tag.text = dm.msg
 
     @staticmethod
-    def _write_xml(root: ET.Element, filepath: str, success_msg: str) -> None:
+    def _write_xml(root: ET.Element, filepath: Path, success_msg: str) -> None:
         """将 XML 树格式化并写入文件"""
         rough_string = ET.tostring(root, 'utf-8')
         reparsed_document = minidom.parseString(rough_string)
