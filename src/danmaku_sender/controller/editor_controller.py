@@ -3,14 +3,14 @@ from typing import Callable
 
 from PySide6.QtCore import QObject, Signal
 
-from .concurrency import PoolTask
-from danmaku_sender.service.editor_session import EditorSession
 from danmaku_sender.runtime.state.app_state import AppState
+from danmaku_sender.service.danmaku_xml import DanmakuXml
+from danmaku_sender.service.editor_session import EditorSession
 from danmaku_sender.types.models.danmaku import Danmaku
-from danmaku_sender.types.models.editor_types import ViewItem, InsertPosition
+from danmaku_sender.types.models.editor_types import InsertPosition, ViewItem
 from danmaku_sender.types.models.queue import TaskView
-from danmaku_sender.service.danmaku_parser import DanmakuParser
-from danmaku_sender.service.danmaku_exporter import export_danmakus_to_xml
+
+from .concurrency import PoolTask
 
 
 class EditorController(QObject):
@@ -87,9 +87,9 @@ class EditorController(QObject):
             on_success: 成功回调，接收解析数量
             on_error: 失败回调，接收错误信息
         """
-        parser = DanmakuParser()
+        parser = DanmakuXml
         PoolTask.submit(
-            parser.parse_xml_file,
+            parser.parse_file,
             lambda parsed: on_success(self._apply_parsed_to_workspace(parsed)),
             lambda err: on_error(str(err)),
             file_path,
@@ -121,7 +121,7 @@ class EditorController(QObject):
     ):
         """异步导出弹幕列表到 XML 文件"""
         PoolTask.submit(
-            export_danmakus_to_xml,
+            DanmakuXml.export_danmakus,
             on_success,
             lambda err: on_error(str(err)),
             danmakus, file_path,

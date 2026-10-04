@@ -41,11 +41,10 @@ from danmaku_sender.controller.sender import QueueReadiness, SenderController
 from danmaku_sender.repo.history_manager import HistoryManager
 from danmaku_sender.runtime.infra.platform import send_windows_notification
 from danmaku_sender.runtime.state.app_state import AppState
-from danmaku_sender.service.danmaku_parser import DanmakuParser
+from danmaku_sender.service.danmaku_xml import DanmakuXml
 from danmaku_sender.service.sender import SendingContext
-from danmaku_sender.types.models.common import UnsentDanmakusRecord, VideoTarget
-from danmaku_sender.types.models.danmaku import Danmaku
-from danmaku_sender.types.models.queue import InsertPosition, QueueTask, TaskStatus, TaskView
+from danmaku_sender.types.models.common import UnsentDanmakusRecord
+from danmaku_sender.types.models.queue import InsertPosition, TaskStatus, TaskView
 from danmaku_sender.ui.framework.drag_drop import DropOverlay, xml_files_from_drop
 from danmaku_sender.ui.framework.empty_state import EmptyStateHint
 from danmaku_sender.ui.framework.icons import SvgIcon
@@ -653,40 +652,17 @@ class SenderPage(QWidget):
                 break
             self._assign_file_to_task(pending_from_start[i], file_path)
 
-    def _parse_xml_file(self, file_path: str) -> list[Danmaku] | None:
-        """解析弹幕 XML；失败或结果为空返回 None 并记日志。"""
-        parser = DanmakuParser()
-        try:
-            danmakus = parser.parse_xml_file(file_path)
-        except Exception as e:
-            self.logger.error(f"弹幕文件解析失败: {e}")
-            return None
-
-        if not danmakus:
-            self.logger.warning("弹幕文件为空。")
-            return None
-
-        return danmakus
-
     def _create_tasks_from_files(self, file_paths: list[str]) -> int:
-        """空队列拖入 XML：每个文件建一条未指定视频目标的任务。
+        """为每个 XML 文件建一条未指定视频目标的任务。
 
-        解析失败或弹幕为空的文件不建任务（弹幕和目标都缺的任务是纯垃圾），
-        记日志后继续处理其余文件。返回实际建出的任务数。
+        解析失败或文件中没有弹幕的不建任务。返回建出的任务数。
         """
+        config = self.state.sender_config.to_task_config()
         created = 0
         for file_path in file_paths:
-            danmakus = self._parse_xml_file(file_path)
-            if danmakus is None:
+            task = DanmakuXml.load_task(file_path, config)
+            if task is None:
                 continue
-
-            task = QueueTask(
-                target=VideoTarget.unset(),
-                danmakus=danmakus,
-                config_snapshot=self.state.sender_config.to_task_config(),
-                xml_path=file_path,
-            )
-            task.status = task.initial_status
             self.state.queue_state.add_task(task)
             created += 1
 
@@ -695,9 +671,18 @@ class SenderPage(QWidget):
         return created
 
     def _assign_file_to_task(self, task: TaskView, file_path: str):
-        """解析 XML 并通过 QueueState 分配弹幕给指定任务"""
-        danmakus = self._parse_xml_file(file_path)
-        if danmakus is None:
+        """将 XML 文件中的弹幕分配给指定任务。
+
+        解析失败或文件中没有弹幕时不动任务。
+        """
+        try:
+            danmakus = DanmakuXml.parse_file(file_path)
+        except Exception as e:
+            self.logger.error(f"弹幕文件解析失败: {e}")
+            return
+
+        if not danmakus:
+            self.logger.warning("弹幕文件为空。")
             return
 
         self.state.queue_state.assign_danmakus(task.task_id, danmakus, xml_path=file_path)
