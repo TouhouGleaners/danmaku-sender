@@ -16,7 +16,7 @@ from danmaku_sender.controller.video_controller import VideoController
 from danmaku_sender.runtime.state.app_state import AppState
 from danmaku_sender.service.danmaku_parser import DanmakuParser
 from danmaku_sender.types.models.common import VideoTarget
-from danmaku_sender.types.models.queue import InsertPosition, QueueTask, TaskStatus
+from danmaku_sender.types.models.queue import InsertPosition, QueueTask
 from danmaku_sender.types.models.video import VideoInfo
 from danmaku_sender.utils.string_utils import parse_bilibili_link
 
@@ -235,10 +235,7 @@ class TaskBuilderDialog(QDialog):
             xml_path=xml_path,
             duration_ms=duration_ms,
         )
-
-        # 如果没有弹幕，标记为未配置
-        if not danmakus:
-            task.status = TaskStatus.UNCONFIGURED
+        task.status = task.initial_status
 
         queue_state = self.state.queue_state
         if self._ref_task_id is None:

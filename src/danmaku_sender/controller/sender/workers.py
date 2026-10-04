@@ -69,7 +69,7 @@ class QueueSendWorker(WorkerThread):
 
                     if snap.status == TaskStatus.UNCONFIGURED:
                         handled.add(snap.spec.task_id)
-                        self.taskSkipped.emit(snap.spec.task_id, "未配置弹幕")
+                        self.taskSkipped.emit(snap.spec.task_id, snap.spec.missing_config_text)
                         continue
 
                     should_continue = self._execute_task(snap, idx, total)

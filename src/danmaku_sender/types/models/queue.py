@@ -75,6 +75,25 @@ class TaskSpec:
     def total(self) -> int:
         return len(self.danmakus)
 
+    @property
+    def is_config_complete(self) -> bool:
+        """配置是否齐备可发：弹幕与视频目标都在。"""
+        return self.total > 0 and self.target.is_assigned
+
+    @property
+    def missing_config_text(self) -> str:
+        """缺失配置项的一句话说明；齐备时返回空字符串。
+
+        表格提示、任务详情与 Worker 跳过原因共用这套文案，
+        保证「缺什么」在各界面与日志里说法一致。
+        """
+        parts: list[str] = []
+        if self.total <= 0:
+            parts.append("未导入弹幕")
+        if not self.target.is_assigned:
+            parts.append("未指定视频目标")
+        return "，且".join(parts)
+
 
 @dataclass
 class TaskRuntime:
@@ -147,6 +166,16 @@ class TaskView:
         return self._record.spec.total
 
     @property
+    def is_config_complete(self) -> bool:
+        """配置是否齐备可发：弹幕与视频目标都在。"""
+        return self._record.spec.is_config_complete
+
+    @property
+    def missing_config_text(self) -> str:
+        """缺失配置项的一句话说明；齐备时返回空字符串。"""
+        return self._record.spec.missing_config_text
+
+    @property
     def status(self) -> TaskStatus:
         return self._record.runtime.status
 
@@ -204,15 +233,25 @@ class QueueTask:
     def __post_init__(self):
         self.total = len(self.danmakus)
 
-    def validate(self) -> str | None:
-        """验证任务数据合法性，返回错误信息，无错误返回 None"""
-        if not self.target.bvid:
-            return "缺少视频目标 (BVID)"
-        if self.target.cid <= 0:
-            return "未选择有效的分P"
-        if not self.danmakus:
-            return "未加载弹幕数据"
-        return None
+    @property
+    def is_config_complete(self) -> bool:
+        """配置是否齐备可发：弹幕与视频目标都在。"""
+        return self.total > 0 and self.target.is_assigned
+
+    @property
+    def missing_config_text(self) -> str:
+        """缺失配置项的一句话说明；齐备时返回空字符串。"""
+        parts: list[str] = []
+        if self.total <= 0:
+            parts.append("未导入弹幕")
+        if not self.target.is_assigned:
+            parts.append("未指定视频目标")
+        return "，且".join(parts)
+
+    @property
+    def initial_status(self) -> TaskStatus:
+        """按配置完整性给出的新建状态：齐备为待发，否则为未配置。"""
+        return TaskStatus.PENDING if self.is_config_complete else TaskStatus.UNCONFIGURED
 
     def to_spec(self) -> TaskSpec:
         """打成不可变工单（target 拷贝，config 本就冻结，弹幕收成 tuple）"""

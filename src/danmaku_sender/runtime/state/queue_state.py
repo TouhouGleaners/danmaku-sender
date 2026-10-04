@@ -107,6 +107,18 @@ class QueueState(QObject):
         return sum(r.spec.total for r in self._records)
 
     @property
+    def sendable_danmaku_count(self) -> int:
+        """可发送弹幕总数（不含未配置的任务）。
+
+        未配置的任务可能拖入过弹幕但没定视频目标，那部分永远不会发，
+        不能进发送进度的分母。
+        """
+        return sum(
+            r.spec.total for r in self._records
+            if r.runtime.status is not TaskStatus.UNCONFIGURED
+        )
+
+    @property
     def processed_danmaku_count(self) -> int:
         """全队列已处理弹幕数（不含 PENDING、UNCONFIGURED 和 PAUSED）"""
         return sum(
@@ -146,7 +158,10 @@ class QueueState(QObject):
     # ── 结构变更（发射 tasksChanged）──────────────────────
 
     def add_task(self, task: QueueTask):
-        """添加任务到队列末尾（入队瞬间拆成 Spec + Runtime）"""
+        """添加任务到队列末尾（入队瞬间拆成 Spec + Runtime）。
+
+        新建任务的状态由 ``QueueTask.initial_status`` 决定，此处不代为改写。
+        """
         record = self._to_record(task)
         self._records.append(record)
         self.tasksChanged.emit()
@@ -164,6 +179,7 @@ class QueueState(QObject):
         """在参考任务上方/下方插入；参考不存在时追加到末尾。
 
         这是队列插入的唯一公开入口，调用方不接触绝对下标。
+        新建任务的状态由 ``QueueTask.initial_status`` 决定，此处不代为改写。
         """
         record = self._to_record(task)
         ref_index = -1
@@ -269,9 +285,8 @@ class QueueState(QObject):
         """为任务分配/更新弹幕列表（换新 Spec），自动联动就绪状态。
 
         拖放 XML、编辑器保存等场景的统一入口。
+        弹幕与视频目标**都**齐备才会转待发，只有弹幕仍停在未配置。
         """
-        need_status = False
-        total = 0
         record = self._find(task_id)
         if record is None:
             return
@@ -284,23 +299,17 @@ class QueueState(QObject):
             danmakus=tuple(danmakus),
             xml_path=xml_path or record.spec.xml_path,
         )
-        total = record.spec.total
-        need_status = record.runtime.status in (TaskStatus.UNCONFIGURED, TaskStatus.SKIPPED) and total > 0
-
-        if need_status:
-            self.update_task_status(task_id, TaskStatus.PENDING)
+        if self._reconcile_config_status(record):
+            self.taskStatusChanged.emit(record.spec.task_id, record.runtime.status)
 
         self.taskDataChanged.emit(task_id)
-        logger.info(f"已分配弹幕: {task_id} ({total} 条)")
+        logger.info(f"已分配弹幕: {task_id} ({record.spec.total} 条)")
 
     def apply_edit(self, task_id: str, source: QueueTask):
         """全量应用来自详情弹窗沙盒的修改结果（换新 Spec）。
 
         发送中等非可编辑状态拒绝并记警告，队列保持原样。
         """
-        old_status: TaskStatus | None = None
-        new_status: TaskStatus | None = None
-        error_msg = ""
         record = self._find(task_id)
         if record is None:
             return
@@ -311,18 +320,38 @@ class QueueState(QObject):
         old_status = record.runtime.status
         # 以队列中的 task_id 为准，防止沙盒误带其它 id
         record.spec = replace(source.to_spec(), task_id=task_id)
-        new_status = source.status
-        error_msg = source.error_msg
-        record.runtime.status = new_status
-        record.runtime.error_msg = error_msg
-        # 补完配置即回到待发：UNCONFIGURED / SKIPPED 都表示「缺配置」
-        if record.runtime.status in (TaskStatus.UNCONFIGURED, TaskStatus.SKIPPED) and record.spec.danmakus:
-            record.runtime.status = TaskStatus.PENDING
+        record.runtime.status = source.status
+        record.runtime.error_msg = source.error_msg
+        self._reconcile_config_status(record)
 
-        # 比较转换后的最终状态：配置到位时会从 UNCONFIGURED / SKIPPED 转回 PENDING
         if record.runtime.status != old_status:
             self.taskStatusChanged.emit(task_id, record.runtime.status)
         self.taskDataChanged.emit(task_id)
+
+    def _reconcile_config_status(self, record: TaskRecord) -> bool:
+        """按配置完整性对齐预运行状态；返回状态是否变化。
+
+        配置齐备（弹幕 + 视频目标）的 UNCONFIGURED / SKIPPED 转回 PENDING；
+        配置被拆掉的 PENDING 降回 UNCONFIGURED。终态与运行态不在此处理
+        ——结构编辑有 is_editable 闸门，本方法只在配置变更后调用。
+
+        Args:
+            record: 待对齐的队列存储单元，就地修改其运行时状态。
+
+        Returns:
+            bool: 状态发生变化返回 True。
+        """
+        status = record.runtime.status
+        complete = record.spec.is_config_complete
+
+        if complete and status in (TaskStatus.UNCONFIGURED, TaskStatus.SKIPPED):
+            record.runtime.status = TaskStatus.PENDING
+            record.runtime.error_msg = ""
+            return True
+        if not complete and status is TaskStatus.PENDING:
+            record.runtime.status = TaskStatus.UNCONFIGURED
+            return True
+        return False
 
     # ── 状态变更（发射 taskStatusChanged）─────────────────
 
