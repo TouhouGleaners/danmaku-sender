@@ -122,10 +122,32 @@ class TestValidationConfig:
         assert cfg.enabled is False
 
 
-def make_task(cid: int = 1, status: TaskStatus = TaskStatus.PENDING) -> QueueTask:
+def make_task(
+    cid: int = 1,
+    status: TaskStatus = TaskStatus.PENDING,
+    danmaku_count: int = 1,
+) -> QueueTask:
+    """构造一条任务。默认带弹幕，是配置齐备的正常任务。
+
+    配置残缺的任务会被 QueueState 纠状态，所以要构造「缺弹幕」的用例
+    必须显式传 ``danmaku_count=0``，别指望草稿自带的 status 能蒙混过关。
+    """
     return QueueTask(
         target=VideoTarget(bvid=f"BV{cid:03d}", cid=cid, title=f"T{cid}"),
-        danmakus=[],
+        danmakus=[Danmaku(msg=f"m{i}", progress=i) for i in range(danmaku_count)],
+        config_snapshot=SenderConfig().to_task_config(),
+        status=status,
+    )
+
+
+def make_incomplete_task(
+    danmaku_count: int = 0,
+    status: TaskStatus = TaskStatus.UNCONFIGURED,
+) -> QueueTask:
+    """拖入 XML 建的任务：没定视频目标，弹幕可配。"""
+    return QueueTask(
+        target=VideoTarget.unset(),
+        danmakus=[Danmaku(msg=f"m{i}", progress=i) for i in range(danmaku_count)],
         config_snapshot=SenderConfig().to_task_config(),
         status=status,
     )
@@ -201,8 +223,8 @@ class TestQueueState:
         for t in (
             make_task(1, TaskStatus.COMPLETED),
             make_task(2, TaskStatus.FAILED),
-            make_task(3, TaskStatus.SKIPPED),
-            make_task(4, TaskStatus.UNCONFIGURED),
+            make_task(3, TaskStatus.SKIPPED, danmaku_count=0),
+            make_task(4, TaskStatus.UNCONFIGURED, danmaku_count=0),
             make_task(5, TaskStatus.PENDING),
             make_task(6, TaskStatus.PAUSED),
         ):
@@ -235,7 +257,7 @@ class TestQueueState:
         """没有已完成/失败任务时不发信号，也不动其它状态"""
         qs = QueueState()
         qs.add_task(make_task(1, TaskStatus.PENDING))
-        qs.add_task(make_task(2, TaskStatus.SKIPPED))
+        qs.add_task(make_task(2, TaskStatus.SKIPPED, danmaku_count=0))
         events: list[object] = []
         qs.tasksChanged.connect(lambda: events.append("tasks"))
         qs.taskStatusChanged.connect(lambda tid, s: events.append("status"))
@@ -306,7 +328,7 @@ class TestQueueState:
 
     def test_assign_danmakus_replaces_spec(self):
         qs = QueueState()
-        t = make_task(1, TaskStatus.UNCONFIGURED)
+        t = make_task(1, TaskStatus.UNCONFIGURED, danmaku_count=0)
         qs.add_task(t)
         dms = [Danmaku(msg="hi", progress=0)]
         qs.assign_danmakus(t.task_id, dms, xml_path="a.xml")
@@ -399,12 +421,161 @@ class TestQueueState:
     def test_skipped_becomes_pending_on_config(self):
         """因缺配置被跳过的任务，补完配置后回到待发"""
         qs = QueueState()
-        t = make_task(1, TaskStatus.SKIPPED)
+        t = make_task(1, TaskStatus.SKIPPED, danmaku_count=0)
         qs.add_task(t)
         qs.assign_danmakus(t.task_id, [Danmaku(msg="hi", progress=0)], xml_path="a.xml")
         view = qs.get_task_by_id(t.task_id)
         assert view is not None
         assert view.status is TaskStatus.PENDING
+
+    def test_assign_danmakus_keeps_unconfigured_without_target(self):
+        """只补弹幕不补目标，仍是未配置——齐备才转待发"""
+        qs = QueueState()
+        t = make_incomplete_task()
+        qs.add_task(t)
+        qs.assign_danmakus(t.task_id, [Danmaku(msg="hi", progress=0)], xml_path="a.xml")
+        view = qs.get_task_by_id(t.task_id)
+        assert view is not None
+        assert view.total == 1
+        assert view.status is TaskStatus.UNCONFIGURED
+
+    def test_assign_danmakus_keeps_skipped_without_target(self):
+        """跳过原因与状态都不动：配置还没齐"""
+        qs = QueueState()
+        t = make_incomplete_task(status=TaskStatus.SKIPPED)
+        qs.add_task(t)
+        qs.update_task_status(t.task_id, TaskStatus.SKIPPED, "未指定视频目标")
+        qs.assign_danmakus(t.task_id, [Danmaku(msg="hi", progress=0)], xml_path="a.xml")
+        view = qs.get_task_by_id(t.task_id)
+        assert view is not None
+        assert view.status is TaskStatus.SKIPPED
+        assert view.error_msg == "未指定视频目标"
+
+    def test_apply_edit_completes_drop_created_task(self):
+        """拖入建的任务在详情里补上视频目标后转待发，跳过原因清空"""
+        qs = QueueState()
+        t = make_incomplete_task(danmaku_count=1)
+        qs.add_task(t)
+        qs.update_task_status(t.task_id, TaskStatus.UNCONFIGURED, "未指定视频目标")
+        draft = qs.get_task_by_id(t.task_id).to_draft()
+        draft.target = VideoTarget(bvid="BV1xx411c7mD", cid=1001, title="我的视频")
+        qs.apply_edit(t.task_id, draft)
+        view = qs.get_task_by_id(t.task_id)
+        assert view is not None
+        assert view.status is TaskStatus.PENDING
+        assert view.error_msg == ""
+
+    def test_apply_edit_demotes_when_danmakus_stripped(self):
+        """配置被拆掉的待发任务降回未配置"""
+        qs = QueueState()
+        t = make_task(1)
+        qs.add_task(t)
+        qs.assign_danmakus(t.task_id, [Danmaku(msg="hi", progress=0)], xml_path="a.xml")
+        draft = qs.get_task_by_id(t.task_id).to_draft()
+        draft.danmakus = []
+        draft.total = 0
+        qs.apply_edit(t.task_id, draft)
+        view = qs.get_task_by_id(t.task_id)
+        assert view is not None
+        assert view.status is TaskStatus.UNCONFIGURED
+
+    def test_apply_edit_demotes_when_target_stripped(self):
+        qs = QueueState()
+        t = make_task(1)
+        qs.add_task(t)
+        qs.assign_danmakus(t.task_id, [Danmaku(msg="hi", progress=0)], xml_path="a.xml")
+        draft = qs.get_task_by_id(t.task_id).to_draft()
+        draft.target = VideoTarget.unset()
+        qs.apply_edit(t.task_id, draft)
+        view = qs.get_task_by_id(t.task_id)
+        assert view is not None
+        assert view.status is TaskStatus.UNCONFIGURED
+
+    def test_apply_edit_completes_skipped_task(self):
+        """跳过任务经编辑补完后同样回到待发（B5 的编辑路径）"""
+        qs = QueueState()
+        t = make_incomplete_task(danmaku_count=1, status=TaskStatus.SKIPPED)
+        qs.add_task(t)
+        qs.update_task_status(t.task_id, TaskStatus.SKIPPED, "未指定视频目标")
+        draft = qs.get_task_by_id(t.task_id).to_draft()
+        draft.target = VideoTarget(bvid="BV1xx411c7mD", cid=1001, title="我的视频")
+        qs.apply_edit(t.task_id, draft)
+        view = qs.get_task_by_id(t.task_id)
+        assert view is not None
+        assert view.status is TaskStatus.PENDING
+
+    def test_apply_edit_keeps_skipped_when_incomplete(self):
+        qs = QueueState()
+        t = make_incomplete_task(danmaku_count=1, status=TaskStatus.SKIPPED)
+        qs.add_task(t)
+        qs.update_task_status(t.task_id, TaskStatus.SKIPPED, "未指定视频目标")
+        draft = qs.get_task_by_id(t.task_id).to_draft()
+        draft.p_title = "改个标题"
+        qs.apply_edit(t.task_id, draft)
+        view = qs.get_task_by_id(t.task_id)
+        assert view is not None
+        assert view.status is TaskStatus.SKIPPED
+        assert view.p_title == "改个标题"
+
+    def test_apply_edit_emits_status_then_data_on_flip(self):
+        """状态翻转：先 taskStatusChanged 再 taskDataChanged"""
+        qs = QueueState()
+        t = make_incomplete_task(danmaku_count=1)
+        qs.add_task(t)
+        events: list[str] = []
+        qs.taskStatusChanged.connect(lambda tid, s: events.append("status"))
+        qs.taskDataChanged.connect(lambda tid: events.append("data"))
+        draft = qs.get_task_by_id(t.task_id).to_draft()
+        draft.target = VideoTarget(bvid="BV1xx411c7mD", cid=1001, title="我的视频")
+        qs.apply_edit(t.task_id, draft)
+        assert events == ["status", "data"]
+
+    def test_apply_edit_emits_data_only_without_flip(self):
+        qs = QueueState()
+        t = make_incomplete_task(danmaku_count=1)
+        qs.add_task(t)
+        events: list[str] = []
+        qs.taskStatusChanged.connect(lambda tid, s: events.append("status"))
+        qs.taskDataChanged.connect(lambda tid: events.append("data"))
+        draft = qs.get_task_by_id(t.task_id).to_draft()
+        draft.p_title = "改个标题"
+        qs.apply_edit(t.task_id, draft)
+        assert events == ["data"]
+
+    def test_sendable_danmaku_count_excludes_unconfigured(self):
+        """未配置任务的弹幕不进发送进度分母"""
+        qs = QueueState()
+        ready = make_task(1)
+        ready.danmakus = [Danmaku(msg="a", progress=0), Danmaku(msg="b", progress=1)]
+        ready.total = 2
+        qs.add_task(ready)
+        qs.add_task(make_incomplete_task(danmaku_count=5))
+        assert qs.total_danmaku_count == 7
+        assert qs.sendable_danmaku_count == 2
+
+    def test_sendable_danmaku_count_excludes_skipped_incomplete(self):
+        """被跳过的残缺任务同样不进分母：状态翻走了，弹幕照样发不出去"""
+        qs = QueueState()
+        ready = make_task(1)
+        qs.add_task(ready)
+        skipped_incomplete = make_incomplete_task(danmaku_count=5, status=TaskStatus.SKIPPED)
+        qs.add_task(skipped_incomplete)
+        assert qs.get_task_by_id(skipped_incomplete.task_id).status is TaskStatus.SKIPPED
+        assert qs.sendable_danmaku_count == 1
+
+    def test_add_task_never_leaves_incomplete_pending(self):
+        """入队时按配置完整性对齐状态，不信任草稿自带的 status"""
+        qs = QueueState()
+        lying = make_task(1, TaskStatus.PENDING, danmaku_count=0)
+        qs.add_task(lying)
+        assert qs.get_task_by_id(lying.task_id).status is TaskStatus.UNCONFIGURED
+
+    def test_add_task_promotes_complete_draft(self):
+        """配置齐备的草稿即便标着未配置，入队即转待发"""
+        qs = QueueState()
+        stale = make_task(1, TaskStatus.UNCONFIGURED)
+        qs.add_task(stale)
+        assert qs.get_task_by_id(stale.task_id).status is TaskStatus.PENDING
 
     def test_startable_covers_paused(self):
         """PAUSED 属于可启动范围：start_queue 会先把残留运行态转回 PENDING"""
@@ -416,6 +587,10 @@ class TestQueueState:
     def test_startable_ignores_terminal_states(self):
         """终态与未配置都不构成可启动的任务"""
         qs = QueueState()
-        for status in (TaskStatus.COMPLETED, TaskStatus.FAILED, TaskStatus.SKIPPED, TaskStatus.UNCONFIGURED):
+        for status in (TaskStatus.COMPLETED, TaskStatus.FAILED):
             qs.add_task(make_task(1, status))
+        # SKIPPED / UNCONFIGURED 要留在原状态，得是缺配置的——
+        # 配置齐备的会在入队时被纠回待发
+        for status in (TaskStatus.SKIPPED, TaskStatus.UNCONFIGURED):
+            qs.add_task(make_task(1, status, danmaku_count=0))
         assert qs.has_startable_tasks is False

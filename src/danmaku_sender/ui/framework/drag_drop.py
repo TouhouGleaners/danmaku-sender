@@ -52,15 +52,15 @@ class DropOverlay(QWidget):
         self._icon_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
         layout.addWidget(self._icon_label)
 
-        title_label = QLabel(title)
-        title_label.setObjectName("dropOverlayTitle")
-        title_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        layout.addWidget(title_label)
+        self._title_label = QLabel(title)
+        self._title_label.setObjectName("dropOverlayTitle")
+        self._title_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        layout.addWidget(self._title_label)
 
-        hint_label = QLabel(hint)
-        hint_label.setObjectName("dropOverlayHint")
-        hint_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        layout.addWidget(hint_label)
+        self._hint_label = QLabel(hint)
+        self._hint_label.setObjectName("dropOverlayHint")
+        self._hint_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        layout.addWidget(self._hint_label)
 
         # QWidget 子类不绘制 QSS 背景，需显式声明
         self.setAttribute(Qt.WidgetAttribute.WA_StyledBackground, True)
@@ -68,6 +68,16 @@ class DropOverlay(QWidget):
         self.setAttribute(Qt.WidgetAttribute.WA_TransparentForMouseEvents, True)
         self.hide()
         parent.installEventFilter(self)
+
+    def set_message(self, title: str, hint: str) -> None:
+        """改写提示文案，供拖拽过程中按落点切换说法。
+
+        Args:
+            title: 主提示文字。
+            hint: 副提示文字。
+        """
+        self._title_label.setText(title)
+        self._hint_label.setText(hint)
 
     def show_overlay(self) -> None:
         """铺满目标控件并显示，保证盖在其内容之上。

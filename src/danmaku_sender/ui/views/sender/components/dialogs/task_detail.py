@@ -25,7 +25,7 @@ from danmaku_sender.config import SenderConfig
 from danmaku_sender.controller.video_controller import VideoController
 from danmaku_sender.service.danmaku_parser import DanmakuParser
 from danmaku_sender.types.models.common import VideoTarget
-from danmaku_sender.types.models.queue import TaskStatus, TaskView
+from danmaku_sender.types.models.queue import TaskView
 from danmaku_sender.types.models.video import VideoInfo
 from danmaku_sender.ui.framework.form_binder import DraftFormBinder
 from danmaku_sender.utils.string_utils import parse_bilibili_link
@@ -145,15 +145,27 @@ class TaskDetailDialog(QDialog):
         detail_form = QFormLayout(detail_group)
 
         task = self.origin
-        url = f"https://www.bilibili.com/video/{task.target.bvid}"
-        if task.p_index > 0:
-            url += f"?p={task.p_index}"
+        target_assigned = task.target.is_assigned
+        if target_assigned:
+            url = f"https://www.bilibili.com/video/{task.target.bvid}"
+            if task.p_index > 0:
+                url += f"?p={task.p_index}"
+            title_text = task.target.title or task.target.bvid
+            bvid_text = task.target.bvid
+            part_text = f"P{task.p_index} - {task.p_title}" if task.p_title else f"P{task.p_index}"
+            cid_text = str(task.target.cid)
+        else:
+            url = "—"
+            title_text = "未指定视频目标"
+            bvid_text = "—"
+            part_text = "—"
+            cid_text = "—"
 
         detail_form.addRow("任务ID:", QLabel(task.task_id))
-        self._detail_title = QLabel(task.target.title or task.target.bvid)
-        self._detail_bvid = QLabel(task.target.bvid)
-        self._detail_part = QLabel(f"P{task.p_index} - {task.p_title}" if task.p_title else f"P{task.p_index}")
-        self._detail_cid = QLabel(str(task.target.cid))
+        self._detail_title = QLabel(title_text)
+        self._detail_bvid = QLabel(bvid_text)
+        self._detail_part = QLabel(part_text)
+        self._detail_cid = QLabel(cid_text)
         self._detail_url = QLabel(url)
         detail_form.addRow("视频:", self._detail_title)
         detail_form.addRow("BVID:", self._detail_bvid)
@@ -164,6 +176,9 @@ class TaskDetailDialog(QDialog):
         detail_form.addRow("进度:", QLabel(f"{task.attempted}/{task.total}"))
         self._detail_dm_count = QLabel(str(len(task.danmakus)))
         detail_form.addRow("弹幕数:", self._detail_dm_count)
+        missing_text = task.missing_config_text
+        if missing_text:
+            detail_form.addRow("待补配置:", QLabel(missing_text))
         if task.error_msg:
             detail_form.addRow("错误:", QLabel(task.error_msg))
 
@@ -296,7 +311,9 @@ class TaskDetailDialog(QDialog):
     def _on_save(self):
         """保存编辑结果
 
-        流程: 读取控件值到 editing → 整体校验 → 通过后交调用方写回队列
+        流程: 读取控件值到 editing → 校验发送配置 → 交调用方写回队列。
+        弹幕或视频目标没补齐**也允许保存**——不完整是状态不是错误，
+        齐备与否由 QueueState 按配置完整性对齐状态。
         """
         self._apply_target_changes()
         self._apply_danmaku_changes()
@@ -312,13 +329,7 @@ class TaskDetailDialog(QDialog):
                 QMessageBox.warning(self, "配置错误", rest[0])
             return
 
-        # 验证任务数据
-        error = self.editing.validate()
-        if error:
-            QMessageBox.warning(self, "任务错误", error)
-            return
-
-        # 全部验证通过，由调用方通过 QueueState 应用修改
+        # 由调用方通过 QueueState 应用修改
         self.accept()
 
     def _apply_target_changes(self):
@@ -338,6 +349,9 @@ class TaskDetailDialog(QDialog):
         )
         self.editing.p_index = part.page
         self.editing.p_title = part.title
+        # 时长是弹幕时间越界校验的依据；先拖 XML 后补目标的任务全靠这里补上，
+        # 否则 duration_ms 停在 0，编辑器的时间检查会被静默跳过
+        self.editing.duration_ms = part.duration * 1000
 
     def _apply_danmaku_changes(self):
         """应用弹幕文件变更（如果有新选择）"""
@@ -353,8 +367,6 @@ class TaskDetailDialog(QDialog):
             self.editing.danmakus = danmakus
             self.editing.total = len(danmakus)
             self.editing.xml_path = self._selected_file
-            if self.editing.status == TaskStatus.UNCONFIGURED:
-                self.editing.status = TaskStatus.PENDING
         except Exception as e:
             logger.error(f"弹幕文件解析失败: {e}")
 

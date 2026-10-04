@@ -161,8 +161,10 @@ class QueueTableModel(QAbstractTableModel):
             case QueueCol.INDEX:
                 return str(row + 1)
             case QueueCol.TITLE:
-                return task.target.title or task.target.bvid
+                return task.target.display_string
             case QueueCol.PART:
+                if not task.target.is_assigned:
+                    return "—"
                 if task.p_title:
                     return f"P{task.p_index} - {task.p_title}"
                 return f"P{task.p_index}"
@@ -186,8 +188,12 @@ class QueueTableModel(QAbstractTableModel):
         return None
 
     def _get_tooltip(self, task: TaskView, col: int):
-        if col == QueueCol.STATUS and task.error_msg:
+        if col != QueueCol.STATUS:
+            return None
+        if task.error_msg:
             return task.error_msg
+        if task.status is TaskStatus.UNCONFIGURED:
+            return task.missing_config_text
         return None
 
 

@@ -13,15 +13,28 @@ class DanmakuStatus(IntEnum):
 
 @dataclass(frozen=True)
 class VideoTarget:
-    """封装发送目标BVID和CID的视频信息（不可变）"""
+    """封装发送目标BVID和CID的视频信息（不可变）。
+
+    缺席的目标用空值表示（见 :meth:`unset`），不必引入 Optional。
+    """
     bvid: str
     cid: int
     title: str = ""
 
+    @classmethod
+    def unset(cls) -> "VideoTarget":
+        """尚未指定视频目标的空哨兵（拖入 XML 建任务的初始态）。"""
+        return cls(bvid="", cid=0, title="")
+
+    @property
+    def is_assigned(self) -> bool:
+        """是否已指定有效目标：BVID 与分P 都在才算。"""
+        return bool(self.bvid) and self.cid > 0
+
     @property
     def display_string(self) -> str:
-        """日志显示：如果有标题显示标题，没标题显示 BVID。"""
-        return self.title if self.title else self.bvid
+        """日志显示：有标题显示标题，没标题显示 BVID，都没有则标注未指定。"""
+        return self.title or self.bvid or "未指定视频目标"
 
 
 class MonitorStats(TypedDict):
