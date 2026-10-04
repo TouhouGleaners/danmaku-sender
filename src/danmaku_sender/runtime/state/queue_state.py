@@ -108,15 +108,14 @@ class QueueState(QObject):
 
     @property
     def sendable_danmaku_count(self) -> int:
-        """可发送弹幕总数（不含未配置的任务）。
+        """可发送弹幕总数（不含配置未完成的任务）。
 
-        未配置的任务可能拖入过弹幕但没定视频目标，那部分永远不会发，
-        不能进发送进度的分母。
+        配置不完整的任务——无论此刻是 UNCONFIGURED 还是已被跳过
+        ——都永远不会发，不能进发送进度的分母。
+        判据取配置完整性而非运行时状态：
+        被跳过的残缺任务状态已经变了，但照样发不出去。
         """
-        return sum(
-            r.spec.total for r in self._records
-            if r.runtime.status is not TaskStatus.UNCONFIGURED
-        )
+        return sum(r.spec.total for r in self._records if r.spec.is_config_complete)
 
     @property
     def processed_danmaku_count(self) -> int:
@@ -160,9 +159,11 @@ class QueueState(QObject):
     def add_task(self, task: QueueTask):
         """添加任务到队列末尾（入队瞬间拆成 Spec + Runtime）。
 
-        新建任务的状态由 ``QueueTask.initial_status`` 决定，此处不代为改写。
+        入队时按配置完整性对齐状态，
+        不信任草稿自带的 status——配置残缺的任务不可能以待发进队。
         """
         record = self._to_record(task)
+        self._reconcile_config_status(record)
         self._records.append(record)
         self.tasksChanged.emit()
         logger.info(
@@ -179,9 +180,10 @@ class QueueState(QObject):
         """在参考任务上方/下方插入；参考不存在时追加到末尾。
 
         这是队列插入的唯一公开入口，调用方不接触绝对下标。
-        新建任务的状态由 ``QueueTask.initial_status`` 决定，此处不代为改写。
+        入队时按配置完整性对齐状态，不信任草稿自带的 status。
         """
         record = self._to_record(task)
+        self._reconcile_config_status(record)
         ref_index = -1
         for i, r in enumerate(self._records):
             if r.spec.task_id == ref_task_id:
