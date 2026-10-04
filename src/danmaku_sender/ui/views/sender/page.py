@@ -43,9 +43,10 @@ from danmaku_sender.runtime.infra.platform import send_windows_notification
 from danmaku_sender.runtime.state.app_state import AppState
 from danmaku_sender.service.danmaku_parser import DanmakuParser
 from danmaku_sender.service.sender import SendingContext
-from danmaku_sender.types.models.common import UnsentDanmakusRecord
-from danmaku_sender.types.models.queue import InsertPosition, TaskStatus, TaskView
-from danmaku_sender.ui.framework.drag_drop import xml_files_from_drop
+from danmaku_sender.types.models.common import UnsentDanmakusRecord, VideoTarget
+from danmaku_sender.types.models.danmaku import Danmaku
+from danmaku_sender.types.models.queue import InsertPosition, QueueTask, TaskStatus, TaskView
+from danmaku_sender.ui.framework.drag_drop import DropOverlay, xml_files_from_drop
 from danmaku_sender.ui.framework.empty_state import EmptyStateHint
 from danmaku_sender.ui.framework.icons import SvgIcon
 from danmaku_sender.ui.views.editor import EditorDialog
@@ -130,6 +131,8 @@ class SenderPage(QWidget):
         self._queue_table.setAcceptDrops(True)
         self._queue_table.setStyleSheet("QTableView::item:selected { background: #3daee9; color: white; }")
         self._queue_table.installEventFilter(self)
+        # InternalMove 会把 acceptDrops 开到 viewport，拖拽事件可能落在任一对象上
+        self._queue_table.viewport().installEventFilter(self)
 
         # 双击查看详情
         self._queue_table.doubleClicked.connect(self._on_queue_double_clicked)
@@ -178,8 +181,13 @@ class SenderPage(QWidget):
         self._empty_hint = EmptyStateHint(
             self._queue_table,
             title="队列为空",
-            description="点击下方按钮新建任务",
+            description="点击下方按钮新建任务，或拖入 XML 文件创建任务",
             action=action_btn,
+        )
+        self._drop_overlay = DropOverlay(
+            self._queue_table,
+            title="松开以新建任务",
+            hint="",
         )
 
         main_layout.addWidget(queue_group)
@@ -454,7 +462,7 @@ class SenderPage(QWidget):
 
         self._unsent_by_task.clear()
         self._btn_export_unsent.setEnabled(False)
-        self._queue_total_dm = self.state.queue_state.total_danmaku_count
+        self._queue_total_dm = self.state.queue_state.sendable_danmaku_count
         if not self.sender_controller.start_queue(auth_config):
             self.logger.warning("队列发送未能启动")
             return
@@ -520,18 +528,48 @@ class SenderPage(QWidget):
 
     def eventFilter(self, obj, event: QDragEnterEvent | QDragMoveEvent | QDropEvent) -> bool:
         """处理拖放到队列表格上的外部 XML 文件"""
-        if obj is not self._queue_table:
+        if obj is not self._queue_table and obj is not self._queue_table.viewport():
             return super().eventFilter(obj, event)
 
         match event.type():
             case QEvent.Type.DragEnter:
                 return self._on_table_drag_enter(event)
             case QEvent.Type.DragMove:
-                return self._on_table_drag_move(event)
+                return self._on_table_drag_move(obj, event)
+            case QEvent.Type.DragLeave:
+                self._drop_overlay.hide()
+                return False
             case QEvent.Type.Drop:
-                return self._on_table_drop(event)
+                self._drop_overlay.hide()
+                return self._on_table_drop(obj, event)
 
         return super().eventFilter(obj, event)
+
+    def _drop_viewport_pos(
+        self,
+        receiver: QWidget,
+        event: QDragEnterEvent | QDragMoveEvent | QDropEvent,
+    ) -> QPoint:
+        """把拖拽事件坐标换算到表格可视区坐标。
+
+        拖拽事件的 position() 是相对接收者的（表格或其可视区），
+        由 setDragDropMode(InternalMove) 决定落在哪个对象上，故按接收者映射。
+        """
+        return self._queue_table.viewport().mapFrom(receiver, event.position().toPoint())
+
+    def _drop_hit_task(self, receiver: QWidget, event) -> tuple[int, TaskView] | None:
+        """命中行上的任务，返回 (行号, 任务)；空白处或表头返回 None。
+
+        表头是「新建」的指定落点：行把可视区填满时没有空白可用，
+        表头自己不开 acceptDrops，事件由表格代收，坐标落在可视区之外故命中不到行。
+        """
+        index = self._queue_table.indexAt(self._drop_viewport_pos(receiver, event))
+        if not index.isValid():
+            return None
+        task = self._queue_model.get_task_at(index.row())
+        if task is not None:
+            return index.row(), task
+        return None
 
     def _on_table_drag_enter(self, event: QDragEnterEvent | QDragMoveEvent | QDropEvent) -> bool:
         if self.state.sender_is_active:
@@ -543,43 +581,64 @@ class SenderPage(QWidget):
 
         return False
 
-    def _on_table_drag_move(self, event: QDragEnterEvent | QDragMoveEvent | QDropEvent) -> bool:
+    def _on_table_drag_move(
+        self,
+        receiver: QWidget,
+        event: QDragEnterEvent | QDragMoveEvent | QDropEvent,
+    ) -> bool:
         if self.state.sender_is_active or not xml_files_from_drop(event):
             return False
 
-        viewport_pos = self._queue_table.viewport().mapFrom(self._queue_table, event.pos())
-        index = self._queue_table.indexAt(viewport_pos)
-        task = self._queue_model.get_task_at(index.row()) if index.isValid() else None
-
-        if task and task.status.is_editable:
-            self._queue_table.selectRow(index.row())
-            event.acceptProposedAction()
+        hit = self._drop_hit_task(receiver, event)
+        if hit is not None:
+            row, task = hit
+            if not task.status.is_editable:
+                # 指到不可编辑的行上：不响应，也不退回新建
+                self._queue_table.clearSelection()
+                self._drop_overlay.hide()
+                event.ignore()
+                return True
+            self._queue_table.selectRow(row)
+            self._drop_overlay.set_message(
+                "松开以重新分配弹幕",
+                "将替换该任务的弹幕内容；拖到空白处或表头则新建任务",
+            )
         else:
             self._queue_table.clearSelection()
-            event.ignore()
-
+            self._drop_overlay.set_message(
+                "松开以新建任务",
+                "拖到空白处或表头新建任务；拖到任务行则重新分配弹幕",
+            )
+        self._drop_overlay.show_overlay()
+        event.acceptProposedAction()
         return True
 
-    def _on_table_drop(self, event: QDragEnterEvent | QDragMoveEvent | QDropEvent) -> bool:
+    def _on_table_drop(
+        self,
+        receiver: QWidget,
+        event: QDragEnterEvent | QDragMoveEvent | QDropEvent,
+    ) -> bool:
         self._queue_table.clearSelection()
         self._queue_table.unsetCursor()
         xml_files = xml_files_from_drop(event)
         if not xml_files:
             return False
 
-        viewport_pos = self._queue_table.viewport().mapFrom(self._queue_table, event.pos())
-        index = self._queue_table.indexAt(viewport_pos)
-        task = self._queue_model.get_task_at(index.row()) if index.isValid() else None
+        hit = self._drop_hit_task(receiver, event)
+        if hit is not None:
+            row, task = hit
+            if not task.status.is_editable:
+                return False
+            if len(xml_files) == 1:
+                self._assign_file_to_task(task, xml_files[0])
+            else:
+                self._assign_files_to_pending(xml_files, row)
+            event.accept()
+            return True
 
-        if not task or not task.status.is_editable:
-            return False
-
-        if len(xml_files) == 1:
-            self._assign_file_to_task(task, xml_files[0])
-        else:
-            self._assign_files_to_pending(xml_files, index.row())
+        # 空白处或表头：每个 XML 建一条未指定视频目标的任务
+        self._create_tasks_from_files(xml_files)
         event.accept()
-
         return True
 
     def _assign_files_to_pending(self, file_paths: list[str], start_row: int = 0):
@@ -594,17 +653,51 @@ class SenderPage(QWidget):
                 break
             self._assign_file_to_task(pending_from_start[i], file_path)
 
-    def _assign_file_to_task(self, task: TaskView, file_path: str):
-        """解析 XML 并通过 QueueState 分配弹幕给指定任务"""
+    def _parse_xml_file(self, file_path: str) -> list[Danmaku] | None:
+        """解析弹幕 XML；失败或结果为空返回 None 并记日志。"""
         parser = DanmakuParser()
         try:
             danmakus = parser.parse_xml_file(file_path)
         except Exception as e:
             self.logger.error(f"弹幕文件解析失败: {e}")
-            return
+            return None
 
         if not danmakus:
             self.logger.warning("弹幕文件为空。")
+            return None
+
+        return danmakus
+
+    def _create_tasks_from_files(self, file_paths: list[str]) -> int:
+        """空队列拖入 XML：每个文件建一条未指定视频目标的任务。
+
+        解析失败或弹幕为空的文件不建任务（弹幕和目标都缺的任务是纯垃圾），
+        记日志后继续处理其余文件。返回实际建出的任务数。
+        """
+        created = 0
+        for file_path in file_paths:
+            danmakus = self._parse_xml_file(file_path)
+            if danmakus is None:
+                continue
+
+            task = QueueTask(
+                target=VideoTarget.unset(),
+                danmakus=danmakus,
+                config_snapshot=self.state.sender_config.to_task_config(),
+                xml_path=file_path,
+            )
+            task.status = task.initial_status
+            self.state.queue_state.add_task(task)
+            created += 1
+
+        if created:
+            self.logger.info(f"已从 XML 创建 {created} 个任务，请补上视频目标后发送")
+        return created
+
+    def _assign_file_to_task(self, task: TaskView, file_path: str):
+        """解析 XML 并通过 QueueState 分配弹幕给指定任务"""
+        danmakus = self._parse_xml_file(file_path)
+        if danmakus is None:
             return
 
         self.state.queue_state.assign_danmakus(task.task_id, danmakus, xml_path=file_path)
