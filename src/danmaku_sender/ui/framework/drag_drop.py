@@ -1,5 +1,7 @@
 """拖放事件的文件提取与拖放覆盖层"""
 
+from pathlib import Path
+
 from PySide6.QtCore import QEvent, QObject, Qt
 from PySide6.QtGui import QDropEvent
 from PySide6.QtWidgets import QLabel, QVBoxLayout, QWidget
@@ -7,17 +9,17 @@ from PySide6.QtWidgets import QLabel, QVBoxLayout, QWidget
 from .icons import SvgIcon
 
 
-def xml_files_from_drop(event: QDropEvent) -> list[str]:
+def xml_files_from_drop(event: QDropEvent) -> list[Path]:
     """从拖放事件中提取本地 XML 文件路径。
 
     Args:
         event: 拖放相关事件，含 QDragEnterEvent 与 QDragMoveEvent。
 
     Returns:
-        list[str]: 命中的 XML 文件路径，顺序与事件给出的一致。
+        list[Path]: 命中的 XML 文件路径，顺序与事件给出的一致。
     """
     return [
-        url.toLocalFile()
+        Path(url.toLocalFile())
         for url in event.mimeData().urls()
         if url.isLocalFile() and url.toLocalFile().lower().endswith(".xml")
     ]

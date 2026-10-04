@@ -1,5 +1,6 @@
 """拖放事件的 XML 文件提取与拖放覆盖层测试。"""
 import re
+from pathlib import Path
 
 import pytest
 from PySide6.QtCore import QMimeData, QPointF, Qt, QUrl
@@ -39,7 +40,7 @@ class TestXmlFilesFromDrop:
         src = ["/tmp/a.xml", "/tmp/b.XML"]
         mime = _mime([QUrl.fromLocalFile(p) for p in src])
         # 路径形态随平台而异，期望值同样经 toLocalFile() 换算
-        expected = [QUrl.fromLocalFile(p).toLocalFile() for p in src]
+        expected = [Path(QUrl.fromLocalFile(p).toLocalFile()) for p in src]
         assert xml_files_from_drop(_make_drop(mime)) == expected
 
     def test_drops_non_xml_and_remote(self, qapp):
@@ -48,7 +49,7 @@ class TestXmlFilesFromDrop:
             QUrl.fromLocalFile("/tmp/a.txt"),
             QUrl.fromLocalFile("/tmp/b.xml"),
         ])
-        expected = QUrl.fromLocalFile("/tmp/b.xml").toLocalFile()
+        expected = Path(QUrl.fromLocalFile("/tmp/b.xml").toLocalFile())
         assert xml_files_from_drop(_make_drop(mime)) == [expected]
 
     def test_empty_result(self, qapp):

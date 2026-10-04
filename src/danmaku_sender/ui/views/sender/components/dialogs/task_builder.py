@@ -1,3 +1,5 @@
+from pathlib import Path
+
 from PySide6.QtCore import Slot
 from PySide6.QtWidgets import (
     QComboBox,
@@ -40,7 +42,7 @@ class TaskBuilderDialog(QDialog):
         self.state = state
         self.video_controller = VideoController(self)
         self._video_info: VideoInfo | None = None
-        self._selected_files: list[str] = []
+        self._selected_files: list[Path] = []
         self._pending_part_page: int | None = None
         self._ref_task_id = ref_task_id
         self._insert_position = insert_position
@@ -173,7 +175,7 @@ class TaskBuilderDialog(QDialog):
             self, "选择弹幕XML文件", "", "XML Files (*.xml)"
         )
         if files:
-            self._selected_files = files
+            self._selected_files = [Path(f) for f in files]
             if len(files) == 1:
                 self._file_input.setText(files[0].split("/")[-1].split("\\")[-1])
             else:
@@ -215,7 +217,7 @@ class TaskBuilderDialog(QDialog):
 
         # 解析弹幕文件（如果选了的话）
         danmakus = []
-        xml_path = ""
+        xml_path: Path | None = None
         if self._selected_files:
             parser = DanmakuXml
             file_idx = min(self._part_combo.currentIndex(), len(self._selected_files) - 1)

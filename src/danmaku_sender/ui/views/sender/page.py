@@ -391,7 +391,7 @@ class SenderPage(QWidget):
         if not path:
             return
 
-        self._write_unsent([(path, unsent)])
+        self._write_unsent([(Path(path), unsent)])
 
     @Slot()
     def _export_all_unsent(self):
@@ -400,17 +400,18 @@ class SenderPage(QWidget):
         if not directory:
             return
 
-        jobs: list[tuple[str, TaskUnsent]] = []
+        base = Path(directory)
+        jobs: list[tuple[Path, TaskUnsent]] = []
         used: set[str] = set()
         for unsent in self._unsent_by_task.values():
             name = f"{safe_filename(unsent.label)}_Unsent.xml"
             if name in used:
                 name = f"{name[:-4]}_{len(used) + 1}.xml"
             used.add(name)
-            jobs.append((str(Path(directory) / name), unsent))
+            jobs.append((base / name, unsent))
         self._write_unsent(jobs)
 
-    def _write_unsent(self, jobs: list[tuple[str, TaskUnsent]]):
+    def _write_unsent(self, jobs: list[tuple[Path, TaskUnsent]]):
         for path, unsent in jobs:
             count = len(unsent.records)
             self.sender_controller.export_unsent_xml(
@@ -420,9 +421,9 @@ class SenderPage(QWidget):
                 lambda err, p=path: self._on_export_failed(p, err),
             )
 
-    def _on_export_failed(self, path: str, error: str):
+    def _on_export_failed(self, path: Path, error: str):
         self.logger.error(f"导出失败 {path}: {error}")
-        QMessageBox.warning(self, "导出失败", f"{Path(path).name}：{error}")
+        QMessageBox.warning(self, "导出失败", f"{path.name}：{error}")
 
     # endregion
 
@@ -640,7 +641,7 @@ class SenderPage(QWidget):
         event.accept()
         return True
 
-    def _assign_files_to_pending(self, file_paths: list[str], start_row: int = 0):
+    def _assign_files_to_pending(self, file_paths: list[Path], start_row: int = 0):
         """将多个 XML 文件从指定行开始按顺序分配给可配置的任务"""
         tasks = self.state.queue_state.tasks
         pending_from_start = [
@@ -652,7 +653,7 @@ class SenderPage(QWidget):
                 break
             self._assign_file_to_task(pending_from_start[i], file_path)
 
-    def _create_tasks_from_files(self, file_paths: list[str]) -> int:
+    def _create_tasks_from_files(self, file_paths: list[Path]) -> int:
         """为每个 XML 文件建一条未指定视频目标的任务。
 
         解析失败或文件中没有弹幕的不建任务。返回建出的任务数。
@@ -670,7 +671,7 @@ class SenderPage(QWidget):
             self.logger.info(f"已从 XML 创建 {created} 个任务，请补上视频目标后发送")
         return created
 
-    def _assign_file_to_task(self, task: TaskView, file_path: str):
+    def _assign_file_to_task(self, task: TaskView, file_path: Path):
         """将 XML 文件中的弹幕分配给指定任务。
 
         解析失败或文件中没有弹幕时不动任务。
@@ -738,8 +739,8 @@ class SenderPage(QWidget):
     @staticmethod
     def _unsent_label(task: TaskView | None) -> str:
         """导出文件名的主体：优先用导入的 XML 文件名，其次视频标题"""
-        if task and task.xml_path:
-            return Path(task.xml_path).stem
+        if task and task.xml_path is not None:
+            return task.xml_path.stem
         return task.target.display_string if task else ""
 
     @Slot(str, str)
