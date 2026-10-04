@@ -11,7 +11,7 @@ from danmaku_sender.config import ApiAuthConfig
 from danmaku_sender.controller.concurrency import PoolTask
 from danmaku_sender.repo.history_manager import HistoryManager
 from danmaku_sender.runtime.state.app_state import AppState
-from danmaku_sender.service.danmaku_exporter import create_xml_from_danmakus
+from danmaku_sender.service.danmaku_xml import DanmakuXml
 from danmaku_sender.service.sender.context import SendingContext
 from danmaku_sender.types.models.common import UnsentDanmakusRecord
 from danmaku_sender.types.models.queue import TaskStatus
@@ -201,7 +201,7 @@ class SenderController(QObject):
     ):
         """异步保存未发送弹幕到 XML 文件"""
         PoolTask.submit(
-            create_xml_from_danmakus,
+            DanmakuXml.export_unsent,
             on_success,
             lambda err: on_error(str(err)),
             unsent_danmakus, file_path,

@@ -23,7 +23,7 @@ from PySide6.QtWidgets import (
 
 from danmaku_sender.config import SenderConfig
 from danmaku_sender.controller.video_controller import VideoController
-from danmaku_sender.service.danmaku_parser import DanmakuParser
+from danmaku_sender.service.danmaku_xml import DanmakuXml
 from danmaku_sender.types.models.common import VideoTarget
 from danmaku_sender.types.models.queue import TaskView
 from danmaku_sender.types.models.video import VideoInfo
@@ -275,9 +275,9 @@ class TaskDetailDialog(QDialog):
             self._selected_file = files[0]
             self._file_input.setText(files[0].split("/")[-1].split("\\")[-1])
             # 预览弹幕数量
-            parser = DanmakuParser()
+            parser = DanmakuXml
             try:
-                danmakus = parser.parse_xml_file(files[0])
+                danmakus = parser.parse_file(files[0])
                 self._detail_dm_count.setText(f"{len(danmakus)} (待保存)")
             except Exception:
                 self._detail_dm_count.setText("解析失败")
@@ -354,21 +354,26 @@ class TaskDetailDialog(QDialog):
         self.editing.duration_ms = part.duration * 1000
 
     def _apply_danmaku_changes(self):
-        """应用弹幕文件变更（如果有新选择）"""
+        """将选定的 XML 文件解析进编辑沙盒。
+
+        解析失败或文件中没有弹幕时弹窗报错并放弃这次保存。
+        """
         if not self._selected_file:
             return
 
-        parser = DanmakuParser()
         try:
-            danmakus = parser.parse_xml_file(self._selected_file)
-            if not danmakus:
-                return
-
-            self.editing.danmakus = danmakus
-            self.editing.total = len(danmakus)
-            self.editing.xml_path = self._selected_file
+            danmakus = DanmakuXml.parse_file(self._selected_file)
         except Exception as e:
-            logger.error(f"弹幕文件解析失败: {e}")
+            QMessageBox.warning(self, "解析失败", f"弹幕文件解析失败:\n{e}")
+            return
+
+        if not danmakus:
+            QMessageBox.warning(self, "解析失败", "弹幕文件为空。")
+            return
+
+        self.editing.danmakus = danmakus
+        self.editing.total = len(danmakus)
+        self.editing.xml_path = self._selected_file
 
     # --- 配置编辑 ---
 

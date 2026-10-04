@@ -8,7 +8,7 @@ from danmaku_sender.repo.history_manager import HistoryManager
 from danmaku_sender.types.exceptions.exceptions import BiliApiError, BiliNetworkError
 from danmaku_sender.types.models.common import VerifyResult
 
-from .danmaku_parser import DanmakuParser
+from .danmaku_xml import DanmakuXml
 
 logger = logging.getLogger(__name__)
 
@@ -24,7 +24,6 @@ class DanmakuVerifier:
     def __init__(self, api_client: BiliApiClient, history_manager: HistoryManager):
         self.api_client = api_client
         self.history_manager = history_manager
-        self.parser = DanmakuParser()
 
     def verify_cid(self, cid: int, mark_lost: bool = True) -> VerifyResult:
         """
@@ -44,7 +43,7 @@ class DanmakuVerifier:
         """
         try:
             xml_content = self.api_client.get_danmaku_list_xml(cid)
-            online_dmids = self.parser.parse_online_dmids(xml_content)
+            online_dmids = DanmakuXml.parse_online_dmids(xml_content)
         except (BiliApiError, BiliNetworkError) as e:
             logger.warning(f"[CID:{cid}] 获取在线弹幕失败: {e}")
             raise
@@ -136,7 +135,7 @@ class DanmakuVerifier:
         """
         try:
             xml_content = self.api_client.get_danmaku_list_xml(cid)
-            return self.parser.parse_online_dmids(xml_content)
+            return DanmakuXml.parse_online_dmids(xml_content)
         except (BiliApiError, BiliNetworkError) as e:
             logger.warning(f"[CID:{cid}] 获取在线弹幕失败: {e}")
             raise
