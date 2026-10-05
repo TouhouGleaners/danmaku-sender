@@ -82,6 +82,8 @@ class DanmakuXml:
             danmakus = DanmakuXml.parse_file(xml_path)
         except FileNotFoundError:
             raise FileNotFoundError("文件不存在") from None
+        except UnicodeDecodeError as e:
+            raise ValueError("文件编码无法解析") from e
         except ValueError as e:
             raise ValueError("XML 解析失败") from e
         except Exception as e:
