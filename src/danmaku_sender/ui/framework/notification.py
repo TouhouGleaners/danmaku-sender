@@ -314,7 +314,7 @@ class _NotificationCard(QFrame):
             )
 
         message_width = (
-            self.WIDTH
+            self.width()
             - 2  # 卡片边框
             - self.BODY_MARGIN_LEFT
             - self.BODY_MARGIN_RIGHT
@@ -485,10 +485,16 @@ class NotificationHost(QWidget):
         self._reflow()
 
     def _trim_to_fit(self) -> None:
-        """丢弃最旧的卡片，直到整堆能装进父控件的可用高度。"""
+        """把卡片堆调整到父控件的可用范围内：缩宽、丢最旧的、必要时压高。"""
         parent = self.parentWidget()
         if parent is None:
             return
+
+        width = self._available_width(parent)
+        for card in self._cards:
+            card.setFixedWidth(width)
+            card._fit_text()
+
         max_height = parent.height() - self.ACTION_BAR_CLEARANCE - 2 * self.MARGIN
         while len(self._cards) > 1:
             stack = sum(c.height() for c in self._cards) + self.SPACING * (len(self._cards) - 1)
@@ -496,6 +502,14 @@ class NotificationHost(QWidget):
                 break
             oldest = self._cards.pop(0)
             oldest.deleteLater()
+
+        # 单张卡仍超高时压到可用高度，全文留在 tooltip
+        if len(self._cards) == 1 and self._cards[0].height() > max_height:
+            self._cards[0].setFixedHeight(max(0, max_height))
+
+    def _available_width(self, parent: QWidget) -> int:
+        """卡片在父控件内可用的宽度。"""
+        return max(0, min(_NotificationCard.WIDTH, parent.width() - 2 * self.MARGIN))
 
     def eventFilter(self, watched: QObject, event: QEvent) -> bool:
         """父控件尺寸变化时重新定位。
@@ -517,13 +531,11 @@ class NotificationHost(QWidget):
         if parent is None or not self.isVisible() or not self._cards:
             return
 
+        width = self._available_width(parent)
         height = sum(c.height() for c in self._cards)
         height += self.SPACING * (len(self._cards) - 1)
-        max_height = parent.height() - self.ACTION_BAR_CLEARANCE - 2 * self.MARGIN
-        height = min(height, max(0, max_height))
-        self.setGeometry(
-            parent.width() - _NotificationCard.WIDTH - self.MARGIN,
-            parent.height() - height - self.ACTION_BAR_CLEARANCE - self.MARGIN,
-            _NotificationCard.WIDTH,
-            height,
-        )
+
+        # 不越过父控件左边界与上边界：窄窗口 / 低高度下算出的坐标可能是负的
+        x = max(self.MARGIN, parent.width() - width - self.MARGIN)
+        y = max(0, parent.height() - height - self.ACTION_BAR_CLEARANCE - self.MARGIN)
+        self.setGeometry(x, y, width, height)

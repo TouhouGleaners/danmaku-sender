@@ -152,6 +152,42 @@ class TestNotificationHost:
         expected = sum(c.height() for c in cards) + NotificationHost.SPACING * (len(cards) - 1)
         assert host.height() == expected
 
+    def test_host_stays_inside_narrow_parent(self, qapp):
+        """窄窗口下宿主不许跑到父控件左边界外，卡片跟着缩宽"""
+        window = QWidget()
+        window.resize(300, 600)   # 比卡片还窄
+        window.show()
+        h = Notification.install(window)
+        try:
+            Notification.info(title="窄窗口", message="正文")
+            assert settle(qapp, lambda: len(h.cards) == 1)
+            assert h.x() >= 0
+            assert h.y() >= 0
+            assert h.cards[0].width() < 360
+            assert h.cards[0].width() == h.width()
+        finally:
+            Notification._host = None
+
+    def test_lone_card_capped_to_available_height(self, qapp):
+        """单张卡装不下时压到可用高度，不越出宿主"""
+        window = QWidget()
+        window.resize(800, 120)   # 很矮
+        window.show()
+        h = Notification.install(window)
+        try:
+            Notification.info(title="矮窗口", message="正文" * 30)
+            assert settle(qapp, lambda: len(h.cards) == 1)
+            # 等入场动画（ENTER_MS）落地再查坐标
+            deadline = time.monotonic() + 1.0
+            while time.monotonic() < deadline:
+                qapp.processEvents()
+                time.sleep(0.01)
+            card = h.cards[0]
+            assert card.height() <= h.height()
+            assert card.pos().y() + card.height() <= h.height()
+        finally:
+            Notification._host = None
+
     def test_host_stays_above_action_bar(self, host, qapp):
         Notification.info(title="不要压住底部按钮", message="正文")
         qapp.processEvents()
