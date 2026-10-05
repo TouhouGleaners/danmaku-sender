@@ -22,7 +22,14 @@ from PySide6.QtCore import (
     Qt,
     Signal,
 )
-from PySide6.QtGui import QEnterEvent, QMouseEvent, QPainter, QPainterPath, QPaintEvent
+from PySide6.QtGui import (
+    QColor,
+    QEnterEvent,
+    QMouseEvent,
+    QPainter,
+    QPainterPath,
+    QPaintEvent,
+)
 from PySide6.QtWidgets import (
     QFrame,
     QGraphicsOpacityEffect,
@@ -35,7 +42,6 @@ from PySide6.QtWidgets import (
 )
 
 from .icons import SvgIcon
-from .theme import ThemeService
 
 logger = logging.getLogger(__name__)
 
@@ -56,12 +62,15 @@ class _Level(Enum):
         }[self]
 
     def color(self) -> str:
-        """该级别在当前主题下的十六进制配色。"""
-        palette = ThemeService().current_palette
+        """该级别的语义配色。
+
+        属于设计语言而非主题旋钮，故不进主题 JSON——用户改主题
+        不该能把「错误」改成绿色。
+        """
         return {
-            _Level.INFO: palette.primary,
-            _Level.WARNING: palette.warning,
-            _Level.ERROR: palette.danger,
+            _Level.INFO: "#3498db",
+            _Level.WARNING: "#f39c12",
+            _Level.ERROR: "#e74c3c",
         }[self]
 
 
@@ -136,7 +145,7 @@ class _CountdownBar(QWidget):
     def __init__(self, level: _Level, parent: QWidget | None = None) -> None:
         super().__init__(parent)
         self.setObjectName("notificationCountdown")
-        self.setProperty("level", level.value)
+        self._color = QColor(level.color())
         self._progress = 1.0
         self.setFixedHeight(3)
 
@@ -157,7 +166,7 @@ class _CountdownBar(QWidget):
         painter = QPainter(self)
         painter.setRenderHint(QPainter.RenderHint.Antialiasing)
         painter.setPen(Qt.PenStyle.NoPen)
-        painter.setBrush(self.palette().color(self.foregroundRole()))
+        painter.setBrush(self._color)
         radius = min(self.height() / 2, width / 2)
         path = QPainterPath()
         path.addRoundedRect(0, 0, width, self.height(), radius, radius)

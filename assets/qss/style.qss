@@ -237,12 +237,3 @@ QLabel#notificationMessage {
 QWidget#notificationCountdown {
     border: none;
 }
-QWidget#notificationCountdown[level="info"] {
-    color: {primary};
-}
-QWidget#notificationCountdown[level="warning"] {
-    color: {warning};
-}
-QWidget#notificationCountdown[level="error"] {
-    color: {danger};
-}
