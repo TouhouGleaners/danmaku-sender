@@ -2,7 +2,7 @@
 
 右下角堆叠的轻量提示。
 发送入口是 :class:`Notification` 的类方法；
-宿主由主窗口 :func:`install` 一次，之后任意 UI 代码即可发送。
+宿主由主窗口 :meth:`Notification.install` 一次，之后任意 UI 代码即可发送。
 卡片底部的倒计时条走完自动收起；
 悬停时暂停计时并高亮卡片，点击卡片或关闭按钮立即收起。
 """
@@ -16,6 +16,7 @@ from PySide6.QtCore import (
     QEasingCurve,
     QEvent,
     QObject,
+    QPoint,
     QPropertyAnimation,
     Qt,
     Signal,
@@ -23,27 +24,51 @@ from PySide6.QtCore import (
 from PySide6.QtGui import QEnterEvent, QMouseEvent, QPainter, QPainterPath, QPaintEvent
 from PySide6.QtWidgets import (
     QFrame,
+    QGraphicsOpacityEffect,
     QHBoxLayout,
     QLabel,
-    QPushButton,
     QSizePolicy,
+    QToolButton,
     QVBoxLayout,
     QWidget,
 )
 
 from .icons import SvgIcon
+from .theme import ThemeService
 
 logger = logging.getLogger(__name__)
 
 DEFAULT_TIMEOUT_MS = 5000
+# 进入 / 退出动画时长
+ENTER_MS = 180
+EXIT_MS = 150
+# 进入时卡片上滑的距离
+ENTER_SLIDE_PX = 12
 
 
 class _Level(Enum):
-    """通知级别，决定卡片左侧色条与倒计时条的配色。"""
+    """通知级别，决定图标与配色。"""
 
     INFO = "info"
     WARNING = "warning"
     ERROR = "error"
+
+    def icon(self):
+        """该级别对应的图标。"""
+        return {
+            _Level.INFO: SvgIcon.INFO,
+            _Level.WARNING: SvgIcon.WARNING,
+            _Level.ERROR: SvgIcon.ERROR,
+        }[self]
+
+    def color(self) -> str:
+        """该级别在当前主题下的十六进制配色。"""
+        palette = ThemeService().current_palette
+        return {
+            _Level.INFO: palette.primary,
+            _Level.WARNING: palette.warning,
+            _Level.ERROR: palette.danger,
+        }[self]
 
 
 class Notification:
@@ -153,7 +178,6 @@ class _NotificationCard(QFrame):
     """
 
     WIDTH = 360
-    MIN_HEIGHT = 56
 
     closed = Signal()
 
@@ -168,7 +192,6 @@ class _NotificationCard(QFrame):
         self.setObjectName("notificationCard")
         self.setProperty("level", level.value)
         self.setAttribute(Qt.WidgetAttribute.WA_Hover, True)
-        self.setMinimumHeight(self.MIN_HEIGHT)
         self.setFixedWidth(self.WIDTH)
         # 纵向固定：布局不许拉伸卡片，堆高由宿主按卡片数算
         self.setSizePolicy(QSizePolicy.Policy.Fixed, QSizePolicy.Policy.Fixed)
@@ -180,7 +203,7 @@ class _NotificationCard(QFrame):
         body = QWidget()
         body.setObjectName("notificationBody")
         body_layout = QHBoxLayout(body)
-        body_layout.setContentsMargins(10, 10, 8, 10)
+        body_layout.setContentsMargins(10, 6, 6, 6)
         body_layout.setSpacing(8)
 
         accent = QFrame()
@@ -189,8 +212,12 @@ class _NotificationCard(QFrame):
         accent.setFixedWidth(3)
         body_layout.addWidget(accent)
 
+        icon_label = QLabel()
+        icon_label.setPixmap(level.icon()(color=level.color()).pixmap(16, 16))
+        body_layout.addWidget(icon_label, alignment=Qt.AlignmentFlag.AlignTop)
+
         texts = QVBoxLayout()
-        texts.setSpacing(2)
+        texts.setSpacing(1)
 
         title_row = QHBoxLayout()
         title_row.setSpacing(8)
@@ -198,11 +225,11 @@ class _NotificationCard(QFrame):
         self._title.setObjectName("notificationTitle")
         title_row.addWidget(self._title, stretch=1)
 
-        close_btn = QPushButton()
+        close_btn = QToolButton()
         close_btn.setObjectName("notificationClose")
         close_btn.setIcon(SvgIcon.CLOSE)
-        close_btn.setFixedSize(20, 20)
-        close_btn.setFlat(True)
+        close_btn.setAutoRaise(True)
+        close_btn.setFixedSize(18, 18)
         close_btn.setCursor(Qt.CursorShape.PointingHandCursor)
         close_btn.clicked.connect(self.dismiss)
         title_row.addWidget(close_btn, alignment=Qt.AlignmentFlag.AlignTop)
@@ -219,6 +246,17 @@ class _NotificationCard(QFrame):
 
         self._countdown = _CountdownBar(level)
         layout.addWidget(self._countdown)
+
+        # 高度定死为自身 sizeHint：QSizePolicy.Fixed 与 QLabel 的
+        # heightForWidth 混用时，布局给的高度会小于 sizeHint，
+        # 宿主按卡片高累加就会对不上
+        self.setFixedHeight(self.sizeHint().height())
+
+        self._opacity = QGraphicsOpacityEffect(self)
+        self._opacity.setOpacity(1.0)
+        self.setGraphicsEffect(self._opacity)
+        self._exiting = False
+        self._enter_animation: QPropertyAnimation | None = None
 
         self._animation = QPropertyAnimation(self._countdown, b"progress", self)
         self._animation.setStartValue(1.0)
@@ -241,10 +279,57 @@ class _NotificationCard(QFrame):
         """卡片正文"""
         return self._label.text()
 
+    def play_enter(self, target_pos: QPoint) -> None:
+        """自底部滑入并淡入到指定位置
+
+        Args:
+            target_pos: 卡片在宿主内的最终坐标。
+        """
+        self.move(target_pos + QPoint(0, ENTER_SLIDE_PX))
+        self._opacity.setOpacity(0.0)
+
+        slide = QPropertyAnimation(self, b"pos", self)
+        slide.setStartValue(target_pos + QPoint(0, ENTER_SLIDE_PX))
+        slide.setEndValue(target_pos)
+        slide.setDuration(ENTER_MS)
+        slide.setEasingCurve(QEasingCurve.Type.OutCubic)
+        self._enter_animation = slide
+        slide.finished.connect(self._clear_enter_animation)
+        slide.start(QPropertyAnimation.DeletionPolicy.DeleteWhenStopped)
+
+        fade = QPropertyAnimation(self._opacity, b"opacity", self)
+        fade.setStartValue(0.0)
+        fade.setEndValue(1.0)
+        fade.setDuration(ENTER_MS)
+        fade.start(QPropertyAnimation.DeletionPolicy.DeleteWhenStopped)
+
+    def _clear_enter_animation(self) -> None:
+        self._enter_animation = None
+
+    def snap_to(self, pos: QPoint) -> None:
+        """直接落到指定位置，掐掉进行中的入场动画。
+
+        卡片堆重排后旧的动画目标已失效，放任它跑完会把卡片按回原处、
+        掉出宿主外。
+        """
+        if self._enter_animation is not None:
+            self._enter_animation.stop()
+            self._enter_animation = None
+        self.move(pos)
+
     def dismiss(self) -> None:
-        """立即收起这张卡片"""
+        """淡出后从卡片堆移除"""
+        if self._exiting:
+            return
+        self._exiting = True
         self._animation.stop()
-        self.closed.emit()
+
+        fade = QPropertyAnimation(self._opacity, b"opacity", self)
+        fade.setStartValue(self._opacity.opacity())
+        fade.setEndValue(0.0)
+        fade.setDuration(EXIT_MS)
+        fade.finished.connect(self.closed.emit)
+        fade.start(QPropertyAnimation.DeletionPolicy.DeleteWhenStopped)
 
     def enterEvent(self, event: QEnterEvent) -> None:
         """悬停时暂停倒计时"""
@@ -280,11 +365,9 @@ class NotificationHost(QWidget):
         super().__init__(parent)
         self.setObjectName("notificationHost")
 
+        # 卡片由 _relayout 手动摆位，不交给 QLayout：进出场动画要动卡片坐标，
+        # 和布局抢几何会摆回原点
         self._cards: list[_NotificationCard] = []
-        self._layout = QVBoxLayout(self)
-        self._layout.setContentsMargins(0, 0, 0, 0)
-        self._layout.setSpacing(self.SPACING)
-        self._layout.addStretch()
 
         self.hide()
         parent.installEventFilter(self)
@@ -304,30 +387,46 @@ class NotificationHost(QWidget):
         """在右下角追加一张通知卡片。"""
         card = _NotificationCard(level, title, message, timeout_ms)
         card.closed.connect(lambda c=card: self._remove(c))
+        card.setParent(self)
+        card.show()  # setParent 会把控件隐掉
         self._cards.append(card)
-        self._layout.addWidget(card)
         self._trim()
         self.show()
         self.raise_()
-        self._reflow()
+        self._relayout()
+        card.play_enter(self._card_pos(card))
 
     def _trim(self) -> None:
         """丢弃最旧的卡片，保证堆高不超过可用空间。"""
         while len(self._cards) > self.MAX_CARDS:
-            oldest = self._cards[0]
-            self._cards.pop(0)
-            self._layout.removeWidget(oldest)
+            oldest = self._cards.pop(0)
             oldest.deleteLater()
 
     def _remove(self, card: _NotificationCard) -> None:
         if card not in self._cards:
             return
         self._cards.remove(card)
-        self._layout.removeWidget(card)
         card.deleteLater()
+        self._relayout()
+
+    def _card_pos(self, card: _NotificationCard) -> QPoint:
+        """卡片在宿主内的目标坐标：先加入的在上。"""
+        y = 0
+        for c in self._cards:
+            if c is card:
+                break
+            y += c.height() + self.SPACING
+        return QPoint(0, y)
+
+    def _relayout(self) -> None:
+        """摆好卡片并把宿主贴到父控件右下角、页面操作栏之上。"""
         if not self._cards:
             self.hide()
             return
+        y = 0
+        for card in self._cards:
+            card.snap_to(QPoint(0, y))
+            y += card.height() + self.SPACING
         self._reflow()
 
     def eventFilter(self, watched: QObject, event: QEvent) -> bool:
@@ -350,8 +449,7 @@ class NotificationHost(QWidget):
         if parent is None or not self.isVisible() or not self._cards:
             return
 
-        # 逐张累加而不是读 sizeHint：addWidget 后布局尚未重算，sizeHint 是旧值
-        height = sum(max(c.minimumHeight(), c.sizeHint().height()) for c in self._cards)
+        height = sum(c.height() for c in self._cards)
         height += self.SPACING * (len(self._cards) - 1)
 
         # 堆高不超可用空间，免得卡片被压扁
