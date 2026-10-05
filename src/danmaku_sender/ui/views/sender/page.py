@@ -658,6 +658,8 @@ class SenderPage(QWidget):
         failed = 0
         for i, file_path in enumerate(file_paths):
             if i >= len(pending_from_start):
+                for surplus in file_paths[i:]:
+                    self.logger.warning(f"没有可分配的任务，跳过: {surplus}")
                 failed += len(file_paths) - i
                 break
             if not self._assign_file_to_task(pending_from_start[i], file_path):
