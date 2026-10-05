@@ -48,7 +48,7 @@ from danmaku_sender.types.models.queue import InsertPosition, TaskStatus, TaskVi
 from danmaku_sender.ui.framework.drag_drop import DropOverlay, xml_files_from_drop
 from danmaku_sender.ui.framework.empty_state import EmptyStateHint
 from danmaku_sender.ui.framework.icons import SvgIcon
-from danmaku_sender.ui.framework.notification import notify
+from danmaku_sender.ui.framework.notification import Notification
 from danmaku_sender.ui.views.editor import EditorDialog
 from danmaku_sender.utils.string_utils import safe_filename
 from danmaku_sender.utils.time_utils import format_duration
@@ -674,7 +674,7 @@ class SenderPage(QWidget):
         if created:
             self.logger.info(f"已从 XML 创建 {created} 个任务，请补上视频目标后发送")
         if skipped:
-            notify(f"{skipped} 个文件未能导入，详见日志")
+            Notification.warning(title="导入失败", message=f"{skipped} 个文件未能导入，详见日志")
         return created
 
     def _assign_file_to_task(self, task: TaskView, file_path: Path):

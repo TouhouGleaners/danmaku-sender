@@ -73,6 +73,7 @@ class Palette:
     success: str
     danger: str
     danger_bg: str
+    warning: str
 
     def to_qpalette(self) -> QPalette:
         """映射为 Qt 原生调色板，供未被 QSS 覆盖的控件使用。
@@ -168,6 +169,7 @@ class ThemeService(QObject):
                     "{success}": palette.success,
                     "{danger}": palette.danger,
                     "{danger_bg}": palette.danger_bg,
+                    "{warning}": palette.warning,
                 }.items():
                     css = css.replace(token, color)
                 app.setStyleSheet(css)
