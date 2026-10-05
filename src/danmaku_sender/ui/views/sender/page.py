@@ -631,9 +631,11 @@ class SenderPage(QWidget):
             if not task.status.is_editable:
                 return False
             if len(xml_files) == 1:
-                self._assign_file_to_task(task, xml_files[0])
+                failed = 0 if self._assign_file_to_task(task, xml_files[0]) else 1
             else:
-                self._assign_files_to_pending(xml_files, row)
+                failed = self._assign_files_to_pending(xml_files, row)
+            if failed:
+                Notification.warning(title="导入失败", message=f"{failed} 个文件未能导入，详见日志")
             event.accept()
             return True
 
