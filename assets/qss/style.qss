@@ -225,21 +225,8 @@ QFrame#notificationCard:hover {
     background-color: {bg_hover};
     border-color: {text_secondary};
 }
-QFrame#notificationAccent {
-    border: none;
-    border-radius: 1px;
-}
-QFrame#notificationAccent[level="info"] {
-    background-color: {primary};
-}
-QFrame#notificationAccent[level="warning"] {
-    background-color: {warning};
-}
-QFrame#notificationAccent[level="error"] {
-    background-color: {danger};
-}
 QLabel#notificationTitle {
-    font-size: 12px;
+    font-size: 13px;
     font-weight: bold;
     color: {text_main};
 }

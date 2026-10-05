@@ -18,6 +18,7 @@ from PySide6.QtCore import (
     QObject,
     QPoint,
     QPropertyAnimation,
+    QSize,
     Qt,
     Signal,
 )
@@ -37,13 +38,6 @@ from .icons import SvgIcon
 from .theme import ThemeService
 
 logger = logging.getLogger(__name__)
-
-DEFAULT_TIMEOUT_MS = 5000
-# 进入 / 退出动画时长
-ENTER_MS = 180
-EXIT_MS = 150
-# 进入时卡片上滑的距离
-ENTER_SLIDE_PX = 12
 
 
 class _Level(Enum):
@@ -78,6 +72,8 @@ class Notification:
     :meth:`warning` / :meth:`error` 发送。
     """
 
+    DEFAULT_TIMEOUT_MS = 5000
+
     _host: ClassVar["NotificationHost | None"] = None
 
     @classmethod
@@ -94,7 +90,7 @@ class Notification:
         return cls._host
 
     @classmethod
-    def info(cls, title: str, message: str, timeout_ms: int = DEFAULT_TIMEOUT_MS) -> None:
+    def info(cls, title: str, message: str, timeout_ms: int | None = None) -> None:
         """弹出一条提示。
 
         Args:
@@ -102,10 +98,10 @@ class Notification:
             message: 正文。
             timeout_ms: 自动收起的时长；<= 0 表示不自动收起。
         """
-        cls._push(_Level.INFO, title, message, timeout_ms)
+        cls._push(_Level.INFO, title, message, cls.DEFAULT_TIMEOUT_MS if timeout_ms is None else timeout_ms)
 
     @classmethod
-    def warning(cls, title: str, message: str, timeout_ms: int = DEFAULT_TIMEOUT_MS) -> None:
+    def warning(cls, title: str, message: str, timeout_ms: int | None = None) -> None:
         """弹出一条警告。
 
         Args:
@@ -113,10 +109,10 @@ class Notification:
             message: 正文。
             timeout_ms: 自动收起的时长；<= 0 表示不自动收起。
         """
-        cls._push(_Level.WARNING, title, message, timeout_ms)
+        cls._push(_Level.WARNING, title, message, cls.DEFAULT_TIMEOUT_MS if timeout_ms is None else timeout_ms)
 
     @classmethod
-    def error(cls, title: str, message: str, timeout_ms: int = DEFAULT_TIMEOUT_MS) -> None:
+    def error(cls, title: str, message: str, timeout_ms: int | None = None) -> None:
         """弹出一条错误。
 
         Args:
@@ -124,7 +120,7 @@ class Notification:
             message: 正文。
             timeout_ms: 自动收起的时长；<= 0 表示不自动收起。
         """
-        cls._push(_Level.ERROR, title, message, timeout_ms)
+        cls._push(_Level.ERROR, title, message, cls.DEFAULT_TIMEOUT_MS if timeout_ms is None else timeout_ms)
 
     @classmethod
     def _push(cls, level: _Level, title: str, message: str, timeout_ms: int) -> None:
@@ -157,6 +153,7 @@ class _CountdownBar(QWidget):
         width = self.width() * self._progress
         if width <= 0:
             return
+
         painter = QPainter(self)
         painter.setRenderHint(QPainter.RenderHint.Antialiasing)
         painter.setPen(Qt.PenStyle.NoPen)
@@ -178,6 +175,10 @@ class _NotificationCard(QFrame):
     """
 
     WIDTH = 360
+    # 进入 / 退出动画时长与上滑距离
+    ENTER_MS = 180
+    EXIT_MS = 150
+    ENTER_SLIDE_PX = 12
 
     closed = Signal()
 
@@ -186,7 +187,7 @@ class _NotificationCard(QFrame):
         level: _Level,
         title: str,
         message: str,
-        timeout_ms: int = DEFAULT_TIMEOUT_MS,
+        timeout_ms: int,
     ) -> None:
         super().__init__()
         self.setObjectName("notificationCard")
@@ -203,45 +204,49 @@ class _NotificationCard(QFrame):
         body = QWidget()
         body.setObjectName("notificationBody")
         body_layout = QHBoxLayout(body)
-        body_layout.setContentsMargins(10, 6, 6, 6)
+        body_layout.setContentsMargins(12, 6, 8, 6)
         body_layout.setSpacing(8)
 
-        accent = QFrame()
-        accent.setObjectName("notificationAccent")
-        accent.setProperty("level", level.value)
-        accent.setFixedWidth(3)
-        body_layout.addWidget(accent)
-
+        # 图标独占左列、垂直居中：标题与正文共用同一左边缘
         icon_label = QLabel()
         icon_label.setPixmap(level.icon()(color=level.color()).pixmap(16, 16))
-        body_layout.addWidget(icon_label, alignment=Qt.AlignmentFlag.AlignTop)
+        body_layout.addWidget(icon_label, alignment=Qt.AlignmentFlag.AlignVCenter)
 
+        # 关闭按钮是文字块的兄弟而非标题行成员：塞进标题行会把行高
+        # 顶到按钮高度，标题与正文之间就压不下去
         texts = QVBoxLayout()
-        texts.setSpacing(1)
+        texts.setSpacing(0)
 
-        title_row = QHBoxLayout()
-        title_row.setSpacing(8)
         self._title = QLabel(title)
         self._title.setObjectName("notificationTitle")
-        title_row.addWidget(self._title, stretch=1)
-
-        close_btn = QToolButton()
-        close_btn.setObjectName("notificationClose")
-        close_btn.setIcon(SvgIcon.CLOSE)
-        close_btn.setAutoRaise(True)
-        close_btn.setFixedSize(18, 18)
-        close_btn.setCursor(Qt.CursorShape.PointingHandCursor)
-        close_btn.clicked.connect(self.dismiss)
-        title_row.addWidget(close_btn, alignment=Qt.AlignmentFlag.AlignTop)
-
-        texts.addLayout(title_row)
+        self._title.setWordWrap(False)
+        # 行框比字形高，按字体度量裁到字形高度，正文随之上移
+        self._title.ensurePolished()
+        metrics = self._title.fontMetrics()
+        self._title.setFixedHeight(metrics.ascent() + metrics.descent())
+        texts.addWidget(self._title)
 
         self._label = QLabel(message)
         self._label.setObjectName("notificationMessage")
         self._label.setWordWrap(True)
+        # 正文单行，裁到字形高度。确认类按钮放在同一行的右侧，
+        # 不靠加高卡片来腾位置
+        self._label.ensurePolished()
+        msg_metrics = self._label.fontMetrics()
+        self._label.setFixedHeight(msg_metrics.ascent() + msg_metrics.descent())
         texts.addWidget(self._label)
 
+        close_btn = QToolButton()
+        close_btn.setObjectName("notificationClose")
+        close_btn.setIcon(SvgIcon.CLOSE)
+        close_btn.setIconSize(QSize(16, 16))
+        close_btn.setAutoRaise(True)
+        close_btn.setFixedSize(20, 20)
+        close_btn.setCursor(Qt.CursorShape.PointingHandCursor)
+        close_btn.clicked.connect(self.dismiss)
+
         body_layout.addLayout(texts, stretch=1)
+        body_layout.addWidget(close_btn, alignment=Qt.AlignmentFlag.AlignTop)
         layout.addWidget(body)
 
         self._countdown = _CountdownBar(level)
@@ -285,13 +290,13 @@ class _NotificationCard(QFrame):
         Args:
             target_pos: 卡片在宿主内的最终坐标。
         """
-        self.move(target_pos + QPoint(0, ENTER_SLIDE_PX))
+        self.move(target_pos + QPoint(0, self.ENTER_SLIDE_PX))
         self._opacity.setOpacity(0.0)
 
         slide = QPropertyAnimation(self, b"pos", self)
-        slide.setStartValue(target_pos + QPoint(0, ENTER_SLIDE_PX))
+        slide.setStartValue(target_pos + QPoint(0, self.ENTER_SLIDE_PX))
         slide.setEndValue(target_pos)
-        slide.setDuration(ENTER_MS)
+        slide.setDuration(self.ENTER_MS)
         slide.setEasingCurve(QEasingCurve.Type.OutCubic)
         self._enter_animation = slide
         slide.finished.connect(self._clear_enter_animation)
@@ -300,7 +305,7 @@ class _NotificationCard(QFrame):
         fade = QPropertyAnimation(self._opacity, b"opacity", self)
         fade.setStartValue(0.0)
         fade.setEndValue(1.0)
-        fade.setDuration(ENTER_MS)
+        fade.setDuration(self.ENTER_MS)
         fade.start(QPropertyAnimation.DeletionPolicy.DeleteWhenStopped)
 
     def _clear_enter_animation(self) -> None:
@@ -309,8 +314,7 @@ class _NotificationCard(QFrame):
     def snap_to(self, pos: QPoint) -> None:
         """直接落到指定位置，掐掉进行中的入场动画。
 
-        卡片堆重排后旧的动画目标已失效，放任它跑完会把卡片按回原处、
-        掉出宿主外。
+        卡片堆重排后旧的动画目标已失效，放任它跑完会把卡片按回原处、掉出宿主外。
         """
         if self._enter_animation is not None:
             self._enter_animation.stop()
@@ -327,7 +331,7 @@ class _NotificationCard(QFrame):
         fade = QPropertyAnimation(self._opacity, b"opacity", self)
         fade.setStartValue(self._opacity.opacity())
         fade.setEndValue(0.0)
-        fade.setDuration(EXIT_MS)
+        fade.setDuration(self.EXIT_MS)
         fade.finished.connect(self.closed.emit)
         fade.start(QPropertyAnimation.DeletionPolicy.DeleteWhenStopped)
 
@@ -352,7 +356,8 @@ class _NotificationCard(QFrame):
 class NotificationHost(QWidget):
     """右下角堆叠通知卡片的容器。
 
-    自身尺寸只覆盖卡片堆，不遮挡窗口其余部分；跟随父控件尺寸变化重新定位。
+    自身尺寸只覆盖卡片堆，不遮挡窗口其余部分；
+    跟随父控件尺寸变化重新定位。
     最新的卡片排在堆底。
     """
 
@@ -382,7 +387,7 @@ class NotificationHost(QWidget):
         level: _Level,
         title: str,
         message: str,
-        timeout_ms: int = DEFAULT_TIMEOUT_MS,
+        timeout_ms: int,
     ) -> None:
         """在右下角追加一张通知卡片。"""
         card = _NotificationCard(level, title, message, timeout_ms)
@@ -405,6 +410,7 @@ class NotificationHost(QWidget):
     def _remove(self, card: _NotificationCard) -> None:
         if card not in self._cards:
             return
+
         self._cards.remove(card)
         card.deleteLater()
         self._relayout()
