@@ -660,7 +660,7 @@ class SenderPage(QWidget):
         for i, file_path in enumerate(file_paths):
             if i >= len(pending_from_start):
                 for surplus in file_paths[i:]:
-                    problem = f"分配 {surplus.name} 失败：没有可配置的任务"
+                    problem = f"分配 {surplus} 失败：没有可配置的任务"
                     self.logger.warning(problem)
                     problems.append(problem)
                 break
@@ -682,7 +682,7 @@ class SenderPage(QWidget):
             try:
                 task = DanmakuXml.load_task(file_path, config)
             except Exception as e:
-                problem = f"导入 {file_path.name} 失败：{e}"
+                problem = f"导入 {file_path} 失败：{e}"
                 self.logger.error(problem)
                 problems.append(problem)
                 continue
@@ -706,7 +706,7 @@ class SenderPage(QWidget):
         try:
             loaded = DanmakuXml.load_task(file_path, self.state.sender_config.to_task_config())
         except Exception as e:
-            problem = f"导入 {file_path.name} 失败：{e}"
+            problem = f"导入 {file_path} 失败：{e}"
             self.logger.error(problem)
             return problem
 

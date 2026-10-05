@@ -229,6 +229,7 @@ class _NotificationCard(QFrame):
         self._title_text = title
         self._title = QLabel(title)
         self._title.setObjectName("notificationTitle")
+        self._title.setTextFormat(Qt.TextFormat.PlainText)
         self._title.setWordWrap(False)
         self._title.setMinimumWidth(0)
         self._title.setToolTip(title)

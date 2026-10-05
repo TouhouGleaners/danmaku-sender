@@ -76,14 +76,16 @@ class DanmakuXml:
 
         Raises:
             FileNotFoundError: 文件不存在。
-            ValueError: 解析失败或没有弹幕，异常信息即失败原因。
+            ValueError: 读取或解析失败，或文件中没有弹幕，异常信息即失败原因。
         """
         try:
             danmakus = DanmakuXml.parse_file(xml_path)
         except FileNotFoundError:
             raise FileNotFoundError("文件不存在") from None
-        except Exception as e:
+        except ValueError as e:
             raise ValueError("XML 解析失败") from e
+        except Exception as e:
+            raise ValueError(f"读取失败：{e}") from e
         if not danmakus:
             raise ValueError("文件中没有弹幕")
 
