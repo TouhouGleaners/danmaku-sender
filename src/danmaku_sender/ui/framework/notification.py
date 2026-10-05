@@ -430,13 +430,7 @@ class NotificationHost(QWidget):
         """当前卡片堆，先加入的在前。"""
         return list(self._cards)
 
-    def push(
-        self,
-        level: _Level,
-        title: str,
-        message: str,
-        timeout_ms: int,
-    ) -> None:
+    def push(self, level: _Level, title: str, message: str, timeout_ms: int) -> None:
         """在右下角追加一张通知卡片。"""
         card = _NotificationCard(level, title, message, timeout_ms)
         card.closed.connect(lambda c=card: self._remove(c))
@@ -503,7 +497,7 @@ class NotificationHost(QWidget):
             oldest = self._cards.pop(0)
             oldest.deleteLater()
 
-        # 单张卡仍超高时压到可用高度，全文留在 tooltip
+        # 单张卡仍超高时压到可用高度
         if len(self._cards) == 1 and self._cards[0].height() > max_height:
             self._cards[0].setFixedHeight(max(0, max_height))
 
@@ -535,7 +529,7 @@ class NotificationHost(QWidget):
         height = sum(c.height() for c in self._cards)
         height += self.SPACING * (len(self._cards) - 1)
 
-        # 不越过父控件左边界与上边界：窄窗口 / 低高度下算出的坐标可能是负的
+        # 不越过父控件的左边界与上边界
         x = max(self.MARGIN, parent.width() - width - self.MARGIN)
         y = max(0, parent.height() - height - self.ACTION_BAR_CLEARANCE - self.MARGIN)
         self.setGeometry(x, y, width, height)

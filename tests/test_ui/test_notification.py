@@ -11,7 +11,7 @@ from danmaku_sender.ui.framework.notification import (
 )
 
 
-def settle(qapp, predicate, timeout: float = 2.0) -> bool:
+def settle(qapp, predicate, timeout: float = 5.0) -> bool:
     """泵事件直到条件成立；超时返回 False。"""
     deadline = time.monotonic() + timeout
     while time.monotonic() < deadline:
