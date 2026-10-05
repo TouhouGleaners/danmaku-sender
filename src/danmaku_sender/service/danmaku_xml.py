@@ -83,9 +83,9 @@ class DanmakuXml:
         except FileNotFoundError:
             raise FileNotFoundError("文件不存在") from None
         except Exception as e:
-            raise ValueError("解析失败") from e
+            raise ValueError("XML 解析失败") from e
         if not danmakus:
-            raise ValueError("内容为空")
+            raise ValueError("文件中没有弹幕")
 
         task = QueueTask(
             target=VideoTarget.unset(),

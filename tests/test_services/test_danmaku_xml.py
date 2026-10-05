@@ -78,7 +78,7 @@ class TestLoadTask:
 
     def test_empty_file_raises(self, tmp_path):
         path = write_xml(tmp_path, "empty.xml", EMPTY_XML)
-        with pytest.raises(ValueError, match="内容为空"):
+        with pytest.raises(ValueError, match="文件中没有弹幕"):
             DanmakuXml.load_task(path, SenderConfig().to_task_config())
 
     def test_missing_file_raises(self, tmp_path):

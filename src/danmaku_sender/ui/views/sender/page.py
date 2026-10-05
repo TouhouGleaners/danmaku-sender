@@ -636,7 +636,7 @@ class SenderPage(QWidget):
             else:
                 problems = self._assign_files_to_pending(xml_files, row)
             if problems:
-                Notification.warning(title="导入失败", message="；".join(problems))
+                Notification.warning(title="导入失败", message="\n".join(problems))
             event.accept()
             return True
 
@@ -649,7 +649,7 @@ class SenderPage(QWidget):
         """将多个 XML 文件从指定行开始按顺序分配给可配置的任务。
 
         Returns:
-            list[str]: 未能分配的文件及其原因。
+            list[str]: 分配失败的文件及其原因。
         """
         tasks = self.state.queue_state.tasks
         pending_from_start = [
@@ -660,7 +660,7 @@ class SenderPage(QWidget):
         for i, file_path in enumerate(file_paths):
             if i >= len(pending_from_start):
                 for surplus in file_paths[i:]:
-                    problem = f"{surplus.name}：没有可分配的任务"
+                    problem = f"分配 {surplus.name} 失败：没有可配置的任务"
                     self.logger.warning(problem)
                     problems.append(problem)
                 break
@@ -682,7 +682,7 @@ class SenderPage(QWidget):
             try:
                 task = DanmakuXml.load_task(file_path, config)
             except Exception as e:
-                problem = f"{file_path.name}：{e}"
+                problem = f"导入 {file_path.name} 失败：{e}"
                 self.logger.error(problem)
                 problems.append(problem)
                 continue
@@ -692,7 +692,7 @@ class SenderPage(QWidget):
         if created:
             self.logger.info(f"已从 XML 创建 {created} 个任务，请补上视频目标后发送")
         if problems:
-            Notification.warning(title="导入失败", message="；".join(problems))
+            Notification.warning(title="导入失败", message="\n".join(problems))
         return created
 
     def _assign_file_to_task(self, task: TaskView, file_path: Path) -> str | None:
@@ -706,7 +706,7 @@ class SenderPage(QWidget):
         try:
             loaded = DanmakuXml.load_task(file_path, self.state.sender_config.to_task_config())
         except Exception as e:
-            problem = f"{file_path.name}：{e}"
+            problem = f"导入 {file_path.name} 失败：{e}"
             self.logger.error(problem)
             return problem
 
