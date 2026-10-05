@@ -48,6 +48,7 @@ from danmaku_sender.types.models.queue import InsertPosition, TaskStatus, TaskVi
 from danmaku_sender.ui.framework.drag_drop import DropOverlay, xml_files_from_drop
 from danmaku_sender.ui.framework.empty_state import EmptyStateHint
 from danmaku_sender.ui.framework.icons import SvgIcon
+from danmaku_sender.ui.framework.notification import notify
 from danmaku_sender.ui.views.editor import EditorDialog
 from danmaku_sender.utils.string_utils import safe_filename
 from danmaku_sender.utils.time_utils import format_duration
@@ -656,19 +657,24 @@ class SenderPage(QWidget):
     def _create_tasks_from_files(self, file_paths: list[Path]) -> int:
         """为每个 XML 文件建一条未指定视频目标的任务。
 
-        解析失败或文件中没有弹幕的不建任务。返回建出的任务数。
+        解析失败或文件中没有弹幕的不建任务，并在右下角提示跳过的个数。
+        返回建出的任务数。
         """
         config = self.state.sender_config.to_task_config()
         created = 0
+        skipped = 0
         for file_path in file_paths:
             task = DanmakuXml.load_task(file_path, config)
             if task is None:
+                skipped += 1
                 continue
             self.state.queue_state.add_task(task)
             created += 1
 
         if created:
             self.logger.info(f"已从 XML 创建 {created} 个任务，请补上视频目标后发送")
+        if skipped:
+            notify(f"{skipped} 个文件未能导入，详见日志")
         return created
 
     def _assign_file_to_task(self, task: TaskView, file_path: Path):
