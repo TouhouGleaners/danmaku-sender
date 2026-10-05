@@ -642,17 +642,25 @@ class SenderPage(QWidget):
         event.accept()
         return True
 
-    def _assign_files_to_pending(self, file_paths: list[Path], start_row: int = 0):
-        """将多个 XML 文件从指定行开始按顺序分配给可配置的任务"""
+    def _assign_files_to_pending(self, file_paths: list[Path], start_row: int = 0) -> int:
+        """将多个 XML 文件从指定行开始按顺序分配给可配置的任务。
+
+        Returns:
+            int: 未能分配的文件数（解析失败、内容为空，或没有可分配的任务）。
+        """
         tasks = self.state.queue_state.tasks
         pending_from_start = [
             t for t in tasks[start_row:]
             if t.status.is_editable
         ]
+        failed = 0
         for i, file_path in enumerate(file_paths):
             if i >= len(pending_from_start):
+                failed += len(file_paths) - i
                 break
-            self._assign_file_to_task(pending_from_start[i], file_path)
+            if not self._assign_file_to_task(pending_from_start[i], file_path):
+                failed += 1
+        return failed
 
     def _create_tasks_from_files(self, file_paths: list[Path]) -> int:
         """为每个 XML 文件建一条未指定视频目标的任务。
@@ -677,22 +685,26 @@ class SenderPage(QWidget):
             Notification.warning(title="导入失败", message=f"{skipped} 个文件未能导入，详见日志")
         return created
 
-    def _assign_file_to_task(self, task: TaskView, file_path: Path):
+    def _assign_file_to_task(self, task: TaskView, file_path: Path) -> bool:
         """将 XML 文件中的弹幕分配给指定任务。
 
         解析失败或文件中没有弹幕时不动任务。
+
+        Returns:
+            bool: 分配成功返回 True。
         """
         try:
             danmakus = DanmakuXml.parse_file(file_path)
         except Exception as e:
-            self.logger.error(f"弹幕文件解析失败: {e}")
-            return
+            self.logger.error(f"弹幕文件解析失败: {file_path} — {e}")
+            return False
 
         if not danmakus:
-            self.logger.warning("弹幕文件为空。")
-            return
+            self.logger.warning(f"弹幕文件为空: {file_path}")
+            return False
 
         self.state.queue_state.assign_danmakus(task.task_id, danmakus, xml_path=file_path)
+        return True
 
     def _refresh_table(self):
         """将队列任务同步进表格模型。"""

@@ -296,7 +296,7 @@ class _NotificationCard(QFrame):
     @property
     def message(self) -> str:
         """卡片正文"""
-        return self._label.text()
+        return self._message_text
 
     def resizeEvent(self, event) -> None:
         """尺寸变化后重排标题与正文。"""
