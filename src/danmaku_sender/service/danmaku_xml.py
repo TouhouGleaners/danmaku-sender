@@ -64,27 +64,28 @@ class DanmakuXml:
         return dmids
 
     @staticmethod
-    def load_task(xml_path: Path, config: TaskConfig) -> QueueTask | None:
+    def load_task(xml_path: Path, config: TaskConfig) -> QueueTask:
         """读取本地 XML 文件并组装成一条未指定视频目标的任务草稿。
-
-        解析失败或文件中没有弹幕时返回 None。任务状态为 UNCONFIGURED。
 
         Args:
             xml_path: XML 文件路径。
             config: 入队时定死的发送节奏快照。
 
         Returns:
-            QueueTask | None: 任务草稿；文件不可用时为 None。
+            QueueTask: 任务草稿，状态为 UNCONFIGURED。
+
+        Raises:
+            FileNotFoundError: 文件不存在。
+            ValueError: 解析失败或没有弹幕，异常信息即失败原因。
         """
         try:
             danmakus = DanmakuXml.parse_file(xml_path)
+        except FileNotFoundError:
+            raise FileNotFoundError("文件不存在") from None
         except Exception as e:
-            logger.error(f"弹幕文件解析失败: {xml_path} — {e}")
-            return None
-
+            raise ValueError("解析失败") from e
         if not danmakus:
-            logger.warning(f"弹幕文件为空: {xml_path}")
-            return None
+            raise ValueError("内容为空")
 
         task = QueueTask(
             target=VideoTarget.unset(),

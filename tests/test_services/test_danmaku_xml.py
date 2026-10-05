@@ -71,18 +71,19 @@ class TestLoadTask:
         assert task.config_snapshot == config
         assert task.status is TaskStatus.UNCONFIGURED
 
-    def test_broken_file_yields_none(self, tmp_path):
+    def test_broken_file_raises(self, tmp_path):
         path = write_xml(tmp_path, "bad.xml", "<i><d>没关上")
-        assert DanmakuXml.load_task(path, SenderConfig().to_task_config()) is None
+        with pytest.raises(ValueError):
+            DanmakuXml.load_task(path, SenderConfig().to_task_config())
 
-    def test_empty_file_yields_none(self, tmp_path):
+    def test_empty_file_raises(self, tmp_path):
         path = write_xml(tmp_path, "empty.xml", EMPTY_XML)
-        assert DanmakuXml.load_task(path, SenderConfig().to_task_config()) is None
+        with pytest.raises(ValueError, match="内容为空"):
+            DanmakuXml.load_task(path, SenderConfig().to_task_config())
 
-    def test_missing_file_yields_none(self, tmp_path):
-        assert DanmakuXml.load_task(
-            tmp_path / "nope.xml", SenderConfig().to_task_config()
-        ) is None
+    def test_missing_file_raises(self, tmp_path):
+        with pytest.raises(FileNotFoundError):
+            DanmakuXml.load_task(tmp_path / "nope.xml", SenderConfig().to_task_config())
 
 
 class TestExport:

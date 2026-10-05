@@ -631,11 +631,12 @@ class SenderPage(QWidget):
             if not task.status.is_editable:
                 return False
             if len(xml_files) == 1:
-                failed = 0 if self._assign_file_to_task(task, xml_files[0]) else 1
+                problem = self._assign_file_to_task(task, xml_files[0])
+                problems = [problem] if problem else []
             else:
-                failed = self._assign_files_to_pending(xml_files, row)
-            if failed:
-                Notification.warning(title="导入失败", message=f"{failed} 个文件未能导入，详见日志")
+                problems = self._assign_files_to_pending(xml_files, row)
+            if problems:
+                Notification.warning(title="导入失败", message="；".join(problems))
             event.accept()
             return True
 
@@ -644,71 +645,75 @@ class SenderPage(QWidget):
         event.accept()
         return True
 
-    def _assign_files_to_pending(self, file_paths: list[Path], start_row: int = 0) -> int:
+    def _assign_files_to_pending(self, file_paths: list[Path], start_row: int = 0) -> list[str]:
         """将多个 XML 文件从指定行开始按顺序分配给可配置的任务。
 
         Returns:
-            int: 未能分配的文件数（解析失败、内容为空，或没有可分配的任务）。
+            list[str]: 未能分配的文件及其原因。
         """
         tasks = self.state.queue_state.tasks
         pending_from_start = [
             t for t in tasks[start_row:]
             if t.status.is_editable
         ]
-        failed = 0
+        problems: list[str] = []
         for i, file_path in enumerate(file_paths):
             if i >= len(pending_from_start):
                 for surplus in file_paths[i:]:
-                    self.logger.warning(f"没有可分配的任务，跳过: {surplus}")
-                failed += len(file_paths) - i
+                    problem = f"{surplus.name}：没有可分配的任务"
+                    self.logger.warning(problem)
+                    problems.append(problem)
                 break
-            if not self._assign_file_to_task(pending_from_start[i], file_path):
-                failed += 1
-        return failed
+            problem = self._assign_file_to_task(pending_from_start[i], file_path)
+            if problem:
+                problems.append(problem)
+        return problems
 
     def _create_tasks_from_files(self, file_paths: list[Path]) -> int:
         """为每个 XML 文件建一条未指定视频目标的任务。
 
-        解析失败或文件中没有弹幕的不建任务，并在右下角提示跳过的个数。
+        解析失败或文件中没有弹幕的不建任务，原因在右下角列出。
         返回建出的任务数。
         """
         config = self.state.sender_config.to_task_config()
         created = 0
-        skipped = 0
+        problems: list[str] = []
         for file_path in file_paths:
-            task = DanmakuXml.load_task(file_path, config)
-            if task is None:
-                skipped += 1
+            try:
+                task = DanmakuXml.load_task(file_path, config)
+            except Exception as e:
+                problem = f"{file_path.name}：{e}"
+                self.logger.error(problem)
+                problems.append(problem)
                 continue
             self.state.queue_state.add_task(task)
             created += 1
 
         if created:
             self.logger.info(f"已从 XML 创建 {created} 个任务，请补上视频目标后发送")
-        if skipped:
-            Notification.warning(title="导入失败", message=f"{skipped} 个文件未能导入，详见日志")
+        if problems:
+            Notification.warning(title="导入失败", message="；".join(problems))
         return created
 
-    def _assign_file_to_task(self, task: TaskView, file_path: Path) -> bool:
+    def _assign_file_to_task(self, task: TaskView, file_path: Path) -> str | None:
         """将 XML 文件中的弹幕分配给指定任务。
 
         解析失败或文件中没有弹幕时不动任务。
 
         Returns:
-            bool: 分配成功返回 True。
+            str | None: 失败原因；成功时为 None。
         """
         try:
-            danmakus = DanmakuXml.parse_file(file_path)
+            loaded = DanmakuXml.load_task(file_path, self.state.sender_config.to_task_config())
         except Exception as e:
-            self.logger.error(f"弹幕文件解析失败: {file_path} — {e}")
-            return False
+            problem = f"{file_path.name}：{e}"
+            self.logger.error(problem)
+            return problem
 
-        if not danmakus:
-            self.logger.warning(f"弹幕文件为空: {file_path}")
-            return False
-
-        self.state.queue_state.assign_danmakus(task.task_id, danmakus, xml_path=file_path)
-        return True
+        self.state.queue_state.assign_danmakus(
+            task.task_id, list(loaded.danmakus), xml_path=file_path
+        )
+        return None
 
     def _refresh_table(self):
         """将队列任务同步进表格模型。"""
