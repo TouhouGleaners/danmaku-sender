@@ -11,13 +11,12 @@ from typing import ClassVar
 
 from PySide6.QtCore import (
     Property,
-    QTimer,
-    QRect,
     QEasingCurve,
     QEvent,
     QObject,
     QPoint,
     QPropertyAnimation,
+    QRect,
     QSize,
     Qt,
     Signal,
@@ -185,6 +184,11 @@ class _NotificationCard(QFrame):
     """
 
     WIDTH = 360
+    BODY_MARGIN_LEFT = 12
+    BODY_MARGIN_RIGHT = 8
+    BODY_SPACING = 8
+    ICON = 16
+    CLOSE = 20
     ENTER_MS = 180
     EXIT_MS = 150
     ENTER_SLIDE_PX = 12
@@ -212,11 +216,11 @@ class _NotificationCard(QFrame):
         body = QWidget()
         body.setObjectName("notificationBody")
         body_layout = QHBoxLayout(body)
-        body_layout.setContentsMargins(12, 6, 8, 6)
-        body_layout.setSpacing(8)
+        body_layout.setContentsMargins(self.BODY_MARGIN_LEFT, 6, self.BODY_MARGIN_RIGHT, 6)
+        body_layout.setSpacing(self.BODY_SPACING)
 
         icon_label = QLabel()
-        icon_label.setPixmap(level.icon()(color=level.color()).pixmap(16, 16))
+        icon_label.setPixmap(level.icon()(color=level.color()).pixmap(self.ICON, self.ICON))
         body_layout.addWidget(icon_label, alignment=Qt.AlignmentFlag.AlignVCenter)
 
         texts = QVBoxLayout()
@@ -245,9 +249,9 @@ class _NotificationCard(QFrame):
         close_btn = QToolButton()
         close_btn.setObjectName("notificationClose")
         close_btn.setIcon(SvgIcon.CLOSE)
-        close_btn.setIconSize(QSize(16, 16))
+        close_btn.setIconSize(QSize(self.ICON, self.ICON))
         close_btn.setAutoRaise(True)
-        close_btn.setFixedSize(20, 20)
+        close_btn.setFixedSize(self.CLOSE, self.CLOSE)
         close_btn.setCursor(Qt.CursorShape.PointingHandCursor)
         close_btn.clicked.connect(self.dismiss)
 
@@ -277,12 +281,7 @@ class _NotificationCard(QFrame):
         else:
             self._countdown.hide()
 
-        # 布局落定后才有真实宽度，此时才排得准换行；
-        # 定时器挂在卡片上，卡片销毁时一并取消
-        self._fit_timer = QTimer(self)
-        self._fit_timer.setSingleShot(True)
-        self._fit_timer.timeout.connect(self._fit_text)
-        self._fit_timer.start(0)
+        self._fit_text()
 
     @property
     def level(self) -> str:
@@ -313,9 +312,15 @@ class _NotificationCard(QFrame):
                 title_metrics.elidedText(self._title_text, Qt.TextElideMode.ElideRight, title_width)
             )
 
-        message_width = self._label.width()
-        if message_width <= 0:
-            return
+        message_width = (
+            self.WIDTH
+            - 2  # 卡片边框
+            - self.BODY_MARGIN_LEFT
+            - self.BODY_MARGIN_RIGHT
+            - self.ICON
+            - self.CLOSE
+            - 2 * self.BODY_SPACING
+        )
         metrics = self._label.fontMetrics()
         line_height = metrics.ascent() + metrics.descent()
         wrapped = metrics.boundingRect(
