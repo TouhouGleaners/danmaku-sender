@@ -39,7 +39,7 @@ class TestNotification:
         Notification.warning(title="警告", message="正文")
         Notification.error(title="错误", message="正文")
         assert [c.title for c in host.cards] == ["提示", "警告", "错误"]
-        assert [c.property("level") for c in host.cards] == ["info", "warning", "error"]
+        assert [c.level for c in host.cards] == ["info", "warning", "error"]
 
     def test_notify_without_host_does_not_crash(self):
         Notification._host = None
@@ -56,8 +56,10 @@ class TestNotificationHost:
     def test_cards_stack_newest_at_bottom(self, host, qapp):
         Notification.info(title="旧的", message="正文")
         Notification.info(title="新的", message="正文")
-        qapp.processEvents()
-        assert [c.title for c in host.cards] == ["旧的", "新的"]
+        assert settle(qapp, lambda: len(host.cards) == 2)
+        first, second = host.cards
+        assert [first.title, second.title] == ["旧的", "新的"]
+        assert first.pos().y() + first.height() <= second.pos().y()
 
     def test_card_width_is_fixed(self, host, qapp):
         Notification.info(title="短", message="短")
@@ -78,6 +80,8 @@ class TestNotificationHost:
 
     def test_timeout_dismisses_automatically(self, host, qapp):
         Notification.info(title="短命", message="正文", timeout_ms=30)
+        assert len(host.cards) == 1, "通知压根没弹出"
+        assert host.isVisible()
         assert settle(qapp, lambda: host.isHidden())
 
     def test_remaining_cards_do_not_grow_when_sibling_exits(self, host, qapp):
@@ -115,6 +119,29 @@ class TestNotificationHost:
         assert card.isVisible()
         assert 0 <= card.pos().y()
         assert card.pos().y() + card.height() <= host.height()
+
+    def test_stack_trims_oldest_when_parent_too_short(self, qapp):
+        """父控件装不下整堆时丢最旧的，剩下的必须仍在宿主内可见"""
+        window = QWidget()
+        window.resize(800, 140)   # 连两张卡片都放不下（还要让开操作栏）
+        window.show()
+        h = Notification.install(window)
+        try:
+            for i in range(4):
+                Notification.info(title=f"第 {i} 条", message="正文")
+            # 等入场动画（ENTER_MS）落地再查坐标
+            deadline = time.monotonic() + 1.0
+            while time.monotonic() < deadline:
+                qapp.processEvents()
+                time.sleep(0.01)
+            assert len(h.cards) >= 1
+            assert len(h.cards) < 4
+            for card in h.cards:
+                assert card.isVisible()
+                assert 0 <= card.pos().y()
+                assert card.pos().y() + card.height() <= h.height()
+        finally:
+            Notification._host = None
 
     def test_host_height_matches_card_stack(self, host, qapp):
         """堆高必须等于卡片高度累加，多出来的空白会吃掉鼠标事件"""

@@ -11,6 +11,8 @@ from typing import ClassVar
 
 from PySide6.QtCore import (
     Property,
+    QTimer,
+    QRect,
     QEasingCurve,
     QEvent,
     QObject,
@@ -42,6 +44,15 @@ from PySide6.QtWidgets import (
 from .icons import SvgIcon
 
 logger = logging.getLogger(__name__)
+
+
+def _allow_edge_wrap(text: str, chunk: int = 8) -> str:
+    """每 chunk 个字符插入一个零宽空格，给换行提供断点。
+
+    QLabel 的自动换行只在词边界断，长串无断点的文本会整段超宽被裁；
+    中文本可逐字断，此处对它无副作用。
+    """
+    return "​".join(text[i:i + chunk] for i in range(0, len(text), chunk))
 
 
 class _Level(Enum):
@@ -189,7 +200,7 @@ class _NotificationCard(QFrame):
     ) -> None:
         super().__init__()
         self.setObjectName("notificationCard")
-        self.setProperty("level", level.value)
+        self._level = level
         self.setAttribute(Qt.WidgetAttribute.WA_Hover, True)
         self.setFixedWidth(self.WIDTH)
         self.setSizePolicy(QSizePolicy.Policy.Fixed, QSizePolicy.Policy.Fixed)
@@ -211,20 +222,24 @@ class _NotificationCard(QFrame):
         texts = QVBoxLayout()
         texts.setSpacing(0)
 
+        self._title_text = title
         self._title = QLabel(title)
         self._title.setObjectName("notificationTitle")
         self._title.setWordWrap(False)
+        self._title.setMinimumWidth(0)
+        self._title.setToolTip(title)
         self._title.ensurePolished()
         title_metrics = self._title.fontMetrics()
         self._title.setFixedHeight(title_metrics.ascent() + title_metrics.descent())
         texts.addWidget(self._title)
 
-        self._label = QLabel(message)
+        self._message_text = message
+        self._label = QLabel(_allow_edge_wrap(message))
         self._label.setObjectName("notificationMessage")
+        self._label.setTextFormat(Qt.TextFormat.PlainText)
         self._label.setWordWrap(True)
-        self._label.ensurePolished()
-        message_metrics = self._label.fontMetrics()
-        self._label.setFixedHeight(message_metrics.ascent() + message_metrics.descent())
+        self._label.setMinimumWidth(0)
+        self._label.setToolTip(message)
         texts.addWidget(self._label)
 
         close_btn = QToolButton()
@@ -262,15 +277,57 @@ class _NotificationCard(QFrame):
         else:
             self._countdown.hide()
 
+        # 布局落定后才有真实宽度，此时才排得准换行；
+        # 定时器挂在卡片上，卡片销毁时一并取消
+        self._fit_timer = QTimer(self)
+        self._fit_timer.setSingleShot(True)
+        self._fit_timer.timeout.connect(self._fit_text)
+        self._fit_timer.start(0)
+
+    @property
+    def level(self) -> str:
+        """卡片级别，取值 info / warning / error。"""
+        return self._level.value
+
     @property
     def title(self) -> str:
         """卡片标题"""
-        return self._title.text()
+        return self._title_text
 
     @property
     def message(self) -> str:
         """卡片正文"""
         return self._label.text()
+
+    def resizeEvent(self, event) -> None:
+        """尺寸变化后重排标题与正文。"""
+        super().resizeEvent(event)
+        self._fit_text()
+
+    def _fit_text(self) -> None:
+        """按可用宽度给标题加省略号，按正文的实际行数裁高，并跟随调整卡片高度。"""
+        title_width = self._title.width()
+        if title_width > 0:
+            title_metrics = self._title.fontMetrics()
+            self._title.setText(
+                title_metrics.elidedText(self._title_text, Qt.TextElideMode.ElideRight, title_width)
+            )
+
+        message_width = self._label.width()
+        if message_width <= 0:
+            return
+        metrics = self._label.fontMetrics()
+        line_height = metrics.ascent() + metrics.descent()
+        wrapped = metrics.boundingRect(
+            QRect(0, 0, message_width, 1 << 30),
+            Qt.TextFlag.TextWordWrap,
+            self._label.text(),
+        )
+        lines = max(1, round(wrapped.height() / metrics.height()))
+        self._label.setFixedHeight(line_height * lines)
+        target = self.sizeHint().height()
+        if self.height() != target:
+            self.setFixedHeight(target)
 
     def play_enter(self, target_pos: QPoint) -> None:
         """自底部滑入并淡入到指定位置。
@@ -349,8 +406,8 @@ class NotificationHost(QWidget):
     跟随父控件尺寸变化重新定位。最新的卡片排在堆底。
     """
 
-    MARGIN = 16
-    ACTION_BAR_CLEARANCE = 52
+    MARGIN = 12
+    ACTION_BAR_CLEARANCE = 40
     SPACING = 8
     MAX_CARDS = 5
 
@@ -414,11 +471,25 @@ class NotificationHost(QWidget):
         if not self._cards:
             self.hide()
             return
+        self._trim_to_fit()
         y = 0
         for card in self._cards:
             card.snap_to(QPoint(0, y))
             y += card.height() + self.SPACING
         self._reflow()
+
+    def _trim_to_fit(self) -> None:
+        """丢弃最旧的卡片，直到整堆能装进父控件的可用高度。"""
+        parent = self.parentWidget()
+        if parent is None:
+            return
+        max_height = parent.height() - self.ACTION_BAR_CLEARANCE - 2 * self.MARGIN
+        while len(self._cards) > 1:
+            stack = sum(c.height() for c in self._cards) + self.SPACING * (len(self._cards) - 1)
+            if stack <= max_height:
+                break
+            oldest = self._cards.pop(0)
+            oldest.deleteLater()
 
     def eventFilter(self, watched: QObject, event: QEvent) -> bool:
         """父控件尺寸变化时重新定位。

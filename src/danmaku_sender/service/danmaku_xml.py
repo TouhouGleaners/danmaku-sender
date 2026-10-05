@@ -79,11 +79,11 @@ class DanmakuXml:
         try:
             danmakus = DanmakuXml.parse_file(xml_path)
         except Exception as e:
-            logger.error(f"弹幕文件解析失败: {e}")
+            logger.error(f"弹幕文件解析失败: {xml_path} — {e}")
             return None
 
         if not danmakus:
-            logger.warning("弹幕文件为空。")
+            logger.warning(f"弹幕文件为空: {xml_path}")
             return None
 
         task = QueueTask(
