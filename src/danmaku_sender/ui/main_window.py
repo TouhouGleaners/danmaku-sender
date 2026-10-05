@@ -36,6 +36,7 @@ from danmaku_sender.types.models.user import UserProfile
 from .dialogs import AboutDialog, UpdateDialog
 from .framework.icons import SvgIcon, get_app_icon
 from .framework.image_processor import QtImageProcessor
+from .framework.notification import Notification
 from .framework.theme import Palette, ThemeService
 from .views.account import AccountDialog
 from .views.history import HistoryPage
@@ -178,6 +179,9 @@ class MainWindow(QMainWindow):
 
         self.main_layout.addWidget(self.sidebar_frame)
         self.main_layout.addWidget(self.content_stack)
+
+        # 右下角通知卡片堆
+        Notification.install(self.central_widget)
 
     def _init_pages(self):
         """初始化页面并绑定导航"""
