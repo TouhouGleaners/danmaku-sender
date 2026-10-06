@@ -77,7 +77,8 @@
 | 配置项 | 类型 | 默认值 | UI 控件 | 说明 |
 |:-------|:-----|:-------|:--------|:-----|
 | `refresh_interval` | int | 60 | QSpinBox | 轮询 B 站弹幕池的间隔（秒），最小 10 |
-| `stats_baseline` | float | 程序启动时间 | QComboBox + 按钮 | 统计基线时间戳（瞬态，不持久化） |
+
+监视页上的「统计基线」是本次会话的运行时状态，不属于持久化配置，不在本表内。详见 [实时存活率仪表盘](../features/monitor/dashboard.md)。
 
 详细说明见 [实时存活率仪表盘](../features/monitor/dashboard.md)。
 
@@ -97,7 +98,7 @@
 
 ## 配置持久化
 
-所有配置在窗口关闭时自动保存到：
+控件写回后 800 毫秒自动保存；窗口关闭时再兜底保存一次。文件位于：
 
 ```
 %LOCALAPPDATA%/Miku_oso/BiliDanmakuSender/config.json
