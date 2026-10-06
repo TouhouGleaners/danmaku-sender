@@ -52,7 +52,7 @@ jobs:
                --include-data-dir=assets=assets `
                --output-dir=dist-standalone `
                --output-filename=BiliDanmakuSender `
-               src/danmaku_sender/__main__.py
+               src/danmaku_sender
 
     - name: Build Onefile (Single EXE)
       run: |
@@ -66,7 +66,7 @@ jobs:
                --include-data-dir=assets=assets `
                --output-dir=dist-onefile `
                --output-filename=BiliDanmakuSender `
-               src/danmaku_sender/__main__.py
+               src/danmaku_sender
 
     - name: Repackage and Rename Assets
       shell: pwsh
