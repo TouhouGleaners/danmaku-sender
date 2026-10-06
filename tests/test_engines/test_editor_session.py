@@ -3,8 +3,9 @@ import pytest
 
 from danmaku_sender.config import ValidationConfig
 from danmaku_sender.service.editor_session import EditorSession
+from danmaku_sender.types.models.common import RelativePosition
 from danmaku_sender.types.models.danmaku import Danmaku
-from danmaku_sender.types.models.editor_types import EditorField, InsertPosition
+from danmaku_sender.types.models.editor_types import EditorField
 from tests.conftest import edit_working as _edit
 from tests.conftest import make_danmaku as _dm
 
@@ -217,7 +218,7 @@ class TestUndo:
 
     def test_undo_reverts_insert(self, loaded_session: EditorSession):
         uid = loaded_session.item_order[0]
-        new_uid = loaded_session.insert_item(uid, InsertPosition.BELOW)
+        new_uid = loaded_session.insert_item(uid, RelativePosition.BELOW)
         assert isinstance(new_uid, str)
         assert loaded_session.items[new_uid].is_deleted is False
         loaded_session.undo()
@@ -249,13 +250,13 @@ class TestUndo:
 class TestInsertItem:
     def test_insert_below(self, loaded_session: EditorSession):
         ref_uid = loaded_session.item_order[0]  # progress=1000
-        new_uid = loaded_session.insert_item(ref_uid, InsertPosition.BELOW)
+        new_uid = loaded_session.insert_item(ref_uid, RelativePosition.BELOW)
         assert isinstance(new_uid, str)
         assert loaded_session.items[new_uid].working.progress == 1500  # 1000+500
 
     def test_insert_above(self, loaded_session: EditorSession):
         ref_uid = loaded_session.item_order[0]  # progress=1000
-        new_uid = loaded_session.insert_item(ref_uid, InsertPosition.ABOVE)
+        new_uid = loaded_session.insert_item(ref_uid, RelativePosition.ABOVE)
         assert isinstance(new_uid, str)
         assert loaded_session.items[new_uid].working.progress == 500  # max(0, 1000-500)
 
@@ -263,7 +264,7 @@ class TestInsertItem:
         # 将第一条设为 progress=200
         uid = loaded_session.item_order[0]
         _edit(loaded_session.items[uid], progress=200)
-        new_uid = loaded_session.insert_item(uid, InsertPosition.ABOVE)
+        new_uid = loaded_session.insert_item(uid, RelativePosition.ABOVE)
         assert isinstance(new_uid, str)
         assert loaded_session.items[new_uid].working.progress == 0  # max(0, 200-500)
 

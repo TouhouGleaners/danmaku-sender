@@ -4,12 +4,12 @@ from collections.abc import Callable
 from typing import Any
 
 from danmaku_sender.config import ValidationConfig
+from danmaku_sender.types.models.common import RelativePosition
 from danmaku_sender.types.models.danmaku import Danmaku
 from danmaku_sender.types.models.editor_types import (
     AtomicChange,
     EditorField,
     EditorItem,
-    InsertPosition,
     ViewItem,
 )
 
@@ -168,7 +168,7 @@ class EditorSession:
         self.set_dirty(bool(self.undo_stack))
         return True
 
-    def insert_item(self, reference_uid: str, position: InsertPosition = InsertPosition.BELOW) -> str | None:
+    def insert_item(self, reference_uid: str, position: RelativePosition = RelativePosition.BELOW) -> str | None:
         """在指定弹幕附近插入一条新弹幕。
 
         Args:
@@ -182,8 +182,14 @@ class EditorSession:
         if not ref_item:
             return None
 
-        offset = 500 if position == InsertPosition.BELOW else -500
-        new_progress = max(0, ref_item.working.progress + offset)
+        # 新弹幕落在参考项之上则时间提前，之下则推后
+        match position:
+            case RelativePosition.ABOVE:
+                new_progress = max(0, ref_item.working.progress - 500)
+            case RelativePosition.BELOW:
+                new_progress = max(0, ref_item.working.progress + 500)
+            case _:
+                raise ValueError(f"未知的插入位置: {position!r}")
 
         new_dm = Danmaku(
             msg="新建弹幕",

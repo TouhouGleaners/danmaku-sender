@@ -13,7 +13,7 @@ from danmaku_sender.config import (
     ValidationConfig,
 )
 from danmaku_sender.runtime.state.queue_state import QueueState
-from danmaku_sender.types.models.common import VideoTarget
+from danmaku_sender.types.models.common import RelativePosition, VideoTarget
 from danmaku_sender.types.models.danmaku import Danmaku
 from danmaku_sender.types.models.queue import QueueTask, TaskStatus
 
@@ -200,13 +200,14 @@ class TestQueueState:
             assert qs.get_task_by_id(task.task_id) is None, f"{status} 应可删除"
 
     def test_move_task(self):
+        """上下移动：相对参考项换位，越界时顺序不变"""
         qs = QueueState()
         t1, t2, t3 = make_task(1), make_task(2), make_task(3)
         for t in (t1, t2, t3):
             qs.add_task(t)
-        qs.move_task(t3.task_id, -1)
+        qs.move_task(t3.task_id, RelativePosition.ABOVE)
         assert [t.target.cid for t in qs.tasks] == [1, 3, 2]
-        qs.move_task(t1.task_id, -1)  # 已在顶端，顺序不变
+        qs.move_task(t1.task_id, RelativePosition.ABOVE)  # 已在顶端，顺序不变
         assert [t.target.cid for t in qs.tasks] == [1, 3, 2]
 
     def test_move_non_movable_task(self):
@@ -215,8 +216,20 @@ class TestQueueState:
         other = make_task(2)
         qs.add_task(done)
         qs.add_task(other)
-        qs.move_task(done.task_id, 1)  # 已完成任务不可移动
+        qs.move_task(done.task_id, RelativePosition.BELOW)  # 已完成任务不可移动
         assert [t.target.cid for t in qs.tasks] == [1, 2]
+
+    def test_relative_position_rejects_unknown(self):
+        """非法的相对位置当场拒绝，不得静默按某一支处理"""
+        qs = QueueState()
+        t1, t2 = make_task(1), make_task(2)
+        qs.add_task(t1)
+        qs.add_task(t2)
+        with pytest.raises(ValueError):
+            qs.move_task(t1.task_id, "上方")  # type: ignore[arg-type]
+        with pytest.raises(ValueError):
+            qs.insert_task(make_task(3), t1.task_id, "上方")  # type: ignore[arg-type]
+        assert [t.target.cid for t in qs.tasks] == [1, 2], "被拒的调用不得改动队列"
 
     def test_reset_queue_semantics(self):
         """重置：移除已完成、失败转待发；跳过/未配置保留，其余不动"""

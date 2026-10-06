@@ -43,8 +43,8 @@ from danmaku_sender.runtime.infra.platform import send_windows_notification
 from danmaku_sender.runtime.state.app_state import AppState
 from danmaku_sender.service.danmaku_xml import DanmakuXml
 from danmaku_sender.service.sender import SendingContext
-from danmaku_sender.types.models.common import UnsentDanmakusRecord
-from danmaku_sender.types.models.queue import InsertPosition, TaskStatus, TaskView
+from danmaku_sender.types.models.common import RelativePosition, UnsentDanmakusRecord
+from danmaku_sender.types.models.queue import TaskStatus, TaskView
 from danmaku_sender.ui.framework.drag_drop import DropOverlay, xml_files_from_drop
 from danmaku_sender.ui.framework.empty_state import EmptyStateHint
 from danmaku_sender.ui.framework.icons import SvgIcon
@@ -284,15 +284,15 @@ class SenderPage(QWidget):
         menu.addAction(SvgIcon.TUNE, "查看详情/编辑配置", lambda: self._show_task_detail(task))  # 所有状态都能查看
         menu.addAction(SvgIcon.EDIT_DOCUMENT, "编辑弹幕", lambda: self._edit_danmakus(task)).setEnabled(is_editable)
         menu.addSeparator()
-        menu.addAction(SvgIcon.ARROW_UPWARD, "上移", lambda: self._move_task(task.task_id, -1)).setEnabled(is_editable)
-        menu.addAction(SvgIcon.ARROW_DOWNWARD, "下移", lambda: self._move_task(task.task_id, 1)).setEnabled(is_editable)
+        menu.addAction(SvgIcon.ARROW_UPWARD, "上移", lambda: self._move_task(task.task_id, RelativePosition.ABOVE)).setEnabled(is_editable)
+        menu.addAction(SvgIcon.ARROW_DOWNWARD, "下移", lambda: self._move_task(task.task_id, RelativePosition.BELOW)).setEnabled(is_editable)
         menu.addSeparator()
         can_insert = idle
         menu.addAction(SvgIcon.EDIT_ARROW_UP, "在上方插入任务", lambda: self._open_task_builder(
-            ref_task_id=task.task_id, insert_position=InsertPosition.ABOVE
+            ref_task_id=task.task_id, insert_position=RelativePosition.ABOVE
         )).setEnabled(can_insert)
         menu.addAction(SvgIcon.EDIT_ARROW_DOWN, "在下方插入任务", lambda: self._open_task_builder(
-            ref_task_id=task.task_id, insert_position=InsertPosition.BELOW
+            ref_task_id=task.task_id, insert_position=RelativePosition.BELOW
         )).setEnabled(can_insert)
         menu.addSeparator()
         menu.addAction(
@@ -321,8 +321,14 @@ class SenderPage(QWidget):
             # 编辑器内部已通过 assign_danmakus 通知 QueueState，表格自动刷新
             self.logger.info(f"已编辑弹幕: {task.target.display_string} ({task.total} 条)")
 
-    def _move_task(self, task_id: str, direction: int):
-        self.state.queue_state.move_task(task_id, direction)
+    def _move_task(self, task_id: str, toward: RelativePosition):
+        """上下移动一个任务。
+
+        Args:
+            task_id: 要移动的任务标识。
+            toward: 移向参考项的哪一侧，ABOVE 为上移，BELOW 为下移。
+        """
+        self.state.queue_state.move_task(task_id, toward)
 
     def _remove_task(self, task_id: str):
         self.state.queue_state.remove_task(task_id)
@@ -436,9 +442,14 @@ class SenderPage(QWidget):
     def _open_task_builder(
         self,
         ref_task_id: str | None = None,
-        insert_position: InsertPosition | None = None,
+        insert_position: RelativePosition | None = None,
     ):
-        """打开 TaskBuilderDialog；入队由弹窗直接写 QueueState"""
+        """打开 TaskBuilderDialog；入队由弹窗直接写 QueueState。
+
+        Args:
+            ref_task_id: 参考任务标识；为 None 时追加到队尾。
+            insert_position: 插在参考任务的哪一侧；不给则按队尾处理。
+        """
         TaskBuilderDialog(
             self.state,
             ref_task_id=ref_task_id,

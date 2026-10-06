@@ -1,6 +1,6 @@
 import uuid
 from dataclasses import dataclass, field
-from enum import Enum, auto
+from enum import Enum
 from typing import Any, TypedDict
 
 from .danmaku import Danmaku
@@ -60,9 +60,3 @@ class ViewItem(TypedDict):
     content: str
     error_msg: str
     is_valid: bool
-
-
-class InsertPosition(Enum):
-    """弹幕插入位置枚举"""
-    ABOVE = auto()
-    BELOW = auto()

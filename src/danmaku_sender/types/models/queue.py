@@ -1,6 +1,6 @@
 import uuid
 from dataclasses import dataclass, field, replace
-from enum import Enum, auto
+from enum import Enum
 from pathlib import Path
 
 from .common import VideoTarget
@@ -24,12 +24,6 @@ class TaskStatus(Enum):
         UNCONFIGURED 与 SKIPPED 都表示「缺配置」，补完配置一律转回 PENDING。
         """
         return self in (TaskStatus.PENDING, TaskStatus.UNCONFIGURED, TaskStatus.SKIPPED)
-
-
-class InsertPosition(Enum):
-    """队列任务相对插入位置（相对参考任务）"""
-    ABOVE = auto()
-    BELOW = auto()
 
 
 @dataclass(frozen=True)

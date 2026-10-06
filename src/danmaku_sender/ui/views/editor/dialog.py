@@ -23,7 +23,8 @@ from PySide6.QtWidgets import (
 
 from danmaku_sender.controller.editor_controller import EditorController
 from danmaku_sender.runtime.state.app_state import AppState
-from danmaku_sender.types.models.editor_types import EditorField, InsertPosition
+from danmaku_sender.types.models.common import RelativePosition
+from danmaku_sender.types.models.editor_types import EditorField
 from danmaku_sender.types.models.queue import TaskView
 from danmaku_sender.ui.framework.drag_drop import DropOverlay, xml_files_from_drop
 from danmaku_sender.ui.framework.empty_state import EmptyStateHint
@@ -561,8 +562,8 @@ class EditorDialog(QDialog):
 
         menu.addAction(SvgIcon.EDIT_LINE, "编辑内容", lambda: self._edit_row(row))
         menu.addSeparator()
-        menu.addAction(SvgIcon.EDIT_ARROW_UP, "在上方插入新弹幕", lambda: self._insert_row(row, InsertPosition.ABOVE))
-        menu.addAction(SvgIcon.EDIT_ARROW_DOWN, "在下方插入新弹幕", lambda: self._insert_row(row, InsertPosition.BELOW))
+        menu.addAction(SvgIcon.EDIT_ARROW_UP, "在上方插入新弹幕", lambda: self._insert_row(row, RelativePosition.ABOVE))
+        menu.addAction(SvgIcon.EDIT_ARROW_DOWN, "在下方插入新弹幕", lambda: self._insert_row(row, RelativePosition.BELOW))
         menu.addSeparator()
         menu.addAction(SvgIcon.SYNC_ALT, "平移选中弹幕的时间轴", self._shift_selected_items_time)
         adv_menu = menu.addMenu(SvgIcon.AUTO_AWESOME, "高级生成工具")
@@ -597,8 +598,13 @@ class EditorDialog(QDialog):
                 if self.controller.update_properties(uid, new_props):
                     self.table.selectRow(row)
 
-    def _insert_row(self, row: int, position: InsertPosition):
-        """插入新弹幕"""
+    def _insert_row(self, row: int, position: RelativePosition):
+        """在指定行旁插入一条新弹幕，并进入编辑。
+
+        Args:
+            row: 参考弹幕所在行号。
+            position: 插在参考弹幕的哪一侧。
+        """
         uid = self.model.get_item_id(row)
         if not uid:
             return

@@ -17,8 +17,8 @@ from PySide6.QtWidgets import (
 from danmaku_sender.controller.video_controller import VideoController
 from danmaku_sender.runtime.state.app_state import AppState
 from danmaku_sender.service.danmaku_xml import DanmakuXml
-from danmaku_sender.types.models.common import VideoTarget
-from danmaku_sender.types.models.queue import InsertPosition, QueueTask
+from danmaku_sender.types.models.common import RelativePosition, VideoTarget
+from danmaku_sender.types.models.queue import QueueTask
 from danmaku_sender.types.models.video import VideoInfo
 from danmaku_sender.utils.string_utils import parse_bilibili_link
 
@@ -26,8 +26,6 @@ from danmaku_sender.utils.string_utils import parse_bilibili_link
 class TaskBuilderDialog(QDialog):
     """任务构建弹窗：选择视频 → 选择分P → 选择弹幕文件 → 写入队列
 
-    ref_task_id 为 None：追加到队尾，可连续添加，弹窗保持打开。
-    指定 ref_task_id + insert_position：相对参考任务插入，成功后自动关闭。
     与 EditorDialog 一致：由弹窗在创建时直接写 QueueState，调用方只负责打开。
     """
 
@@ -35,9 +33,17 @@ class TaskBuilderDialog(QDialog):
         self,
         state: AppState,
         ref_task_id: str | None = None,
-        insert_position: InsertPosition | None = None,
+        insert_position: RelativePosition | None = None,
         parent=None,
     ):
+        """初始化弹窗。
+
+        Args:
+            state: 应用全局状态，弹窗经它写入队列。
+            ref_task_id: 参考任务标识。为 None 时追加到队尾，可连续添加且弹窗保持打开。
+            insert_position: 插在参考任务的哪一侧。与 ref_task_id 一并给出时为相对插入，成功后自动关闭。
+            parent: 父控件。
+        """
         super().__init__(parent)
         self.state = state
         self.video_controller = VideoController(self)
@@ -45,12 +51,19 @@ class TaskBuilderDialog(QDialog):
         self._selected_files: list[Path] = []
         self._pending_part_page: int | None = None
         self._ref_task_id = ref_task_id
-        self._insert_position = insert_position
+        # 未指定插入侧时按队尾之下处理；非法值留给下面的 match 拒绝
+        self._insert_position = insert_position or RelativePosition.BELOW
 
         if ref_task_id is None:
             self.setWindowTitle("添加任务到队列")
         else:
-            label = "上方" if insert_position is InsertPosition.ABOVE else "下方"
+            match self._insert_position:
+                case RelativePosition.ABOVE:
+                    label = "上方"
+                case RelativePosition.BELOW:
+                    label = "下方"
+                case _:
+                    raise ValueError(f"未知的相对位置: {self._insert_position!r}")
             self.setWindowTitle(f"在选中任务{label}插入")
         self.setMinimumWidth(500)
         self._create_ui()
@@ -248,6 +261,5 @@ class TaskBuilderDialog(QDialog):
             return
 
         # 相对插入：写入后关闭（上下文插入是一次性动作）
-        position = self._insert_position or InsertPosition.BELOW
-        queue_state.insert_task(task, self._ref_task_id, position)
+        queue_state.insert_task(task, self._ref_task_id, self._insert_position)
         self.accept()
