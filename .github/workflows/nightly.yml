@@ -77,7 +77,7 @@ jobs:
                --include-data-dir=assets=assets `
                --output-dir=dist-standalone `
                --output-filename=BiliDanmakuSender `
-               src/danmaku_sender/__main__.py
+               src/danmaku_sender
 
     - name: Build Onefile
       if: steps.check.outputs.skip != 'true'
@@ -90,7 +90,7 @@ jobs:
                --include-data-dir=assets=assets `
                --output-dir=dist-onefile `
                --output-filename=BiliDanmakuSender `
-               src/danmaku_sender/__main__.py
+               src/danmaku_sender
 
     - name: Package artifacts
       if: steps.check.outputs.skip != 'true'
