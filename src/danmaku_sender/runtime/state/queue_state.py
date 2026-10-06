@@ -8,9 +8,9 @@ from pathlib import Path
 
 from PySide6.QtCore import QObject, Signal
 
+from danmaku_sender.types.models.common import RelativePosition
 from danmaku_sender.types.models.danmaku import Danmaku
 from danmaku_sender.types.models.queue import (
-    InsertPosition,
     QueueTask,
     TaskRecord,
     TaskRuntime,
@@ -176,12 +176,17 @@ class QueueState(QObject):
         self,
         task: QueueTask,
         ref_task_id: str,
-        position: InsertPosition = InsertPosition.BELOW,
+        position: RelativePosition = RelativePosition.BELOW,
     ):
         """在参考任务上方/下方插入；参考不存在时追加到末尾。
 
         这是队列插入的唯一公开入口，调用方不接触绝对下标。
         入队时按配置完整性对齐状态，不信任草稿自带的 status。
+
+        Args:
+            task: 任务草稿，入队时拆成不可变工单与可变运行时。
+            ref_task_id: 参考任务标识。
+            position: 插在参考任务的哪一侧。
         """
         record = self._to_record(task)
         self._reconcile_config_status(record)
@@ -193,7 +198,13 @@ class QueueState(QObject):
         if ref_index < 0:
             self._records.append(record)
         else:
-            index = ref_index if position is InsertPosition.ABOVE else ref_index + 1
+            match position:
+                case RelativePosition.ABOVE:
+                    index = ref_index
+                case RelativePosition.BELOW:
+                    index = ref_index + 1
+                case _:
+                    raise ValueError(f"未知的相对位置: {position!r}")
             if index >= len(self._records):
                 self._records.append(record)
             else:
@@ -217,12 +228,23 @@ class QueueState(QObject):
             self.tasksChanged.emit()
             logger.info(f"任务已从队列移除: [{task_id}]")
 
-    def move_task(self, task_id: str, direction: int):
-        """移动任务位置（direction: -1 上移, +1 下移）"""
+    def move_task(self, task_id: str, toward: RelativePosition):
+        """上下移动一个任务；相邻项不可编辑时不动。
+
+        Args:
+            task_id: 要移动的任务标识。
+            toward: 移向参考项的哪一侧，ABOVE 为上移，BELOW 为下移。
+        """
         moved = False
         for i, r in enumerate(self._records):
             if r.spec.task_id == task_id and r.runtime.status.is_editable:
-                new_index = i + direction
+                match toward:
+                    case RelativePosition.ABOVE:
+                        new_index = i - 1
+                    case RelativePosition.BELOW:
+                        new_index = i + 1
+                    case _:
+                        raise ValueError(f"未知的相对位置: {toward!r}")
                 if (
                     0 <= new_index < len(self._records)
                     and self._records[new_index].runtime.status.is_editable

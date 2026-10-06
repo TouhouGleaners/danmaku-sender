@@ -7,8 +7,9 @@ from PySide6.QtCore import QObject, Signal
 from danmaku_sender.runtime.state.app_state import AppState
 from danmaku_sender.service.danmaku_xml import DanmakuXml
 from danmaku_sender.service.editor_session import EditorSession
+from danmaku_sender.types.models.common import RelativePosition
 from danmaku_sender.types.models.danmaku import Danmaku
-from danmaku_sender.types.models.editor_types import InsertPosition, ViewItem
+from danmaku_sender.types.models.editor_types import ViewItem
 from danmaku_sender.types.models.queue import TaskView
 
 from .concurrency import PoolTask
@@ -153,7 +154,7 @@ class EditorController(QObject):
     # endregion
     # region Atomic Operation Routing
 
-    def insert_item(self, ref_uid: str, pos: InsertPosition) -> str | None:
+    def insert_item(self, ref_uid: str, pos: RelativePosition) -> str | None:
         """在参考弹幕附近插入一条新弹幕。
 
         Args:
