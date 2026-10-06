@@ -172,12 +172,7 @@ class QueueState(QObject):
             f"{record.spec.target.display_string} ({record.spec.total} 条弹幕)"
         )
 
-    def insert_task(
-        self,
-        task: QueueTask,
-        ref_task_id: str,
-        position: RelativePosition = RelativePosition.BELOW,
-    ):
+    def insert_task(self, task: QueueTask, ref_task_id: str, position: RelativePosition = RelativePosition.BELOW):
         """在参考任务上方/下方插入；参考不存在时追加到末尾。
 
         这是队列插入的唯一公开入口，调用方不接触绝对下标。
@@ -186,29 +181,35 @@ class QueueState(QObject):
         Args:
             task: 任务草稿，入队时拆成不可变工单与可变运行时。
             ref_task_id: 参考任务标识。
-            position: 插在参考任务的哪一侧。
+            position: 插在参考任务的哪一侧，默认 BELOW。
+
+        Raises:
+            ValueError: position 不是 ABOVE / BELOW。
         """
         record = self._to_record(task)
         self._reconcile_config_status(record)
-        ref_index = -1
-        for i, r in enumerate(self._records):
-            if r.spec.task_id == ref_task_id:
-                ref_index = i
-                break
-        if ref_index < 0:
-            self._records.append(record)
+
+        # 查找参考任务索引
+        ref_index = next(
+            (i for i, r in enumerate(self._records) if r.spec.task_id == ref_task_id),
+            None,
+        )
+
+        # 计算实际插入位置
+        if ref_index is None:
+            insert_index = len(self._records)
         else:
             match position:
                 case RelativePosition.ABOVE:
-                    index = ref_index
+                    insert_index = ref_index
                 case RelativePosition.BELOW:
-                    index = ref_index + 1
+                    insert_index = ref_index + 1
                 case _:
                     raise ValueError(f"未知的相对位置: {position!r}")
-            if index >= len(self._records):
-                self._records.append(record)
-            else:
-                self._records.insert(max(0, index), record)
+
+        # 插入
+        self._records.insert(insert_index, record)
+
         self.tasksChanged.emit()
         logger.info(
             f"任务已插入队列 (相对 {ref_task_id} {position.name}): [{record.spec.task_id}] "
@@ -235,27 +236,44 @@ class QueueState(QObject):
             task_id: 要移动的任务标识。
             toward: 移向参考项的哪一侧，ABOVE 为上移，BELOW 为下移。
         """
-        moved = False
-        for i, r in enumerate(self._records):
-            if r.spec.task_id == task_id and r.runtime.status.is_editable:
-                match toward:
-                    case RelativePosition.ABOVE:
-                        new_index = i - 1
-                    case RelativePosition.BELOW:
-                        new_index = i + 1
-                    case _:
-                        raise ValueError(f"未知的相对位置: {toward!r}")
-                if (
-                    0 <= new_index < len(self._records)
-                    and self._records[new_index].runtime.status.is_editable
-                ):
-                    self._records[i], self._records[new_index] = (
-                        self._records[new_index], self._records[i]
-                    )
-                    moved = True
-                break
-        if moved:
-            self.tasksChanged.emit()
+        match toward:
+            case RelativePosition.ABOVE:
+                offset = -1
+            case RelativePosition.BELOW:
+                offset = 1
+            case _:
+                raise ValueError(f"未知的相对位置: {toward!r}")
+
+        # 目标任务索引
+        index = next(
+            (i for i, r in enumerate(self._records) if r.spec.task_id == task_id),
+            None,
+        )
+
+        # 目标任务不存在
+        if index is None:
+            logger.warning(f"移动任务失败：找不到任务 [{task_id}]")
+            return
+
+        # 目标任务不可编辑
+        if not self._records[index].runtime.status.is_editable:
+            logger.warning(f"移动任务失败：任务 [{task_id}] 状态为 {self._records[index].runtime.status.value}，不可编辑。")
+            return
+
+        # 校验目标位置是否越界
+        new_index = index + offset
+        if not (0 <= new_index < len(self._records)):
+            logger.warning(f"移动任务失败：任务 [{task_id}] 已在队列边界，无法向 {toward.name} 移动。")
+            return
+
+        # 校验相邻任务是否可编辑
+        adjacent_task = self._records[new_index]
+        if not adjacent_task.runtime.status.is_editable:
+            logger.warning(f"移动任务失败：相邻任务 [{adjacent_task.spec.task_id}] 状态为 {adjacent_task.runtime.status.value}，不可编辑。")
+            return
+
+        self._records[index], self._records[new_index] = self._records[new_index], self._records[index]
+        self.tasksChanged.emit()
 
     def reorder_tasks(self, task_ids: list[str]):
         """按给定的 task_id 顺序重排；列表必须是当前队列的全排列。"""
