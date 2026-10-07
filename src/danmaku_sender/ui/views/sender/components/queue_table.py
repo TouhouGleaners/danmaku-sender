@@ -161,13 +161,14 @@ class QueueTableModel(QAbstractTableModel):
             case QueueCol.INDEX:
                 return str(row + 1)
             case QueueCol.TITLE:
-                return task.target.display_string
+                return task.display_string
             case QueueCol.PART:
                 if not task.target.is_assigned:
                     return "—"
-                if task.p_title:
-                    return f"P{task.p_index} - {task.p_title}"
-                return f"P{task.p_index}"
+                meta = task.meta
+                if meta.part_title:
+                    return f"P{meta.part_page} - {meta.part_title}"
+                return f"P{meta.part_page}"
             case QueueCol.COUNT:
                 return str(len(task.danmakus))
             case QueueCol.STATUS:

@@ -14,14 +14,14 @@ class ValidationIssue(TypedDict):
 
 def validate_danmaku_list(
         danmaku_list: list[Danmaku],
-        video_duration_ms: int = -1,
+        video_duration_ms: int | None = None,
         validation_config: ValidationConfig | None = None
     ) -> list[ValidationIssue]:
     """
     校验弹幕列表，找出不符合B站发送规则的弹幕。
     Args:
         danmaku_list (list): 待校验的弹幕对象列表。
-        video_duration_ms (int): 视频总时长（毫秒）。
+        video_duration_ms (int | None): 视频总时长（毫秒），None 表示未知。
     Returns:
         list: 一个包含问题弹幕信息的字典列表。
     """
@@ -45,7 +45,7 @@ def validate_danmaku_list(
             reasons.append('内容超过100个字符')
 
         # 时间戳检查
-        if video_duration_ms > 0 and progress > video_duration_ms:
+        if video_duration_ms is not None and progress > video_duration_ms:
             reasons.append('时间戳超出视频总时长')
 
         # 特殊符号检查

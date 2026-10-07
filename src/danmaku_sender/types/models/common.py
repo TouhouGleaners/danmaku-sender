@@ -1,5 +1,6 @@
 from dataclasses import dataclass
 from enum import Enum, IntEnum
+from pathlib import Path
 from typing import TypedDict
 
 from .danmaku import Danmaku
@@ -22,30 +23,39 @@ class DanmakuStatus(IntEnum):
     LOST = 2      # 已丢失
 
 
-@dataclass(frozen=True)
+@dataclass(frozen=True, kw_only=True)
 class VideoTarget:
-    """封装发送目标BVID和CID的视频信息（不可变）。
+    """发送/核销的目标：以 BVID+CID 定位的某个分P。未指定的项为 None。
 
-    缺席的目标用空值表示（见 :meth:`unset`），不必引入 Optional。
+    Attributes:
+        bvid (str | None): 视频 BVID，未指定为 None。
+        cid (int | None): 分P的 CID，未指定为 None。
     """
-    bvid: str
-    cid: int
-    title: str = ""
-
-    @classmethod
-    def unset(cls) -> "VideoTarget":
-        """尚未指定视频目标的空哨兵（拖入 XML 建任务的初始态）。"""
-        return cls(bvid="", cid=0, title="")
+    bvid: str | None = None
+    cid: int | None = None
 
     @property
     def is_assigned(self) -> bool:
         """是否已指定有效目标：BVID 与分P 都在才算。"""
-        return bool(self.bvid) and self.cid > 0
+        return self.bvid is not None and self.cid is not None
 
-    @property
-    def display_string(self) -> str:
-        """日志显示：有标题显示标题，没标题显示 BVID，都没有则标注未指定。"""
-        return self.title or self.bvid or "未指定视频目标"
+
+@dataclass(frozen=True)
+class TaskMeta:
+    """任务的描述性资料：展示、校验与溯源。
+
+    Attributes:
+        video_title (str): 视频标题。
+        part_page (int | None): 第几 P（1-based），未指定为 None。
+        part_title (str): 分P标题。
+        part_duration_ms (int | None): 分P时长（毫秒），未知为 None。
+        xml_path (Path | None): 弹幕文件来自哪。
+    """
+    video_title: str = ""
+    part_page: int | None = None
+    part_title: str = ""
+    part_duration_ms: int | None = None
+    xml_path: Path | None = None
 
 
 class MonitorStats(TypedDict):

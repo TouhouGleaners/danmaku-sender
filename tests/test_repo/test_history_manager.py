@@ -13,7 +13,7 @@ from danmaku_sender.types.models.danmaku import Danmaku
 
 @pytest.fixture
 def target() -> VideoTarget:
-    return VideoTarget(bvid="BV1xx411c7mD", cid=1001, title="T")
+    return VideoTarget(bvid="BV1xx411c7mD", cid=1001)
 
 
 @pytest.fixture
@@ -96,7 +96,7 @@ class TestTargetsWithEvidence:
         assert hm.get_recorded_targets() == []
 
     def test_returns_targets_holding_evidence(self, hm, target):
-        other = VideoTarget(bvid="BV2xx", cid=2002, title="T2")
+        other = VideoTarget(bvid="BV2xx", cid=2002)
         _record(hm, target, "dm1")
         assert hm.get_recorded_targets() == [("BV1xx411c7mD", 1001)]
         _record(hm, other, "dm2")
@@ -120,7 +120,7 @@ class TestTargetsWithEvidence:
     def test_ordered_by_first_evidence(self, hm, target):
         """行序跟首条存证时间一致（跟发送顺序），不随后续写入改变"""
         import time
-        other = VideoTarget(bvid="BV2xx", cid=2002, title="T2")
+        other = VideoTarget(bvid="BV2xx", cid=2002)
         _record(hm, target, "dm1")
         _record(hm, other, "dm2")
         _record(hm, target, "dm3")  # 第二个目标晚发，但不改变谁排前面

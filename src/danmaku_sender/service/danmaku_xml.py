@@ -5,9 +5,13 @@ import xml.etree.ElementTree as ET
 from pathlib import Path
 from xml.dom import minidom
 
-from danmaku_sender.types.models.common import UnsentDanmakusRecord, VideoTarget
+from danmaku_sender.types.models.common import (
+    TaskMeta,
+    UnsentDanmakusRecord,
+    VideoTarget,
+)
 from danmaku_sender.types.models.danmaku import Danmaku
-from danmaku_sender.types.models.queue import TaskDraft, TaskConfig
+from danmaku_sender.types.models.queue import TaskConfig, TaskDraft
 
 logger = logging.getLogger(__name__)
 
@@ -92,10 +96,10 @@ class DanmakuXml:
             raise ValueError("文件中没有弹幕")
 
         task = TaskDraft(
-            target=VideoTarget.unset(),
+            target=VideoTarget(),
             danmakus=danmakus,
-            config_snapshot=config,
-            xml_path=xml_path,
+            config=config,
+            meta=TaskMeta(xml_path=xml_path),
         )
         task.status = task.initial_status
         return task

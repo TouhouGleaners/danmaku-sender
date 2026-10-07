@@ -1,4 +1,5 @@
 import logging
+from dataclasses import replace
 from pathlib import Path
 
 from pydantic import ValidationError
@@ -59,13 +60,13 @@ class TaskDetailDialog(QDialog):
             and task.status.is_editable
         )
 
-        self.setWindowTitle(f"编辑任务 — {task.target.display_string}")
+        self.setWindowTitle(f"编辑任务 — {task.display_string}")
         self.setMinimumSize(500, 500)
         self._create_ui()
         self._connect_signals()
         self._load_task_info()
         # 配置区填充初始值（表单用可编辑的 SenderConfig，保存时再转回 TaskConfig）
-        DraftFormBinder.fill(self, SenderConfig.from_task_config(self.editing.config_snapshot))
+        DraftFormBinder.fill(self, SenderConfig.from_task_config(self.editing.config))
 
         # 非可编辑状态时禁用所有编辑控件
         if not self._is_editable:
@@ -129,8 +130,8 @@ class TaskDetailDialog(QDialog):
         file_row = QHBoxLayout()
         self._file_input = QLineEdit()
         self._file_input.setReadOnly(True)
-        if self.origin.xml_path is not None:
-            self._file_input.setText(str(self.origin.xml_path))
+        if self.origin.meta.xml_path is not None:
+            self._file_input.setText(str(self.origin.meta.xml_path))
         elif self.origin.danmakus:
             self._file_input.setText(f"已加载 {len(self.origin.danmakus)} 条弹幕")
         self._file_btn = QPushButton("选择文件")
@@ -148,12 +149,13 @@ class TaskDetailDialog(QDialog):
         task = self.origin
         target_assigned = task.target.is_assigned
         if target_assigned:
+            meta = task.meta
             url = f"https://www.bilibili.com/video/{task.target.bvid}"
-            if task.p_index > 0:
-                url += f"?p={task.p_index}"
-            title_text = task.target.title or task.target.bvid
+            if meta.part_page is not None:
+                url += f"?p={meta.part_page}"
+            title_text = meta.video_title or task.target.bvid
             bvid_text = task.target.bvid
-            part_text = f"P{task.p_index} - {task.p_title}" if task.p_title else f"P{task.p_index}"
+            part_text = f"P{meta.part_page} - {meta.part_title}" if meta.part_title else f"P{meta.part_page}"
             cid_text = str(task.target.cid)
         else:
             url = "—"
@@ -197,9 +199,10 @@ class TaskDetailDialog(QDialog):
     def _load_task_info(self):
         """预填当前任务的分P信息"""
         task = self.origin
-        if task.p_index > 0:
-            label = f"P{task.p_index} - {task.p_title}" if task.p_title else f"P{task.p_index}"
-            self._part_combo.addItem(label, userData=task.p_index)
+        meta = task.meta
+        if meta.part_page is not None:
+            label = f"P{meta.part_page} - {meta.part_title}" if meta.part_title else f"P{meta.part_page}"
+            self._part_combo.addItem(label, userData=meta.part_page)
             self._part_combo.setCurrentIndex(0)
 
     @Slot()
@@ -257,7 +260,7 @@ class TaskDetailDialog(QDialog):
         else:
             target_index = next(
                 (i for i in range(self._part_combo.count())
-                 if self._part_combo.itemData(i) == self.origin.p_index),
+                 if self._part_combo.itemData(i) == self.origin.meta.part_page),
                 0
             )
             self._part_combo.setCurrentIndex(target_index)
@@ -298,15 +301,15 @@ class TaskDetailDialog(QDialog):
         part = next((p for p in self._video_info.parts if p.page == page), None) if self._video_info else None
 
         cid = part.cid if part else self.origin.target.cid
-        title = self._video_info.title if self._video_info else self.origin.target.title
+        title = self._video_info.title if self._video_info else self.origin.meta.video_title
         bvid = self._video_info.bvid if self._video_info else self.origin.target.bvid
         part_text = self._part_combo.currentText()
 
-        self._detail_title.setText(title or bvid)
-        self._detail_bvid.setText(bvid)
+        self._detail_title.setText(title or bvid or "")
+        self._detail_bvid.setText(bvid or "")
         self._detail_part.setText(part_text)
-        self._detail_cid.setText(str(cid))
-        self._detail_url.setText(f"https://www.bilibili.com/video/{bvid}?p={page}")
+        self._detail_cid.setText("" if cid is None else str(cid))
+        self._detail_url.setText(f"https://www.bilibili.com/video/{bvid or ''}?p={page}")
 
     def _on_save(self):
         """保存编辑结果
@@ -322,7 +325,7 @@ class TaskDetailDialog(QDialog):
         # 再冻结成工单参数快照
         try:
             collected = DraftFormBinder.collect(self, SenderConfig)
-            self.editing.config_snapshot = collected.to_task_config()
+            self.editing.config = collected.to_task_config()
         except ValidationError as e:
             rest = DraftFormBinder.show_errors(self, e)
             if rest:
@@ -345,13 +348,16 @@ class TaskDetailDialog(QDialog):
         self.editing.target = VideoTarget(
             bvid=self._video_info.bvid,
             cid=part.cid,
-            title=self._video_info.title,
         )
-        self.editing.p_index = part.page
-        self.editing.p_title = part.title
         # 时长是弹幕时间越界校验的依据；先拖 XML 后补目标的任务全靠这里补上，
-        # 否则 duration_ms 停在 0，编辑器的时间检查会被静默跳过
-        self.editing.duration_ms = part.duration * 1000
+        # 否则 duration 停在 None，编辑器的时间检查会被静默跳过
+        self.editing.meta = replace(
+            self.editing.meta,
+            video_title=self._video_info.title,
+            part_page=part.page,
+            part_title=part.title,
+            part_duration_ms=part.duration * 1000,
+        )
 
     def _apply_danmaku_changes(self):
         """将选定的 XML 文件解析进编辑沙盒。
@@ -372,8 +378,7 @@ class TaskDetailDialog(QDialog):
             return
 
         self.editing.danmakus = danmakus
-        self.editing.total = len(danmakus)
-        self.editing.xml_path = self._selected_file
+        self.editing.meta = replace(self.editing.meta, xml_path=self._selected_file)
 
     # --- 配置编辑 ---
 

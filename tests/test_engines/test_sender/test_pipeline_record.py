@@ -76,7 +76,7 @@ class TestPipelineRecord:
     def test_successful_send_records_to_db(self, pipeline_env):
         """每条发送成功的弹幕都必须有存证行"""
         hm = pipeline_env
-        target = VideoTarget(bvid="BV1xx", cid=1001, title="T")
+        target = VideoTarget(bvid="BV1xx", cid=1001)
         _run_pipeline(hm, target, [Danmaku(msg="a", progress=1000), Danmaku(msg="b", progress=2000)])
 
         conn = sqlite3.connect(hm.db_path)
@@ -94,7 +94,7 @@ class TestPipelineRecord:
             return {"code": -400, "message": "请求错误", "data": {}}
 
         monkeypatch.setattr(StubClient, "post_danmaku", fail_post)
-        target = VideoTarget(bvid="BV1xx", cid=1001, title="T")
+        target = VideoTarget(bvid="BV1xx", cid=1001)
         _run_pipeline(hm, target, [Danmaku(msg="a", progress=1000)])
 
         n = sqlite3.connect(hm.db_path).execute("SELECT COUNT(*) FROM sent_danmaku").fetchone()[0]
