@@ -42,7 +42,7 @@ class TaskDetailDialog(QDialog):
 
     Attributes:
         origin: 原始任务的只读视图，仅用于展示。
-        editing: 保存时提交的 ``QueueTask``，在用户点击「保存」时组装完成。
+        editing: 保存时提交的 ``TaskDraft``，在用户点击「保存」时组装完成。
     """
 
     def __init__(self, task: TaskView, api_auth, queue_active: bool = False, parent=None):
@@ -276,9 +276,8 @@ class TaskDetailDialog(QDialog):
             self._selected_file = Path(files[0])
             self._file_input.setText(files[0].split("/")[-1].split("\\")[-1])
             # 预览弹幕数量
-            parser = DanmakuXml
             try:
-                danmakus = parser.parse_file(files[0])
+                danmakus = DanmakuXml.parse_file(files[0])
                 self._detail_dm_count.setText(f"{len(danmakus)} (待保存)")
             except Exception:
                 self._detail_dm_count.setText("解析失败")

@@ -7,7 +7,7 @@ from xml.dom import minidom
 
 from danmaku_sender.types.models.common import UnsentDanmakusRecord, VideoTarget
 from danmaku_sender.types.models.danmaku import Danmaku
-from danmaku_sender.types.models.queue import QueueTask, TaskConfig
+from danmaku_sender.types.models.queue import TaskDraft, TaskConfig
 
 logger = logging.getLogger(__name__)
 
@@ -64,7 +64,7 @@ class DanmakuXml:
         return dmids
 
     @staticmethod
-    def load_task(xml_path: Path, config: TaskConfig) -> QueueTask:
+    def load_task(xml_path: Path, config: TaskConfig) -> TaskDraft:
         """读取本地 XML 文件并组装成一条未指定视频目标的任务草稿。
 
         Args:
@@ -72,7 +72,7 @@ class DanmakuXml:
             config: 入队时定死的发送节奏快照。
 
         Returns:
-            QueueTask: 任务草稿，状态为 UNCONFIGURED。
+            TaskDraft: 任务草稿，状态为 UNCONFIGURED。
 
         Raises:
             FileNotFoundError: 文件不存在。
@@ -91,7 +91,7 @@ class DanmakuXml:
         if not danmakus:
             raise ValueError("文件中没有弹幕")
 
-        task = QueueTask(
+        task = TaskDraft(
             target=VideoTarget.unset(),
             danmakus=danmakus,
             config_snapshot=config,

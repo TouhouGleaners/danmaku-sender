@@ -68,12 +68,12 @@ class QueueSendWorker(WorkerThread):
                         continue
 
                     if snap.status == TaskStatus.UNCONFIGURED:
-                        handled.add(snap.spec.task_id)
-                        self.taskSkipped.emit(snap.spec.task_id, snap.spec.missing_config_text)
+                        handled.add(snap.definition.task_id)
+                        self.taskSkipped.emit(snap.definition.task_id, snap.definition.missing_config_text)
                         continue
 
                     should_continue = self._execute_task(snap, idx, total)
-                    handled.add(snap.spec.task_id)
+                    handled.add(snap.definition.task_id)
 
                     if not should_continue:
                         stopped_early = True
@@ -86,10 +86,10 @@ class QueueSendWorker(WorkerThread):
 
             if stopped_early and not self.stop_event.is_set():
                 for snap in tasks:
-                    if snap.spec.task_id in handled:
+                    if snap.definition.task_id in handled:
                         continue
                     if snap.status == TaskStatus.PENDING:
-                        self.taskSkipped.emit(snap.spec.task_id, "致命错误，队列中止")
+                        self.taskSkipped.emit(snap.definition.task_id, "致命错误，队列中止")
 
         except Exception as e:
             logger.error(f"队列执行发生未预期异常: {e}", exc_info=True)
@@ -100,24 +100,24 @@ class QueueSendWorker(WorkerThread):
 
     def _execute_task(self, snap: TaskSnapshot, idx: int, total: int) -> bool:
         """执行单个队列任务。返回 True 表示继续，False 表示致命错误需中止队列。"""
-        spec = snap.spec
-        task_id = spec.task_id
+        definition = snap.definition
+        task_id = definition.task_id
         self.taskStarted.emit(task_id, idx)
-        logger.info(f"[{idx + 1}/{total}] 开始发送: {spec.target.display_string}")
+        logger.info(f"[{idx + 1}/{total}] 开始发送: {definition.target.display_string}")
 
         future_tasks = self.tasks[idx + 1:]
 
         def progress_emitter(attempted: int, task_total: int, eta: float):
-            queue_eta = self._calc_queue_eta(attempted, task_total, spec.config, future_tasks, self.send_policy)
+            queue_eta = self._calc_queue_eta(attempted, task_total, definition.config, future_tasks, self.send_policy)
             self.queueProgressUpdated.emit(idx, total, queue_eta)
             self.taskProgressUpdated.emit(task_id, attempted, task_total, eta)
 
         try:
             pipeline = SendPipeline(self.auth_config, self.history_manager)
             job = SendJob(
-                target=spec.target,
-                danmakus=list(spec.danmakus),  # Danmaku 不可变，无需克隆
-                config=spec.config,
+                target=definition.target,
+                danmakus=list(definition.danmakus),  # Danmaku 不可变，无需克隆
+                config=definition.config,
                 policy=self.send_policy,
                 stop_event=self.stop_event,
             )
@@ -125,17 +125,17 @@ class QueueSendWorker(WorkerThread):
 
             if ctx.fatal_error_occurred:
                 self.taskFailed.emit(task_id, "致命错误，队列中止")
-                logger.error(f"致命错误，队列中止于: {spec.target.display_string}")
+                logger.error(f"致命错误，队列中止于: {definition.target.display_string}")
                 return False
 
             # COMPLETED / PAUSED 由 Controller 根据 ctx 在主线程判定落账
             self.taskCompleted.emit(task_id, ctx)
-            logger.info(f"[{idx + 1}/{total}] 发送完成: {spec.target.display_string}")
+            logger.info(f"[{idx + 1}/{total}] 发送完成: {definition.target.display_string}")
             return True
 
         except Exception as e:
             self.taskFailed.emit(task_id, str(e))
-            logger.error(f"[{idx + 1}/{total}] 发送失败: {spec.target.display_string} - {e}")
+            logger.error(f"[{idx + 1}/{total}] 发送失败: {definition.target.display_string} - {e}")
             return True  # 单任务异常不阻断队列，继续下一个
 
     @staticmethod
@@ -170,6 +170,6 @@ class QueueSendWorker(WorkerThread):
             # 与上一个任务之间的间隔；只对真正要跑的任务算，
             # 否则「剩余全是非 PENDING」时会多算一次间隔
             queue_eta += policy.delay_between_tasks
-            queue_eta += _task_eta(0, s.spec.total, s.spec.config)
+            queue_eta += _task_eta(0, s.definition.total, s.definition.config)
 
         return queue_eta
