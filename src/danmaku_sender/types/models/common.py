@@ -6,10 +6,11 @@ from .danmaku import Danmaku
 
 
 class RelativePosition(Enum):
-    """相对参考项的位置（有序集合中的前后）。
+    """相对参考项的位置：在参考项之上还是之下。
 
-    队列插入、编辑器插入与上下移动共用这一根轴：ABOVE 是参考项之前，
-    BELOW 是参考项之后。value 是日志里的中文说法。
+    Attributes:
+        ABOVE (str): 参考项之上，列表更靠前、时间更早。
+        BELOW (str): 参考项之下，列表更靠后、时间更晚。
     """
     ABOVE = "上方"
     BELOW = "下方"

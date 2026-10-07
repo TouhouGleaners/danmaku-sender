@@ -7,11 +7,11 @@ from danmaku_sender.controller.sender import QueueReadiness, SenderController
 from danmaku_sender.repo.history_manager import HistoryManager
 from danmaku_sender.runtime.state.app_state import AppState
 from danmaku_sender.types.models.common import VideoTarget
-from danmaku_sender.types.models.queue import QueueTask, TaskStatus
+from danmaku_sender.types.models.queue import TaskDraft, TaskStatus
 
 
-def _task(state: AppState, status: TaskStatus) -> QueueTask:
-    return QueueTask(
+def _task(state: AppState, status: TaskStatus) -> TaskDraft:
+    return TaskDraft(
         target=VideoTarget(bvid="BV1", cid=1, title="T"),
         danmakus=[],
         config_snapshot=state.sender_config.to_task_config(),

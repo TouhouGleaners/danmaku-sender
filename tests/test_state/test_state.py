@@ -15,7 +15,7 @@ from danmaku_sender.config import (
 from danmaku_sender.runtime.state.queue_state import QueueState
 from danmaku_sender.types.models.common import RelativePosition, VideoTarget
 from danmaku_sender.types.models.danmaku import Danmaku
-from danmaku_sender.types.models.queue import QueueTask, TaskStatus
+from danmaku_sender.types.models.queue import TaskDraft, TaskStatus
 
 
 class TestGlobalConfig:
@@ -127,13 +127,13 @@ def make_task(
     cid: int = 1,
     status: TaskStatus = TaskStatus.PENDING,
     danmaku_count: int = 1,
-) -> QueueTask:
+) -> TaskDraft:
     """构造一条任务。默认带弹幕，是配置齐备的正常任务。
 
     配置残缺的任务会被 QueueState 纠状态，所以要构造「缺弹幕」的用例
     必须显式传 ``danmaku_count=0``，别指望草稿自带的 status 能蒙混过关。
     """
-    return QueueTask(
+    return TaskDraft(
         target=VideoTarget(bvid=f"BV{cid:03d}", cid=cid, title=f"T{cid}"),
         danmakus=[Danmaku(msg=f"m{i}", progress=i) for i in range(danmaku_count)],
         config_snapshot=SenderConfig().to_task_config(),
@@ -144,9 +144,9 @@ def make_task(
 def make_incomplete_task(
     danmaku_count: int = 0,
     status: TaskStatus = TaskStatus.UNCONFIGURED,
-) -> QueueTask:
+) -> TaskDraft:
     """拖入 XML 建的任务：没定视频目标，弹幕可配。"""
-    return QueueTask(
+    return TaskDraft(
         target=VideoTarget.unset(),
         danmakus=[Danmaku(msg=f"m{i}", progress=i) for i in range(danmaku_count)],
         config_snapshot=SenderConfig().to_task_config(),
@@ -409,7 +409,7 @@ class TestQueueState:
             view.config.min_delay = 99.0  # type: ignore[misc]
 
     def test_spec_danmakus_are_frozen(self):
-        """Danmaku 不可变：写穿 TaskSpec 在类型层就不可能"""
+        """Danmaku 不可变：写穿 TaskDefinition 在类型层就不可能"""
         import dataclasses
 
         qs = QueueState()
@@ -421,7 +421,7 @@ class TestQueueState:
 
         snap = qs.snapshots({TaskStatus.PENDING})[0]
         with pytest.raises(dataclasses.FrozenInstanceError):
-            snap.spec.danmakus[0].msg = "hacked"  # type: ignore[misc]
+            snap.definition.danmakus[0].msg = "hacked"  # type: ignore[misc]
 
     def test_queue_state_has_no_lock(self):
         """QueueState 只允许主线程访问：跨线程读的 RLock 已删除。

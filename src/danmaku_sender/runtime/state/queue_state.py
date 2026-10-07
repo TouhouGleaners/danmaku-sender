@@ -11,9 +11,9 @@ from PySide6.QtCore import QObject, Signal
 from danmaku_sender.types.models.common import RelativePosition
 from danmaku_sender.types.models.danmaku import Danmaku
 from danmaku_sender.types.models.queue import (
-    QueueTask,
-    TaskRecord,
-    TaskRuntime,
+    Task,
+    TaskDraft,
+    TaskExecution,
     TaskSnapshot,
     TaskStatus,
     TaskView,
@@ -28,7 +28,7 @@ class QueueState(QObject):
     所有任务数据变更必须通过本类的方法进行，
     以确保信号正确发射，所有观察者（发射器、监视器等）自动同步。
 
-    内部存 TaskRecord = TaskSpec(不可变工单) + TaskRuntime(可变运行时)。
+    内部存 Task = TaskDefinition(不可变工单) + TaskExecution(可变运行时)。
     对外只暴露 TaskView 只读门面。
 
     只允许主线程访问；给 Worker 数据用 snapshots() 取不可变拷贝。
@@ -43,7 +43,7 @@ class QueueState(QObject):
 
     def __init__(self, parent=None):
         super().__init__(parent)
-        self._records: list[TaskRecord] = []
+        self._tasks: list[Task] = []
         self._current_index: int = -1
 
     # ── 只读访问 ──────────────────────────────────────────
@@ -51,7 +51,7 @@ class QueueState(QObject):
     @property
     def tasks(self) -> list[TaskView]:
         """只读视图列表。元素是 live 门面，可反复读到新值；禁止经此写入。"""
-        return [TaskView(r) for r in self._records]
+        return [TaskView(r) for r in self._tasks]
 
     def snapshots(
         self,
@@ -59,9 +59,9 @@ class QueueState(QObject):
     ) -> tuple[TaskSnapshot, ...]:
         """定死 status 的不可变采样，交给 Worker 后与后续变更隔离。"""
         return tuple(
-            TaskSnapshot(spec=r.spec, status=r.runtime.status)
-            for r in self._records
-            if r.runtime.status in statuses
+            TaskSnapshot(definition=r.definition, status=r.execution.status)
+            for r in self._tasks
+            if r.execution.status in statuses
         )
 
     @property
@@ -76,19 +76,19 @@ class QueueState(QObject):
 
     @property
     def is_empty(self) -> bool:
-        return len(self._records) == 0
+        return len(self._tasks) == 0
 
     # ── 统计属性 ──────────────────────────────────────────
 
     @property
     def pending_count(self) -> int:
         """等待发送的任务数"""
-        return sum(1 for r in self._records if r.runtime.status == TaskStatus.PENDING)
+        return sum(1 for r in self._tasks if r.execution.status == TaskStatus.PENDING)
 
     @property
     def has_pending_tasks(self) -> bool:
         """队列中是否有待发送的任务"""
-        return any(r.runtime.status == TaskStatus.PENDING for r in self._records)
+        return any(r.execution.status == TaskStatus.PENDING for r in self._tasks)
 
     @property
     def has_startable_tasks(self) -> bool:
@@ -97,12 +97,12 @@ class QueueState(QObject):
         PENDING 与 PAUSED 均计入: `SenderController.start_queue` 启动时会把
         残留运行态转回 PENDING 再取快照，PAUSED 因此属于可启动范围。
         """
-        return any(r.runtime.status in (TaskStatus.PENDING, TaskStatus.PAUSED) for r in self._records)
+        return any(r.execution.status in (TaskStatus.PENDING, TaskStatus.PAUSED) for r in self._tasks)
 
     @property
     def total_danmaku_count(self) -> int:
         """全队列弹幕总数"""
-        return sum(r.spec.total for r in self._records)
+        return sum(r.definition.total for r in self._tasks)
 
     @property
     def sendable_danmaku_count(self) -> int:
@@ -113,20 +113,20 @@ class QueueState(QObject):
         判据取配置完整性而非运行时状态:
         被跳过的残缺任务状态已经变了，但照样发不出去。
         """
-        return sum(r.spec.total for r in self._records if r.spec.is_config_complete)
+        return sum(r.definition.total for r in self._tasks if r.definition.is_config_complete)
 
     @property
     def processed_danmaku_count(self) -> int:
         """全队列已处理弹幕数（不含 PENDING、UNCONFIGURED 和 PAUSED）"""
         return sum(
-            r.runtime.attempted for r in self._records
-            if r.runtime.status not in (TaskStatus.PENDING, TaskStatus.UNCONFIGURED, TaskStatus.PAUSED)
+            r.execution.attempted for r in self._tasks
+            if r.execution.status not in (TaskStatus.PENDING, TaskStatus.UNCONFIGURED, TaskStatus.PAUSED)
         )
 
     @property
     def status_counts(self) -> dict[TaskStatus, int]:
         """各状态的任务数量"""
-        return dict(Counter(r.runtime.status for r in self._records))
+        return dict(Counter(r.execution.status for r in self._tasks))
 
     # ── 查询 ─────────────────────────────────────────────
 
@@ -144,55 +144,55 @@ class QueueState(QObject):
         Returns:
             int | None: 命中的索引。
         """
-        for i, record in enumerate(self._records):
-            if record.spec.task_id == task_id:
+        for i, record in enumerate(self._tasks):
+            if record.definition.task_id == task_id:
                 return i
         return None
 
-    def _find(self, task_id: str) -> TaskRecord | None:
+    def _find(self, task_id: str) -> Task | None:
         """按 task_id 查找存储单元；不存在返回 None。
 
         Args:
             task_id (str): 任务标识。
 
         Returns:
-            TaskRecord | None: 命中的存储单元。
+            Task | None: 命中的存储单元。
         """
         index = self._find_index(task_id)
-        return self._records[index] if index is not None else None
+        return self._tasks[index] if index is not None else None
 
     # ── 结构变更（发射 tasksChanged）──────────────────────
 
-    def add_task(self, task: QueueTask):
+    def add_task(self, task: TaskDraft):
         """添加任务到队列末尾（入队瞬间拆成 Spec + Runtime）。
 
         入队时按配置完整性对齐状态，
         不信任草稿自带的 status——配置残缺的任务不可能以待发进队。
         """
-        record = self._to_record(task)
+        record = self._to_task(task)
         self._reconcile_config_status(record)
-        self._records.append(record)
+        self._tasks.append(record)
         self.tasksChanged.emit()
         logger.info(
-            f"任务已加入队列: [{record.spec.task_id}] "
-            f"{record.spec.target.display_string} ({record.spec.total} 条弹幕)"
+            f"任务已加入队列: [{record.definition.task_id}] "
+            f"{record.definition.target.display_string} ({record.definition.total} 条弹幕)"
         )
 
-    def insert_task(self, task: QueueTask, ref_task_id: str, position: RelativePosition = RelativePosition.BELOW):
+    def insert_task(self, task: TaskDraft, ref_task_id: str, position: RelativePosition = RelativePosition.BELOW):
         """在参考任务上方/下方插入；参考不存在时追加到末尾。
 
         这是队列插入的唯一公开入口，调用方不接触绝对下标。
         入队时按配置完整性对齐状态，不信任草稿自带的 status。
 
         Args:
-            task (QueueTask): 任务草稿，入队时拆成不可变工单与可变运行时。
+            task (TaskDraft): 任务草稿，入队时拆成不可变工单与可变运行时。
             ref_task_id (str): 参考任务标识。
             position (RelativePosition): 插在参考任务的哪一侧，默认 BELOW。
 
         Raises:
             ValueError: position 不是 ABOVE / BELOW。
         """
-        record = self._to_record(task)
+        record = self._to_task(task)
         self._reconcile_config_status(record)
 
         match position:
@@ -207,15 +207,15 @@ class QueueState(QObject):
         ref_index = self._find_index(ref_task_id)
 
         # 计算实际插入位置
-        insert_index = len(self._records) if ref_index is None else ref_index + offset
+        insert_index = len(self._tasks) if ref_index is None else ref_index + offset
 
         # 执行插入
-        self._records.insert(insert_index, record)
+        self._tasks.insert(insert_index, record)
 
         self.tasksChanged.emit()
         logger.info(
-            f"任务已插入队列 (相对 {ref_task_id} {position.value}): [{record.spec.task_id}] "
-            f"{record.spec.target.display_string} ({record.spec.total} 条弹幕)"
+            f"任务已插入队列 (相对 {ref_task_id} {position.value}): [{record.definition.task_id}] "
+            f"{record.definition.target.display_string} ({record.definition.total} 条弹幕)"
         )
 
     def remove_task(self, task_id: str):
@@ -229,11 +229,11 @@ class QueueState(QObject):
             logger.warning(f"移除任务失败: 找不到任务 [{task_id}]")
             return
 
-        if self._records[index].runtime.status is TaskStatus.RUNNING:
+        if self._tasks[index].execution.status is TaskStatus.RUNNING:
             logger.warning(f"移除任务失败: 任务 [{task_id}] 正在发送中，无法移除。")
             return
 
-        self._records.pop(index)
+        self._tasks.pop(index)
         self.tasksChanged.emit()
         logger.info(f"任务已从队列移除: [{task_id}]")
 
@@ -261,40 +261,40 @@ class QueueState(QObject):
             return
 
         # 目标任务不可编辑
-        if not self._records[index].runtime.status.is_editable:
-            logger.warning(f"移动任务失败: 任务 [{task_id}] 状态为 {self._records[index].runtime.status.value}，不可编辑。")
+        if not self._tasks[index].execution.status.is_editable:
+            logger.warning(f"移动任务失败: 任务 [{task_id}] 状态为 {self._tasks[index].execution.status.value}，不可编辑。")
             return
 
         # 校验目标位置是否越界
         new_index = index + offset
-        if not (0 <= new_index < len(self._records)):
+        if not (0 <= new_index < len(self._tasks)):
             logger.warning(f"移动任务失败: 任务 [{task_id}] 已在队列最{toward.value}。")
             return
 
         # 校验相邻任务是否可编辑
-        adjacent_task = self._records[new_index]
-        if not adjacent_task.runtime.status.is_editable:
-            logger.warning(f"移动任务失败: 相邻任务 [{adjacent_task.spec.task_id}] 状态为 {adjacent_task.runtime.status.value}，不可编辑。")
+        adjacent_task = self._tasks[new_index]
+        if not adjacent_task.execution.status.is_editable:
+            logger.warning(f"移动任务失败: 相邻任务 [{adjacent_task.definition.task_id}] 状态为 {adjacent_task.execution.status.value}，不可编辑。")
             return
 
-        self._records[index], self._records[new_index] = self._records[new_index], self._records[index]
+        self._tasks[index], self._tasks[new_index] = self._tasks[new_index], self._tasks[index]
         self.tasksChanged.emit()
 
     def reorder_tasks(self, task_ids: list[str]):
         """按给定的 task_id 顺序重排；列表必须是当前队列的全排列。"""
-        by_id = {r.spec.task_id: r for r in self._records}
-        if set(task_ids) != set(by_id) or len(task_ids) != len(self._records):
+        by_id = {r.definition.task_id: r for r in self._tasks}
+        if set(task_ids) != set(by_id) or len(task_ids) != len(self._tasks):
             logger.warning("reorder_tasks 忽略: task_id 列表与当前队列不一致。")
             return
-        self._records = [by_id[tid] for tid in task_ids]
+        self._tasks = [by_id[tid] for tid in task_ids]
         self.tasksChanged.emit()
 
     def clear_all(self):
         """清空整个队列（所有状态的任务都移除）"""
-        removed = len(self._records)
+        removed = len(self._tasks)
         if removed == 0:
             return
-        self._records.clear()
+        self._tasks.clear()
         self.tasksChanged.emit()
         logger.info(f"已清空队列（{removed} 个任务）")
 
@@ -307,18 +307,18 @@ class QueueState(QObject):
         """
         revived: list[str] = []
         removed = 0
-        kept: list[TaskRecord] = []
-        for record in self._records:
-            if record.runtime.status is TaskStatus.COMPLETED:
+        kept: list[Task] = []
+        for record in self._tasks:
+            if record.execution.status is TaskStatus.COMPLETED:
                 removed += 1
                 continue
-            if record.runtime.status is TaskStatus.FAILED:
-                record.runtime.status = TaskStatus.PENDING
-                record.runtime.error_msg = ""
-                record.runtime.attempted = 0
-                revived.append(record.spec.task_id)
+            if record.execution.status is TaskStatus.FAILED:
+                record.execution.status = TaskStatus.PENDING
+                record.execution.error_msg = ""
+                record.execution.attempted = 0
+                revived.append(record.definition.task_id)
             kept.append(record)
-        self._records = kept
+        self._tasks = kept
 
         if not removed and not revived:
             return
@@ -339,21 +339,21 @@ class QueueState(QObject):
         if record is None:
             return
 
-        if not record.runtime.status.is_editable:
+        if not record.execution.status.is_editable:
             return
 
-        record.spec = replace(
-            record.spec,
+        record.definition = replace(
+            record.definition,
             danmakus=tuple(danmakus),
-            xml_path=xml_path if xml_path is not None else record.spec.xml_path,
+            xml_path=xml_path if xml_path is not None else record.definition.xml_path,
         )
         if self._reconcile_config_status(record):
-            self.taskStatusChanged.emit(record.spec.task_id, record.runtime.status)
+            self.taskStatusChanged.emit(record.definition.task_id, record.execution.status)
 
         self.taskDataChanged.emit(task_id)
-        logger.info(f"已分配弹幕: {task_id} ({record.spec.total} 条)")
+        logger.info(f"已分配弹幕: {task_id} ({record.definition.total} 条)")
 
-    def apply_edit(self, task_id: str, source: QueueTask):
+    def apply_edit(self, task_id: str, source: TaskDraft):
         """全量应用来自详情弹窗沙盒的修改结果（换新 Spec）。
 
         发送中等非可编辑状态拒绝并记警告，队列保持原样。
@@ -361,22 +361,22 @@ class QueueState(QObject):
         record = self._find(task_id)
         if record is None:
             return
-        if not record.runtime.status.is_editable:
-            logger.warning(f"任务 [{task_id}] 处于 {record.runtime.status.value}，已忽略编辑结果。")
+        if not record.execution.status.is_editable:
+            logger.warning(f"任务 [{task_id}] 处于 {record.execution.status.value}，已忽略编辑结果。")
             return
 
-        old_status = record.runtime.status
+        old_status = record.execution.status
         # 以队列中的 task_id 为准，防止沙盒误带其它 id
-        record.spec = replace(source.to_spec(), task_id=task_id)
-        record.runtime.status = source.status
-        record.runtime.error_msg = source.error_msg
+        record.definition = replace(source.to_definition(), task_id=task_id)
+        record.execution.status = source.status
+        record.execution.error_msg = source.error_msg
         self._reconcile_config_status(record)
 
-        if record.runtime.status != old_status:
-            self.taskStatusChanged.emit(task_id, record.runtime.status)
+        if record.execution.status != old_status:
+            self.taskStatusChanged.emit(task_id, record.execution.status)
         self.taskDataChanged.emit(task_id)
 
-    def _reconcile_config_status(self, record: TaskRecord) -> bool:
+    def _reconcile_config_status(self, record: Task) -> bool:
         """按配置完整性对齐预运行状态；返回状态是否变化。
 
         配置齐备（弹幕 + 视频目标）的 UNCONFIGURED / SKIPPED 转回 PENDING；
@@ -389,15 +389,15 @@ class QueueState(QObject):
         Returns:
             bool: 状态发生变化返回 True。
         """
-        status = record.runtime.status
-        complete = record.spec.is_config_complete
+        status = record.execution.status
+        complete = record.definition.is_config_complete
 
         if complete and status in (TaskStatus.UNCONFIGURED, TaskStatus.SKIPPED):
-            record.runtime.status = TaskStatus.PENDING
-            record.runtime.error_msg = ""
+            record.execution.status = TaskStatus.PENDING
+            record.execution.error_msg = ""
             return True
         if not complete and status is TaskStatus.PENDING:
-            record.runtime.status = TaskStatus.UNCONFIGURED
+            record.execution.status = TaskStatus.UNCONFIGURED
             return True
         return False
 
@@ -408,8 +408,8 @@ class QueueState(QObject):
         record = self._find(task_id)
         if record is None:
             return
-        record.runtime.status = status
-        record.runtime.error_msg = error_msg
+        record.execution.status = status
+        record.execution.error_msg = error_msg
         self.taskStatusChanged.emit(task_id, status)
 
     def update_task_progress(self, task_id: str, attempted: int, total: int):
@@ -417,18 +417,18 @@ class QueueState(QObject):
         record = self._find(task_id)
         if record is None:
             return
-        record.runtime.attempted = attempted
-        actual_total = record.spec.total or total
+        record.execution.attempted = attempted
+        actual_total = record.definition.total or total
         self.taskProgressChanged.emit(task_id, attempted, actual_total)
 
     # ── 内部转换 ─────────────────────────────────────────
 
     @staticmethod
-    def _to_record(task: QueueTask) -> TaskRecord:
-        """草稿 → 存储单元。运行时字段随草稿带入（UNCONFIGURED 等）。"""
-        return TaskRecord(
-            spec=task.to_spec(),
-            runtime=TaskRuntime(
+    def _to_task(task: TaskDraft) -> Task:
+        """草稿 → 队列里的一项。运行时字段随草稿带入（UNCONFIGURED 等）。"""
+        return Task(
+            definition=task.to_definition(),
+            execution=TaskExecution(
                 status=task.status,
                 error_msg=task.error_msg,
                 attempted=task.attempted,

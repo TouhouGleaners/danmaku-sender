@@ -7,20 +7,20 @@ from danmaku_sender.types.models.common import VideoTarget
 from danmaku_sender.types.models.danmaku import Danmaku
 from danmaku_sender.types.models.queue import (
     TaskConfig,
+    TaskDefinition,
     TaskSnapshot,
-    TaskSpec,
     TaskStatus,
 )
 
 
-def _spec(task_id: str, total: int = 2) -> TaskSpec:
+def _definition(task_id: str, total: int = 2) -> TaskDefinition:
     """构造最小可用的工单。
 
     弹幕数默认 2：DelayManager.calc_eta 的契约是「最后一条发完不产生延时」，
     只有 1 条时任务自身 ETA 为 0，无法区分「间隔」与「任务耗时」。
     节奏取同值，便于只比较间隔部分。
     """
-    return TaskSpec(
+    return TaskDefinition(
         task_id=task_id,
         target=VideoTarget(bvid="BV1", cid=1),
         danmakus=tuple(Danmaku(msg="x", progress=0) for _ in range(total)),
@@ -33,7 +33,7 @@ def _spec(task_id: str, total: int = 2) -> TaskSpec:
 
 
 def _eta(future: tuple[TaskSnapshot, ...], policy: SendPolicy) -> float:
-    return QueueSendWorker._calc_queue_eta(0, 1, _spec("t1").config, future, policy)
+    return QueueSendWorker._calc_queue_eta(0, 1, _definition("t1").config, future, policy)
 
 
 class TestCalcQueueEta:
@@ -44,9 +44,9 @@ class TestCalcQueueEta:
         """
         policy = SendPolicy(delay_between_tasks=100.0)
         future = (
-            TaskSnapshot(spec=_spec("t2"), status=TaskStatus.COMPLETED),
-            TaskSnapshot(spec=_spec("t3"), status=TaskStatus.FAILED),
-            TaskSnapshot(spec=_spec("t4"), status=TaskStatus.SKIPPED),
+            TaskSnapshot(definition=_definition("t2"), status=TaskStatus.COMPLETED),
+            TaskSnapshot(definition=_definition("t3"), status=TaskStatus.FAILED),
+            TaskSnapshot(definition=_definition("t4"), status=TaskStatus.SKIPPED),
         )
         assert _eta(future, policy) == _eta((), policy)
 
@@ -57,17 +57,17 @@ class TestCalcQueueEta:
         """
         policy = SendPolicy(delay_between_tasks=100.0)
         trailing_done = (
-            TaskSnapshot(spec=_spec("t2"), status=TaskStatus.PENDING),
-            TaskSnapshot(spec=_spec("t3"), status=TaskStatus.COMPLETED),
+            TaskSnapshot(definition=_definition("t2"), status=TaskStatus.PENDING),
+            TaskSnapshot(definition=_definition("t3"), status=TaskStatus.COMPLETED),
         )
-        only_pending = (TaskSnapshot(spec=_spec("t2"), status=TaskStatus.PENDING),)
+        only_pending = (TaskSnapshot(definition=_definition("t2"), status=TaskStatus.PENDING),)
         assert _eta(trailing_done, policy) == _eta(only_pending, policy)
 
     def test_one_gap_per_pending_task(self):
         """每个待发任务前算一次间隔：每多一个待发任务，增量相同。"""
         policy = SendPolicy(delay_between_tasks=100.0)
-        first = TaskSnapshot(spec=_spec("t2"), status=TaskStatus.PENDING)
-        second = TaskSnapshot(spec=_spec("t3"), status=TaskStatus.PENDING)
+        first = TaskSnapshot(definition=_definition("t2"), status=TaskStatus.PENDING)
+        second = TaskSnapshot(definition=_definition("t3"), status=TaskStatus.PENDING)
 
         base = _eta((), policy)
         one = _eta((first,), policy)

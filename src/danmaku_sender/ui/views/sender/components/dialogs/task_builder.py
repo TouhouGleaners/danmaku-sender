@@ -18,7 +18,7 @@ from danmaku_sender.controller.video_controller import VideoController
 from danmaku_sender.runtime.state.app_state import AppState
 from danmaku_sender.service.danmaku_xml import DanmakuXml
 from danmaku_sender.types.models.common import RelativePosition, VideoTarget
-from danmaku_sender.types.models.queue import QueueTask
+from danmaku_sender.types.models.queue import TaskDraft
 from danmaku_sender.types.models.video import VideoInfo
 from danmaku_sender.utils.string_utils import parse_bilibili_link
 
@@ -232,16 +232,15 @@ class TaskBuilderDialog(QDialog):
         danmakus = []
         xml_path: Path | None = None
         if self._selected_files:
-            parser = DanmakuXml
             file_idx = min(self._part_combo.currentIndex(), len(self._selected_files) - 1)
             xml_path = self._selected_files[file_idx]
             try:
-                danmakus = parser.parse_file(xml_path)
+                danmakus = DanmakuXml.parse_file(xml_path)
             except Exception as e:
                 QMessageBox.warning(self, "解析失败", f"弹幕文件解析失败:\n{e}")
                 return
 
-        task = QueueTask(
+        task = TaskDraft(
             target=target,
             danmakus=danmakus,
             config_snapshot=self.state.sender_config.to_task_config(),

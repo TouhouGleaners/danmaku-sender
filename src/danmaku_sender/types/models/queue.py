@@ -49,10 +49,10 @@ class TaskConfig:
 
 
 @dataclass(frozen=True)
-class TaskSpec:
+class TaskDefinition:
     """任务工单（入队后不可变）。
 
-    Worker 只持有 TaskSpec / TaskSnapshot，摸不到 TaskRuntime。
+    Worker 只持有 TaskDefinition / TaskSnapshot，摸不到 TaskExecution。
     config 是入队那一刻定死的发送节奏，冻结类型，无需防御性拷贝。
     danmakus 为 tuple，结构上不可替换；发送管线须持有自己的 Danmaku 副本
     （见 SendJob 构造处的 clone），不得回填 dmid 写穿本工单。
@@ -91,7 +91,7 @@ class TaskSpec:
 
 
 @dataclass
-class TaskRuntime:
+class TaskExecution:
     """任务运行时（仅主线程 QueueState 可写）"""
     status: TaskStatus = TaskStatus.PENDING
     error_msg: str = ""
@@ -99,118 +99,118 @@ class TaskRuntime:
 
 
 @dataclass
-class TaskRecord:
-    """QueueState 存储单元：不可变工单 + 可变运行时"""
-    spec: TaskSpec
-    runtime: TaskRuntime
+class Task:
+    """队列里的一项：不可变工单 + 可变运行时"""
+    definition: TaskDefinition
+    execution: TaskExecution
 
 
 @dataclass(frozen=True)
 class TaskSnapshot:
     """Worker 启动时的一次性采样：status 在采样时定死，与后续主线程落账隔离。"""
-    spec: TaskSpec
+    definition: TaskDefinition
     status: TaskStatus
 
 
 class TaskView:
     """任务只读视图（live 门面）。
 
-    属性实时读自 TaskRecord，表格 refresh_row 无需换对象即可看到新值。
+    属性实时读自 Task，表格 refresh_row 无需换对象即可看到新值。
     禁止缓存字段值做业务判断，更禁止经此写入——变更一律走 QueueState API。
     """
-    __slots__ = ("_record",)
+    __slots__ = ("_task",)
 
-    def __init__(self, record: TaskRecord) -> None:
-        self._record = record
+    def __init__(self, task: Task) -> None:
+        self._task = task
 
     @property
     def task_id(self) -> str:
-        return self._record.spec.task_id
+        return self._task.definition.task_id
 
     @property
     def target(self) -> VideoTarget:
-        return self._record.spec.target
+        return self._task.definition.target
 
     @property
     def danmakus(self) -> tuple[Danmaku, ...]:
-        return self._record.spec.danmakus
+        return self._task.definition.danmakus
 
     @property
     def config(self) -> TaskConfig:
         """发送节奏参数（冻结，直接给出即可）。"""
-        return self._record.spec.config
+        return self._task.definition.config
 
     @property
     def p_index(self) -> int:
-        return self._record.spec.p_index
+        return self._task.definition.p_index
 
     @property
     def p_title(self) -> str:
-        return self._record.spec.p_title
+        return self._task.definition.p_title
 
     @property
     def xml_path(self) -> Path | None:
-        return self._record.spec.xml_path
+        return self._task.definition.xml_path
 
     @property
     def duration_ms(self) -> int:
-        return self._record.spec.duration_ms
+        return self._task.definition.duration_ms
 
     @property
     def total(self) -> int:
-        return self._record.spec.total
+        return self._task.definition.total
 
     @property
     def is_config_complete(self) -> bool:
         """配置是否齐备可发：弹幕与视频目标都在。"""
-        return self._record.spec.is_config_complete
+        return self._task.definition.is_config_complete
 
     @property
     def missing_config_text(self) -> str:
         """缺失配置项的一句话说明；齐备时返回空字符串。"""
-        return self._record.spec.missing_config_text
+        return self._task.definition.missing_config_text
 
     @property
     def status(self) -> TaskStatus:
-        return self._record.runtime.status
+        return self._task.execution.status
 
     @property
     def error_msg(self) -> str:
-        return self._record.runtime.error_msg
+        return self._task.execution.error_msg
 
     @property
     def attempted(self) -> int:
-        return self._record.runtime.attempted
+        return self._task.execution.attempted
 
-    def to_draft(self) -> "QueueTask":
+    def to_draft(self) -> "TaskDraft":
         """拷贝为可变编辑沙盒（详情弹窗 / 构建弹窗用）"""
-        spec = self._record.spec
-        runtime = self._record.runtime
-        return QueueTask(
-            target=replace(spec.target),
-            danmakus=list(spec.danmakus),
-            config_snapshot=spec.config,
-            task_id=spec.task_id,
-            p_index=spec.p_index,
-            p_title=spec.p_title,
-            xml_path=spec.xml_path,
-            duration_ms=spec.duration_ms,
-            status=runtime.status,
-            error_msg=runtime.error_msg,
-            attempted=runtime.attempted,
+        definition = self._task.definition
+        execution = self._task.execution
+        return TaskDraft(
+            target=replace(definition.target),
+            danmakus=list(definition.danmakus),
+            config_snapshot=definition.config,
+            task_id=definition.task_id,
+            p_index=definition.p_index,
+            p_title=definition.p_title,
+            xml_path=definition.xml_path,
+            duration_ms=definition.duration_ms,
+            status=execution.status,
+            error_msg=execution.error_msg,
+            attempted=execution.attempted,
         )
 
     def snapshot(self) -> TaskSnapshot:
         """定死当前 status 的不可变采样（Worker / 跨线程读取用）"""
-        return TaskSnapshot(spec=self._record.spec, status=self._record.runtime.status)
+        return TaskSnapshot(definition=self._task.definition, status=self._task.execution.status)
 
 
 @dataclass
-class QueueTask:
+class TaskDraft:
     """构造期 / 编辑沙盒 DTO。
 
     仅用于「组装 → 入队」与「详情弹窗编辑」。入队后由 QueueState 拆成
-    TaskSpec + TaskRuntime，本对象不再代表队列中的真实任务。
+    TaskDefinition + TaskExecution，本对象不再代表队列中的真实任务。
     """
     target: VideoTarget
     danmakus: list[Danmaku]
@@ -248,9 +248,9 @@ class QueueTask:
         """按配置完整性给出的新建状态：齐备为待发，否则为未配置。"""
         return TaskStatus.PENDING if self.is_config_complete else TaskStatus.UNCONFIGURED
 
-    def to_spec(self) -> TaskSpec:
+    def to_definition(self) -> TaskDefinition:
         """打成不可变工单（target 拷贝，config 本就冻结，弹幕收成 tuple）"""
-        return TaskSpec(
+        return TaskDefinition(
             task_id=self.task_id,
             target=replace(self.target),
             danmakus=tuple(self.danmakus),
