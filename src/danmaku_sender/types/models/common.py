@@ -1,5 +1,5 @@
 from dataclasses import dataclass
-from enum import Enum, IntEnum, auto
+from enum import Enum, IntEnum
 from typing import TypedDict
 
 from .danmaku import Danmaku
@@ -9,10 +9,10 @@ class RelativePosition(Enum):
     """相对参考项的位置（有序集合中的前后）。
 
     队列插入、编辑器插入与上下移动共用这一根轴：ABOVE 是参考项之前，
-    BELOW 是参考项之后。
+    BELOW 是参考项之后。value 是日志里的中文说法。
     """
-    ABOVE = auto()
-    BELOW = auto()
+    ABOVE = "上方"
+    BELOW = "下方"
 
 
 class DanmakuStatus(IntEnum):

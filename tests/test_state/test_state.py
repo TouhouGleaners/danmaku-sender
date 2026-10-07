@@ -226,9 +226,9 @@ class TestQueueState:
         qs.add_task(t1)
         qs.add_task(t2)
         with pytest.raises(ValueError):
-            qs.move_task(t1.task_id, "上方")  # type: ignore[arg-type]
+            qs.move_task(t1.task_id, 999)  # type: ignore[arg-type]
         with pytest.raises(ValueError):
-            qs.insert_task(make_task(3), t1.task_id, "上方")  # type: ignore[arg-type]
+            qs.insert_task(make_task(3), t1.task_id, 999)  # type: ignore[arg-type]
         assert [t.target.cid for t in qs.tasks] == [1, 2], "被拒的调用不得改动队列"
 
     def test_reset_queue_semantics(self):
