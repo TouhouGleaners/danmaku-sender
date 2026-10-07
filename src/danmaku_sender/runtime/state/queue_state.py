@@ -70,11 +70,8 @@ class QueueState(QObject):
 
     @current_index.setter
     def current_index(self, value: int):
-        emit = False
         if self._current_index != value:
             self._current_index = value
-            emit = True
-        if emit:
             self.currentTaskChanged.emit(value)
 
     @property
@@ -97,7 +94,7 @@ class QueueState(QObject):
     def has_startable_tasks(self) -> bool:
         """启动队列后是否存在可执行的任务。
 
-        PENDING 与 PAUSED 均计入：`SenderController.start_queue` 启动时会把
+        PENDING 与 PAUSED 均计入: `SenderController.start_queue` 启动时会把
         残留运行态转回 PENDING 再取快照，PAUSED 因此属于可启动范围。
         """
         return any(r.runtime.status in (TaskStatus.PENDING, TaskStatus.PAUSED) for r in self._records)
@@ -113,7 +110,7 @@ class QueueState(QObject):
 
         配置不完整的任务——无论此刻是 UNCONFIGURED 还是已被跳过
         ——都永远不会发，不能进发送进度的分母。
-        判据取配置完整性而非运行时状态：
+        判据取配置完整性而非运行时状态:
         被跳过的残缺任务状态已经变了，但照样发不出去。
         """
         return sum(r.spec.total for r in self._records if r.spec.is_config_complete)
@@ -129,10 +126,7 @@ class QueueState(QObject):
     @property
     def status_counts(self) -> dict[TaskStatus, int]:
         """各状态的任务数量"""
-        counts: dict[TaskStatus, int] = Counter()
-        for r in self._records:
-            counts[r.runtime.status] += 1
-        return dict(counts)
+        return dict(Counter(r.runtime.status for r in self._records))
 
     # ── 查询 ─────────────────────────────────────────────
 
@@ -141,19 +135,31 @@ class QueueState(QObject):
         record = self._find(task_id)
         return TaskView(record) if record else None
 
+    def _find_index(self, task_id: str) -> int | None:
+        """按 task_id 查找索引；不存在返回 None。
+
+        Args:
+            task_id (str): 任务标识。
+
+        Returns:
+            int | None: 命中的索引。
+        """
+        for i, record in enumerate(self._records):
+            if record.spec.task_id == task_id:
+                return i
+        return None
+
     def _find(self, task_id: str) -> TaskRecord | None:
         """按 task_id 查找存储单元；不存在返回 None。
 
         Args:
-            task_id: 任务标识。
+            task_id (str): 任务标识。
 
         Returns:
             TaskRecord | None: 命中的存储单元。
         """
-        for record in self._records:
-            if record.spec.task_id == task_id:
-                return record
-        return None
+        index = self._find_index(task_id)
+        return self._records[index] if index is not None else None
 
     # ── 结构变更（发射 tasksChanged）──────────────────────
 
@@ -172,96 +178,113 @@ class QueueState(QObject):
             f"{record.spec.target.display_string} ({record.spec.total} 条弹幕)"
         )
 
-    def insert_task(
-        self,
-        task: QueueTask,
-        ref_task_id: str,
-        position: RelativePosition = RelativePosition.BELOW,
-    ):
+    def insert_task(self, task: QueueTask, ref_task_id: str, position: RelativePosition = RelativePosition.BELOW):
         """在参考任务上方/下方插入；参考不存在时追加到末尾。
 
         这是队列插入的唯一公开入口，调用方不接触绝对下标。
         入队时按配置完整性对齐状态，不信任草稿自带的 status。
 
         Args:
-            task: 任务草稿，入队时拆成不可变工单与可变运行时。
-            ref_task_id: 参考任务标识。
-            position: 插在参考任务的哪一侧。
+            task (QueueTask): 任务草稿，入队时拆成不可变工单与可变运行时。
+            ref_task_id (str): 参考任务标识。
+            position (RelativePosition): 插在参考任务的哪一侧，默认 BELOW。
+
+        Raises:
+            ValueError: position 不是 ABOVE / BELOW。
         """
         record = self._to_record(task)
         self._reconcile_config_status(record)
-        ref_index = -1
-        for i, r in enumerate(self._records):
-            if r.spec.task_id == ref_task_id:
-                ref_index = i
-                break
-        if ref_index < 0:
-            self._records.append(record)
-        else:
-            match position:
-                case RelativePosition.ABOVE:
-                    index = ref_index
-                case RelativePosition.BELOW:
-                    index = ref_index + 1
-                case _:
-                    raise ValueError(f"未知的相对位置: {position!r}")
-            if index >= len(self._records):
-                self._records.append(record)
-            else:
-                self._records.insert(max(0, index), record)
+
+        match position:
+            case RelativePosition.ABOVE:
+                offset = 0
+            case RelativePosition.BELOW:
+                offset = 1
+            case _:
+                raise ValueError(f"未知的相对位置: {position!r}")
+
+        # 查找参考任务索引
+        ref_index = self._find_index(ref_task_id)
+
+        # 计算实际插入位置
+        insert_index = len(self._records) if ref_index is None else ref_index + offset
+
+        # 执行插入
+        self._records.insert(insert_index, record)
+
         self.tasksChanged.emit()
         logger.info(
-            f"任务已插入队列 (相对 {ref_task_id} {position.name}): [{record.spec.task_id}] "
+            f"任务已插入队列 (相对 {ref_task_id} {position.value}): [{record.spec.task_id}] "
             f"{record.spec.target.display_string} ({record.spec.total} 条弹幕)"
         )
 
     def remove_task(self, task_id: str):
-        """移除指定任务(非 RUNNING 任务)"""
-        removed = False
-        for i, r in enumerate(self._records):
-            if r.spec.task_id == task_id and r.runtime.status is not TaskStatus.RUNNING:
-                self._records.pop(i)
-                removed = True
-                break
+        """移除指定任务(非 RUNNING 任务)
 
-        if removed:
-            self.tasksChanged.emit()
-            logger.info(f"任务已从队列移除: [{task_id}]")
+        Args:
+            task_id (str): 要移除的任务标识。
+        """
+        index = self._find_index(task_id)
+        if index is None:
+            logger.warning(f"移除任务失败: 找不到任务 [{task_id}]")
+            return
+
+        if self._records[index].runtime.status is TaskStatus.RUNNING:
+            logger.warning(f"移除任务失败: 任务 [{task_id}] 正在发送中，无法移除。")
+            return
+
+        self._records.pop(index)
+        self.tasksChanged.emit()
+        logger.info(f"任务已从队列移除: [{task_id}]")
 
     def move_task(self, task_id: str, toward: RelativePosition):
         """上下移动一个任务；相邻项不可编辑时不动。
 
         Args:
-            task_id: 要移动的任务标识。
-            toward: 移向参考项的哪一侧，ABOVE 为上移，BELOW 为下移。
+            task_id (str): 要移动的任务标识。
+            toward (RelativePosition): 移向参考项的哪一侧，ABOVE 为上移，BELOW 为下移。
         """
-        moved = False
-        for i, r in enumerate(self._records):
-            if r.spec.task_id == task_id and r.runtime.status.is_editable:
-                match toward:
-                    case RelativePosition.ABOVE:
-                        new_index = i - 1
-                    case RelativePosition.BELOW:
-                        new_index = i + 1
-                    case _:
-                        raise ValueError(f"未知的相对位置: {toward!r}")
-                if (
-                    0 <= new_index < len(self._records)
-                    and self._records[new_index].runtime.status.is_editable
-                ):
-                    self._records[i], self._records[new_index] = (
-                        self._records[new_index], self._records[i]
-                    )
-                    moved = True
-                break
-        if moved:
-            self.tasksChanged.emit()
+        match toward:
+            case RelativePosition.ABOVE:
+                offset = -1
+            case RelativePosition.BELOW:
+                offset = 1
+            case _:
+                raise ValueError(f"未知的相对位置: {toward!r}")
+
+        # 目标任务索引
+        index = self._find_index(task_id)
+
+        # 目标任务不存在
+        if index is None:
+            logger.warning(f"移动任务失败: 找不到任务 [{task_id}]")
+            return
+
+        # 目标任务不可编辑
+        if not self._records[index].runtime.status.is_editable:
+            logger.warning(f"移动任务失败: 任务 [{task_id}] 状态为 {self._records[index].runtime.status.value}，不可编辑。")
+            return
+
+        # 校验目标位置是否越界
+        new_index = index + offset
+        if not (0 <= new_index < len(self._records)):
+            logger.warning(f"移动任务失败: 任务 [{task_id}] 已在队列最{toward.value}。")
+            return
+
+        # 校验相邻任务是否可编辑
+        adjacent_task = self._records[new_index]
+        if not adjacent_task.runtime.status.is_editable:
+            logger.warning(f"移动任务失败: 相邻任务 [{adjacent_task.spec.task_id}] 状态为 {adjacent_task.runtime.status.value}，不可编辑。")
+            return
+
+        self._records[index], self._records[new_index] = self._records[new_index], self._records[index]
+        self.tasksChanged.emit()
 
     def reorder_tasks(self, task_ids: list[str]):
         """按给定的 task_id 顺序重排；列表必须是当前队列的全排列。"""
         by_id = {r.spec.task_id: r for r in self._records}
         if set(task_ids) != set(by_id) or len(task_ids) != len(self._records):
-            logger.warning("reorder_tasks 忽略：task_id 列表与当前队列不一致。")
+            logger.warning("reorder_tasks 忽略: task_id 列表与当前队列不一致。")
             return
         self._records = [by_id[tid] for tid in task_ids]
         self.tasksChanged.emit()
@@ -276,7 +299,7 @@ class QueueState(QObject):
         logger.info(f"已清空队列（{removed} 个任务）")
 
     def reset_queue(self):
-        """重置队列：移除已完成、失败任务转待发。
+        """重置队列: 移除已完成、失败任务转待发。
 
         SKIPPED / UNCONFIGURED 保留——它们缺配置，转待发没有意义；
         PENDING / PAUSED / RUNNING 不动。转待发清零进度与错误信息，
@@ -302,7 +325,7 @@ class QueueState(QObject):
         for task_id in revived:
             self.taskStatusChanged.emit(task_id, TaskStatus.PENDING)
         self.tasksChanged.emit()
-        logger.info(f"队列已重置：移除 {removed} 个已完成任务，{len(revived)} 个失败任务转待发")
+        logger.info(f"队列已重置: 移除 {removed} 个已完成任务，{len(revived)} 个失败任务转待发")
 
     # ── 数据变更（发射 taskDataChanged）───────────────────────
 
