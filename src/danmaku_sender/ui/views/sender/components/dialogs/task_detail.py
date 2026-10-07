@@ -277,7 +277,7 @@ class TaskDetailDialog(QDialog):
             self._file_input.setText(files[0].split("/")[-1].split("\\")[-1])
             # 预览弹幕数量
             try:
-                danmakus = DanmakuXml.parse_file(files[0])
+                danmakus = DanmakuXml.parse_file(self._selected_file)
                 self._detail_dm_count.setText(f"{len(danmakus)} (待保存)")
             except Exception:
                 self._detail_dm_count.setText("解析失败")
