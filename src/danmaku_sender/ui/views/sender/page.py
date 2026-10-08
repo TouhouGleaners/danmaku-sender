@@ -765,8 +765,10 @@ class SenderPage(QWidget):
     @Slot(str, object)
     def _on_queue_task_completed(self, task_id: str, ctx: SendingContext):
         task = self.state.queue_state.get_task_by_id(task_id)
-        if task:
-            self.logger.info(f"完成: {task.display_string} (成功 {ctx.success_count}/{ctx.total})")
+        if task is None:
+            return
+
+        self.logger.info(f"完成: {task.display_string} (成功 {ctx.success_count}/{ctx.total})")
         if ctx.unsent_records:
             self._unsent_by_task[task_id] = TaskUnsent(
                 label=self._unsent_label(task), records=list(ctx.unsent_records)
@@ -775,11 +777,10 @@ class SenderPage(QWidget):
             self.logger.info(f"未发送成功 {len(ctx.unsent_records)} 条，右键任务可导出")
 
     @staticmethod
-    def _unsent_label(task: TaskView | None) -> str:
+    def _unsent_label(task: TaskView) -> str:
         """导出文件名的主体：优先用导入的 XML 文件名，其次视频标题"""
-        if task and task.xml_path is not None:
-            return task.xml_path.stem
-        return task.display_string if task else ""
+        xml_path = task.meta.xml_path
+        return xml_path.stem if xml_path is not None else task.display_string
 
     @Slot(str, str)
     def _on_queue_task_failed(self, task_id: str, error_msg: str):
