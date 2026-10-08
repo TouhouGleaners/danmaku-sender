@@ -2,8 +2,7 @@ import logging
 from pathlib import Path
 from typing import Any
 
-from PySide6.QtCore import QEvent, QModelIndex, QObject, QPoint, Qt, Slot
-from PySide6.QtGui import QDropEvent
+from PySide6.QtCore import QModelIndex, QPoint, Qt, Slot
 from PySide6.QtWidgets import (
     QAbstractItemView,
     QCheckBox,
@@ -26,7 +25,7 @@ from danmaku_sender.runtime.state.app_state import AppState
 from danmaku_sender.types.models.common import RelativePosition
 from danmaku_sender.types.models.editor_types import EditorField
 from danmaku_sender.types.models.queue import TaskView
-from danmaku_sender.ui.framework.drag_drop import DropOverlay, xml_files_from_drop
+from danmaku_sender.ui.framework.drag_drop import DropOverlay, XmlDropFilter
 from danmaku_sender.ui.framework.empty_state import EmptyStateHint
 from danmaku_sender.ui.framework.icons import SvgIcon
 
@@ -163,8 +162,6 @@ class EditorDialog(QDialog):
 
         # 拖入 XML 文件直接导入工作区（拖放事件可能落在表格或其可视区）
         self.table.setAcceptDrops(True)
-        self.table.installEventFilter(self)
-        self.table.viewport().installEventFilter(self)
 
         # 空状态引导
         action_btn = QPushButton(SvgIcon.FILE_OPEN, "导入 XML")
@@ -187,6 +184,7 @@ class EditorDialog(QDialog):
             title="松开以导入文件",
             hint="支持 .xml 格式的弹幕文件",
         )
+        self._drop_filter = XmlDropFilter(self.table, self._drop_overlay, self._import_file)
 
         header = self.table.horizontalHeader()
         header.setSectionResizeMode(0, QHeaderView.ResizeMode.ResizeToContents)
@@ -359,69 +357,6 @@ class EditorDialog(QDialog):
         self._refresh_table()
         if uid:
             self._select_row_by_uid(uid)
-
-    def eventFilter(self, watched: QObject, event: QEvent) -> bool:
-        """拦截表格的拖放事件，实现拖入 XML 导入工作区。
-
-        Args:
-            watched: 被监听的控件。
-            event: 到达的事件。
-
-        Returns:
-            bool: 命中并处理的拖放事件返回 True，其余交回父类。
-        """
-        if watched not in (self.table, self.table.viewport()):
-            return super().eventFilter(watched, event)
-
-        if event.type() == QEvent.Type.DragLeave:
-            self._drop_overlay.hide()
-            return False
-
-        # QDragEnterEvent 与 QDragMoveEvent 均派生自 QDropEvent，一次判断即可收窄
-        if isinstance(event, QDropEvent):
-            if event.type() == QEvent.Type.Drop:
-                self._drop_overlay.hide()
-                return self._on_table_drop(event)
-
-            if self._droppable_xml(event) is not None:
-                event.acceptProposedAction()
-                self._drop_overlay.show_overlay()
-                return True
-            return False
-        return super().eventFilter(watched, event)
-
-    @staticmethod
-    def _droppable_xml(event: QDropEvent) -> Path | None:
-        """可接受的 XML 路径。
-
-        工作区只承载一份弹幕列表，因此仅当恰好命中一个 XML 时才接受拖放，
-        其余情况交回系统拒绝——拖放期间光标即显示为禁止，无需另做提示。
-
-        Args:
-            event: 拖放相关事件。
-
-        Returns:
-            str | None: 命中的 XML 路径；数量不为一时为 None。
-        """
-        files = xml_files_from_drop(event)
-        return files[0] if len(files) == 1 else None
-
-    def _on_table_drop(self, event: QDropEvent) -> bool:
-        """处理拖入的 XML 文件。
-
-        Args:
-            event: 拖放事件。
-
-        Returns:
-            bool: 事件已处理返回 True。
-        """
-        path = self._droppable_xml(event)
-        if path is None:
-            return False
-
-        event.acceptProposedAction()
-        self._import_file(path)
-        return True
 
     @Slot(int)
     def _on_import_success(self, count: int):
