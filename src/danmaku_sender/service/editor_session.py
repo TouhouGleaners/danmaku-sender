@@ -95,8 +95,13 @@ class EditorSession:
     # endregion
     # region Data Validation & View Rendering
 
-    def validate(self, duration_ms: int, config: ValidationConfig):
-        """对当前工作区数据进行校验，并回填错误信息"""
+    def validate(self, duration_ms: int | None, config: ValidationConfig):
+        """对当前工作区数据进行校验，并回填错误信息。
+
+        Args:
+            duration_ms (int | None): 视频总时长（毫秒），None 表示未知、跳过时间检查。
+            config (ValidationConfig): 校验规则。
+        """
         self._reorder_items()
 
         active_uids = [uid for uid in self.item_order if not self.items[uid].is_deleted]

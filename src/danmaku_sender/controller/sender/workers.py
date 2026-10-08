@@ -103,7 +103,7 @@ class QueueSendWorker(WorkerThread):
         definition = snap.definition
         task_id = definition.task_id
         self.taskStarted.emit(task_id, idx)
-        logger.info(f"[{idx + 1}/{total}] 开始发送: {definition.target.display_string}")
+        logger.info(f"[{idx + 1}/{total}] 开始发送: {definition.display_string}")
 
         future_tasks = self.tasks[idx + 1:]
 
@@ -125,17 +125,17 @@ class QueueSendWorker(WorkerThread):
 
             if ctx.fatal_error_occurred:
                 self.taskFailed.emit(task_id, "致命错误，队列中止")
-                logger.error(f"致命错误，队列中止于: {definition.target.display_string}")
+                logger.error(f"致命错误，队列中止于: {definition.display_string}")
                 return False
 
             # COMPLETED / PAUSED 由 Controller 根据 ctx 在主线程判定落账
             self.taskCompleted.emit(task_id, ctx)
-            logger.info(f"[{idx + 1}/{total}] 发送完成: {definition.target.display_string}")
+            logger.info(f"[{idx + 1}/{total}] 发送完成: {definition.display_string}")
             return True
 
         except Exception as e:
             self.taskFailed.emit(task_id, str(e))
-            logger.error(f"[{idx + 1}/{total}] 发送失败: {definition.target.display_string} - {e}")
+            logger.error(f"[{idx + 1}/{total}] 发送失败: {definition.display_string} - {e}")
             return True  # 单任务异常不阻断队列，继续下一个
 
     @staticmethod

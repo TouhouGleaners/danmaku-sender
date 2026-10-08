@@ -1,9 +1,8 @@
 import uuid
 from dataclasses import dataclass, field, replace
 from enum import Enum
-from pathlib import Path
 
-from .common import VideoTarget
+from .common import TaskMeta, VideoTarget
 from .danmaku import Danmaku
 
 
@@ -48,9 +47,9 @@ class TaskConfig:
     # 表单边界保证（SenderConfig 校验后再派生本快照）。
 
 
-@dataclass(frozen=True)
+@dataclass(frozen=True, kw_only=True)
 class TaskDefinition:
-    """任务工单（入队后不可变）。
+    """不可变任务工单。
 
     Worker 只持有 TaskDefinition / TaskSnapshot，摸不到 TaskExecution。
     config 是入队那一刻定死的发送节奏，冻结类型，无需防御性拷贝。
@@ -59,16 +58,18 @@ class TaskDefinition:
     """
     task_id: str
     target: VideoTarget
-    danmakus: tuple[Danmaku, ...]
+    meta: TaskMeta = field(default_factory=TaskMeta)
+    danmakus: tuple[Danmaku, ...] = ()
     config: TaskConfig
-    p_index: int = 0
-    p_title: str = ""
-    xml_path: Path | None = None
-    duration_ms: int = 0
 
     @property
     def total(self) -> int:
         return len(self.danmakus)
+
+    @property
+    def display_string(self) -> str:
+        """日志显示：视频标题 → BVID → 未指定。"""
+        return self.meta.video_title or self.target.bvid or "未指定视频目标"
 
     @property
     def is_config_complete(self) -> bool:
@@ -124,12 +125,21 @@ class TaskView:
         self._task = task
 
     @property
+    def definition(self) -> TaskDefinition:
+        """不可变工单（冻结，直接给出即可）。"""
+        return self._task.definition
+
+    @property
     def task_id(self) -> str:
         return self._task.definition.task_id
 
     @property
     def target(self) -> VideoTarget:
         return self._task.definition.target
+
+    @property
+    def meta(self) -> TaskMeta:
+        return self._task.definition.meta
 
     @property
     def danmakus(self) -> tuple[Danmaku, ...]:
@@ -141,24 +151,12 @@ class TaskView:
         return self._task.definition.config
 
     @property
-    def p_index(self) -> int:
-        return self._task.definition.p_index
-
-    @property
-    def p_title(self) -> str:
-        return self._task.definition.p_title
-
-    @property
-    def xml_path(self) -> Path | None:
-        return self._task.definition.xml_path
-
-    @property
-    def duration_ms(self) -> int:
-        return self._task.definition.duration_ms
-
-    @property
     def total(self) -> int:
         return self._task.definition.total
+
+    @property
+    def display_string(self) -> str:
+        return self._task.definition.display_string
 
     @property
     def is_config_complete(self) -> bool:
@@ -188,13 +186,10 @@ class TaskView:
         execution = self._task.execution
         return TaskDraft(
             target=replace(definition.target),
+            meta=replace(definition.meta),
             danmakus=list(definition.danmakus),
-            config_snapshot=definition.config,
+            config=definition.config,
             task_id=definition.task_id,
-            p_index=definition.p_index,
-            p_title=definition.p_title,
-            xml_path=definition.xml_path,
-            duration_ms=definition.duration_ms,
             status=execution.status,
             error_msg=execution.error_msg,
             attempted=execution.attempted,
@@ -205,28 +200,30 @@ class TaskView:
         return TaskSnapshot(definition=self._task.definition, status=self._task.execution.status)
 
 
-@dataclass
+@dataclass(kw_only=True)
 class TaskDraft:
     """构造期 / 编辑沙盒 DTO。
 
     仅用于「组装 → 入队」与「详情弹窗编辑」。入队后由 QueueState 拆成
     TaskDefinition + TaskExecution，本对象不再代表队列中的真实任务。
     """
-    target: VideoTarget
-    danmakus: list[Danmaku]
-    config_snapshot: TaskConfig
+    target: VideoTarget = field(default_factory=VideoTarget)
+    meta: TaskMeta = field(default_factory=TaskMeta)
+    danmakus: list[Danmaku] = field(default_factory=list)
+    config: TaskConfig
     task_id: str = field(default_factory=lambda: uuid.uuid4().hex[:8])
-    p_index: int = 0
-    p_title: str = ""
-    xml_path: Path | None = None
-    duration_ms: int = 0  # 视频时长（毫秒），用于弹幕时间越界校验
     status: TaskStatus = TaskStatus.PENDING
     error_msg: str = ""
     attempted: int = 0
-    total: int = field(init=False)
 
-    def __post_init__(self):
-        self.total = len(self.danmakus)
+    @property
+    def total(self) -> int:
+        return len(self.danmakus)
+
+    @property
+    def display_string(self) -> str:
+        """日志显示：视频标题 → BVID → 未指定。"""
+        return self.meta.video_title or self.target.bvid or "未指定视频目标"
 
     @property
     def is_config_complete(self) -> bool:
@@ -249,14 +246,11 @@ class TaskDraft:
         return TaskStatus.PENDING if self.is_config_complete else TaskStatus.UNCONFIGURED
 
     def to_definition(self) -> TaskDefinition:
-        """打成不可变工单（target 拷贝，config 本就冻结，弹幕收成 tuple）"""
+        """打成不可变工单（target/meta 拷贝，config 本就冻结，弹幕收成 tuple）"""
         return TaskDefinition(
             task_id=self.task_id,
             target=replace(self.target),
+            meta=replace(self.meta),
             danmakus=tuple(self.danmakus),
-            config=self.config_snapshot,
-            p_index=self.p_index,
-            p_title=self.p_title,
-            xml_path=self.xml_path,
-            duration_ms=self.duration_ms,
+            config=self.config,
         )

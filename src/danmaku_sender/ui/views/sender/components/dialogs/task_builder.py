@@ -17,7 +17,7 @@ from PySide6.QtWidgets import (
 from danmaku_sender.controller.video_controller import VideoController
 from danmaku_sender.runtime.state.app_state import AppState
 from danmaku_sender.service.danmaku_xml import DanmakuXml
-from danmaku_sender.types.models.common import RelativePosition, VideoTarget
+from danmaku_sender.types.models.common import RelativePosition, TaskMeta, VideoTarget
 from danmaku_sender.types.models.queue import TaskDraft
 from danmaku_sender.types.models.video import VideoInfo
 from danmaku_sender.utils.string_utils import parse_bilibili_link
@@ -207,26 +207,14 @@ class TaskBuilderDialog(QDialog):
             return
 
         cid = data['cid']
-        page = data['page']
-        part_title = ""
-        if self._video_info:
-            for p in self._video_info.parts:
-                if p.cid == cid:
-                    part_title = p.title
-                    break
+        part = next((p for p in self._video_info.parts if p.cid == cid), None)
+        if part is None:
+            return
 
         target = VideoTarget(
             bvid=self._video_info.bvid,
-            cid=cid,
-            title=self._video_info.title,
+            cid=part.cid,
         )
-
-        # 获取视频时长（毫秒）
-        duration_ms = 0
-        for p in self._video_info.parts:
-            if p.cid == cid:
-                duration_ms = p.duration * 1000  # 秒转毫秒
-                break
 
         # 解析弹幕文件（如果选了的话）
         danmakus = []
@@ -242,12 +230,15 @@ class TaskBuilderDialog(QDialog):
 
         task = TaskDraft(
             target=target,
+            meta=TaskMeta(
+                video_title=self._video_info.title,
+                part_page=part.page,
+                part_title=part.title,
+                part_duration_ms=part.duration * 1000,  # 秒转毫秒
+                xml_path=xml_path,
+            ),
             danmakus=danmakus,
-            config_snapshot=self.state.sender_config.to_task_config(),
-            p_index=page,
-            p_title=part_title,
-            xml_path=xml_path,
-            duration_ms=duration_ms,
+            config=self.state.sender_config.to_task_config(),
         )
         task.status = task.initial_status
 

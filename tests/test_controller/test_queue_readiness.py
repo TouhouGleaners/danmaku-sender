@@ -12,9 +12,9 @@ from danmaku_sender.types.models.queue import TaskDraft, TaskStatus
 
 def _task(state: AppState, status: TaskStatus) -> TaskDraft:
     return TaskDraft(
-        target=VideoTarget(bvid="BV1", cid=1, title="T"),
+        target=VideoTarget(bvid="BV1", cid=1),
         danmakus=[],
-        config_snapshot=state.sender_config.to_task_config(),
+        config=state.sender_config.to_task_config(),
         status=status,
     )
 

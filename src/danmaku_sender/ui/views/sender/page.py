@@ -312,14 +312,14 @@ class SenderPage(QWidget):
                 return
             # 通过 QueueState 统一应用编辑结果（自动发射 taskDataChanged）
             self.state.queue_state.apply_edit(task.task_id, dialog.editing)
-            self.logger.info(f"已更新任务: {task.target.display_string}")
+            self.logger.info(f"已更新任务: {task.display_string}")
 
     def _edit_danmakus(self, task: TaskView):
         """编辑任务的弹幕数据（打开编辑器弹窗）"""
         dialog = EditorDialog(task, self.state, self)
         if dialog.exec() == QDialog.DialogCode.Accepted:
             # 编辑器内部已通过 assign_danmakus 通知 QueueState，表格自动刷新
-            self.logger.info(f"已编辑弹幕: {task.target.display_string} ({task.total} 条)")
+            self.logger.info(f"已编辑弹幕: {task.display_string} ({task.total} 条)")
 
     def _move_task(self, task_id: str, toward: RelativePosition):
         """上下移动一个任务。
@@ -760,13 +760,15 @@ class SenderPage(QWidget):
     def _on_queue_task_started(self, task_id: str):
         task = self.state.queue_state.get_task_by_id(task_id)
         if task:
-            self.logger.info(f"开始发送: {task.target.display_string}")
+            self.logger.info(f"开始发送: {task.display_string}")
 
     @Slot(str, object)
     def _on_queue_task_completed(self, task_id: str, ctx: SendingContext):
         task = self.state.queue_state.get_task_by_id(task_id)
-        if task:
-            self.logger.info(f"完成: {task.target.display_string} (成功 {ctx.success_count}/{ctx.total})")
+        if task is None:
+            return
+
+        self.logger.info(f"完成: {task.display_string} (成功 {ctx.success_count}/{ctx.total})")
         if ctx.unsent_records:
             self._unsent_by_task[task_id] = TaskUnsent(
                 label=self._unsent_label(task), records=list(ctx.unsent_records)
@@ -775,17 +777,16 @@ class SenderPage(QWidget):
             self.logger.info(f"未发送成功 {len(ctx.unsent_records)} 条，右键任务可导出")
 
     @staticmethod
-    def _unsent_label(task: TaskView | None) -> str:
+    def _unsent_label(task: TaskView) -> str:
         """导出文件名的主体：优先用导入的 XML 文件名，其次视频标题"""
-        if task and task.xml_path is not None:
-            return task.xml_path.stem
-        return task.target.display_string if task else ""
+        xml_path = task.meta.xml_path
+        return xml_path.stem if xml_path is not None else task.display_string
 
     @Slot(str, str)
     def _on_queue_task_failed(self, task_id: str, error_msg: str):
         task = self.state.queue_state.get_task_by_id(task_id)
         if task:
-            self.logger.error(f"失败: {task.target.display_string} - {error_msg}")
+            self.logger.error(f"失败: {task.display_string} - {error_msg}")
 
     @Slot()
     def _on_queue_finished(self):

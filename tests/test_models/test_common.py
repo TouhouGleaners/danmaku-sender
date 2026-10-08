@@ -1,32 +1,38 @@
-"""common 模型单元测试 — VideoTarget, DanmakuStatus"""
-from danmaku_sender.types.models.common import VideoTarget
+"""common 模型单元测试 — VideoTarget, TaskMeta, DanmakuStatus"""
+from danmaku_sender.types.models.common import TaskMeta, VideoTarget
 
 
 class TestVideoTarget:
-    def test_display_string_with_title(self):
-        vt = VideoTarget(bvid="BV1xx411c7mD", cid=1001, title="我的视频")
-        assert vt.display_string == "我的视频"
-
-    def test_display_string_without_title(self):
-        vt = VideoTarget(bvid="BV1xx411c7mD", cid=1001)
-        assert vt.display_string == "BV1xx411c7mD"
-
-    def test_display_string_empty_title(self):
-        vt = VideoTarget(bvid="BV1xx411c7mD", cid=1001, title="")
-        assert vt.display_string == "BV1xx411c7mD"
-
-    def test_unset_is_empty_sentinel(self):
-        vt = VideoTarget.unset()
-        assert vt.bvid == ""
-        assert vt.cid == 0
-        assert vt.title == ""
-        assert not vt.is_assigned
-
     def test_is_assigned_needs_bvid_and_cid(self):
-        assert not VideoTarget(bvid="", cid=0).is_assigned
-        assert not VideoTarget(bvid="BV1xx411c7mD", cid=0).is_assigned
-        assert not VideoTarget(bvid="", cid=1001).is_assigned
+        assert not VideoTarget().is_assigned
+        assert not VideoTarget(bvid="BV1xx411c7mD").is_assigned
+        assert not VideoTarget(cid=1001).is_assigned
         assert VideoTarget(bvid="BV1xx411c7mD", cid=1001).is_assigned
 
-    def test_display_string_unset_target(self):
-        assert VideoTarget.unset().display_string == "未指定视频目标"
+    def test_unset_is_all_none(self):
+        tv = VideoTarget()
+        assert tv.bvid is None
+        assert tv.cid is None
+        assert not tv.is_assigned
+
+
+class TestTaskMeta:
+    def test_defaults_are_unknown(self):
+        meta = TaskMeta()
+        assert meta.video_title == ""
+        assert meta.part_page is None
+        assert meta.part_title == ""
+        assert meta.part_duration_ms is None
+        assert meta.xml_path is None
+
+    def test_holds_task_description(self):
+        meta = TaskMeta(
+            video_title="我的视频",
+            part_page=2,
+            part_title="P2",
+            part_duration_ms=1000,
+        )
+        assert meta.video_title == "我的视频"
+        assert meta.part_page == 2
+        assert meta.part_title == "P2"
+        assert meta.part_duration_ms == 1000

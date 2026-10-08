@@ -45,7 +45,7 @@ class EditorDialog(QDialog):
 
         self.current_item_id: str | None = None
 
-        self.setWindowTitle(f"编辑弹幕 — {task.target.display_string}")
+        self.setWindowTitle(f"编辑弹幕 — {task.display_string}")
         self.setMinimumSize(900, 600)
         self.setWindowFlags(
             Qt.WindowType.Window

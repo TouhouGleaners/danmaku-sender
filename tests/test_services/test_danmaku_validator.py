@@ -58,7 +58,7 @@ class TestTimestampCheck:
 
     def test_negative_duration_skips_check(self):
         """video_duration_ms <= 0 时跳过检查"""
-        issues = validate_danmaku_list([_dm("test", progress=999999)], video_duration_ms=-1)
+        issues = validate_danmaku_list([_dm("test", progress=999999)], video_duration_ms=None)
         assert len(issues) == 0
 
 

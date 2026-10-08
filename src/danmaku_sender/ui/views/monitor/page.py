@@ -247,14 +247,16 @@ class MonitorPage(QWidget):
     def _refresh_table(self):
         """按队列任务拼行，存活统计从账本回填。
 
-        名称、状态、行的有无都由队列决定；账本只贡献存活统计，取不到即尚未发送。
+        只有已指定目标的任务才有核销目标，才占一行；账本只贡献存活统计，取不到即尚未发送。
         """
         rows = []
         for task in self.state.queue_state.tasks:
-            name = task.target.display_string
-            if task.p_title:
-                name = f"{name} - {task.p_title}"
             bvid, cid = task.target.bvid, task.target.cid
+            if bvid is None or cid is None:  # 没有核销目标，不占一行
+                continue
+            name = task.display_string
+            if task.meta.part_title:
+                name = f"{name} - {task.meta.part_title}"
             rows.append(MonitorRow(
                 bvid=bvid,
                 cid=cid,

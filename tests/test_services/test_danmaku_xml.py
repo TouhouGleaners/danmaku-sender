@@ -65,10 +65,10 @@ class TestLoadTask:
         task = DanmakuXml.load_task(path, config)
 
         assert task is not None
-        assert task.target == VideoTarget.unset()
+        assert task.target == VideoTarget()
         assert task.total == 2
-        assert task.xml_path == path
-        assert task.config_snapshot == config
+        assert task.meta.xml_path == path
+        assert task.config == config
         assert task.status is TaskStatus.UNCONFIGURED
 
     def test_broken_file_raises(self, tmp_path):

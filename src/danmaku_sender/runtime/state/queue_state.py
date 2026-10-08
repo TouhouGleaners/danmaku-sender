@@ -175,7 +175,7 @@ class QueueState(QObject):
         self.tasksChanged.emit()
         logger.info(
             f"任务已加入队列: [{record.definition.task_id}] "
-            f"{record.definition.target.display_string} ({record.definition.total} 条弹幕)"
+            f"{record.definition.display_string} ({record.definition.total} 条弹幕)"
         )
 
     def insert_task(self, task: TaskDraft, ref_task_id: str, position: RelativePosition = RelativePosition.BELOW):
@@ -215,7 +215,7 @@ class QueueState(QObject):
         self.tasksChanged.emit()
         logger.info(
             f"任务已插入队列 (相对 {ref_task_id} {position.value}): [{record.definition.task_id}] "
-            f"{record.definition.target.display_string} ({record.definition.total} 条弹幕)"
+            f"{record.definition.display_string} ({record.definition.total} 条弹幕)"
         )
 
     def remove_task(self, task_id: str):
@@ -345,7 +345,10 @@ class QueueState(QObject):
         record.definition = replace(
             record.definition,
             danmakus=tuple(danmakus),
-            xml_path=xml_path if xml_path is not None else record.definition.xml_path,
+            meta=replace(
+                record.definition.meta,
+                xml_path=xml_path if xml_path is not None else record.definition.meta.xml_path,
+            ),
         )
         if self._reconcile_config_status(record):
             self.taskStatusChanged.emit(record.definition.task_id, record.execution.status)

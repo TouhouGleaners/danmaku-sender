@@ -46,7 +46,7 @@ class EditorController(QObject):
     @property
     def has_video_context(self) -> bool:
         """是否拥有关联的视频上下文（BVID/CID）"""
-        return bool(self.task.target.bvid) and bool(self.task.target.cid)
+        return self.task.target.is_assigned
 
     @property
     def is_dirty(self) -> bool:
@@ -145,7 +145,7 @@ class EditorController(QObject):
         如果任务有关联的视频上下文，使用视频时长进行时间越界检查；
         否则跳过时间检查。
         """
-        duration = self.task.duration_ms if self.task.duration_ms > 0 else -1
+        duration = self.task.meta.part_duration_ms
 
         config = self.state.validation_config
         self.session.validate(duration_ms=duration, config=config)
