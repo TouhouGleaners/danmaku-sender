@@ -3,12 +3,16 @@ import re
 from pathlib import Path
 
 import pytest
-from PySide6.QtCore import QMimeData, QPointF, Qt, QUrl
-from PySide6.QtGui import QColor, QDropEvent, QPalette
+from PySide6.QtCore import QEvent, QMimeData, QPoint, QPointF, Qt, QUrl
+from PySide6.QtGui import QColor, QDragEnterEvent, QDropEvent, QPalette
 from PySide6.QtWidgets import QLabel, QTableView
 
 from danmaku_sender.config.app_meta import AppInfo
-from danmaku_sender.ui.framework.drag_drop import DropOverlay, xml_files_from_drop
+from danmaku_sender.ui.framework.drag_drop import (
+    DropOverlay,
+    XmlDropFilter,
+    xml_files_from_drop,
+)
 
 
 def _mime(urls: list[QUrl]) -> QMimeData:
@@ -26,6 +30,17 @@ def _make_drop(mime: QMimeData) -> QDropEvent:
     """
     return QDropEvent(
         QPointF(0, 0),
+        Qt.DropAction.CopyAction,
+        mime,
+        Qt.MouseButton.LeftButton,
+        Qt.KeyboardModifier.NoModifier,
+    )
+
+
+def _make_enter(mime: QMimeData) -> QDragEnterEvent:
+    """构造拖入事件；mime 的存活要求同 :func:`_make_drop`。"""
+    return QDragEnterEvent(
+        QPoint(0, 0),
         Qt.DropAction.CopyAction,
         mime,
         Qt.MouseButton.LeftButton,
@@ -141,3 +156,60 @@ class TestDropOverlay:
             seen.add((pixel.red(), pixel.green(), pixel.blue()))
 
         assert len(seen) == 1, f"遮罩颜色在显隐间翻转: {seen}"
+
+
+class TestXmlDropFilter:
+    """拖入单个 XML 的过滤器：判定、拦截与回调"""
+
+    def _filter(self, host, drops: list):
+        overlay = DropOverlay(host, title="松开以导入文件", hint="支持 .xml")
+        return overlay, XmlDropFilter(host, overlay, drops.append)
+
+    def test_single_xml_accepts_exactly_one(self, qapp):
+        mime = _mime([QUrl.fromLocalFile("/tmp/a.xml")])
+        assert XmlDropFilter.single_xml(_make_drop(mime)) == Path("/tmp/a.xml")
+
+    def test_single_xml_rejects_multiple(self, qapp):
+        mime = _mime([QUrl.fromLocalFile("/tmp/a.xml"), QUrl.fromLocalFile("/tmp/b.xml")])
+        assert XmlDropFilter.single_xml(_make_drop(mime)) is None
+
+    def test_single_xml_rejects_empty(self, qapp):
+        assert XmlDropFilter.single_xml(_make_drop(_mime([]))) is None
+
+    def test_drop_invokes_callback(self, host):
+        drops: list = []
+        _overlay, filt = self._filter(host, drops)
+        mime = _mime([QUrl.fromLocalFile("/tmp/a.xml")])
+        assert filt.eventFilter(host.viewport(), _make_drop(mime)) is True
+        assert drops == [Path("/tmp/a.xml")]
+
+    def test_drop_of_multiple_is_refused(self, host):
+        drops: list = []
+        _overlay, filt = self._filter(host, drops)
+        mime = _mime([QUrl.fromLocalFile("/tmp/a.xml"), QUrl.fromLocalFile("/tmp/b.xml")])
+        assert filt.eventFilter(host.viewport(), _make_drop(mime)) is False
+        assert drops == []
+
+    def test_drag_enter_of_single_xml_is_accepted(self, host):
+        drops: list = []
+        _overlay, filt = self._filter(host, drops)
+        mime = _mime([QUrl.fromLocalFile("/tmp/a.xml")])
+        event = _make_enter(mime)
+        assert filt.eventFilter(host.viewport(), event) is True
+        assert event.isAccepted()
+        assert drops == [], "拖动中不应触发导入"
+
+    def test_drag_enter_of_multiple_is_refused(self, host):
+        drops: list = []
+        _overlay, filt = self._filter(host, drops)
+        mime = _mime([QUrl.fromLocalFile("/tmp/a.xml"), QUrl.fromLocalFile("/tmp/b.xml")])
+        event = _make_enter(mime)
+        filt.eventFilter(host.viewport(), event)
+        assert not event.isAccepted()
+        assert drops == []
+
+    def test_non_drop_event_is_ignored(self, host):
+        drops: list = []
+        _overlay, filt = self._filter(host, drops)
+        assert filt.eventFilter(host.viewport(), QEvent(QEvent.Type.MouseButtonPress)) is False
+        assert drops == []

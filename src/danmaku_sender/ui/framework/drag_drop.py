@@ -1,10 +1,11 @@
-"""拖放事件的文件提取与拖放覆盖层"""
+"""拖放事件的文件提取、拖放覆盖层与拖放过滤器"""
 
+from collections.abc import Callable
 from pathlib import Path
 
 from PySide6.QtCore import QEvent, QObject, Qt
 from PySide6.QtGui import QDropEvent
-from PySide6.QtWidgets import QLabel, QVBoxLayout, QWidget
+from PySide6.QtWidgets import QAbstractItemView, QLabel, QVBoxLayout, QWidget
 
 from .icons import SvgIcon
 
@@ -131,3 +132,134 @@ class DropOverlay(QWidget):
         parent = self.parentWidget()
         if parent is not None:
             self.setGeometry(parent.rect())
+
+
+class XmlDropFilter(QObject):
+    """拦截拖放：只接受恰好一个 XML，拖动中显示遮罩，松手时回调。"""
+
+    def __init__(
+        self,
+        view: QAbstractItemView,
+        overlay: DropOverlay,
+        on_drop: Callable[[Path], None],
+    ) -> None:
+        """挂到目标视图上并开始拦截，随视图一并销毁。
+
+        Args:
+            view: 接受拖放的视图。
+            overlay: 拖动期间显示的遮罩。
+            on_drop: 松手命中 XML 时的回调。
+        """
+        super().__init__(view)
+        self._overlay = overlay
+        self._on_drop = on_drop
+        self._accepted_path: Path | None = None
+
+        view.setAcceptDrops(True)
+        view.viewport().setAcceptDrops(True)
+        view.installEventFilter(self)
+        view.viewport().installEventFilter(self)
+
+    def eventFilter(self, watched: QObject, event: QEvent) -> bool:
+        """拦截视图的拖放事件。
+
+        Args:
+            watched (QObject): 被监听的控件。
+            event (QEvent): 到达的事件。
+
+        Returns:
+            bool: 命中并处理的事件返回 True，其余交回 Qt。
+        """
+        event_type = event.type()
+
+        if event_type == QEvent.Type.DragLeave:
+            return self._handle_drag_leave()
+
+        # 拖放事件 Enter / Move / Drop 均派生自 QDropEvent，一次判断即可收窄
+        if isinstance(event, QDropEvent):
+            if event_type == QEvent.Type.DragEnter:
+                return self._handle_drag_enter(event)
+            if event_type == QEvent.Type.DragMove:
+                return self._handle_drag_move(event)
+            if event_type == QEvent.Type.Drop:
+                return self._handle_drop(event)
+
+        return super().eventFilter(watched, event)
+
+    def _handle_drag_enter(self, event: QDropEvent) -> bool:
+        """拖入控件时校验文件并建立缓存。
+
+        Args:
+            event (QDropEvent): 拖入事件。
+
+        Returns:
+            bool: 恒为 True，本次事件已定夺（接受或拒绝）。
+        """
+        self._accepted_path = self.single_xml(event)
+
+        if self._accepted_path is not None:
+            event.acceptProposedAction()
+            self._overlay.show_overlay()
+        else:
+            event.ignore()
+            self._overlay.hide()
+        return True
+
+    def _handle_drag_move(self, event: QDropEvent) -> bool:
+        """拖动过程中复用 Enter 时的校验结果。
+
+        Args:
+            event (QDropEvent): 拖动事件。
+
+        Returns:
+            bool: 恒为 True，本次事件已定夺。
+        """
+        if self._accepted_path is not None:
+            event.acceptProposedAction()
+        else:
+            event.ignore()
+        return True
+
+    def _handle_drag_leave(self) -> bool:
+        """离开控件区域，清理缓存。
+
+        Returns:
+            bool: 恒为 False，不拦截事件传递。
+        """
+        self._accepted_path = None
+        self._overlay.hide()
+        return False
+
+    def _handle_drop(self, event: QDropEvent) -> bool:
+        """松手放置文件。
+
+        Args:
+            event (QDropEvent): 放置事件。
+
+        Returns:
+            bool: 命中并导入返回 True，否则 False。
+        """
+        path = self._accepted_path if self._accepted_path is not None else self.single_xml(event)
+        self._accepted_path = None
+        self._overlay.hide()
+
+        if path is not None:
+            event.acceptProposedAction()
+            self._on_drop(path)
+            return True
+
+        event.ignore()
+        return False
+
+    @staticmethod
+    def single_xml(event: QDropEvent) -> Path | None:
+        """解析拖放事件中的有效 XML 路径。
+
+        Args:
+            event (QDropEvent): 拖放相关事件。
+
+        Returns:
+            Path | None: 命中的 XML 路径；数量不为一时为 None。
+        """
+        files = xml_files_from_drop(event)
+        return files[0] if len(files) == 1 else None
