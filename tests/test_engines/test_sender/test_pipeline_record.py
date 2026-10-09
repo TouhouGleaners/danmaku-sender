@@ -46,12 +46,13 @@ def pipeline_env(tmp_path, monkeypatch) -> HistoryManager:
     return hm
 
 
-def _run_pipeline(hm: HistoryManager, target: VideoTarget, danmakus: list[Danmaku]) -> None:
+def _run_pipeline(hm: HistoryManager, target: VideoTarget, danmakus: list[Danmaku], task_id: str) -> None:
     """在独立线程中执行管线，与 QueueSendWorker 的真实调用方式一致"""
     pipeline = SendPipeline(
         ApiAuthConfig(sessdata="x", bili_jct="y", use_system_proxy=False), hm
     )
     job = SendJob(
+        task_id=task_id,
         target=target,
         danmakus=danmakus,
         config=SenderConfig(min_delay=0.1, max_delay=0.2).to_task_config(),
@@ -77,14 +78,20 @@ class TestPipelineRecord:
         """每条发送成功的弹幕都必须有存证行"""
         hm = pipeline_env
         target = VideoTarget(bvid="BV1xx", cid=1001)
-        _run_pipeline(hm, target, [Danmaku(msg="a", progress=1000), Danmaku(msg="b", progress=2000)])
+        _run_pipeline(
+            hm,
+            target,
+            [Danmaku(msg="a", progress=1000), Danmaku(msg="b", progress=2000)],
+            task_id="任务归属-8f3c",
+        )
 
         conn = sqlite3.connect(hm.db_path)
-        rows = conn.execute("SELECT dmid, cid, status FROM sent_danmaku ORDER BY dmid").fetchall()
+        rows = conn.execute("SELECT dmid, cid, status, task_id FROM sent_danmaku ORDER BY dmid").fetchall()
         conn.close()
         assert len(rows) == 2
         assert all(r[1] == 1001 for r in rows)
         assert all(r[2] == 0 for r in rows)  # PENDING
+        assert all(r[3] == "任务归属-8f3c" for r in rows)
 
     def test_failed_post_leaves_no_record(self, pipeline_env, monkeypatch):
         """发送失败的弹幕不应有存证"""
@@ -95,7 +102,7 @@ class TestPipelineRecord:
 
         monkeypatch.setattr(StubClient, "post_danmaku", fail_post)
         target = VideoTarget(bvid="BV1xx", cid=1001)
-        _run_pipeline(hm, target, [Danmaku(msg="a", progress=1000)])
+        _run_pipeline(hm, target, [Danmaku(msg="a", progress=1000)], task_id="失败任务")
 
         n = sqlite3.connect(hm.db_path).execute("SELECT COUNT(*) FROM sent_danmaku").fetchone()[0]
         assert n == 0

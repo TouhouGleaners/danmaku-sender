@@ -211,7 +211,7 @@ class TaskDraft:
     meta: TaskMeta = field(default_factory=TaskMeta)
     danmakus: list[Danmaku] = field(default_factory=list)
     config: TaskConfig
-    task_id: str = field(default_factory=lambda: uuid.uuid4().hex[:8])
+    task_id: str = field(default_factory=lambda: uuid.uuid4().hex)
     status: TaskStatus = TaskStatus.PENDING
     error_msg: str = ""
     attempted: int = 0

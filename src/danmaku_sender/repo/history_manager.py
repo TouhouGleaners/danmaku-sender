@@ -2,7 +2,8 @@ import logging
 import time
 from pathlib import Path
 
-from peewee import Case, SqliteDatabase, fn
+from peewee import Case, CharField, SqliteDatabase, fn
+from playhouse.migrate import SqliteMigrator, migrate
 
 from danmaku_sender.types.models.common import (
     DanmakuStatus,
@@ -12,8 +13,9 @@ from danmaku_sender.types.models.common import (
     VideoTarget,
 )
 from danmaku_sender.types.models.danmaku import Danmaku
+from danmaku_sender.types.models.queue import TaskDefinition, TaskStatus
 
-from .orm_models import SentDanmaku, db
+from .orm_models import SentDanmaku, TaskRecord, db
 
 logger = logging.getLogger(__name__)
 
@@ -34,6 +36,11 @@ class HistoryManager:
     """
 
     def __init__(self, db_path: Path):
+        """打开（或创建）账本数据库并完成迁移。
+
+        Args:
+            db_path (Path): SQLite 文件路径。
+        """
         self.db_path = db_path
         self._init_db()
         logger.debug("HistoryManager 初始化完成")
@@ -52,30 +59,56 @@ class HistoryManager:
             db.initialize(sqlite_db)
             sqlite_db.connect(reuse_if_open=True)
 
-            # 自动建表（已有则跳过）
-            sqlite_db.create_tables([SentDanmaku], safe=True)
+            # 建表（含索引，已存在则跳过）→ 迁移补列
+            sqlite_db.create_tables([SentDanmaku, TaskRecord], safe=True)
+            self._run_migrations(sqlite_db)
 
         except Exception as e:
             logger.critical(f"数据库初始化/迁移致命错误: {e}", exc_info=True)
             raise RuntimeError(f"HistoryManager 数据库初始化失败: {e}") from e
 
-    def record_danmaku(self, target: VideoTarget, dm: Danmaku, dmid: str, is_visible_api: bool = True):
-        """
-        [存证] 记录一条刚刚发送成功的弹幕。
-        对应状态: STATUS_PENDING (0)
+    def _run_migrations(self, sqlite_db: SqliteDatabase) -> None:
+        """幂等迁移：补齐历史版本缺失的列与索引。
 
         Args:
-            dmid: 服务器返回的弹幕身份（来自 DanmakuSendResult.dmid），不可从 dm 上取
+            sqlite_db (SqliteDatabase): 已连接的数据库。
+        """
+        migrator = SqliteMigrator(sqlite_db)
+        columns = {col.name for col in sqlite_db.get_columns('sent_danmaku')}
+        if 'task_id' not in columns:
+            migrate(migrator.add_column('sent_danmaku', 'task_id', CharField(null=True)))
+
+    def record_danmaku(
+        self,
+        task_id: str,
+        target: VideoTarget,
+        dm: Danmaku,
+        dmid: str,
+        is_visible_api: bool = True,
+    ) -> bool:
+        """
+        记录一条刚刚发送成功的弹幕，状态置为 STATUS_PENDING (0)。
+
+        Args:
+            task_id (str): 归属任务，用于任务级历史对账。
+            target (VideoTarget): 发送目标。
+            dm (Danmaku): 发送的弹幕。
+            dmid (str): 服务器返回的弹幕身份。
+            is_visible_api (bool): API 是否回执可见。
+
+        Returns:
+            bool: 落库成功返回 True；无 dmid 或写入失败返回 False。
         """
         if not dmid:
             logger.warning("尝试记录无 ID 的弹幕，操作跳过。")
-            return
+            return False
 
         try:
             (
                 SentDanmaku
                     .insert(
                         dmid=str(dmid),
+                        task_id=task_id,
                         cid=target.cid,
                         bvid=target.bvid,
                         msg=dm.msg,
@@ -90,23 +123,90 @@ class HistoryManager:
                     .on_conflict_ignore()
                     .execute()
             )
+            return True
         except Exception as e:
             logger.error(f"存证失败: {e}", exc_info=True)
+            return False
 
-    def get_recorded_targets(self, baseline: float = 0.0) -> list[tuple[str, int]]:
-        """
-        [核销] 返回 baseline 之后有记录的目标，即监视器的核销范围。
+    def upsert_task(self, definition: TaskDefinition, status: TaskStatus) -> None:
+        """写入或更新一条任务记录。
 
-        发送进行中新增的记录，下一轮自动纳入。
+        发送开始时调用；已写入的记录不删除，仅更新任务状态。
 
         Args:
-            baseline: 统计基线时间（0 表示不限）
+            definition (TaskDefinition): 任务工单，提供身份与描述。
+            status (TaskStatus): 当前任务状态，按 ``TaskStatus.name`` 落库。
+        """
+        meta = definition.meta
+        try:
+            (
+                TaskRecord
+                    .insert(
+                        task_id=definition.task_id,
+                        bvid=definition.target.bvid,
+                        cid=definition.target.cid,
+                        video_title=meta.video_title,
+                        part_page=meta.part_page,
+                        part_title=meta.part_title,
+                        xml_path=str(meta.xml_path) if meta.xml_path is not None else None,
+                        created_at=time.time(),
+                        status=status.name,
+                    )
+                    .on_conflict(
+                        conflict_target=[TaskRecord.task_id],
+                        update={
+                            TaskRecord.bvid: definition.target.bvid,
+                            TaskRecord.cid: definition.target.cid,
+                            TaskRecord.video_title: meta.video_title,
+                            TaskRecord.part_page: meta.part_page,
+                            TaskRecord.part_title: meta.part_title,
+                            TaskRecord.xml_path: str(meta.xml_path) if meta.xml_path is not None else None,
+                            TaskRecord.status: status.name,
+                        },
+                    )
+                    .execute()
+            )
+        except Exception as e:
+            logger.error(f"任务记录写入失败: {e}", exc_info=True)
+            raise
+
+    def get_task(self, task_id: str) -> dict | None:
+        """读取一条任务记录。
+
+        Args:
+            task_id (str): 任务标识。
 
         Returns:
-            list[tuple[str, int]]: (bvid, cid)，按首次记录时间排序
+            dict | None: 记录字典；不存在返回 None。
+        """
+        row = TaskRecord.get_or_none(TaskRecord.task_id == task_id)
+        return (
+            {
+                'task_id': row.task_id,
+                'bvid': row.bvid,
+                'cid': row.cid,
+                'video_title': row.video_title,
+                'part_page': row.part_page,
+                'part_title': row.part_title,
+                'xml_path': row.xml_path,
+                'created_at': row.created_at,
+                'status': row.status,
+            }
+            if row is not None
+            else None
+        )
+
+    def get_recorded_targets(self, baseline: float = 0.0) -> list[tuple[str, int]]:
+        """返回 baseline 之后有记录的目标，即监视器的核销范围。
+
+        Args:
+            baseline (float): 统计基线时间，0 表示不限。
+
+        Returns:
+            list[tuple[str, int]]: (bvid, cid)，按首次记录时间排序。
 
         Raises:
-            Exception: 查询失败原样上抛，不吞成空列表
+            Exception: 查询失败时上抛。
         """
         query = (
             SentDanmaku
@@ -121,9 +221,15 @@ class HistoryManager:
         return [(row.bvid, row.cid) for row in query]
 
     def verify_dmids(self, verified_dmids: list[str]) -> int:
-        """
-        [核销] 监视器确认存活后，批量更新状态。
-        将状态更新为: STATUS_VERIFIED (1)
+        """将确认存活的弹幕置为已验证。
+
+        状态更新为 STATUS_VERIFIED (1)，只翻转当前仍为 PENDING 的行。
+
+        Args:
+            verified_dmids (list[str]): 监视器确认存活的弹幕身份列表。
+
+        Returns:
+            int: 实际翻转的行数。
         """
         if not verified_dmids:
             return 0
@@ -144,12 +250,14 @@ class HistoryManager:
             return 0
 
     def mark_as_lost(self, cid: int, verified_dmids: list[str]) -> int:
-        """
-        [核销] 标记丢失。
-        逻辑：在该 CID 下，所有状态为 PENDING 且 不在 verified_dmids 列表中的弹幕，标记为 LOST。
+        """将该 CID 下未确认存活的 PENDING 弹幕标记为丢失。
+
+        Args:
+            cid (int): 分P 的 CID。
+            verified_dmids (list[str]): 已确认存活的弹幕身份，不参与标记。
 
         Returns:
-            int: 被标记为丢失的弹幕数量
+            int: 被标记为丢失的弹幕数量。
         """
         try:
             condition = (SentDanmaku.cid == cid) & (SentDanmaku.status == DanmakuStatus.PENDING.value)
@@ -174,7 +282,11 @@ class HistoryManager:
             return 0
 
     def get_pending_cids(self) -> list[PendingCidRecord]:
-        """获取所有含有待验证弹幕的 (bvid, cid) 列表"""
+        """获取所有含有待验证弹幕的 (bvid, cid) 列表。
+
+        Returns:
+            list[PendingCidRecord]: 待验证的目标列表。
+        """
         try:
             return list(
                 SentDanmaku
@@ -188,7 +300,14 @@ class HistoryManager:
             return []
 
     def get_pending_records(self, cid: int) -> list[PendingDanmakuRecord]:
-        """获取 Pending 弹幕"""
+        """获取指定分P 下的待验证弹幕。
+
+        Args:
+            cid (int): 分P 的 CID。
+
+        Returns:
+            list[PendingDanmakuRecord]: 待验证弹幕列表。
+        """
         try:
             return list(
                 SentDanmaku
@@ -205,7 +324,15 @@ class HistoryManager:
             return []
 
     def get_stats(self, cid: int, stats_baseline: float = 0.0) -> tuple[int, int, int]:
-        """获取统计数据 (UI使用)"""
+        """获取指定分P 的存活统计。
+
+        Args:
+            cid (int): 分P 的 CID。
+            stats_baseline (float): 统计基线时间，0 表示不限。
+
+        Returns:
+            tuple[int, int, int]: (总数, 已验证, 已丢失)。
+        """
         try:
             conditions = [SentDanmaku.cid == cid]
             if stats_baseline > 0:
@@ -232,16 +359,20 @@ class HistoryManager:
         return 0, 0, 0
 
     def get_stats_for_target(self, target: VideoTarget, baseline: float = 0.0) -> MonitorStats:
-        """获取指定目标的统计数据，返回包含 pending 的完整统计
+        """获取指定目标的存活统计，包含 pending 的完整计数。
 
         Args:
-            target: 视频目标
-            baseline: 统计基线时间
+            target (VideoTarget): 发送目标。
+            baseline (float): 统计基线时间，0 表示不限。
 
         Returns:
-            MonitorStats: {'total': int, 'verified': int, 'pending': int, 'lost': int}
+            MonitorStats: 总数、已验证、待验证、已丢失。
         """
-        total, verified, lost = self.get_stats(target.cid, baseline)
+        cid = target.cid
+        if cid is None:
+            return MonitorStats(total=0, verified=0, pending=0, lost=0)
+
+        total, verified, lost = self.get_stats(cid, baseline)
         pending = total - verified - lost
         return MonitorStats(
             total=total,
@@ -251,9 +382,14 @@ class HistoryManager:
         )
 
     def count_records(self, target: VideoTarget, dm: Danmaku) -> int:
-        """
-        统计数据库中与传入弹幕完全匹配的记录数量，
-        用于断点续传的计数对账
+        """统计数据库中与传入弹幕完全匹配的记录数量。
+
+        Args:
+            target (VideoTarget): 发送目标。
+            dm (Danmaku): 比对的弹幕。
+
+        Returns:
+            int: 匹配的记录数。
         """
         try:
             return (
@@ -276,11 +412,15 @@ class HistoryManager:
             return 0
 
     def query_history(self, keyword: str = "", status: int = -1, limit: int = 500) -> list[dict]:
-        """
-        查询接口
+        """按关键词与状态筛选弹幕历史。
 
-        支持关键词和状态筛选
-        返回数据库原始 dict，后续 UI 层会结合 API 数据进行展示
+        Args:
+            keyword (str): 消息关键词，空串表示不筛。
+            status (int): 核销状态，-1 表示不筛。
+            limit (int): 返回条数上限。
+
+        Returns:
+            list[dict]: 数据库原始记录，由 UI 层结合 API 数据展示。
         """
         try:
             query = SentDanmaku.select()

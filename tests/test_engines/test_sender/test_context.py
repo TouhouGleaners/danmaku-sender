@@ -57,6 +57,7 @@ class TestSendingContext:
 class TestSendJob:
     def test_creation(self):
         job = SendJob(
+            task_id="t1",
             target=VideoTarget(bvid="BV1test", cid=1),
             danmakus=[Danmaku(msg="t", progress=0)],
             config=SenderConfig().to_task_config(),

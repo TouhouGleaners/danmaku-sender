@@ -115,6 +115,7 @@ class QueueSendWorker(WorkerThread):
         try:
             pipeline = SendPipeline(self.auth_config, self.history_manager)
             job = SendJob(
+                task_id=definition.task_id,
                 target=definition.target,
                 danmakus=list(definition.danmakus),  # Danmaku 不可变，无需克隆
                 config=definition.config,
