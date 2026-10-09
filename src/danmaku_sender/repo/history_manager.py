@@ -122,6 +122,7 @@ class HistoryManager:
             )
         except Exception as e:
             logger.error(f"存证失败: {e}", exc_info=True)
+            raise
 
     def upsert_task(self, definition: TaskDefinition, status: TaskStatus) -> None:
         """写入或更新一条任务记录。

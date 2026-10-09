@@ -7,6 +7,7 @@ import sqlite3
 import pytest
 
 from danmaku_sender.repo.history_manager import HistoryManager
+from danmaku_sender.repo.orm_models import SentDanmaku
 from danmaku_sender.types.models.common import DanmakuStatus, VideoTarget
 from danmaku_sender.types.models.danmaku import Danmaku
 
@@ -155,3 +156,42 @@ class TestStatsAndDedup:
         assert hm.count_records(target, dm) == 2      # VERIFIED 计入
         hm.mark_as_lost(1001, ["dm1"])                # dm2 被标记丢失
         assert hm.count_records(target, dm) == 1      # LOST 不计入（只剩 VERIFIED 的 dm1）
+
+
+class TestMigration:
+    """老库升级：补齐缺失的列与索引，且重复初始化幂等"""
+
+    def test_upgrades_legacy_schema(self, tmp_path, target):
+        db_path = tmp_path / "legacy.db"
+        conn = sqlite3.connect(db_path)
+        conn.execute(
+            "CREATE TABLE sent_danmaku (dmid VARCHAR PRIMARY KEY, cid INTEGER, bvid VARCHAR, "
+            "msg TEXT, progress INTEGER, mode INTEGER, fontsize INTEGER, color INTEGER, "
+            "ctime REAL, is_visible INTEGER, status INTEGER)"
+        )
+        conn.execute(
+            "INSERT INTO sent_danmaku VALUES ('dm1', 1001, 'BV1', 'x', 0, 1, 25, 16777215, 0.0, 1, 0)"
+        )
+        conn.commit()
+        conn.close()
+
+        hm = HistoryManager(db_path)
+        HistoryManager(db_path)   # 重复初始化不得报错
+
+        # 迁移后的列与索引
+        columns = {col.name for col in SentDanmaku._meta.database.get_columns('sent_danmaku')}
+        assert 'task_id' in columns
+        indexed = [
+            list(index.columns)
+            for index in SentDanmaku._meta.database.get_indexes('sent_danmaku')
+        ]
+        assert ['task_id'] in indexed
+
+        # 老行留 NULL，新行能写能读且归属正确
+        old_rows = SentDanmaku.select().order_by(SentDanmaku.dmid).execute()
+        assert [r.dmid for r in old_rows] == ['dm1']
+        assert old_rows[0].task_id is None
+
+        hm.record_danmaku('任务归属-8f3c', target, Danmaku(msg='y', progress=0), 'dm2')
+        new_row = SentDanmaku.get(SentDanmaku.dmid == 'dm2')
+        assert new_row.task_id == '任务归属-8f3c'
