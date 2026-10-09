@@ -68,7 +68,7 @@ class SendPipeline:
             outer_progress_callback = job.progress_callback
 
             def on_result(dm: Danmaku, result: DanmakuSendResult):
-                self._record_result(job.target, dm, result)
+                self._record_result(job.task_id, job.target, dm, result)
                 if outer_result_callback:
                     outer_result_callback(dm, result)
 
@@ -92,10 +92,10 @@ class SendPipeline:
         self._log_summary(ctx)
         return ctx
 
-    def _record_result(self, target: VideoTarget, dm: Danmaku, result: DanmakuSendResult):
+    def _record_result(self, task_id: str, target: VideoTarget, dm: Danmaku, result: DanmakuSendResult):
         """将成功发送的弹幕记录到历史数据库（dmid 以服务器回执为准）"""
         if result.is_success and result.dmid:
-            self.history_manager.record_danmaku(target, dm, result.dmid, result.is_visible)
+            self.history_manager.record_danmaku(task_id, target, dm, result.dmid, result.is_visible)
 
     def _calc_eta(self, attempted: int, total: int, config: TaskConfig) -> float:
         """基于任务配置计算 ETA（秒）"""

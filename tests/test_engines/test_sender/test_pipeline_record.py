@@ -52,6 +52,7 @@ def _run_pipeline(hm: HistoryManager, target: VideoTarget, danmakus: list[Danmak
         ApiAuthConfig(sessdata="x", bili_jct="y", use_system_proxy=False), hm
     )
     job = SendJob(
+        task_id="t1",
         target=target,
         danmakus=danmakus,
         config=SenderConfig(min_delay=0.1, max_delay=0.2).to_task_config(),

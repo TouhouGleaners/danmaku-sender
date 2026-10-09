@@ -24,6 +24,7 @@ class SendJob:
     config 是单个任务的发送节奏（随工单定死）；policy 是整个队列的发送策略
     （启动队列时取用一次）。两者分属不同层级，不要混。
     """
+    task_id: str
     target: VideoTarget
     danmakus: list[Danmaku]
     config: TaskConfig

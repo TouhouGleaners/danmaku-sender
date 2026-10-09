@@ -21,8 +21,8 @@ def hm(tmp_path) -> HistoryManager:
     return HistoryManager(tmp_path / "history.db")
 
 
-def _record(hm: HistoryManager, target: VideoTarget, dmid: str, msg: str = "弹幕") -> None:
-    hm.record_danmaku(target, Danmaku(msg=msg, progress=1000), dmid)
+def _record(hm: HistoryManager, target: VideoTarget, dmid: str, msg: str = "弹幕", task_id: str = "t1") -> None:
+    hm.record_danmaku(task_id, target, Danmaku(msg=msg, progress=1000), dmid)
 
 
 class TestRecordDanmaku:
