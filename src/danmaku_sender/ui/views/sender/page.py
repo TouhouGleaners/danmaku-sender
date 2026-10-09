@@ -764,6 +764,12 @@ class SenderPage(QWidget):
 
     @Slot(str, object)
     def _on_queue_task_completed(self, task_id: str, ctx: SendingContext):
+        if ctx.evidence_failures:
+            Notification.warning(
+                title=f"{len(ctx.evidence_failures)} 条弹幕已发出但未入账",
+                message="本地写入失败，这些弹幕的核销与续传可能受影响。",
+            )
+
         task = self.state.queue_state.get_task_by_id(task_id)
         if task is None:
             return
