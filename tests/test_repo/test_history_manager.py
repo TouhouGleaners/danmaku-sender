@@ -29,11 +29,11 @@ class TestRecordDanmaku:
     """存证回归：发送成功后记录必须真实落库"""
 
     def test_record_persists_row(self, hm, target):
-        _record(hm, target, "dm1")
+        _record(hm, target, "dm1", task_id="t7")
         row = sqlite3.connect(hm.db_path).execute(
-            "SELECT dmid, cid, status FROM sent_danmaku WHERE dmid='dm1'"
+            "SELECT dmid, cid, status, task_id FROM sent_danmaku WHERE dmid='dm1'"
         ).fetchone()
-        assert row == ("dm1", 1001, DanmakuStatus.PENDING.value)
+        assert row == ("dm1", 1001, DanmakuStatus.PENDING.value, "t7")
 
     def test_record_conflict_ignored(self, hm, target):
         """同 dmid 二次存证被忽略，不产生重复行"""

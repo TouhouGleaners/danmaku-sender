@@ -81,11 +81,12 @@ class TestPipelineRecord:
         _run_pipeline(hm, target, [Danmaku(msg="a", progress=1000), Danmaku(msg="b", progress=2000)])
 
         conn = sqlite3.connect(hm.db_path)
-        rows = conn.execute("SELECT dmid, cid, status FROM sent_danmaku ORDER BY dmid").fetchall()
+        rows = conn.execute("SELECT dmid, cid, status, task_id FROM sent_danmaku ORDER BY dmid").fetchall()
         conn.close()
         assert len(rows) == 2
         assert all(r[1] == 1001 for r in rows)
         assert all(r[2] == 0 for r in rows)  # PENDING
+        assert all(r[3] == "t1" for r in rows)
 
     def test_failed_post_leaves_no_record(self, pipeline_env, monkeypatch):
         """发送失败的弹幕不应有存证"""
