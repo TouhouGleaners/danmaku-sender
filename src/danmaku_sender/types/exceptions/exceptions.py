@@ -19,3 +19,15 @@ class BiliApiError(Exception):
         self.code = code
         self.message = message
         super().__init__(f"Bili API Error [Code: {code}]: {message}")
+
+
+class HistoryStorageError(Exception):
+    """本地账本/存证持久化失败。
+
+    Attributes:
+        original_error (Exception | None): 底层异常。
+    """
+
+    def __init__(self, message: str, original_error: Exception | None = None):
+        super().__init__(message)
+        self.original_error = original_error

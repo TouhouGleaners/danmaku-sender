@@ -6,7 +6,7 @@ from danmaku_sender.types.exceptions.api_errors import BiliDmErrorCode
 from danmaku_sender.types.exceptions.exceptions import BiliApiError, BiliNetworkError
 from danmaku_sender.types.models.common import VideoTarget
 from danmaku_sender.types.models.danmaku import Danmaku
-from danmaku_sender.types.models.result import DanmakuSendResult
+from danmaku_sender.types.models.result import BiliSendResponse
 
 
 class DanmakuExecutor:
@@ -20,7 +20,7 @@ class DanmakuExecutor:
         self.api_client = api_client
         self.logger = logging.getLogger(__name__)
 
-    def execute(self, target: VideoTarget, danmaku: Danmaku, stop_event: Event) -> DanmakuSendResult:
+    def execute(self, target: VideoTarget, danmaku: Danmaku, stop_event: Event) -> BiliSendResponse:
         """
         执行单次发送，并内聚处理所有底层的 HTTP / 业务异常, 提供重试
 
@@ -30,7 +30,7 @@ class DanmakuExecutor:
             stop_event(Event): 发送过程中可监听的中断事件
 
         Returns:
-            DanmakuSendResult: 标准化的结果实体。
+            BiliSendResponse: 标准化的远端响应。
         """
         attempt = 0
         max_retries = 3
@@ -51,11 +51,15 @@ class DanmakuExecutor:
 
             attempt += 1
 
-    def _send(self, target: VideoTarget, danmaku: Danmaku) -> DanmakuSendResult:
+    def _send(self, target: VideoTarget, danmaku: Danmaku) -> BiliSendResponse:
         """内部发包: 不捕获异常"""
+        bvid, cid = target.bvid, target.cid
+        if bvid is None or cid is None:
+            raise ValueError("发包需要已指定的目标（bvid 与 cid 都在）")
+
         params = danmaku.to_api_params()
-        resp_json = self.api_client.post_danmaku(target.cid, target.bvid, params)
-        result = DanmakuSendResult.from_api_response(resp_json)
+        resp_json = self.api_client.post_danmaku(cid, bvid, params)
+        result = BiliSendResponse.from_api_json(resp_json)
 
         if result.is_success:
             self.logger.info(f"✅ 发送成功 [ID:{result.dmid}]: {danmaku.msg}")
@@ -64,7 +68,7 @@ class DanmakuExecutor:
 
         return result
 
-    def _handle_api_error(self, e: BiliApiError, attempt: int, max_retries: int, stop_event: Event) -> DanmakuSendResult | None:
+    def _handle_api_error(self, e: BiliApiError, attempt: int, max_retries: int, stop_event: Event) -> BiliSendResponse | None:
         """
         处理业务异常
 
@@ -72,7 +76,7 @@ class DanmakuExecutor:
         """
         if e.code != BiliDmErrorCode.FREQ_LIMIT.code:
             self.logger.error(f"❌ 请求被拒: {e.message}")
-            return DanmakuSendResult(
+            return BiliSendResponse(
                 code=e.code,
                 is_success=False,
                 msg=e.message,
@@ -81,7 +85,7 @@ class DanmakuExecutor:
 
         if attempt >= max_retries:
             self.logger.error(f"❌ 频繁触发风控，重试 {max_retries} 次后放弃: {e.message}")
-            return DanmakuSendResult(
+            return BiliSendResponse(
                 code=e.code,
                 is_success=False,
                 msg=e.message,
@@ -92,7 +96,7 @@ class DanmakuExecutor:
         self.logger.warning(f"⚠️ 触发风控限流！进入 {delay} 秒惩罚等待 ({attempt + 1}/{max_retries})...")
         return self._sleep_with_interrupt(delay, stop_event)
 
-    def _handle_network_error(self, e: BiliNetworkError, attempt: int, max_retries: int, stop_event: Event) -> DanmakuSendResult | None:
+    def _handle_network_error(self, e: BiliNetworkError, attempt: int, max_retries: int, stop_event: Event) -> BiliSendResponse | None:
         """
         处理物理网络异常
 
@@ -100,7 +104,7 @@ class DanmakuExecutor:
         """
         if attempt >= max_retries:
             self.logger.error(f"❌ 网络异常! 重试 {max_retries} 次后彻底失败: {e.message}")
-            return DanmakuSendResult(
+            return BiliSendResponse(
                 code=BiliDmErrorCode.NETWORK_ERROR.code,
                 is_success=False,
                 msg=str(e),
@@ -111,7 +115,7 @@ class DanmakuExecutor:
         self.logger.warning(f"⚠️ 网络波动 ({e.message})。将在 {delay} 秒后重试 ({attempt + 1}/{max_retries})...")
         return self._sleep_with_interrupt(delay, stop_event)
 
-    def _sleep_with_interrupt(self, delay: float, stop_event: Event) -> DanmakuSendResult | None:
+    def _sleep_with_interrupt(self, delay: float, stop_event: Event) -> BiliSendResponse | None:
         """
         支持中断的休眠器
 
@@ -119,7 +123,7 @@ class DanmakuExecutor:
         """
         if stop_event.wait(delay):
             self.logger.info("重试等待期间接收到停止指令，放弃发送。")
-            return DanmakuSendResult(
+            return BiliSendResponse(
                 code=BiliDmErrorCode.CLIENT_RUNTIME_ERROR.code,
                 is_success=False,
                 msg="用户中断",

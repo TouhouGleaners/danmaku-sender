@@ -61,6 +61,9 @@ class SendingContext:
     # 失败弹幕回收站，供后续导出 XML 使用
     unsent_records: list[UnsentDanmakusRecord] = field(default_factory=list)
 
+    # 已发出但本地存证失败的弹幕：远端成功，账本留洞
+    evidence_failures: list[tuple[Danmaku, str]] = field(default_factory=list)
+
     # 智能去重(断点续传)的内部缓存池，避免高频查库
     # Key: 指纹 -> Value: 出现次数
     local_counter: dict[DanmakuFingerprint, int] = field(default_factory=dict)

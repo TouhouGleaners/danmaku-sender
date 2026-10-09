@@ -43,11 +43,10 @@ class TestRecordDanmaku:
         n = sqlite3.connect(hm.db_path).execute("SELECT COUNT(*) FROM sent_danmaku").fetchone()[0]
         assert n == 1
 
-    def test_record_without_dmid_skipped(self, hm, target):
-        """POST 响应缺 dmid 时跳过存证"""
-        _record(hm, target, "")
-        n = sqlite3.connect(hm.db_path).execute("SELECT COUNT(*) FROM sent_danmaku").fetchone()[0]
-        assert n == 0
+    def test_record_without_dmid_raises(self, hm, target):
+        """无 dmid 的存证不得静默丢弃"""
+        with pytest.raises(ValueError):
+            _record(hm, target, "")
 
     def test_init_is_idempotent(self, hm, target):
         """重启等场景下重复初始化不得破坏既有数据"""
