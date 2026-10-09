@@ -85,7 +85,7 @@ class HistoryManager:
         dm: Danmaku,
         dmid: str,
         is_visible_api: bool = True,
-    ):
+    ) -> bool:
         """
         记录一条刚刚发送成功的弹幕，状态置为 STATUS_PENDING (0)。
 
@@ -95,10 +95,13 @@ class HistoryManager:
             dm (Danmaku): 发送的弹幕。
             dmid (str): 服务器返回的弹幕身份。
             is_visible_api (bool): API 是否回执可见。
+
+        Returns:
+            bool: 落库成功返回 True；无 dmid 或写入失败返回 False。
         """
         if not dmid:
             logger.warning("尝试记录无 ID 的弹幕，操作跳过。")
-            return
+            return False
 
         try:
             (
@@ -120,9 +123,10 @@ class HistoryManager:
                     .on_conflict_ignore()
                     .execute()
             )
+            return True
         except Exception as e:
             logger.error(f"存证失败: {e}", exc_info=True)
-            raise
+            return False
 
     def upsert_task(self, definition: TaskDefinition, status: TaskStatus) -> None:
         """写入或更新一条任务记录。
