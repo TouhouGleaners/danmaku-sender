@@ -2,7 +2,8 @@ import logging
 import time
 from pathlib import Path
 
-from peewee import Case, SqliteDatabase, fn
+from peewee import Case, CharField, SqliteDatabase, fn
+from playhouse.migrate import SqliteMigrator, migrate
 
 from danmaku_sender.types.models.common import (
     DanmakuStatus,
@@ -13,7 +14,7 @@ from danmaku_sender.types.models.common import (
 )
 from danmaku_sender.types.models.danmaku import Danmaku
 
-from .orm_models import SentDanmaku, db
+from .orm_models import SentDanmaku, TaskRecord, db
 
 logger = logging.getLogger(__name__)
 
@@ -52,12 +53,24 @@ class HistoryManager:
             db.initialize(sqlite_db)
             sqlite_db.connect(reuse_if_open=True)
 
-            # 自动建表（已有则跳过）
-            sqlite_db.create_tables([SentDanmaku], safe=True)
+            # 建表（含索引，已存在则跳过）→ 迁移补列
+            sqlite_db.create_tables([SentDanmaku, TaskRecord], safe=True)
+            self._run_migrations(sqlite_db)
 
         except Exception as e:
             logger.critical(f"数据库初始化/迁移致命错误: {e}", exc_info=True)
             raise RuntimeError(f"HistoryManager 数据库初始化失败: {e}") from e
+
+    def _run_migrations(self, sqlite_db: SqliteDatabase) -> None:
+        """幂等迁移：补齐历史版本缺失的列与索引。
+
+        Args:
+            sqlite_db: 已连接的数据库。
+        """
+        migrator = SqliteMigrator(sqlite_db)
+        columns = {col.name for col in sqlite_db.get_columns('sent_danmaku')}
+        if 'task_id' not in columns:
+            migrate(migrator.add_column('sent_danmaku', 'task_id', CharField(null=True)))
 
     def record_danmaku(self, target: VideoTarget, dm: Danmaku, dmid: str, is_visible_api: bool = True):
         """
@@ -241,7 +254,11 @@ class HistoryManager:
         Returns:
             MonitorStats: {'total': int, 'verified': int, 'pending': int, 'lost': int}
         """
-        total, verified, lost = self.get_stats(target.cid, baseline)
+        cid = target.cid
+        if cid is None:
+            return MonitorStats(total=0, verified=0, pending=0, lost=0)
+
+        total, verified, lost = self.get_stats(cid, baseline)
         pending = total - verified - lost
         return MonitorStats(
             total=total,
