@@ -246,8 +246,10 @@ class TestDiagnostics:
     def test_result_callback_sees_recorded_result(self, hm):
         """记账先于 result_callback，回调异常不丢记账结论"""
         seen: list[tuple[str, bool]] = []
+        ledger_at_callback: list[int] = []
 
         def callback(dm, result):
+            ledger_at_callback.append(hm.count_records(TARGET, dm))
             seen.append((dm.msg, result.status is SendStatus.SUCCESS))
             raise RuntimeError("回调异常")
 
@@ -256,8 +258,10 @@ class TestDiagnostics:
         ctx = SendingContext(total=1, target=job.target)
         make_scheduler(hm, executor).run_pipeline(job, ctx)
 
+        assert ledger_at_callback == [1], "回调运行时存证尚未落库"
         assert seen == [("a", True)]
         assert ctx.success_count == 1
+        assert hm.count_records(TARGET, Danmaku(msg="a", progress=1000)) == 1, "回调抛异常丢了存证"
         assert ctx.fatal_error_occurred is True
 
 

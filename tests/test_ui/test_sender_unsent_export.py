@@ -63,6 +63,7 @@ class TestUnsentExport:
         page._on_queue_task_completed(task_id, make_ctx(dms))
 
         assert task_id in page._unsent_by_task
+        assert [r['dm'].msg for r in page._unsent_by_task[task_id].records] == ["a"]
         assert page._btn_export_unsent.isEnabled()
 
     def test_clean_run_leaves_export_disabled(self, page):
