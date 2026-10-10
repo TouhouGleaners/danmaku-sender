@@ -27,6 +27,7 @@ class TestFromApiJson:
             "data": {"dmid": 67890}
         }
         result = BiliSendResponse.from_api_json(resp)
+        assert result.is_success is True
         assert result.dmid == "67890"
 
     def test_success_visible_false(self):
