@@ -6,22 +6,13 @@ Controller 层的 Worker 只需调用 pipeline.execute()，无需接触 Executor
 """
 
 import logging
-import time
 from collections.abc import Callable
 from dataclasses import replace
 
 from danmaku_sender.config import ApiAuthConfig
 from danmaku_sender.repo.bili_api_client import BiliApiClient
 from danmaku_sender.repo.history_manager import HistoryManager
-from danmaku_sender.types.exceptions.exceptions import HistoryStorageError
-from danmaku_sender.types.models.common import VideoTarget
-from danmaku_sender.types.models.danmaku import Danmaku
 from danmaku_sender.types.models.queue import TaskConfig
-from danmaku_sender.types.models.result import (
-    BiliSendResponse,
-    DanmakuSendResult,
-    SendStatus,
-)
 
 from .context import SendingContext, SendJob
 from .delay_manager import DelayManager
@@ -70,16 +61,7 @@ class SendPipeline:
             scheduler = DanmakuScheduler(executor, self.history_manager)
 
             # 包装回调链，不修改原始 job 对象
-            outer_result_callback = job.result_callback
             outer_progress_callback = job.progress_callback
-            degraded: list[tuple[Danmaku, str]] = []
-
-            def on_result(dm: Danmaku, response: BiliSendResponse):
-                result = self._account(job.task_id, job.target, dm, response)
-                if result.status is SendStatus.DEGRADED:
-                    degraded.append((dm, result.storage_error or ""))
-                if outer_result_callback:
-                    outer_result_callback(dm, result)
 
             def on_progress(attempted: int, total: int):
                 eta_sec = self._calc_eta(attempted, total, job.config)
@@ -88,66 +70,14 @@ class SendPipeline:
                 if outer_progress_callback:
                     outer_progress_callback(attempted, total)
 
-            wrapped_job = replace(
-                job,
-                progress_callback=on_progress,
-                result_callback=on_result,
-            )
+            wrapped_job = replace(job, progress_callback=on_progress)
 
             ctx = scheduler.run_pipeline(wrapped_job)
 
         # 补充生命周期状态
-        ctx.evidence_failures = degraded
         ctx.is_manually_stopped = job.stop_event.is_set()
         self._log_summary(ctx)
         return ctx
-
-    def _account(
-        self,
-        task_id: str,
-        target: VideoTarget,
-        dm: Danmaku,
-        response: BiliSendResponse,
-    ) -> DanmakuSendResult:
-        """把远端响应落成业务结论，含本地存证。
-
-        Args:
-            task_id (str): 归属任务。
-            target (VideoTarget): 发送目标。
-            dm (Danmaku): 发送的弹幕。
-            response (BiliSendResponse): 远端响应。
-
-        Returns:
-            DanmakuSendResult: 业务处理结果。
-        """
-        if not response.is_success:
-            return DanmakuSendResult(status=SendStatus.FAILED, response=response)
-
-        if not response.dmid:
-            logger.warning(f"远端成功但无 dmid，无法存证: {dm.msg}")
-            return DanmakuSendResult(
-                status=SendStatus.DEGRADED,
-                response=response,
-                storage_error="远端未返回 dmid",
-            )
-
-        max_retries = 3
-        last_error = ""
-        for attempt in range(max_retries):
-            try:
-                self.history_manager.record_danmaku(task_id, target, dm, response.dmid, response.is_visible)
-                return DanmakuSendResult(status=SendStatus.SUCCESS, response=response)
-            except HistoryStorageError as e:
-                last_error = str(e)
-                if attempt < max_retries - 1:
-                    time.sleep(0.05 * (attempt + 1))
-
-        logger.error(f"⚠️ [存证降级] 已发出但记账失败: {dm.msg} (dmid={response.dmid}) - {last_error}")
-        return DanmakuSendResult(
-            status=SendStatus.DEGRADED,
-            response=response,
-            storage_error=last_error,
-        )
 
     def _calc_eta(self, attempted: int, total: int, config: TaskConfig) -> float:
         """基于任务配置计算 ETA（秒）"""

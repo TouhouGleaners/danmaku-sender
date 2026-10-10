@@ -1,9 +1,17 @@
 import logging
+import time
 from threading import Event
 
 from danmaku_sender.config import SendPolicy
 from danmaku_sender.repo.history_manager import HistoryManager
+from danmaku_sender.types.exceptions.exceptions import HistoryStorageError
+from danmaku_sender.types.models.common import VideoTarget
 from danmaku_sender.types.models.danmaku import Danmaku
+from danmaku_sender.types.models.result import (
+    BiliSendResponse,
+    DanmakuSendResult,
+    SendStatus,
+)
 
 from .context import DanmakuFingerprint, SendingContext, SendJob
 from .delay_manager import DelayManager
@@ -14,8 +22,8 @@ class DanmakuScheduler:
     """
     弹幕发送调度器 (Scheduler)
 
-    不亲自发包（委托 Executor），也不亲自存库（通过 Callback 委派）。
-    职责：遍历队列、断点续传（去重）、容错处理、时间控制与任务阻断。
+    不亲自发包（委托 Executor），但把「发包 + 入账」收成一条原子操作；
+    职责：遍历队列、断点续传（去重）、容错处理、时间控制与任务阻断、战果记账。
     """
     def __init__(self, executor: DanmakuExecutor, history_manager: HistoryManager | None = None):
         self.logger = logging.getLogger(__name__)
@@ -26,6 +34,58 @@ class DanmakuScheduler:
     def _get_fingerprint(dm: Danmaku) -> DanmakuFingerprint:
         """生成物理指纹，用于识别内容、位置、样式完全一样的重复弹幕"""
         return (dm.msg, dm.progress, dm.mode, dm.fontsize, dm.color)
+
+    def _send_single(
+        self,
+        target: VideoTarget,
+        dm: Danmaku,
+        task_id: str,
+        stop_event: Event,
+    ) -> DanmakuSendResult:
+        """单条弹幕的原子操作：网络发包 → 尝试入账 → 产出业务结论。
+
+        Args:
+            target (VideoTarget): 发送目标。
+            dm (Danmaku): 待发弹幕。
+            task_id (str): 归属任务。
+            stop_event (Event): 中止信号。
+
+        Returns:
+            DanmakuSendResult: 确凿的业务结论。
+        """
+        response: BiliSendResponse = self.executor.execute(target, dm, stop_event)
+
+        if not response.is_success:
+            return DanmakuSendResult(status=SendStatus.FAILED, response=response)
+
+        if not response.dmid:
+            return DanmakuSendResult(
+                status=SendStatus.DEGRADED,
+                response=response,
+                storage_error="远端成功但未返回 dmid，无法存证",
+            )
+
+        if self.history_manager is None:
+            return DanmakuSendResult(status=SendStatus.SUCCESS, response=response)
+
+        max_retries = 3
+        last_error = ""
+        for attempt in range(max_retries):
+            try:
+                self.history_manager.record_danmaku(
+                    task_id, target, dm, response.dmid, response.is_visible
+                )
+                return DanmakuSendResult(status=SendStatus.SUCCESS, response=response)
+            except HistoryStorageError as e:
+                last_error = str(e)
+                if attempt < max_retries - 1:
+                    time.sleep(0.05 * (attempt + 1))
+
+        return DanmakuSendResult(
+            status=SendStatus.DEGRADED,
+            response=response,
+            storage_error=last_error,
+        )
 
     def _should_skip(self, dm: Danmaku, ctx: SendingContext, policy: SendPolicy) -> bool:
         """
@@ -110,24 +170,26 @@ class DanmakuScheduler:
             ctx.attempted_count += 1
             self.logger.info(f"[{i+1}/{ctx.total}] 准备执行: {dm.msg}")
 
-            # --- 委派 Executor 发送 ---
-            result = self.executor.execute(job.target, dm, job.stop_event)
+            # --- 发送 + 入账：单条的原子操作 ---
+            result = self._send_single(job.target, dm, job.task_id, job.stop_event)
 
-            # --- 回调注入层 ---
             if job.result_callback:
                 job.result_callback(dm, result)
 
-            # --- 结果 ---
-            if not result.is_success:
-                ctx.add_unsent(dm, result.hint)
+            match result.status:
+                case SendStatus.SUCCESS:
+                    ctx.success_count += 1
 
-                # 遭遇致命封禁，直接摧毁流水线
-                if result.is_fatal:
-                    ctx.fatal_error_occurred = True
-                    ctx.add_unsent(job.danmakus[i+1:], f"致命错误: {result.hint}")
-                    break
-            else:
-                ctx.success_count += 1
+                case SendStatus.DEGRADED:
+                    ctx.success_count += 1
+                    ctx.evidence_failures.append((dm, result.storage_error or "未知存证错误"))
+
+                case SendStatus.FAILED:
+                    ctx.add_unsent(dm, result.response.hint)
+                    if result.is_fatal:
+                        ctx.fatal_error_occurred = True
+                        ctx.add_unsent(job.danmakus[i+1:], f"致命错误: {result.response.hint}")
+                        break
 
             # --- 检查用户设置的自动终止阀值 ---
             if self._check_auto_stop(ctx, job.stop_event, job.policy):
