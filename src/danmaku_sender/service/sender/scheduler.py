@@ -23,7 +23,7 @@ class DanmakuScheduler:
     弹幕发送调度器 (Scheduler)
 
     不亲自发包（委托 Executor），但把「发包 + 入账」收成一条原子操作；
-    职责：遍历队列、断点续传（去重）、容错处理、时间控制与任务阻断、战果记账。
+    职责：遍历队列、断点续传（去重）、容错处理、时间控制与任务阻断、结果统计。
     """
     def __init__(self, executor: DanmakuExecutor, history_manager: HistoryManager | None = None):
         self.logger = logging.getLogger(__name__)
@@ -153,56 +153,63 @@ class DanmakuScheduler:
         if job.progress_callback:
             job.progress_callback(0, ctx.total)
 
-        for i, dm in enumerate(job.danmakus):
-            # --- 检查中止指令 ---
-            if job.stop_event.is_set():
-                ctx.add_unsent(job.danmakus[i:], "任务手动停止")
-                break
+        try:
+            for i, dm in enumerate(job.danmakus):
+                # --- 检查中止指令 ---
+                if job.stop_event.is_set():
+                    ctx.add_unsent(job.danmakus[i:], "任务手动停止")
+                    break
 
-            if job.progress_callback:
-                job.progress_callback(i + 1, ctx.total)
+                if job.progress_callback:
+                    job.progress_callback(i + 1, ctx.total)
 
-            # --- 查重断点续传 ---
-            if self._should_skip(dm, ctx, job.policy):
-                ctx.skipped_count += 1
-                continue
+                # --- 查重断点续传 ---
+                if self._should_skip(dm, ctx, job.policy):
+                    ctx.skipped_count += 1
+                    continue
 
-            ctx.attempted_count += 1
-            self.logger.info(f"[{i+1}/{ctx.total}] 准备执行: {dm.msg}")
+                ctx.attempted_count += 1
+                self.logger.info(f"[{i+1}/{ctx.total}] 准备执行: {dm.msg}")
 
-            # --- 发送 + 入账：单条的原子操作 ---
-            result = self._send_single(job.target, dm, job.task_id, job.stop_event)
+                # --- 发送 + 入账：单条的原子操作 ---
+                result = self._send_single(job.target, dm, job.task_id, job.stop_event)
 
-            if job.result_callback:
-                job.result_callback(dm, result)
+                if job.result_callback:
+                    job.result_callback(dm, result)
 
-            match result.status:
-                case SendStatus.SUCCESS:
-                    ctx.success_count += 1
+                match result.status:
+                    case SendStatus.SUCCESS:
+                        ctx.success_count += 1
 
-                case SendStatus.DEGRADED:
-                    ctx.success_count += 1
-                    ctx.evidence_failures.append((dm, result.storage_error or "未知存证错误"))
+                    case SendStatus.DEGRADED:
+                        ctx.success_count += 1
+                        ctx.evidence_failures.append((dm, result.storage_error or "未知存证错误"))
 
-                case SendStatus.FAILED:
-                    ctx.add_unsent(dm, result.response.hint)
-                    if result.is_fatal:
-                        ctx.fatal_error_occurred = True
-                        ctx.add_unsent(job.danmakus[i+1:], f"致命错误: {result.response.hint}")
-                        break
+                    case SendStatus.FAILED:
+                        ctx.add_unsent(dm, result.response.hint)
+                        if result.is_fatal:
+                            ctx.fatal_error_occurred = True
+                            ctx.add_unsent(job.danmakus[i+1:], f"致命错误: {result.response.hint}")
+                            break
 
-            # --- 检查用户设置的自动终止阀值 ---
-            if self._check_auto_stop(ctx, job.stop_event, job.policy):
-                reason = ctx.auto_stop_reason if ctx.auto_stop_reason else "达到自动停止条件"
-                if i + 1 < ctx.total:
-                    ctx.add_unsent(job.danmakus[i+1:], f"自动停止: {reason}")
-                break
+                # --- 检查用户设置的自动终止阀值 ---
+                if self._check_auto_stop(ctx, job.stop_event, job.policy):
+                    reason = ctx.auto_stop_reason if ctx.auto_stop_reason else "达到自动停止条件"
+                    if i + 1 < ctx.total:
+                        ctx.add_unsent(job.danmakus[i+1:], f"自动停止: {reason}")
+                    break
 
-            # --- 正常节奏控制 ---
-            is_last_item = (i == ctx.total - 1)
-            if not is_last_item and delay_manager.wait_and_check_stop(job.stop_event):
-                if i + 1 < ctx.total:
-                    ctx.add_unsent(job.danmakus[i+1:], "任务手动停止")
-                break
+                # --- 正常节奏控制 ---
+                is_last_item = (i == ctx.total - 1)
+                if not is_last_item and delay_manager.wait_and_check_stop(job.stop_event):
+                    if i + 1 < ctx.total:
+                        ctx.add_unsent(job.danmakus[i+1:], "任务手动停止")
+                    break
+
+        except Exception as e:
+            # 保留已累积的记录再返回，调用方拿得到 evidence_failures
+            self.logger.error(f"发送循环异常中止: {e}", exc_info=True)
+            ctx.fatal_error_occurred = True
+            ctx.fatal_error_msg = str(e)
 
         return ctx

@@ -55,7 +55,8 @@ class SendingContext:
     # 生命周期与终止状态
     start_time: float = field(default_factory=time.time)
     auto_stop_reason: str = ""          # 如果触发了自动停止，记录具体原因
-    fatal_error_occurred: bool = False  # 是否因致命错误而崩塌
+    fatal_error_occurred: bool = False  # 是否因致命错误中止
+    fatal_error_msg: str = ""           # 中止原因
     is_manually_stopped: bool = False   # 是否被用户手动停止
 
     # 失败弹幕回收站，供后续导出 XML 使用

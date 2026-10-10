@@ -9,7 +9,7 @@ from danmaku_sender.config import ApiAuthConfig, SendPolicy
 from danmaku_sender.controller.concurrency import WorkerThread
 from danmaku_sender.repo.history_manager import HistoryManager
 from danmaku_sender.runtime.infra.platform import KeepSystemAwake
-from danmaku_sender.service.sender import SendJob, SendPipeline
+from danmaku_sender.service.sender import SendJob, SendPipeline, SendingContext
 from danmaku_sender.service.sender.delay_manager import DelayManager
 from danmaku_sender.types.models.queue import TaskConfig, TaskSnapshot, TaskStatus
 
@@ -24,7 +24,7 @@ class QueueSendWorker(WorkerThread):
 
     taskStarted = Signal(str, int)                  # (task_id, idx_0based)
     taskCompleted = Signal(str, object)             # (task_id, SendingContext)
-    taskFailed = Signal(str, str)                   # (task_id, error_msg)
+    taskFailed = Signal(str, str, object)           # (task_id, error_msg, SendingContext | None)
     taskSkipped = Signal(str, str)                  # (task_id, reason)
     queueFinished = Signal()
     queueProgressUpdated = Signal(int, int, float)  # (current_idx_0based, total, eta)
@@ -112,6 +112,7 @@ class QueueSendWorker(WorkerThread):
             self.queueProgressUpdated.emit(idx, total, queue_eta)
             self.taskProgressUpdated.emit(task_id, attempted, task_total, eta)
 
+        ctx: SendingContext | None = None
         try:
             pipeline = SendPipeline(self.auth_config, self.history_manager)
             job = SendJob(
@@ -125,7 +126,7 @@ class QueueSendWorker(WorkerThread):
             ctx = pipeline.execute(job, progress_emitter=progress_emitter)
 
             if ctx.fatal_error_occurred:
-                self.taskFailed.emit(task_id, "致命错误，队列中止")
+                self.taskFailed.emit(task_id, "致命错误，队列中止", ctx)
                 logger.error(f"致命错误，队列中止于: {definition.display_string}")
                 return False
 
@@ -135,7 +136,7 @@ class QueueSendWorker(WorkerThread):
             return True
 
         except Exception as e:
-            self.taskFailed.emit(task_id, str(e))
+            self.taskFailed.emit(task_id, str(e), ctx)
             logger.error(f"[{idx + 1}/{total}] 发送失败: {definition.display_string} - {e}")
             return True  # 单任务异常不阻断队列，继续下一个
 
