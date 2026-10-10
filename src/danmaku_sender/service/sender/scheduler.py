@@ -25,12 +25,12 @@ class DanmakuScheduler:
     发包委托 DanmakuExecutor，入账委托 HistoryManager。
     """
 
-    def __init__(self, executor: DanmakuExecutor, history_manager: HistoryManager | None = None):
+    def __init__(self, executor: DanmakuExecutor, history_manager: HistoryManager):
         """初始化调度器。
 
         Args:
             executor (DanmakuExecutor): 发包执行器。
-            history_manager (HistoryManager | None): 本地账本；缺省时不入账。
+            history_manager (HistoryManager): 本地账本，供存证与查重。
         """
         self.logger = logging.getLogger(__name__)
         self.executor = executor
@@ -77,9 +77,6 @@ class DanmakuScheduler:
                 response=response,
                 storage_error="远端成功但未返回 dmid，无法存证",
             )
-
-        if self.history_manager is None:
-            return DanmakuSendResult(status=SendStatus.SUCCESS, response=response)
 
         max_retries = 3
         last_error = ""
@@ -163,6 +160,9 @@ class DanmakuScheduler:
         if job.progress_callback:
             job.progress_callback(0, ctx.total)
 
+        # 待处理的弹幕下标，其后的尚未发包
+        pending_from = 0
+
         try:
             for i, dm in enumerate(job.danmakus):
                 # --- 检查中止指令 ---
@@ -176,6 +176,7 @@ class DanmakuScheduler:
                 # --- 查重断点续传 ---
                 if self._should_skip(dm, ctx, job.policy):
                     ctx.skipped_count += 1
+                    pending_from = i + 1
                     continue
 
                 ctx.attempted_count += 1
@@ -184,9 +185,7 @@ class DanmakuScheduler:
                 # --- 发送 + 入账：单条的原子操作 ---
                 result = self._send_single(job.target, dm, job.task_id, job.stop_event)
 
-                if job.result_callback:
-                    job.result_callback(dm, result)
-
+                # 先记账再回调
                 match result.status:
                     case SendStatus.SUCCESS:
                         ctx.success_count += 1
@@ -197,10 +196,17 @@ class DanmakuScheduler:
 
                     case SendStatus.FAILED:
                         ctx.add_unsent(dm, result.response.hint)
-                        if result.is_fatal:
-                            ctx.fatal_error_occurred = True
-                            ctx.add_unsent(job.danmakus[i+1:], f"致命错误: {result.response.hint}")
-                            break
+
+                pending_from = i + 1
+
+                if job.result_callback:
+                    job.result_callback(dm, result)
+
+                if result.status is SendStatus.FAILED and result.is_fatal:
+                    ctx.fatal_error_occurred = True
+                    ctx.fatal_error_msg = result.response.hint
+                    ctx.add_unsent(job.danmakus[i + 1:], f"致命错误: {result.response.hint}")
+                    break
 
                 # --- 检查用户设置的自动终止阀值 ---
                 if self._check_auto_stop(ctx, job.stop_event, job.policy):
@@ -221,3 +227,4 @@ class DanmakuScheduler:
             self.logger.error(f"发送循环异常中止: {e}", exc_info=True)
             ctx.fatal_error_occurred = True
             ctx.fatal_error_msg = str(e)
+            ctx.add_unsent(job.danmakus[pending_from:], f"异常中断: {e}")

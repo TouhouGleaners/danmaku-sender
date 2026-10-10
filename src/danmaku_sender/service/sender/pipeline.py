@@ -81,7 +81,10 @@ class SendPipeline:
 
         # 补充生命周期状态
         ctx.is_manually_stopped = job.stop_event.is_set()
-        self._log_summary(ctx)
+        try:
+            self._log_summary(ctx)
+        except Exception:
+            logger.error("发送摘要输出失败", exc_info=True)
         return ctx
 
     def _calc_eta(self, attempted: int, total: int, config: TaskConfig) -> float:

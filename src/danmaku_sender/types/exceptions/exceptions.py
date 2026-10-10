@@ -22,7 +22,7 @@ class BiliApiError(Exception):
 
 
 class HistoryStorageError(Exception):
-    """本地账本/存证持久化失败。
+    """本地账本读写失败。
 
     Attributes:
         original_error (Exception | None): 底层异常。

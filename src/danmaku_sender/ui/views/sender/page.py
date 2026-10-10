@@ -767,7 +767,7 @@ class SenderPage(QWidget):
         if ctx.evidence_failures:
             Notification.warning(
                 title=f"{len(ctx.evidence_failures)} 条弹幕已发出但未入账",
-                message="本地写入失败，这些弹幕的核销与续传可能受影响。",
+                message="再次执行本任务会重复发送这些弹幕，请在重置队列前先核对。",
             )
 
         task = self.state.queue_state.get_task_by_id(task_id)
@@ -793,7 +793,7 @@ class SenderPage(QWidget):
         if ctx.evidence_failures:
             Notification.warning(
                 title=f"{len(ctx.evidence_failures)} 条弹幕已发出但未入账",
-                message="本地写入失败，这些弹幕的核销与续传可能受影响。",
+                message="再次执行本任务会重复发送这些弹幕，请在重置队列前先核对。",
             )
 
         task = self.state.queue_state.get_task_by_id(task_id)

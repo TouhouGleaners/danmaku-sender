@@ -122,7 +122,7 @@ class QueueSendWorker(WorkerThread):
             self.queueProgressUpdated.emit(idx, total, queue_eta)
             self.taskProgressUpdated.emit(task_id, attempted, task_total, eta)
 
-        ctx: SendingContext | None = None
+        ctx = SendingContext(total=len(definition.danmakus), target=definition.target)
         try:
             pipeline = SendPipeline(self.auth_config, self.history_manager)
             job = SendJob(
@@ -136,8 +136,8 @@ class QueueSendWorker(WorkerThread):
             ctx = pipeline.execute(job, progress_emitter=progress_emitter)
 
             if ctx.fatal_error_occurred:
-                self.taskFailed.emit(task_id, "致命错误，队列中止", ctx)
-                logger.error(f"致命错误，队列中止于: {definition.display_string}")
+                self.taskFailed.emit(task_id, ctx.fatal_error_msg, ctx)
+                logger.error(f"致命错误，队列中止于: {definition.display_string} - {ctx.fatal_error_msg}")
                 return False
 
             # COMPLETED / PAUSED 由 Controller 根据 ctx 在主线程判定落账

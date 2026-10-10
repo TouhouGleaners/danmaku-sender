@@ -21,7 +21,7 @@ dependencies = [
     "keyring>=25.7.0",
     "win11toast>=0.36.2; sys_platform == 'win32'",
     "cryptography>=46.0.3",
-    "peewee>=4.0.1",
+    "peewee>=4.3.0",
     "pydantic>=2.12.5",
     "qrcode[pil]>=8.2"
 ]

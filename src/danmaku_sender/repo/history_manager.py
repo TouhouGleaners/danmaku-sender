@@ -51,7 +51,7 @@ class HistoryManager:
         try:
             # 开启 WAL 模式提升并发性能
             sqlite_db = SqliteDatabase(
-                self.db_path,
+                str(self.db_path),
                 pragmas={'journal_mode': 'wal'},
                 check_same_thread=False
             )
@@ -125,7 +125,7 @@ class HistoryManager:
                         is_visible=1 if is_visible_api else 0,
                         status=DanmakuStatus.PENDING.value,
                     )
-                    .on_conflict_ignore()
+                    .on_conflict(conflict_target=[SentDanmaku.dmid], action='nothing')
                     .execute()
             )
         except Exception as e:
@@ -394,6 +394,9 @@ class HistoryManager:
 
         Returns:
             int: 匹配的记录数。
+
+        Raises:
+            HistoryStorageError: 查重查询失败。
         """
         try:
             return (
@@ -413,7 +416,7 @@ class HistoryManager:
 
         except Exception as e:
             logger.error(f"查重失败: {e}", exc_info=True)
-            return 0
+            raise HistoryStorageError(f"查重查询失败，无法判断弹幕是否已发送: {e}", original_error=e) from e
 
     def query_history(self, keyword: str = "", status: int = -1, limit: int = 500) -> list[dict]:
         """按关键词与状态筛选弹幕历史。
