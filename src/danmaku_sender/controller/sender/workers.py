@@ -22,14 +22,14 @@ class QueueSendWorker(WorkerThread):
     启动时接收不可变 TaskSnapshot 采样；状态落账一律由 SenderController 在主线程完成。
     """
 
-    taskStarted = Signal(str, int)                  # (task_id, idx_0based)
-    taskCompleted = Signal(str, object)             # (task_id, SendingContext)
-    taskFailed = Signal(str, str, object)           # (task_id, error_msg, SendingContext | None)
-    taskSkipped = Signal(str, str)                  # (task_id, reason)
+    taskStarted = Signal(str, int)                      # (task_id, idx_0based)
+    taskCompleted = Signal(str, object)                 # (task_id, SendingContext)
+    taskFailed = Signal(str, str, object)               # (task_id, error_msg, SendingContext)
+    taskSkipped = Signal(str, str)                      # (task_id, reason)
     queueFinished = Signal()
-    queueProgressUpdated = Signal(int, int, float)  # (current_idx_0based, total, eta)
+    queueProgressUpdated = Signal(int, int, float)      # (current_idx_0based, total, eta)
     taskProgressUpdated = Signal(str, int, int, float)  # (task_id, attempted, task_total, eta)
-    ending = Signal(object)                         # run() 退出时 emit(self)
+    ending = Signal(object)                             # run() 退出时 emit(self)
 
     def __init__(
         self,

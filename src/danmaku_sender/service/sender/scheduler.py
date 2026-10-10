@@ -128,20 +128,17 @@ class DanmakuScheduler:
 
         return False
 
-    def run_pipeline(self, job: SendJob) -> SendingContext:
-        """
-        流水线主入口
+    def run_pipeline(self, job: SendJob, ctx: SendingContext) -> None:
+        """执行发送控制循环，结果填入 ctx。
 
-        执行逻辑：
-        检查取消信号 -> 回调进度 -> 查重拦截 -> 委派发送 -> 错误/风控判定 -> 回调数据 -> 延时控制
+        Args:
+            job (SendJob): 发送任务工单。
+            ctx (SendingContext): 由调用方持有并传入，异常时结果仍在其中。
         """
         self.logger.info(f"🚀 启动调度流水线... 目标: {job.target.bvid or "未指定"} (CID: {job.target.cid})")
 
-        # 初始化统计容器
-        ctx = SendingContext(total=len(job.danmakus), target=job.target)
-
         if not job.danmakus:
-            return ctx
+            return
 
         # 初始化时钟管理器
         delay_manager = DelayManager(
@@ -207,9 +204,7 @@ class DanmakuScheduler:
                     break
 
         except Exception as e:
-            # 保留已累积的记录再返回，调用方拿得到 evidence_failures
+            # 保留已累积的记录，调用方拿得到 evidence_failures
             self.logger.error(f"发送循环异常中止: {e}", exc_info=True)
             ctx.fatal_error_occurred = True
             ctx.fatal_error_msg = str(e)
-
-        return ctx

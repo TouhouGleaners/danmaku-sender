@@ -56,23 +56,32 @@ class SendPipeline:
         Returns:
             SendingContext: 包含统计数据的发送上下文
         """
-        with BiliApiClient.from_config(self.auth_config) as client:
-            executor = DanmakuExecutor(client)
-            scheduler = DanmakuScheduler(executor, self.history_manager)
+        # ctx 先于一切存在：后续任何环节异常，调用方都拿得到已累积的记录
+        ctx = SendingContext(total=len(job.danmakus), target=job.target)
 
-            # 包装回调链，不修改原始 job 对象
-            outer_progress_callback = job.progress_callback
+        try:
+            with BiliApiClient.from_config(self.auth_config) as client:
+                executor = DanmakuExecutor(client)
+                scheduler = DanmakuScheduler(executor, self.history_manager)
 
-            def on_progress(attempted: int, total: int):
-                eta_sec = self._calc_eta(attempted, total, job.config)
-                if progress_emitter:
-                    progress_emitter(attempted, total, eta_sec)
-                if outer_progress_callback:
-                    outer_progress_callback(attempted, total)
+                # 包装回调链，不修改原始 job 对象
+                outer_progress_callback = job.progress_callback
 
-            wrapped_job = replace(job, progress_callback=on_progress)
+                def on_progress(attempted: int, total: int):
+                    eta_sec = self._calc_eta(attempted, total, job.config)
+                    if progress_emitter:
+                        progress_emitter(attempted, total, eta_sec)
+                    if outer_progress_callback:
+                        outer_progress_callback(attempted, total)
 
-            ctx = scheduler.run_pipeline(wrapped_job)
+                wrapped_job = replace(job, progress_callback=on_progress)
+
+                scheduler.run_pipeline(wrapped_job, ctx)
+
+        except Exception as e:
+            logger.error(f"发送流水线异常中止: {e}", exc_info=True)
+            ctx.fatal_error_occurred = True
+            ctx.fatal_error_msg = str(e)
 
         # 补充生命周期状态
         ctx.is_manually_stopped = job.stop_event.is_set()
