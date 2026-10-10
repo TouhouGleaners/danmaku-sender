@@ -782,12 +782,6 @@ class SenderPage(QWidget):
             self._btn_export_unsent.setEnabled(True)
             self.logger.info(f"未发送成功 {len(ctx.unsent_records)} 条，右键任务可导出")
 
-    @staticmethod
-    def _unsent_label(task: TaskView) -> str:
-        """导出文件名的主体：优先用导入的 XML 文件名，其次视频标题"""
-        xml_path = task.meta.xml_path
-        return xml_path.stem if xml_path is not None else task.display_string
-
     @Slot(str, str, object)
     def _on_queue_task_failed(self, task_id: str, error_msg: str, ctx: SendingContext):
         if ctx.evidence_failures:
@@ -797,8 +791,22 @@ class SenderPage(QWidget):
             )
 
         task = self.state.queue_state.get_task_by_id(task_id)
-        if task:
-            self.logger.error(f"失败: {task.display_string} - {error_msg}")
+        if task is None:
+            return
+
+        self.logger.error(f"失败: {task.display_string} - {error_msg}")
+        if ctx.unsent_records:
+            self._unsent_by_task[task_id] = TaskUnsent(
+                label=self._unsent_label(task), records=list(ctx.unsent_records)
+            )
+            self._btn_export_unsent.setEnabled(True)
+            self.logger.info(f"未发送成功 {len(ctx.unsent_records)} 条，右键任务可导出")
+
+    @staticmethod
+    def _unsent_label(task: TaskView) -> str:
+        """导出文件名的主体：优先用导入的 XML 文件名，其次视频标题"""
+        xml_path = task.meta.xml_path
+        return xml_path.stem if xml_path is not None else task.display_string
 
     @Slot()
     def _on_queue_finished(self):

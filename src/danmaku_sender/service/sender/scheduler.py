@@ -223,8 +223,7 @@ class DanmakuScheduler:
                     break
 
         except Exception as e:
-            # 保留已累积的记录，调用方拿得到 evidence_failures
-            self.logger.error(f"发送循环异常中止: {e}", exc_info=True)
             ctx.fatal_error_occurred = True
             ctx.fatal_error_msg = str(e)
             ctx.add_unsent(job.danmakus[pending_from:], f"异常中断: {e}")
+            self.logger.error(f"发送循环异常中止: {e}", exc_info=True)
