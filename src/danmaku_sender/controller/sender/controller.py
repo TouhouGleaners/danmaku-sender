@@ -38,7 +38,7 @@ class SenderController(QObject):
     # 队列信号
     queueTaskStarted = Signal(str)                      # task_id
     queueTaskCompleted = Signal(str, object)            # (task_id, SendingContext)
-    queueTaskFailed = Signal(str, str)                  # (task_id, error_msg)
+    queueTaskFailed = Signal(str, str, object)          # (task_id, error_msg, SendingContext)
     queueFinished = Signal()
     queueReady = Signal()                               # Worker 清理完毕，可重新启动
     queueProgressUpdated = Signal(int, int, float)      # (current_idx_0based, total, eta)
@@ -161,10 +161,10 @@ class SenderController(QObject):
             self.state.queue_state.update_task_status(task_id, TaskStatus.COMPLETED)
         self.queueTaskCompleted.emit(task_id, ctx)
 
-    @Slot(str, str)
-    def _on_task_failed(self, task_id: str, error_msg: str):
+    @Slot(str, str, object)
+    def _on_task_failed(self, task_id: str, error_msg: str, ctx: SendingContext):
         self.state.queue_state.update_task_status(task_id, TaskStatus.FAILED, error_msg)
-        self.queueTaskFailed.emit(task_id, error_msg)
+        self.queueTaskFailed.emit(task_id, error_msg, ctx)
 
     @Slot(str, str)
     def _on_task_skipped(self, task_id: str, reason: str):

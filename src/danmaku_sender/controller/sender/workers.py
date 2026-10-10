@@ -9,7 +9,7 @@ from danmaku_sender.config import ApiAuthConfig, SendPolicy
 from danmaku_sender.controller.concurrency import WorkerThread
 from danmaku_sender.repo.history_manager import HistoryManager
 from danmaku_sender.runtime.infra.platform import KeepSystemAwake
-from danmaku_sender.service.sender import SendJob, SendPipeline, SendingContext
+from danmaku_sender.service.sender import SendingContext, SendJob, SendPipeline
 from danmaku_sender.service.sender.delay_manager import DelayManager
 from danmaku_sender.types.models.queue import TaskConfig, TaskSnapshot, TaskStatus
 

@@ -788,8 +788,14 @@ class SenderPage(QWidget):
         xml_path = task.meta.xml_path
         return xml_path.stem if xml_path is not None else task.display_string
 
-    @Slot(str, str)
-    def _on_queue_task_failed(self, task_id: str, error_msg: str):
+    @Slot(str, str, object)
+    def _on_queue_task_failed(self, task_id: str, error_msg: str, ctx: SendingContext):
+        if ctx.evidence_failures:
+            Notification.warning(
+                title=f"{len(ctx.evidence_failures)} 条弹幕已发出但未入账",
+                message="本地写入失败，这些弹幕的核销与续传可能受影响。",
+            )
+
         task = self.state.queue_state.get_task_by_id(task_id)
         if task:
             self.logger.error(f"失败: {task.display_string} - {error_msg}")
