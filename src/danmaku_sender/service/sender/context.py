@@ -9,20 +9,23 @@ from danmaku_sender.types.models.danmaku import Danmaku
 from danmaku_sender.types.models.queue import TaskConfig
 from danmaku_sender.types.models.result import DanmakuSendResult
 
-# 弹幕指纹类型别名：(内容, 进度, 模式, 字号, 颜色)
-# 用于在断点续传时，精准判断两条弹幕是否在物理表现上完全一致
+# 弹幕指纹：(内容, 进度, 模式, 字号, 颜色)
 DanmakuFingerprint = tuple[str, int, int, int, int]
 
 
 @dataclass
 class SendJob:
-    """
-    发送任务工单 (Parameter Object)
+    """单次发送所需的全部输入。
 
-    将单次流水线所需的 [目标]、[数据]、[配置]、[回调] 打包为单一实体传入。
-
-    config 是单个任务的发送节奏（随工单定死）；policy 是整个队列的发送策略
-    （启动队列时取用一次）。两者分属不同层级，不要混。
+    Attributes:
+        task_id (str): 归属任务。
+        target (VideoTarget): 发送目标。
+        danmakus (list[Danmaku]): 待发弹幕。
+        config (TaskConfig): 本任务的发送节奏。
+        policy (SendPolicy): 整队的发送策略。
+        stop_event (Event): 中止信号。
+        progress_callback (Callable[[int, int], None] | None): 进度回调，收已发数与总数。
+        result_callback (Callable[[Danmaku, DanmakuSendResult], None] | None): 单条结果回调。
     """
     task_id: str
     target: VideoTarget
@@ -31,49 +34,65 @@ class SendJob:
     policy: SendPolicy
     stop_event: Event
 
-    # 事件回调挂载点
     progress_callback: Callable[[int, int], None] | None = None
     result_callback: Callable[[Danmaku, DanmakuSendResult], None] | None = None
 
 
 @dataclass
 class SendingContext:
+    """一次发送的运行记录，结束后作为报告返回给调用方。
+
+    Attributes:
+        total (int): 弹幕总数。
+        target (VideoTarget): 发送目标。
+        attempted_count (int): 已尝试发包的数量。
+        success_count (int): 已发出的数量。
+        skipped_count (int): 查重跳过的数量。
+        start_time (float): 开始时刻。
+        auto_stop_reason (str): 触发自动停止的原因。
+        fatal_error_occurred (bool): 是否因致命错误中止。
+        fatal_error_msg (str): 中止原因。
+        is_manually_stopped (bool): 是否被用户手动停止。
+        unsent_records (list[UnsentDanmakusRecord]): 未发出的弹幕及原因。
+        evidence_failures (list[tuple[Danmaku, str]]): 已发出但未入账的弹幕及原因。
+        local_counter (dict[DanmakuFingerprint, int]): 各指纹在本次发送中出现的次数。
+        db_count_cache (dict[DanmakuFingerprint, int]): 各指纹在账本中的记录次数。
     """
-    发送上下文 (Context Container)
+    total: int
+    target: VideoTarget
 
-    设计意图：在整个流水线运行期间，携带和收集运行状态（成功数、失败原因、耗时等）。
-    流水线结束后，将作为最终的统计报告返回给外层调用方。
-    """
-    total: int                  # 任务总数
-    target: VideoTarget         # 目标视频信息
+    attempted_count: int = 0
+    success_count: int = 0
+    skipped_count: int = 0
 
-    # 计数器
-    attempted_count: int = 0    # 已尝试发包的数量
-    success_count: int = 0      # 成功发送的数量
-    skipped_count: int = 0      # 因断点续传跳过的数量
-
-    # 生命周期与终止状态
     start_time: float = field(default_factory=time.time)
-    auto_stop_reason: str = ""          # 如果触发了自动停止，记录具体原因
-    fatal_error_occurred: bool = False  # 是否因致命错误而崩塌
-    is_manually_stopped: bool = False   # 是否被用户手动停止
+    auto_stop_reason: str = ""
+    fatal_error_occurred: bool = False
+    fatal_error_msg: str = ""
+    is_manually_stopped: bool = False
 
-    # 失败弹幕回收站，供后续导出 XML 使用
     unsent_records: list[UnsentDanmakusRecord] = field(default_factory=list)
+    evidence_failures: list[tuple[Danmaku, str]] = field(default_factory=list)
 
-    # 智能去重(断点续传)的内部缓存池，避免高频查库
-    # Key: 指纹 -> Value: 出现次数
     local_counter: dict[DanmakuFingerprint, int] = field(default_factory=dict)
-    # Key: 指纹 -> Value: 数据库中记录的次数
     db_count_cache: dict[DanmakuFingerprint, int] = field(default_factory=dict)
 
     @property
     def elapsed_minutes(self) -> float:
-        """获取任务已运行的分钟数"""
+        """已运行的分钟数。
+
+        Returns:
+            float: 距 start_time 的分钟数。
+        """
         return (time.time() - self.start_time) / 60
 
-    def add_unsent(self, danmakus: Danmaku | list[Danmaku], reason: str):
-        """记录发送失败/被跳过的弹幕及原因，装入回收站"""
+    def add_unsent(self, danmakus: Danmaku | list[Danmaku], reason: str) -> None:
+        """记录未发出的弹幕及原因。
+
+        Args:
+            danmakus (Danmaku | list[Danmaku]): 单条或多条未发出的弹幕。
+            reason (str): 未发出的原因。
+        """
         if isinstance(danmakus, Danmaku):
             self.unsent_records.append({'dm': danmakus, 'reason': reason})
         else:

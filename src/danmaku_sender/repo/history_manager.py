@@ -5,6 +5,7 @@ from pathlib import Path
 from peewee import Case, CharField, SqliteDatabase, fn
 from playhouse.migrate import SqliteMigrator, migrate
 
+from danmaku_sender.types.exceptions.exceptions import HistoryStorageError
 from danmaku_sender.types.models.common import (
     DanmakuStatus,
     MonitorStats,
@@ -50,7 +51,7 @@ class HistoryManager:
         try:
             # 开启 WAL 模式提升并发性能
             sqlite_db = SqliteDatabase(
-                self.db_path,
+                str(self.db_path),
                 pragmas={'journal_mode': 'wal'},
                 check_same_thread=False
             )
@@ -85,7 +86,7 @@ class HistoryManager:
         dm: Danmaku,
         dmid: str,
         is_visible_api: bool = True,
-    ) -> bool:
+    ) -> None:
         """
         记录一条刚刚发送成功的弹幕，状态置为 STATUS_PENDING (0)。
 
@@ -96,12 +97,16 @@ class HistoryManager:
             dmid (str): 服务器返回的弹幕身份。
             is_visible_api (bool): API 是否回执可见。
 
-        Returns:
-            bool: 落库成功返回 True；无 dmid 或写入失败返回 False。
+        Raises:
+            ValueError: dmid 缺失，或目标未指定。
+            HistoryStorageError: 落库失败。
         """
         if not dmid:
-            logger.warning("尝试记录无 ID 的弹幕，操作跳过。")
-            return False
+            raise ValueError("存证必须提供有效的 dmid")
+
+        bvid, cid = target.bvid, target.cid
+        if bvid is None or cid is None:
+            raise ValueError("存证需要已指定的目标（bvid 与 cid 都在）")
 
         try:
             (
@@ -109,8 +114,8 @@ class HistoryManager:
                     .insert(
                         dmid=str(dmid),
                         task_id=task_id,
-                        cid=target.cid,
-                        bvid=target.bvid,
+                        cid=cid,
+                        bvid=bvid,
                         msg=dm.msg,
                         progress=dm.progress,
                         mode=dm.mode,
@@ -120,13 +125,12 @@ class HistoryManager:
                         is_visible=1 if is_visible_api else 0,
                         status=DanmakuStatus.PENDING.value,
                     )
-                    .on_conflict_ignore()
+                    .on_conflict(conflict_target=[SentDanmaku.dmid], action='nothing')
                     .execute()
             )
-            return True
         except Exception as e:
-            logger.error(f"存证失败: {e}", exc_info=True)
-            return False
+            logger.error(f"存证落库失败 [dmid={dmid}]: {e}", exc_info=True)
+            raise HistoryStorageError(f"弹幕存证写入失败 [dmid={dmid}]: {e}", original_error=e) from e
 
     def upsert_task(self, definition: TaskDefinition, status: TaskStatus) -> None:
         """写入或更新一条任务记录。
@@ -390,6 +394,9 @@ class HistoryManager:
 
         Returns:
             int: 匹配的记录数。
+
+        Raises:
+            HistoryStorageError: 查重查询失败。
         """
         try:
             return (
@@ -409,7 +416,7 @@ class HistoryManager:
 
         except Exception as e:
             logger.error(f"查重失败: {e}", exc_info=True)
-            return 0
+            raise HistoryStorageError(f"查重查询失败，无法判断弹幕是否已发送: {e}", original_error=e) from e
 
     def query_history(self, keyword: str = "", status: int = -1, limit: int = 500) -> list[dict]:
         """按关键词与状态筛选弹幕历史。

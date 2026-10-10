@@ -1,4 +1,4 @@
-"""发送任务 Worker - 负责队列执行的后台线程"""
+"""队列发送 Worker：在后台线程执行发送管线并把结果发回主线程。"""
 
 import logging
 import threading
@@ -9,7 +9,7 @@ from danmaku_sender.config import ApiAuthConfig, SendPolicy
 from danmaku_sender.controller.concurrency import WorkerThread
 from danmaku_sender.repo.history_manager import HistoryManager
 from danmaku_sender.runtime.infra.platform import KeepSystemAwake
-from danmaku_sender.service.sender import SendJob, SendPipeline
+from danmaku_sender.service.sender import SendingContext, SendJob, SendPipeline
 from danmaku_sender.service.sender.delay_manager import DelayManager
 from danmaku_sender.types.models.queue import TaskConfig, TaskSnapshot, TaskStatus
 
@@ -17,19 +17,20 @@ logger = logging.getLogger(__name__)
 
 
 class QueueSendWorker(WorkerThread):
-    """队列发送 Worker：薄壳，只执行管线并 emit，不写 QueueState。
+    """队列发送 Worker。
 
-    启动时接收不可变 TaskSnapshot 采样；状态落账一律由 SenderController 在主线程完成。
+    启动时接收不可变的 TaskSnapshot 采样，逐个执行发送管线并通过信号发回结果；
+    不写 QueueState，状态落账由 SenderController 在主线程完成。
     """
 
-    taskStarted = Signal(str, int)                  # (task_id, idx_0based)
-    taskCompleted = Signal(str, object)             # (task_id, SendingContext)
-    taskFailed = Signal(str, str)                   # (task_id, error_msg)
-    taskSkipped = Signal(str, str)                  # (task_id, reason)
+    taskStarted = Signal(str, int)                      # (task_id, idx_0based)
+    taskCompleted = Signal(str, object)                 # (task_id, SendingContext)
+    taskFailed = Signal(str, str, object)               # (task_id, error_msg, SendingContext)
+    taskSkipped = Signal(str, str)                      # (task_id, reason)
     queueFinished = Signal()
-    queueProgressUpdated = Signal(int, int, float)  # (current_idx_0based, total, eta)
+    queueProgressUpdated = Signal(int, int, float)      # (current_idx_0based, total, eta)
     taskProgressUpdated = Signal(str, int, int, float)  # (task_id, attempted, task_total, eta)
-    ending = Signal(object)                         # run() 退出时 emit(self)
+    ending = Signal(object)                             # run() 退出时 emit(self)
 
     def __init__(
         self,
@@ -54,7 +55,7 @@ class QueueSendWorker(WorkerThread):
         tasks = self.tasks
         total = len(tasks)
         stopped_early = False
-        # 本线程已发出终态信号的任务；跳过循环不得再依赖共享 status（主线程 slot 可能尚未落账）
+        # 本线程已发出终态信号的任务
         handled: set[str] = set()
 
         try:
@@ -99,7 +100,16 @@ class QueueSendWorker(WorkerThread):
             self.ending.emit(self)
 
     def _execute_task(self, snap: TaskSnapshot, idx: int, total: int) -> bool:
-        """执行单个队列任务。返回 True 表示继续，False 表示致命错误需中止队列。"""
+        """执行单个队列任务。
+
+        Args:
+            snap (TaskSnapshot): 任务快照。
+            idx (int): 任务在队列中的序号。
+            total (int): 队列任务总数。
+
+        Returns:
+            bool: 可继续返回 True，致命错误需中止队列返回 False。
+        """
         definition = snap.definition
         task_id = definition.task_id
         self.taskStarted.emit(task_id, idx)
@@ -112,6 +122,7 @@ class QueueSendWorker(WorkerThread):
             self.queueProgressUpdated.emit(idx, total, queue_eta)
             self.taskProgressUpdated.emit(task_id, attempted, task_total, eta)
 
+        ctx = SendingContext(total=len(definition.danmakus), target=definition.target)
         try:
             pipeline = SendPipeline(self.auth_config, self.history_manager)
             job = SendJob(
@@ -125,8 +136,8 @@ class QueueSendWorker(WorkerThread):
             ctx = pipeline.execute(job, progress_emitter=progress_emitter)
 
             if ctx.fatal_error_occurred:
-                self.taskFailed.emit(task_id, "致命错误，队列中止")
-                logger.error(f"致命错误，队列中止于: {definition.display_string}")
+                self.taskFailed.emit(task_id, ctx.fatal_error_msg, ctx)
+                logger.error(f"致命错误，队列中止于: {definition.display_string} - {ctx.fatal_error_msg}")
                 return False
 
             # COMPLETED / PAUSED 由 Controller 根据 ctx 在主线程判定落账
@@ -135,7 +146,7 @@ class QueueSendWorker(WorkerThread):
             return True
 
         except Exception as e:
-            self.taskFailed.emit(task_id, str(e))
+            self.taskFailed.emit(task_id, str(e), ctx)
             logger.error(f"[{idx + 1}/{total}] 发送失败: {definition.display_string} - {e}")
             return True  # 单任务异常不阻断队列，继续下一个
 
@@ -149,8 +160,17 @@ class QueueSendWorker(WorkerThread):
     ) -> float:
         """计算整个队列的剩余 ETA（秒）。
 
-        = 当前任务剩余 ETA + 后续每个待发任务的「任务间隔 + 任务自身 ETA」
-        只统计 PENDING 的任务；COMPLETED/FAILED/SKIPPED 等不会占时间。
+        合计 = 当前任务剩余 ETA + 后续每个待发任务的「任务间隔 + 任务自身 ETA」。
+
+        Args:
+            current_attempted (int): 当前任务已尝试发包的数量。
+            current_total (int): 当前任务的弹幕总数。
+            current_config (TaskConfig): 当前任务的发送节奏。
+            future_tasks (tuple[TaskSnapshot, ...]): 后续任务快照。
+            policy (SendPolicy): 整队的发送策略。
+
+        Returns:
+            float: 剩余秒数。
         """
         def _task_eta(attempted: int, total: int, config: TaskConfig) -> float:
             avg_normal = (config.min_delay + config.max_delay) / 2
@@ -168,8 +188,7 @@ class QueueSendWorker(WorkerThread):
         pending_future = [s for s in future_tasks if s.status == TaskStatus.PENDING]
 
         for s in pending_future:
-            # 与上一个任务之间的间隔；只对真正要跑的任务算，
-            # 否则「剩余全是非 PENDING」时会多算一次间隔
+            # 与上一个任务之间的间隔
             queue_eta += policy.delay_between_tasks
             queue_eta += _task_eta(0, s.definition.total, s.definition.config)
 
