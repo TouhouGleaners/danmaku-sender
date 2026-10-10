@@ -1,9 +1,4 @@
-"""
-发送管线编排器 (Send Pipeline)
-
-封装单次发送任务的完整生命周期：资源组装、调度执行、结果记录、摘要日志。
-Controller 层的 Worker 只需调用 pipeline.execute()，无需接触 Executor/Scheduler 细节。
-"""
+"""发送流水线：组装客户端与调度器，跑完一条发送任务并返回运行记录。"""
 
 import logging
 from collections.abc import Callable
@@ -23,14 +18,10 @@ logger = logging.getLogger(__name__)
 
 
 class SendPipeline:
-    """
-    发送管线编排器
+    """发送流水线。
 
-    职责：
-    - 组装 BiliApiClient / Executor / Scheduler
-    - 将成功结果记录到 HistoryManager
-    - 计算 ETA 并回调进度
-    - 输出任务摘要日志
+    组建 BiliApiClient、DanmakuExecutor 与 DanmakuScheduler，执行发送循环，
+    汇总 SendingContext 并输出摘要日志。
     """
 
     def __init__(
@@ -38,6 +29,12 @@ class SendPipeline:
         auth_config: ApiAuthConfig,
         history_manager: HistoryManager,
     ):
+        """初始化流水线。
+
+        Args:
+            auth_config (ApiAuthConfig): B 站接口的鉴权配置。
+            history_manager (HistoryManager): 本地账本，供存证与查重。
+        """
         self.auth_config = auth_config
         self.history_manager = history_manager
 
@@ -46,17 +43,17 @@ class SendPipeline:
         job: SendJob,
         progress_emitter: Callable[[int, int, float], None] | None = None,
     ) -> SendingContext:
-        """
-        执行完整的发送管线。
+        """执行一次完整的发送任务。
 
         Args:
-            job: 发送任务工单（含目标、弹幕、配置、回调）
-            progress_emitter: 进度信号发射器 (attempted, total, eta_sec)，由 Worker 桥接
+            job (SendJob): 发送任务工单。
+            progress_emitter (Callable[[int, int, float], None] | None): 进度发射器，
+                收已发数、总数与 ETA 秒数。
 
         Returns:
-            SendingContext: 包含统计数据的发送上下文
+            SendingContext: 运行记录。
         """
-        # ctx 先于一切存在：后续任何环节异常，调用方都拿得到已累积的记录
+        # 先建 ctx，确保异常路径也能返回它
         ctx = SendingContext(total=len(job.danmakus), target=job.target)
 
         try:
@@ -64,7 +61,6 @@ class SendPipeline:
                 executor = DanmakuExecutor(client)
                 scheduler = DanmakuScheduler(executor, self.history_manager)
 
-                # 包装回调链，不修改原始 job 对象
                 outer_progress_callback = job.progress_callback
 
                 def on_progress(attempted: int, total: int):
@@ -89,7 +85,16 @@ class SendPipeline:
         return ctx
 
     def _calc_eta(self, attempted: int, total: int, config: TaskConfig) -> float:
-        """基于任务配置计算 ETA（秒）"""
+        """按任务节奏计算剩余 ETA（秒）。
+
+        Args:
+            attempted (int): 已尝试发包的数量。
+            total (int): 弹幕总数。
+            config (TaskConfig): 本任务的发送节奏。
+
+        Returns:
+            float: 剩余秒数。
+        """
         cfg = config
         avg_normal = (cfg.min_delay + cfg.max_delay) / 2
         avg_rest = (cfg.rest_min + cfg.rest_max) / 2
@@ -104,7 +109,11 @@ class SendPipeline:
 
     @staticmethod
     def _log_summary(ctx: SendingContext):
-        """输出任务结束摘要"""
+        """输出任务结束摘要。
+
+        Args:
+            ctx (SendingContext): 运行记录。
+        """
         logger.info("--- 发送任务结束 ---")
         if ctx.auto_stop_reason:
             logger.info(f"原因：{ctx.auto_stop_reason}")

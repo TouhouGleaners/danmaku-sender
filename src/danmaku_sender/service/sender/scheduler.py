@@ -19,20 +19,33 @@ from .executor import DanmakuExecutor
 
 
 class DanmakuScheduler:
-    """
-    弹幕发送调度器 (Scheduler)
+    """发送控制循环。
 
-    不亲自发包（委托 Executor），但把「发包 + 入账」收成一条原子操作；
-    职责：遍历队列、断点续传（去重）、容错处理、时间控制与任务阻断、结果统计。
+    遍历弹幕、查重跳过、控制节奏与自动停止，并把每条的发送与入账结果记入 SendingContext。
+    发包委托 DanmakuExecutor，入账委托 HistoryManager。
     """
+
     def __init__(self, executor: DanmakuExecutor, history_manager: HistoryManager | None = None):
+        """初始化调度器。
+
+        Args:
+            executor (DanmakuExecutor): 发包执行器。
+            history_manager (HistoryManager | None): 本地账本；缺省时不入账。
+        """
         self.logger = logging.getLogger(__name__)
         self.executor = executor
         self.history_manager = history_manager
 
     @staticmethod
     def _get_fingerprint(dm: Danmaku) -> DanmakuFingerprint:
-        """生成物理指纹，用于识别内容、位置、样式完全一样的重复弹幕"""
+        """生成弹幕指纹，用于识别内容与样式完全相同的重复弹幕。
+
+        Args:
+            dm (Danmaku): 待识别的弹幕。
+
+        Returns:
+            DanmakuFingerprint: (内容, 进度, 模式, 字号, 颜色)。
+        """
         return (dm.msg, dm.progress, dm.mode, dm.fontsize, dm.color)
 
     def _send_single(
