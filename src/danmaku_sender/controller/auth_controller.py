@@ -45,14 +45,27 @@ class AuthController(QObject):
             self.userProfileReady.emit(UserProfile(False, "未登录"))
             return
 
+        requested_sessdata = session.sessdata
         auth = ApiAuthConfig(sessdata=session.sessdata, bili_jct=session.bili_jct)
         network = NetworkPolicy(use_system_proxy=self.settings.global_config.use_system_proxy)
         PoolTask.submit(
             self._task_fetch_profile,
-            self.userProfileReady.emit,
-            lambda _: self.userProfileReady.emit(UserProfile(False, "未登录")),
+            lambda profile: self._emit_profile(profile, requested_sessdata),
+            lambda _: self._emit_profile(UserProfile(False, "未登录"), requested_sessdata),
             auth, network,
         )
+
+    def _emit_profile(self, profile: UserProfile, requested_sessdata: str) -> None:
+        """发放用户资料；账号已切换则丢弃过期响应。
+
+        Args:
+            profile: 用户资料。
+            requested_sessdata: 发起本次请求时的 SESSDATA。
+        """
+        if requested_sessdata != self.state.session.sessdata:
+            logger.debug("用户资料响应对应旧账号，已丢弃。")
+            return
+        self.userProfileReady.emit(profile)
 
     def start_qr_login(self) -> None:
         """启动扫码登录后台任务。"""

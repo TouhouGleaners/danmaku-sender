@@ -26,7 +26,6 @@ from PySide6.QtWidgets import (
 
 from danmaku_sender.config import Settings
 from danmaku_sender.config.app_meta import UI, AppInfo, Links
-from danmaku_sender.controller.account_controller import AccountController
 from danmaku_sender.controller.auth_controller import AuthController
 from danmaku_sender.controller.system_controller import SystemController
 from danmaku_sender.infra.persistence.history_manager import HistoryManager
@@ -77,7 +76,6 @@ class MainWindow(QMainWindow):
         self.theme_service.apply_theme(self.settings.theme_config.theme_mode)
 
         # 控制器
-        self.account_controller = AccountController(self.settings, self)
         self.auth_controller = AuthController(self.state, self.settings, self)
         self.system_controller = SystemController(self)
         self.logger = logging.getLogger(__name__)
@@ -300,7 +298,7 @@ class MainWindow(QMainWindow):
 
     def _open_account_dialog(self):
         """打开账号管理弹窗"""
-        dialog = AccountDialog(self.state, self.settings, self.account_controller, self)
+        dialog = AccountDialog(self.state, self.settings, self)
         dialog.exec()
 
     def _bind_state_to_pages(self):
