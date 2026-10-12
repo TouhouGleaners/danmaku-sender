@@ -3,8 +3,8 @@
 import logging
 from collections.abc import Callable
 
-from danmaku_sender.repo.bili_api_client import BiliApiClient
-from danmaku_sender.repo.history_manager import HistoryManager
+from danmaku_sender.infra.bilibili.bili_api_client import BiliApiClient
+from danmaku_sender.infra.persistence.history_manager import HistoryManager
 from danmaku_sender.types.exceptions.exceptions import BiliApiError, BiliNetworkError
 from danmaku_sender.types.models.common import VerifyResult
 

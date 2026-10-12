@@ -5,7 +5,7 @@ import time
 
 from danmaku_sender.config import ApiAuthConfig
 from danmaku_sender.controller.monitor.workers import QueueMonitorWorker
-from danmaku_sender.repo.history_manager import HistoryManager
+from danmaku_sender.infra.persistence.history_manager import HistoryManager
 
 
 def _make_worker(tmp_path, **kwargs) -> QueueMonitorWorker:

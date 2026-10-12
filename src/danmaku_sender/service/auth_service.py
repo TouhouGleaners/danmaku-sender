@@ -7,9 +7,8 @@
 
 import logging
 
-from danmaku_sender.repo.bili_api_client import BiliApiClient
+from danmaku_sender.infra.bilibili.bili_api_client import BiliApiClient
 from danmaku_sender.types.models.user import UserProfile
-
 
 logger = logging.getLogger(__name__)
 
@@ -39,7 +38,7 @@ class AuthService:
         if face_url:
             try:
                 avatar_data = self.client.get_raw_resource(face_url)
-            except Exception as e:
+            except Exception:
                 logger.warning(f"下载头像失败 [URL: {face_url}]", exc_info=True)
 
         return UserProfile(is_login=True, username=username, uid=uid, avatar_bytes=avatar_data)

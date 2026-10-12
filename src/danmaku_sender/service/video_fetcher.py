@@ -7,8 +7,8 @@
 
 import logging
 
+from danmaku_sender.infra.bilibili.bili_api_client import BiliApiClient
 from danmaku_sender.types.models.video import VideoInfo, VideoPart
-from danmaku_sender.repo.bili_api_client import BiliApiClient
 
 
 class VideoFetcher:

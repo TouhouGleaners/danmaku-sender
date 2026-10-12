@@ -2,14 +2,13 @@ import logging
 
 from PySide6.QtCore import QObject, Signal
 
-from .concurrency import PoolTask
-
-from danmaku_sender.repo.bili_api_client import BiliApiClient
-from danmaku_sender.repo.history_manager import HistoryManager
+from danmaku_sender.config import ApiAuthConfig
+from danmaku_sender.infra.bilibili.bili_api_client import BiliApiClient
+from danmaku_sender.infra.persistence.history_manager import HistoryManager
 from danmaku_sender.service.danmaku_verifier import DanmakuVerifier
 from danmaku_sender.types.models.common import VerifyResult
-from danmaku_sender.config import ApiAuthConfig
 
+from .concurrency import PoolTask
 
 logger = logging.getLogger(__name__)
 

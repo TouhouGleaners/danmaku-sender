@@ -22,7 +22,7 @@ from PySide6.QtWidgets import (
 )
 
 from danmaku_sender.controller.monitor import MonitorController
-from danmaku_sender.repo.history_manager import HistoryManager
+from danmaku_sender.infra.persistence.history_manager import HistoryManager
 from danmaku_sender.runtime.state.app_state import AppState
 from danmaku_sender.types.models.common import MonitorStats
 from danmaku_sender.ui.framework.empty_state import EmptyStateHint

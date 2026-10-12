@@ -5,7 +5,7 @@
 import pytest
 
 from danmaku_sender.config import SenderConfig
-from danmaku_sender.repo.history_manager import HistoryManager
+from danmaku_sender.infra.persistence.history_manager import HistoryManager
 from danmaku_sender.runtime.state.app_state import AppState
 from danmaku_sender.service.sender.context import SendingContext
 from danmaku_sender.types.models.common import VideoTarget

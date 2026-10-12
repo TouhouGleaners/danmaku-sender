@@ -1,14 +1,15 @@
 import logging
-from typing import Any, Generator, Protocol
+from collections.abc import Generator
 from contextlib import contextmanager
+from typing import Any, Protocol
 
 import requests
 from requests.exceptions import ConnectionError, HTTPError, RequestException, Timeout
 
-from .wbi_signer import WbiSigner
-
-from danmaku_sender.types.exceptions.exceptions import BiliNetworkError, BiliApiError
 from danmaku_sender.types.exceptions.api_errors import BiliDmErrorCode
+from danmaku_sender.types.exceptions.exceptions import BiliApiError, BiliNetworkError
+
+from .wbi_signer import WbiSigner
 
 
 class BiliConfigProto(Protocol):

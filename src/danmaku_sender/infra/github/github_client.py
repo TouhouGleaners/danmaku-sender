@@ -1,9 +1,9 @@
 import logging
+
 import requests
 from packaging import version
 
-from ..config.app_meta import Links
-
+from danmaku_sender.config.app_meta import Links
 
 logger = logging.getLogger(__name__)
 

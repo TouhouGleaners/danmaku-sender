@@ -3,7 +3,7 @@ import time
 from threading import Event
 
 from danmaku_sender.config import SendPolicy
-from danmaku_sender.repo.history_manager import HistoryManager
+from danmaku_sender.infra.persistence.history_manager import HistoryManager
 from danmaku_sender.types.exceptions.exceptions import HistoryStorageError
 from danmaku_sender.types.models.common import VideoTarget
 from danmaku_sender.types.models.danmaku import Danmaku

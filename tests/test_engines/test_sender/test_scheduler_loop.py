@@ -9,7 +9,7 @@ from threading import Event
 import pytest
 
 from danmaku_sender.config import SenderConfig, SendPolicy
-from danmaku_sender.repo.history_manager import HistoryManager
+from danmaku_sender.infra.persistence.history_manager import HistoryManager
 from danmaku_sender.service.sender.context import SendingContext, SendJob
 from danmaku_sender.service.sender.scheduler import DanmakuScheduler
 from danmaku_sender.types.exceptions.api_errors import BiliDmErrorCode

@@ -3,13 +3,12 @@ import threading
 
 from PySide6.QtCore import QObject, Signal, Slot
 
-from .concurrency import WorkerThread, PoolTask
-
 from danmaku_sender.config import ApiAuthConfig
-from danmaku_sender.types.models.user import UserProfile
-from danmaku_sender.repo.bili_api_client import BiliApiClient
+from danmaku_sender.infra.bilibili.bili_api_client import BiliApiClient
 from danmaku_sender.service.auth_service import AuthService
+from danmaku_sender.types.models.user import UserProfile
 
+from .concurrency import PoolTask, WorkerThread
 
 logger = logging.getLogger(__name__)
 
