@@ -8,6 +8,7 @@ from danmaku_sender.config import (
     MonitorConfig,
     SenderConfig,
     SendPolicy,
+    Settings,
     ThemeConfig,
     ValidationConfig,
 )
@@ -36,13 +37,8 @@ class AppState(QObject):
         self._sessdata: str = ""
         self._bili_jct: str = ""
 
-        # 各模块配置（global_config 为跨模块共享的系统设置）
-        self.global_config = GlobalConfig()
-        self.sender_config = SenderConfig()
-        self.send_policy = SendPolicy()
-        self.monitor_config = MonitorConfig()
-        self.theme_config = ThemeConfig()
-        self.validation_config = ValidationConfig()
+        # 各模块配置（实例终身不换，字段就地更新）
+        self.settings = Settings()
 
         # 运行时状态
         self.queue_state = QueueState(self)
@@ -55,6 +51,36 @@ class AppState(QObject):
 
         # 会话运行时（不持久化）：监视统计基线时间戳，0 表示全量历史
         self.stats_baseline: float = 0.0
+
+    @property
+    def global_config(self) -> GlobalConfig:
+        """跨模块共享的系统设置。"""
+        return self.settings.global_config
+
+    @property
+    def sender_config(self) -> SenderConfig:
+        """发送参数。"""
+        return self.settings.sender_config
+
+    @property
+    def send_policy(self) -> SendPolicy:
+        """发送策略。"""
+        return self.settings.send_policy
+
+    @property
+    def monitor_config(self) -> MonitorConfig:
+        """监视参数。"""
+        return self.settings.monitor_config
+
+    @property
+    def theme_config(self) -> ThemeConfig:
+        """主题外观。"""
+        return self.settings.theme_config
+
+    @property
+    def validation_config(self) -> ValidationConfig:
+        """校验关键字。"""
+        return self.settings.validation_config
 
     @property
     def sessdata(self) -> str:

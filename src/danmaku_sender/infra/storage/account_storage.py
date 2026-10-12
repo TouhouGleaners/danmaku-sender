@@ -1,14 +1,13 @@
+"""凭据落盘存储：accounts.json 加密读写与系统密钥环。"""
 import json
 import logging
+
 import keyring
-from pathlib import Path
 from cryptography.fernet import Fernet, InvalidToken
 
-from danmaku_sender.runtime.state.app_state import AppState
 from danmaku_sender.config.app_meta import AppInfo
 from danmaku_sender.types.models.account import AccountCredential
 from danmaku_sender.utils.file_utils import atomic_write_bytes, backup_corrupt_file
-
 
 KEYRING_SERVICE_NAME = f"{AppInfo.NAME_EN}-CredentialsKey"
 KEYRING_USERNAME = "default_user"
@@ -17,8 +16,8 @@ ACCOUNTS_PATH = AppInfo.Paths.ACCOUNTS
 logger = logging.getLogger(__name__)
 
 
-class AccountManager:
-    """凭据管理器"""
+class AccountStorage:
+    """凭据存储：accounts.json 的加密读写与密钥环管理。"""
 
     def _get_encryption_key(self) -> tuple[bytes, bool]:
         """
@@ -51,6 +50,9 @@ class AccountManager:
         """
         从加密的 accounts.json 加载账号列表。
         如果文件不存在或解密失败，返回空列表。
+
+        Returns:
+            加载成功的账号列表。
         """
         if not ACCOUNTS_PATH.exists():
             return []
@@ -93,7 +95,11 @@ class AccountManager:
             raise
 
     def save_accounts(self, accounts: list[AccountCredential]) -> None:
-        """将账号列表加密后写入 accounts.json。"""
+        """将账号列表加密后写入 accounts.json。
+
+        Args:
+            accounts: 待落盘的账号列表；为空时删除账号文件。
+        """
         if not accounts:
             logger.info("账号列表为空，删除账号文件。")
             try:
@@ -118,12 +124,3 @@ class AccountManager:
             logger.info(f"已保存 {len(accounts)} 个账号到 {ACCOUNTS_PATH}")
         except Exception as e:
             logger.error(f"保存账号数据失败: {e}", exc_info=True)
-
-    def load_credentials(self, state: AppState) -> None:
-        """加载凭据并激活第一个账号。"""
-        state.saved_accounts = self.load_accounts()
-        if state.saved_accounts:
-            first = state.saved_accounts[0]
-            state.sessdata = first.sessdata
-            state.bili_jct = first.bili_jct
-            logger.info(f"已激活账号: {first.name or '(未命名)'}")

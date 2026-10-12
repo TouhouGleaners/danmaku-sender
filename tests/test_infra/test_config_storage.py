@@ -1,9 +1,9 @@
-"""ConfigManager 配置加载与保存"""
+"""ConfigStorage 配置加载与保存"""
 import json
 
-from danmaku_sender.runtime.managers import config_manager as cm_module
-from danmaku_sender.runtime.managers.config_manager import ConfigManager
-from danmaku_sender.runtime.state.app_state import AppState
+from danmaku_sender.config import Settings
+from danmaku_sender.infra.storage import config_storage as cs_module
+from danmaku_sender.infra.storage.config_storage import ConfigStorage
 
 
 class TestConfigLoad:
@@ -15,13 +15,13 @@ class TestConfigLoad:
         legacy = {"sender": {"min_delay": 3.0, "max_delay": 9.0, "skip_sent": False}}
         path = tmp_path / "config.json"
         path.write_text(json.dumps(legacy), encoding="utf-8")
-        monkeypatch.setattr(cm_module, "CONFIG_PATH", path)
+        monkeypatch.setattr(cs_module, "CONFIG_PATH", path)
 
-        state = AppState()
-        ConfigManager().load(state)
+        settings = Settings()
+        ConfigStorage().load(settings)
 
-        assert (state.sender_config.min_delay, state.sender_config.max_delay) == (3.0, 9.0)
-        assert state.send_policy.allow_duplicates is False, "缺 send_policy 段应回默认值"
+        assert (settings.sender_config.min_delay, settings.sender_config.max_delay) == (3.0, 9.0)
+        assert settings.send_policy.allow_duplicates is False, "缺 send_policy 段应回默认值"
 
     def test_load_reads_send_policy_section(self, tmp_path, monkeypatch):
         """新格式 config.json 的 send_policy 段应被读取。"""
@@ -36,11 +36,11 @@ class TestConfigLoad:
         }
         path = tmp_path / "config.json"
         path.write_text(json.dumps(data), encoding="utf-8")
-        monkeypatch.setattr(cm_module, "CONFIG_PATH", path)
+        monkeypatch.setattr(cs_module, "CONFIG_PATH", path)
 
-        state = AppState()
-        ConfigManager().load(state)
+        settings = Settings()
+        ConfigStorage().load(settings)
 
-        assert state.send_policy.allow_duplicates is True
-        assert state.send_policy.delay_between_tasks == 12.5
-        assert state.send_policy.stop_after_count == 7
+        assert settings.send_policy.allow_duplicates is True
+        assert settings.send_policy.delay_between_tasks == 12.5
+        assert settings.send_policy.stop_after_count == 7

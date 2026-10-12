@@ -1,10 +1,9 @@
 import logging
 
 from danmaku_sender.config.app_meta import AppInfo
+from danmaku_sender.infra.storage import AccountStorage, ConfigStorage
 from danmaku_sender.repo.history_manager import HistoryManager
 
-from .managers.account_manager import AccountManager
-from .managers.config_manager import ConfigManager
 from .state.app_state import AppState
 
 logger = logging.getLogger(__name__)
@@ -21,9 +20,9 @@ class Runtime:
         # === 状态 ===
         self.app_state = AppState()
 
-        # === 持久化管理器 ===
-        self.config_manager = ConfigManager()
-        self.account_manager = AccountManager()
+        # === 持久化存储 ===
+        self.config_storage = ConfigStorage()
+        self.account_storage = AccountStorage()
 
         self._bootstrapped = False
 
@@ -37,8 +36,18 @@ class Runtime:
         self.history_manager = HistoryManager(AppInfo.Paths.HISTORY_DB)
 
         try:
-            self.account_manager.load_credentials(self.app_state)
+            self._activate_saved_accounts()
         except Exception as e:
             logger.error(f"凭据加载失败，将以未登录状态继续: {e}")
 
-        self.config_manager.load(self.app_state)
+        self.config_storage.load(self.app_state.settings)
+
+    def _activate_saved_accounts(self) -> None:
+        """加载已保存账号并激活第一个。"""
+        accounts = self.account_storage.load_accounts()
+        self.app_state.saved_accounts = accounts
+        if accounts:
+            first = accounts[0]
+            self.app_state.sessdata = first.sessdata
+            self.app_state.bili_jct = first.bili_jct
+            logger.info(f"已激活账号: {first.name or '(未命名)'}")

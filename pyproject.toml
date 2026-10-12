@@ -79,7 +79,7 @@ layers = [
     "danmaku_sender.controller",
     "danmaku_sender.runtime",
     "danmaku_sender.service",
-    "danmaku_sender.repo",
+    "danmaku_sender.repo | danmaku_sender.infra",
     "danmaku_sender.config",
     "danmaku_sender.types | danmaku_sender.utils",
 ]
