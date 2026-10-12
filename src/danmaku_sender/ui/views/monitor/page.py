@@ -21,6 +21,7 @@ from PySide6.QtWidgets import (
     QWidget,
 )
 
+from danmaku_sender.config import Settings
 from danmaku_sender.controller.monitor import MonitorController
 from danmaku_sender.infra.persistence.history_manager import HistoryManager
 from danmaku_sender.state import AppState
@@ -37,13 +38,14 @@ class MonitorPage(QWidget):
 
     statsUpdated = Signal(dict)
 
-    def __init__(self, state: AppState, history_manager: HistoryManager):
+    def __init__(self, state: AppState, settings: Settings, history_manager: HistoryManager):
         super().__init__()
         self.state = state
+        self.settings = settings
         self.logger = logging.getLogger(__name__)
         self.history_manager = history_manager
 
-        self.monitor_controller = MonitorController(state, history_manager, self)
+        self.monitor_controller = MonitorController(state, settings, history_manager, self)
 
         self._queue_monitoring = False
         self._monitor_failed = False
@@ -212,7 +214,7 @@ class MonitorPage(QWidget):
         self.state.configChanged.emit()
 
     def init_bindings(self):
-        LiveFormBinder.bind(self.interval_spin, self.state.settings.monitor_config, "refresh_interval", after_write=self._on_config_written)
+        LiveFormBinder.bind(self.interval_spin, self.settings.monitor_config, "refresh_interval", after_write=self._on_config_written)
 
         if self.state.workspace.stats_baseline == 0.0:
             self.state.workspace.stats_baseline = self.state.workspace.app_launch_time
@@ -322,7 +324,7 @@ class MonitorPage(QWidget):
             QMessageBox.warning(self, "凭证缺失", "请先配置 Cookie。")
             return
 
-        if not self.monitor_controller.start_queue_monitor(self.state.session.get_api_auth()):
+        if not self.monitor_controller.start_queue_monitor():
             self._refresh_table()
             self._sync_overall_stats()
             self._set_ui_running(False)

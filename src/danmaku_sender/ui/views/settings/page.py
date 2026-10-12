@@ -13,6 +13,7 @@ from PySide6.QtWidgets import (
     QWidget,
 )
 
+from danmaku_sender.config import Settings
 from danmaku_sender.config.theme_config import ThemeMode
 from danmaku_sender.state import AppState
 from danmaku_sender.ui.framework.form_binder import LiveFormBinder
@@ -29,10 +30,11 @@ class SettingsPage(QWidget):
 
     themeApplied = Signal(object)  # ThemeMode：主题已写入配置，可立即应用
 
-    def __init__(self, state: AppState):
+    def __init__(self, state: AppState, settings: Settings):
         super().__init__()
 
         self.state = state
+        self.settings = settings
         self._create_ui()
 
     def _create_ui(self):
@@ -247,17 +249,17 @@ class SettingsPage(QWidget):
         # 主题：写成功后立刻广播，驱动 ThemeService 应用
         LiveFormBinder.bind(
             self.theme_combo,
-            self.state.settings.theme_config,
+            self.settings.theme_config,
             "theme_mode",
             after_write=self._on_theme_written,
         )
 
         # 全局系统设置（跨发送器/监视器共享，单绑一份）
-        LiveFormBinder.bind(self.prevent_sleep_checkbox, self.state.settings.global_config, "prevent_sleep", after_write=self._on_config_written)
-        LiveFormBinder.bind(self.proxy_checkbox, self.state.settings.global_config, "use_system_proxy", after_write=self._on_config_written)
+        LiveFormBinder.bind(self.prevent_sleep_checkbox, self.settings.global_config, "prevent_sleep", after_write=self._on_config_written)
+        LiveFormBinder.bind(self.proxy_checkbox, self.settings.global_config, "use_system_proxy", after_write=self._on_config_written)
 
         # 发送延迟策略
-        config = self.state.settings.sender_config
+        config = self.settings.sender_config
         LiveFormBinder.bind(self.min_delay, config, "min_delay", after_write=self._on_config_written)
         LiveFormBinder.bind(self.max_delay, config, "max_delay", after_write=self._on_config_written)
         LiveFormBinder.bind(self.burst_enabled_cb, config, "burst_enabled", after_write=self._on_config_written)
@@ -266,7 +268,7 @@ class SettingsPage(QWidget):
         LiveFormBinder.bind(self.burst_rest_max, config, "rest_max", after_write=self._on_config_written)
 
         # 队列运行策略（一次队列运行共享，不随单个任务走）
-        policy = self.state.settings.send_policy
+        policy = self.settings.send_policy
         LiveFormBinder.bind(self.delay_between, policy, "delay_between_tasks", after_write=self._on_config_written)
         LiveFormBinder.bind(self.stop_count, policy, "stop_after_count", after_write=self._on_config_written)
         LiveFormBinder.bind(self.stop_time, policy, "stop_after_time", after_write=self._on_config_written)

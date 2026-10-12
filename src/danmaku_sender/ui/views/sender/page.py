@@ -37,6 +37,7 @@ from PySide6.QtWidgets import (
     QWidget,
 )
 
+from danmaku_sender.config import Settings
 from danmaku_sender.controller.sender import QueueReadiness, SenderController
 from danmaku_sender.infra.persistence.history_manager import HistoryManager
 from danmaku_sender.runtime.infra.platform import send_windows_notification
@@ -69,11 +70,12 @@ class TaskUnsent:
 class SenderPage(QWidget):
     progressUpdated = Signal(int, int, float)
 
-    def __init__(self, state: AppState, history_manager: HistoryManager):
+    def __init__(self, state: AppState, settings: Settings, history_manager: HistoryManager):
         super().__init__()
         self.state = state
+        self.settings = settings
         self.logger = logging.getLogger(__name__)
-        self.sender_controller = SenderController(state, history_manager, self)
+        self.sender_controller = SenderController(state, settings, history_manager, self)
 
         self._queue_total = 0
         self._queue_current = 0
@@ -304,8 +306,7 @@ class SenderPage(QWidget):
 
     def _show_task_detail(self, task: TaskView):
         """查看/编辑任务详情和配置"""
-        auth_config = self.state.session.get_api_auth()
-        dialog = TaskDetailDialog(task, auth_config, self.state.workspace.sender_is_active, self)
+        dialog = TaskDetailDialog(task, self.state, self.settings, self.state.workspace.sender_is_active, self)
         if dialog.exec() == QDialog.DialogCode.Accepted:
             if self.state.workspace.sender_is_active:
                 self.logger.warning("发送进行中，已忽略任务详情编辑结果。")
@@ -316,7 +317,7 @@ class SenderPage(QWidget):
 
     def _edit_danmakus(self, task: TaskView):
         """编辑任务的弹幕数据（打开编辑器弹窗）"""
-        dialog = EditorDialog(task, self.state, self)
+        dialog = EditorDialog(task, self.state, self.settings, self)
         if dialog.exec() == QDialog.DialogCode.Accepted:
             # 编辑器内部已通过 assign_danmakus 通知 QueueState，表格自动刷新
             self.logger.info(f"已编辑弹幕: {task.display_string} ({task.total} 条)")
@@ -452,6 +453,7 @@ class SenderPage(QWidget):
         """
         TaskBuilderDialog(
             self.state,
+            self.settings,
             ref_task_id=ref_task_id,
             insert_position=insert_position,
             parent=self,
@@ -463,7 +465,6 @@ class SenderPage(QWidget):
         if self.sender_controller.is_queue_running():
             return
 
-        auth_config = self.state.session.get_api_auth()
         match self.sender_controller.queue_readiness:
             case QueueReadiness.MISSING_CREDENTIALS:
                 QMessageBox.warning(self, "凭证缺失", "请先登入账号。")
@@ -475,7 +476,7 @@ class SenderPage(QWidget):
         self._unsent_by_task.clear()
         self._btn_export_unsent.setEnabled(False)
         self._queue_total_dm = self.state.workspace.queue_state.sendable_danmaku_count
-        if not self.sender_controller.start_queue(auth_config):
+        if not self.sender_controller.start_queue():
             self.logger.warning("队列发送未能启动")
             return
         self._update_queue_ui(running=True)
@@ -686,7 +687,7 @@ class SenderPage(QWidget):
         解析失败或文件中没有弹幕的不建任务，原因在右下角列出。
         返回建出的任务数。
         """
-        config = self.state.settings.sender_config.to_task_config()
+        config = self.settings.sender_config.to_task_config()
         created = 0
         problems: list[str] = []
         for file_path in file_paths:
@@ -715,7 +716,7 @@ class SenderPage(QWidget):
             str | None: 失败原因；成功时为 None。
         """
         try:
-            loaded = DanmakuXml.load_task(file_path, self.state.settings.sender_config.to_task_config())
+            loaded = DanmakuXml.load_task(file_path, self.settings.sender_config.to_task_config())
         except Exception as e:
             problem = f"导入 {file_path} 失败：{e}"
             self.logger.error(problem)

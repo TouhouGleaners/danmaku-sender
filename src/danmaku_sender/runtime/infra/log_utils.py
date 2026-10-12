@@ -29,7 +29,7 @@ class GuiLoggingHandler(QObject, logging.Handler):
         QObject.__init__(self)
         logging.Handler.__init__(self)
 
-    def emit(self, record):
+    def emit(self, record: logging.LogRecord) -> None:
         """
         发出一条日志记录。
 

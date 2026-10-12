@@ -4,6 +4,7 @@ from pathlib import Path
 
 from PySide6.QtCore import QObject, Signal
 
+from danmaku_sender.config import Settings
 from danmaku_sender.service.danmaku_xml import DanmakuXml
 from danmaku_sender.service.editor_session import EditorSession
 from danmaku_sender.state import AppState
@@ -24,11 +25,20 @@ class EditorController(QObject):
     """
     dataChanged = Signal()
 
-    def __init__(self, task: TaskView, state: AppState, parent=None):
+    def __init__(self, task: TaskView, state: AppState, settings: Settings, parent=None):
+        """初始化控制器。
+
+        Args:
+            task: 被编辑的任务只读视图。
+            state: 状态树聚合根，保存时经 ``state.workspace`` 写回队列。
+            settings: 配置容器，取校验关键字。
+            parent: Qt 父对象。
+        """
         super().__init__(parent)
         self.logger = logging.getLogger(__name__)
         self.task = task
         self.state = state
+        self.settings = settings
         self.session = EditorSession()
 
     # region Computed Properties for UI
@@ -147,7 +157,7 @@ class EditorController(QObject):
         """
         duration = self.task.meta.part_duration_ms
 
-        config = self.state.settings.validation_config
+        config = self.settings.validation_config
         self.session.validate(duration_ms=duration, config=config)
         self.dataChanged.emit()
 

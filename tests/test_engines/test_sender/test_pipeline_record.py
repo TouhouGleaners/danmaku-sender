@@ -7,7 +7,7 @@ import threading
 
 import pytest
 
-from danmaku_sender.config import ApiAuthConfig, SenderConfig, SendPolicy
+from danmaku_sender.config import ApiAuthConfig, NetworkPolicy, SenderConfig, SendPolicy
 from danmaku_sender.infra.persistence.history_manager import HistoryManager
 from danmaku_sender.service.sender import SendJob, SendPipeline
 from danmaku_sender.service.sender import pipeline as pipeline_mod
@@ -20,12 +20,8 @@ SENT_DMIDS: list[str] = []
 class StubClient:
     """伪 B 站客户端：POST 恒成功并返回递增 dmid"""
 
-    def __init__(self, auth_config):
+    def __init__(self, auth, network):
         pass
-
-    @classmethod
-    def from_config(cls, auth_config):
-        return cls(auth_config)
 
     def __enter__(self):
         return self
@@ -49,7 +45,9 @@ def pipeline_env(tmp_path, monkeypatch) -> HistoryManager:
 def _run_pipeline(hm: HistoryManager, target: VideoTarget, danmakus: list[Danmaku], task_id: str) -> None:
     """在独立线程中执行管线，与 QueueSendWorker 的真实调用方式一致"""
     pipeline = SendPipeline(
-        ApiAuthConfig(sessdata="x", bili_jct="y", use_system_proxy=False), hm
+        ApiAuthConfig(sessdata="x", bili_jct="y"),
+        NetworkPolicy(use_system_proxy=False),
+        hm,
     )
     job = SendJob(
         task_id=task_id,

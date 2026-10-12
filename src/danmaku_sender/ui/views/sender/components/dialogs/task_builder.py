@@ -14,6 +14,7 @@ from PySide6.QtWidgets import (
     QVBoxLayout,
 )
 
+from danmaku_sender.config import Settings
 from danmaku_sender.controller.video_controller import VideoController
 from danmaku_sender.service.danmaku_xml import DanmakuXml
 from danmaku_sender.state import AppState
@@ -32,6 +33,7 @@ class TaskBuilderDialog(QDialog):
     def __init__(
         self,
         state: AppState,
+        settings: Settings,
         ref_task_id: str | None = None,
         insert_position: RelativePosition | None = None,
         parent=None,
@@ -40,13 +42,15 @@ class TaskBuilderDialog(QDialog):
 
         Args:
             state: 状态树聚合根，经 ``state.workspace`` 写入队列。
+            settings: 配置容器，取发送参数。
             ref_task_id: 参考任务标识。为 None 时追加到队尾，可连续添加且弹窗保持打开。
             insert_position: 插在参考任务的哪一侧。与 ref_task_id 一并给出时为相对插入，成功后自动关闭。
             parent: 父控件。
         """
         super().__init__(parent)
         self.state = state
-        self.video_controller = VideoController(self)
+        self.settings = settings
+        self.video_controller = VideoController(state, settings, self)
         self._video_info: VideoInfo | None = None
         self._selected_files: list[Path] = []
         self._pending_part_page: int | None = None
@@ -148,7 +152,7 @@ class TaskBuilderDialog(QDialog):
         self._part_combo.clear()
         self._part_combo.setEnabled(False)
 
-        self.video_controller.fetch_single_info(bvid, self.state.session.get_api_auth())
+        self.video_controller.fetch_single_info(bvid)
 
     @Slot(str, VideoInfo)
     def _on_fetch_succeeded(self, bvid: str, info: VideoInfo):
@@ -238,7 +242,7 @@ class TaskBuilderDialog(QDialog):
                 xml_path=xml_path,
             ),
             danmakus=danmakus,
-            config=self.state.settings.sender_config.to_task_config(),
+            config=self.settings.sender_config.to_task_config(),
         )
         task.status = task.initial_status
 

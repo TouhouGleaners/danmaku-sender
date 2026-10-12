@@ -3,7 +3,7 @@
 import threading
 import time
 
-from danmaku_sender.config import ApiAuthConfig
+from danmaku_sender.config import ApiAuthConfig, NetworkPolicy
 from danmaku_sender.controller.monitor.workers import QueueMonitorWorker
 from danmaku_sender.infra.persistence.history_manager import HistoryManager
 
@@ -11,7 +11,8 @@ from danmaku_sender.infra.persistence.history_manager import HistoryManager
 def _make_worker(tmp_path, **kwargs) -> QueueMonitorWorker:
     """空账本：`_run_round` 无目标即返回，测试只量等待行为，不碰网络。"""
     return QueueMonitorWorker(
-        auth_config=ApiAuthConfig(sessdata="s", bili_jct="j", use_system_proxy=False),
+        auth=ApiAuthConfig(sessdata="s", bili_jct="j"),
+        network=NetworkPolicy(use_system_proxy=False),
         history_manager=HistoryManager(tmp_path / "history.db"),
         stop_event=threading.Event(),
         prevent_sleep=False,

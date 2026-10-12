@@ -1,5 +1,6 @@
 import logging
 
+from danmaku_sender.config import Settings
 from danmaku_sender.config.app_meta import AppInfo
 from danmaku_sender.infra.persistence.history_manager import HistoryManager
 from danmaku_sender.infra.storage import AccountStorage, ConfigStorage
@@ -13,9 +14,19 @@ class Runtime:
     应用运行时
 
     持有所有全局服务，管理生命周期。
+    ``settings`` 为持久化配置，``app_state`` 为易失状态树；
+    二者生命周期不同，故平级持有。
+
+    Attributes:
+        settings: 持久化配置容器。
+        app_state: 易失状态树。
     """
 
     def __init__(self) -> None:
+        """初始化运行时，构建状态与存储。"""
+        # === 配置 ===
+        self.settings = Settings()
+
         # === 状态 ===
         self.app_state = AppState()
 
@@ -26,7 +37,7 @@ class Runtime:
         self._bootstrapped = False
 
     def bootstrap(self) -> None:
-        """编排完整的启动序列"""
+        """编排完整的启动序列。"""
         if self._bootstrapped:
             return
         self._bootstrapped = True
@@ -39,7 +50,7 @@ class Runtime:
         except Exception as e:
             logger.error(f"凭据加载失败，将以未登录状态继续: {e}")
 
-        self.config_storage.load(self.app_state.settings)
+        self.config_storage.load(self.settings)
 
     def _activate_saved_accounts(self) -> None:
         """加载已保存账号并激活第一个。"""

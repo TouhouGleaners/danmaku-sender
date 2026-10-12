@@ -20,6 +20,7 @@ from PySide6.QtWidgets import (
     QVBoxLayout,
 )
 
+from danmaku_sender.config import Settings
 from danmaku_sender.controller.editor_controller import EditorController
 from danmaku_sender.state import AppState
 from danmaku_sender.types.models.common import RelativePosition
@@ -36,10 +37,10 @@ from .dialogs import ArrayGeneratorDialog, EditDanmakuDialog, TimeOffsetDialog
 class EditorDialog(QDialog):
     """编辑器弹窗 - 用于编辑单个任务的弹幕数据"""
 
-    def __init__(self, task: TaskView, state: AppState, parent=None):
+    def __init__(self, task: TaskView, state: AppState, settings: Settings, parent=None):
         super().__init__(parent)
         self.task = task
-        self.controller = EditorController(task, state, self)
+        self.controller = EditorController(task, state, settings, self)
         self.logger = logging.getLogger(__name__)
 
         self.current_item_id: str | None = None
@@ -136,7 +137,7 @@ class EditorDialog(QDialog):
         main_layout.addLayout(toolbar_layout)
 
         # --- 规则管理区 ---
-        self.rules_group = ValidationRulesGroup(self.controller.state)
+        self.rules_group = ValidationRulesGroup(self.controller.state, self.controller.settings)
         main_layout.addWidget(self.rules_group)
 
         # --- 核心区 ---

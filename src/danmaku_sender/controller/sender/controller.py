@@ -8,7 +8,7 @@ from pathlib import Path
 
 from PySide6.QtCore import QObject, Signal, Slot
 
-from danmaku_sender.config import ApiAuthConfig
+from danmaku_sender.config import ApiAuthConfig, NetworkPolicy, Settings
 from danmaku_sender.controller.concurrency import PoolTask
 from danmaku_sender.infra.persistence.history_manager import HistoryManager
 from danmaku_sender.service.danmaku_xml import DanmakuXml
@@ -44,9 +44,24 @@ class SenderController(QObject):
     queueProgressUpdated = Signal(int, int, float)      # (current_idx_0based, total, eta)
     taskProgressUpdated = Signal(str, int, int, float)  # (task_id, attempted, task_total, eta)
 
-    def __init__(self, state: AppState, history_manager: HistoryManager, parent=None):
+    def __init__(
+        self,
+        state: AppState,
+        settings: Settings,
+        history_manager: HistoryManager,
+        parent=None,
+    ):
+        """初始化控制器。
+
+        Args:
+            state: 状态树聚合根，取活动会话与队列。
+            settings: 配置容器，取发送策略与传输策略。
+            history_manager: 本地账本。
+            parent: Qt 父对象。
+        """
         super().__init__(parent)
         self.state = state
+        self.settings = settings
         self.history_manager = history_manager
         self._queue_worker: QueueSendWorker | None = None
         self._stop_event = threading.Event()
@@ -65,7 +80,7 @@ class SenderController(QObject):
 
     # region Queue
 
-    def start_queue(self, auth_config: ApiAuthConfig) -> bool:
+    def start_queue(self) -> bool:
         """启动队列发送。
 
         始终使用 WorkspaceState.queue_state；Worker 事件也只落账到该队列。
@@ -104,15 +119,19 @@ class SenderController(QObject):
 
         # 队列策略同样取启动时快照：运行期间改设置不影响本次运行，
         # 也避免设置页与 Worker 跨线程共享同一个可变对象。
-        send_policy = self.state.settings.send_policy.model_copy(deep=True)
+        send_policy = self.settings.send_policy.model_copy(deep=True)
+        session = self.state.session
+        auth = ApiAuthConfig(sessdata=session.sessdata, bili_jct=session.bili_jct)
+        network = NetworkPolicy(use_system_proxy=self.settings.global_config.use_system_proxy)
 
         worker = QueueSendWorker(
             tasks=snapshots,
-            auth_config=auth_config,
+            auth=auth,
+            network=network,
             send_policy=send_policy,
             history_manager=self.history_manager,
             stop_event=self._stop_event,
-            prevent_sleep=self.state.settings.global_config.prevent_sleep,
+            prevent_sleep=self.settings.global_config.prevent_sleep,
         )
 
         worker.taskStarted.connect(self._on_task_started)
