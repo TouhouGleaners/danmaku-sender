@@ -40,7 +40,7 @@ from PySide6.QtWidgets import (
 from danmaku_sender.config import Settings
 from danmaku_sender.controller.sender import QueueReadiness, SenderController
 from danmaku_sender.infra.persistence.history_manager import HistoryManager
-from danmaku_sender.runtime.infra.platform import send_windows_notification
+from danmaku_sender.infra.platform import send_windows_notification
 from danmaku_sender.service.danmaku_xml import DanmakuXml
 from danmaku_sender.service.sender import SendingContext
 from danmaku_sender.state import AppState

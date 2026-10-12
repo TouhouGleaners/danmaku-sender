@@ -75,9 +75,9 @@ root_packages = ["danmaku_sender"]
 name = "分层依赖方向"
 type = "layers"
 layers = [
+    "danmaku_sender.app",
     "danmaku_sender.ui",
     "danmaku_sender.controller",
-    "danmaku_sender.runtime",
     "danmaku_sender.state",
     "danmaku_sender.service",
     "danmaku_sender.infra",

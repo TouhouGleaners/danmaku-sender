@@ -45,14 +45,40 @@ class AuthController(QObject):
             self.userProfileReady.emit(UserProfile(False, "未登录"))
             return
 
-        auth = ApiAuthConfig(sessdata=session.sessdata, bili_jct=session.bili_jct)
+        requested_sessdata = session.sessdata
+        requested_bili_jct = session.bili_jct
+        auth = ApiAuthConfig(sessdata=requested_sessdata, bili_jct=requested_bili_jct)
         network = NetworkPolicy(use_system_proxy=self.settings.global_config.use_system_proxy)
         PoolTask.submit(
             self._task_fetch_profile,
-            self.userProfileReady.emit,
-            lambda _: self.userProfileReady.emit(UserProfile(False, "未登录")),
+            lambda profile: self._on_profile_fetched(profile, requested_sessdata, requested_bili_jct),
+            lambda _: self._on_profile_fetched(UserProfile(False, "未登录"), requested_sessdata, requested_bili_jct),
             auth, network,
         )
+
+    def _on_profile_fetched(
+        self,
+        profile: UserProfile,
+        requested_sessdata: str,
+        requested_bili_jct: str,
+    ) -> None:
+        """把昵称登记到发起请求的那个账号，并按需发放界面更新。
+
+        响应始终写回它自己的账号，即使期间已切换活动账号；
+        界面只在响应属于当前账号时刷新。
+
+        Args:
+            profile: 用户资料。
+            requested_sessdata: 发起本次请求的 SESSDATA，作为账号身份。
+            requested_bili_jct: 发起本次请求的 bili_jct。
+        """
+        if profile.is_login:
+            self.state.session.upsert_account(
+                requested_sessdata, requested_bili_jct, profile.username
+            )
+
+        if requested_sessdata == self.state.session.sessdata:
+            self.userProfileReady.emit(profile)
 
     def start_qr_login(self) -> None:
         """启动扫码登录后台任务。"""

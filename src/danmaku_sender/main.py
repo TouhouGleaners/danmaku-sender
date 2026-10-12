@@ -1,12 +1,12 @@
-import sys
 import ctypes
+import sys
 
 from PySide6.QtWidgets import QApplication
 
 from danmaku_sender.config.app_meta import AppInfo
-from danmaku_sender.runtime.infra.log_utils import init_app_logging
 from danmaku_sender.ui.framework.cursor_policy import AutoHandCursorFilter
 from danmaku_sender.ui.framework.icons import get_app_icon
+from danmaku_sender.ui.support.log_utils import init_app_logging
 
 
 def main(argv=None):
@@ -29,7 +29,7 @@ def main(argv=None):
     log_dir = AppInfo.Paths.LOGS
     init_app_logging(log_dir)
 
-    from .runtime import Runtime
+    from .app.runtime import Runtime
     from .ui.main_window import MainWindow
 
     app = QApplication(argv)
@@ -43,8 +43,11 @@ def main(argv=None):
     rt = Runtime()
     rt.bootstrap()
 
-    window = MainWindow(rt)
+    window = MainWindow(rt.app_state, rt.settings, rt.history_manager)
     window.show()
+
+    # 退出前强制落盘配置与凭据
+    app.aboutToQuit.connect(rt.shutdown)
 
     sys.exit(app.exec())
 

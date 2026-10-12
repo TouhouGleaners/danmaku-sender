@@ -29,7 +29,19 @@ logger = logging.getLogger(__name__)
 class AccountDialog(QDialog):
     """账号管理主窗口"""
 
-    def __init__(self, state: AppState, settings: Settings, parent=None):
+    def __init__(
+        self,
+        state: AppState,
+        settings: Settings,
+        parent=None,
+    ):
+        """初始化账号管理弹窗。
+
+        Args:
+            state: 状态树聚合根。
+            settings: 配置容器，供扫码登录取传输策略。
+            parent: 父控件。
+        """
         super().__init__(parent)
         self.state = state
         self.settings = settings
@@ -42,15 +54,16 @@ class AccountDialog(QDialog):
             Qt.WindowType.CustomizeWindowHint
         )
 
-        self.accounts: list[AccountCredential] = [
-            a.model_copy() for a in state.session.saved_accounts
-        ]
+        # 直接编辑已保存账号本身，不再保留克隆副本：
+        # 弹窗没有取消语义，双份表示会让外部写入（如昵称登记）被整表替换冲掉。
+        self.accounts: list[AccountCredential] = state.session.saved_accounts
 
         self._batch_total: int = 0
         self._batch_done: int = 0
         self._rows: list[AccountRow] = []
         self._is_batching: bool = False
 
+        # 弹窗自带控制器，随弹窗销毁，检测结果不会串到别的弹窗
         self._controller = AccountController(settings, self)
         self._controller.checkFinished.connect(self._on_check_finished)
         self._controller.userInfoFetched.connect(self._on_user_info_fetched)
@@ -227,7 +240,7 @@ class AccountDialog(QDialog):
             QMessageBox.StandardButton.No
         )
         if reply == QMessageBox.StandardButton.Yes:
-            self.accounts = [a for a in self.accounts if a.is_valid is not False]
+            self.accounts[:] = [a for a in self.accounts if a.is_valid is not False]
             self._refresh()
 
     def _on_account_saved(self, new: AccountCredential, _old: AccountCredential):
@@ -255,16 +268,3 @@ class AccountDialog(QDialog):
             self.accounts.remove(duplicate)
             logger.info(f"合并重复账号: {duplicate.name} → {account.name}")
         self._refresh()
-
-    def _sync_state(self):
-        self.state.session.saved_accounts = [
-            a.model_copy() for a in self.accounts
-        ]
-
-    def accept(self):
-        self._sync_state()
-        super().accept()
-
-    def reject(self):
-        self._sync_state()
-        super().reject()

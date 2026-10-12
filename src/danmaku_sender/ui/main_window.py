@@ -24,14 +24,15 @@ from PySide6.QtWidgets import (
     QWidget,
 )
 
+from danmaku_sender.config import Settings
 from danmaku_sender.config.app_meta import UI, AppInfo, Links
-from danmaku_sender.controller.account_controller import AccountController
 from danmaku_sender.controller.auth_controller import AuthController
 from danmaku_sender.controller.system_controller import SystemController
-from danmaku_sender.runtime import Runtime
-from danmaku_sender.runtime.infra.log_utils import GuiLoggingHandler
+from danmaku_sender.infra.persistence.history_manager import HistoryManager
+from danmaku_sender.state import AppState
 from danmaku_sender.types.models.common import MonitorStats
 from danmaku_sender.types.models.user import UserProfile
+from danmaku_sender.ui.support.log_utils import GuiLoggingHandler
 
 from .dialogs import AboutDialog, UpdateDialog
 from .framework.icons import SvgIcon, get_app_icon
@@ -47,11 +48,23 @@ from .views.settings import SettingsPage
 
 class MainWindow(QMainWindow):
     # region Lifecycle & Initialization
-    def __init__(self, rt: Runtime):
+    def __init__(
+        self,
+        state: AppState,
+        settings: Settings,
+        history_manager: HistoryManager,
+    ):
+        """初始化主窗口。
+
+        Args:
+            state: 状态树聚合根。
+            settings: 配置容器。
+            history_manager: 本地账本。
+        """
         super().__init__()
-        self.rt = rt
-        self.state = rt.app_state
-        self.settings = rt.settings
+        self.state = state
+        self.settings = settings
+        self.history_manager = history_manager
 
         self.setWindowTitle(UI.MAIN_WINDOW_TITLE)
         self.resize(900, 680)
@@ -86,7 +99,6 @@ class MainWindow(QMainWindow):
 
         # 信号与状态绑定
         self._init_auth_system()
-        self._init_config_autosave()
         self._bind_state_to_pages()
         self._connect_global_signals()
 
@@ -106,16 +118,7 @@ class MainWindow(QMainWindow):
             )
 
     def closeEvent(self, event: QCloseEvent):
-        """窗口关闭事件: 保存配置与凭证"""
-        try:
-            AccountController.save_credentials(self.state, self._current_profile, self.rt.account_storage)
-        except (OSError, ValueError) as e:
-            self.logger.error(f"保存凭证失败: {e}")
-
-        # 停掉待触发的防抖落盘：显式保存已覆盖，避免同一份配置重复写盘
-        self._config_save_timer.stop()
-        self.rt.config_storage.save(self.settings)
-
+        """窗口关闭事件。配置与凭据由装配总线在退出时落盘。"""
         super().closeEvent(event)
 
     # endregion
@@ -187,9 +190,9 @@ class MainWindow(QMainWindow):
     def _init_pages(self):
         """初始化页面并绑定导航"""
         self.page_settings = SettingsPage(self.state, self.settings)
-        self.page_sender = SenderPage(self.state, self.settings, self.rt.history_manager)
-        self.page_monitor = MonitorPage(self.state, self.settings, self.rt.history_manager)
-        self.page_history = HistoryPage(self.state, self.settings, self.rt.history_manager)
+        self.page_sender = SenderPage(self.state, self.settings, self.history_manager)
+        self.page_monitor = MonitorPage(self.state, self.settings, self.history_manager)
+        self.page_history = HistoryPage(self.state, self.settings, self.history_manager)
 
         # 侧边栏导航页面（图标在 _refresh_icons 中按需重新获取）
         sidebar_entries = [
@@ -293,23 +296,6 @@ class MainWindow(QMainWindow):
         self._auth_debounce_timer.setSingleShot(True)
         self._auth_debounce_timer.timeout.connect(self._refresh_user_info)
 
-    def _init_config_autosave(self):
-        """配置写入后防抖落盘。
-
-        连续改动只写一次文件：每次 configChanged 都重启计时器，
-        停手 800ms 后落盘。closeEvent 仍会强制存一次作为最终兜底。
-        """
-        self._config_save_timer = QTimer(self)
-        self._config_save_timer.setSingleShot(True)
-        self._config_save_timer.setInterval(800)
-        self._config_save_timer.timeout.connect(self._save_config)
-        self.state.configChanged.connect(lambda: self._config_save_timer.start())
-
-    @Slot()
-    def _save_config(self):
-        """落盘非敏感配置"""
-        self.rt.config_storage.save(self.settings)
-
     def _open_account_dialog(self):
         """打开账号管理弹窗"""
         dialog = AccountDialog(self.state, self.settings, self)
@@ -402,7 +388,7 @@ class MainWindow(QMainWindow):
 
     @Slot(UserProfile)
     def _on_user_profile_updated(self, profile: UserProfile):
-        """同步更新 UI"""
+        """同步更新 UI；昵称登记由授权控制器完成。"""
         self._current_profile = profile
         self.username_label.setText(profile.username)
         self._render_avatar()
