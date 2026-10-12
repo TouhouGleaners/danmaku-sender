@@ -6,7 +6,7 @@ import threading
 from PySide6.QtCore import QObject, Signal, Slot
 
 from danmaku_sender.config import ApiAuthConfig
-from danmaku_sender.repo.history_manager import HistoryManager
+from danmaku_sender.infra.persistence.history_manager import HistoryManager
 from danmaku_sender.runtime.state.app_state import AppState
 
 from .workers import QueueMonitorWorker

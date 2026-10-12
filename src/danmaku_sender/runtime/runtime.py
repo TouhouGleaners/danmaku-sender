@@ -1,8 +1,8 @@
 import logging
 
 from danmaku_sender.config.app_meta import AppInfo
+from danmaku_sender.infra.persistence.history_manager import HistoryManager
 from danmaku_sender.infra.storage import AccountStorage, ConfigStorage
-from danmaku_sender.repo.history_manager import HistoryManager
 
 from .state.app_state import AppState
 

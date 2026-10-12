@@ -6,8 +6,8 @@ import sqlite3
 
 import pytest
 
-from danmaku_sender.repo.history_manager import HistoryManager
-from danmaku_sender.repo.orm_models import SentDanmaku
+from danmaku_sender.infra.persistence.history_manager import HistoryManager
+from danmaku_sender.infra.persistence.orm_models import SentDanmaku
 from danmaku_sender.types.models.common import DanmakuStatus, VideoTarget
 from danmaku_sender.types.models.danmaku import Danmaku
 

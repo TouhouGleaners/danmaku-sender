@@ -1,12 +1,11 @@
-import time
 import logging
 import threading
+import time
 import urllib.parse
 from functools import reduce
 from hashlib import md5
 
 import requests
-
 
 logger = logging.getLogger(__name__)
 

@@ -5,8 +5,8 @@ from collections.abc import Callable
 from dataclasses import replace
 
 from danmaku_sender.config import ApiAuthConfig
-from danmaku_sender.repo.bili_api_client import BiliApiClient
-from danmaku_sender.repo.history_manager import HistoryManager
+from danmaku_sender.infra.bilibili.bili_api_client import BiliApiClient
+from danmaku_sender.infra.persistence.history_manager import HistoryManager
 from danmaku_sender.types.models.queue import TaskConfig
 
 from .context import SendingContext, SendJob

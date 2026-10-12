@@ -12,7 +12,7 @@ import pytest
 from danmaku_sender.config import ApiAuthConfig
 from danmaku_sender.controller.monitor.controller import MonitorController
 from danmaku_sender.controller.monitor.workers import QueueMonitorWorker
-from danmaku_sender.repo.history_manager import HistoryManager
+from danmaku_sender.infra.persistence.history_manager import HistoryManager
 from danmaku_sender.runtime.state.app_state import AppState
 
 # 落在符号位上（低 32 位 >= 2^31）就会绕成负数，两种跨度都要覆盖：

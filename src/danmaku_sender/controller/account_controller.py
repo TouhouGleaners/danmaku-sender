@@ -4,8 +4,8 @@ import logging
 from PySide6.QtCore import QObject, Signal
 
 from danmaku_sender.config import ApiAuthConfig
+from danmaku_sender.infra.bilibili.bili_api_client import BiliApiClient
 from danmaku_sender.infra.storage.account_storage import AccountStorage
-from danmaku_sender.repo.bili_api_client import BiliApiClient
 from danmaku_sender.runtime.state.app_state import AppState
 from danmaku_sender.service.auth_service import AuthService
 from danmaku_sender.types.models.account import AccountCredential
