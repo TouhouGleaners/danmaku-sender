@@ -8,7 +8,7 @@ from PySide6.QtCore import Signal
 from danmaku_sender.config import ApiAuthConfig, NetworkPolicy, SendPolicy
 from danmaku_sender.controller.concurrency import WorkerThread
 from danmaku_sender.infra.persistence.history_manager import HistoryManager
-from danmaku_sender.runtime.infra.platform import KeepSystemAwake
+from danmaku_sender.infra.platform import KeepSystemAwake
 from danmaku_sender.service.sender import SendingContext, SendJob, SendPipeline
 from danmaku_sender.service.sender.delay_manager import DelayManager
 from danmaku_sender.types.models.queue import TaskConfig, TaskSnapshot, TaskStatus

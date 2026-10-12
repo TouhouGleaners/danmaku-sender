@@ -29,7 +29,21 @@ logger = logging.getLogger(__name__)
 class AccountDialog(QDialog):
     """账号管理主窗口"""
 
-    def __init__(self, state: AppState, settings: Settings, parent=None):
+    def __init__(
+        self,
+        state: AppState,
+        settings: Settings,
+        controller: AccountController,
+        parent=None,
+    ):
+        """初始化账号管理弹窗。
+
+        Args:
+            state: 状态树聚合根。
+            settings: 配置容器，供扫码登录取传输策略。
+            controller: 账号管理控制器。
+            parent: 父控件。
+        """
         super().__init__(parent)
         self.state = state
         self.settings = settings
@@ -51,7 +65,7 @@ class AccountDialog(QDialog):
         self._rows: list[AccountRow] = []
         self._is_batching: bool = False
 
-        self._controller = AccountController(settings, self)
+        self._controller = controller
         self._controller.checkFinished.connect(self._on_check_finished)
         self._controller.userInfoFetched.connect(self._on_user_info_fetched)
 

@@ -10,7 +10,7 @@ from danmaku_sender.config import ApiAuthConfig, NetworkPolicy
 from danmaku_sender.controller.concurrency import WorkerThread
 from danmaku_sender.infra.bilibili.bili_api_client import BiliApiClient
 from danmaku_sender.infra.persistence.history_manager import HistoryManager
-from danmaku_sender.runtime.infra.platform import KeepSystemAwake
+from danmaku_sender.infra.platform import KeepSystemAwake
 from danmaku_sender.service.danmaku_verifier import DanmakuVerifier
 from danmaku_sender.types.models.common import MonitorStats, VideoTarget
 

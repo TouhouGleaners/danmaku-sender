@@ -41,3 +41,24 @@ class SessionState(QObject):
         if self._bili_jct != value:
             self._bili_jct = value
             self.credentialsChanged.emit()
+
+    def upsert_active_account(self, name: str | None = None) -> None:
+        """把当前凭据登记进已保存账号列表。
+
+        已存在同 SESSDATA 的账号则就地更新 ``bili_jct``，否则追加新条目。
+
+        Args:
+            name: 昵称；为 None 时保留既有昵称。
+        """
+        if not self._sessdata or not self._bili_jct:
+            return
+
+        acc = next((a for a in self.saved_accounts if a.sessdata == self._sessdata), None)
+        if acc:
+            acc.bili_jct = self._bili_jct
+        else:
+            acc = AccountCredential(sessdata=self._sessdata, bili_jct=self._bili_jct)
+            self.saved_accounts.append(acc)
+
+        if name:
+            acc.name = name

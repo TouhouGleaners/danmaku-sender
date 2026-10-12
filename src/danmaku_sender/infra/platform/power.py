@@ -1,68 +1,21 @@
-"""平台相关服务 - 系统级功能（通知、电源管理等）"""
-
+"""电源管理：阻止系统休眠。"""
 import ctypes
 import logging
 import platform
 import threading
 
-from danmaku_sender.config.app_meta import AppInfo
-
-
 logger = logging.getLogger(__name__)
-
 
 IS_WINDOWS = platform.system() == "Windows"
 
 
-# region Windows Toast 通知
-
-ICON_PATH = AppInfo.Paths.ASSETS / 'icon.ico'
-
-if not ICON_PATH.is_file():
-    logger.warning(f"图标文件未找到: {ICON_PATH}。通知将可能没有图标。")
-    ICON_PATH = ""
-else:
-    ICON_PATH = str(ICON_PATH)
-
-try:
-    from win11toast import toast
-except ImportError:
-    toast = None
-    logger.warning("未能导入 'win11toast' 库。桌面通知功能将被禁用。")
-
-
-def _send_notification_wrapper(title: str, message: str):
-    """内部包装函数，用于在独立的线程中安全地调用 toast 并处理异常。"""
-    try:
-        if callable(toast):
-            toast(title=title, body=message, icon=ICON_PATH, app_id=AppInfo.NAME)
-        logger.info(f"成功发送通知: {title}")
-    except Exception as e:
-        logger.error(f"发送通知 {title} 时发生未知错误: {e}。", exc_info=True)
-
-
-def send_windows_notification(title: str, message: str):
-    """在后台启动一个线程来发送 Windows 桌面通知。"""
-    if toast is None or not IS_WINDOWS:
-        logger.debug(f"跳过通知 (依赖缺失或非Windows系统): {title}")
-        return
-
-    notification_thread = threading.Thread(
-        target=_send_notification_wrapper,
-        args=(title, message),
-        name="Notification",
-        daemon=True
-    )
-    notification_thread.start()
-
-
-# endregion
-
-
-# region 电源管理
-
 class PowerManagement:
-    """系统电源管理工具类 (仅限 Windows)"""
+    """系统电源管理工具类（仅限 Windows）。
+
+    以引用计数管理阻止休眠的申请：多个调用方同时申请时，只有计数
+    从 0 变 1 才真正调用系统 API，归零时才恢复默认策略。
+    """
+
     # Windows API 常量
     ES_CONTINUOUS = 0x80000000
     ES_SYSTEM_REQUIRED = 0x00000001
@@ -73,7 +26,7 @@ class PowerManagement:
     _prevent_sleep_count = 0
 
     @staticmethod
-    def prevent_sleep():
+    def prevent_sleep() -> None:
         """申请阻止系统休眠。
 
         增加引用计数；仅当计数从 0 变为 1 时，调用系统 API。
@@ -99,7 +52,7 @@ class PowerManagement:
             logger.error(f"无法设置阻止休眠状态: {e}")
 
     @staticmethod
-    def allow_sleep():
+    def allow_sleep() -> None:
         """释放阻止休眠申请。
 
         减少引用计数；仅当计数降为 0 时，调用系统 API 恢复默认策略。
@@ -134,19 +87,27 @@ class PowerManagement:
 
 
 class KeepSystemAwake:
-    """上下文管理器：在代码块执行期间阻止系统休眠 (仅限 Windows)"""
+    """上下文管理器：在代码块执行期间阻止系统休眠（仅限 Windows）。
 
-    def __init__(self, enabled: bool = True):
+    Attributes:
+        enabled: 是否启用阻止休眠；为 False 时上下文为空操作。
+    """
+
+    def __init__(self, enabled: bool = True) -> None:
+        """初始化上下文管理器。
+
+        Args:
+            enabled: 是否启用阻止休眠。
+        """
         self.enabled = enabled
 
-    def __enter__(self):
+    def __enter__(self) -> "KeepSystemAwake":
+        """进入上下文并申请阻止休眠。"""
         if self.enabled:
             PowerManagement.prevent_sleep()
         return self
 
-    def __exit__(self, exc_type, exc_value, traceback):
+    def __exit__(self, exc_type, exc_value, traceback) -> None:
+        """退出上下文并释放阻止休眠申请。"""
         if self.enabled:
             PowerManagement.allow_sleep()
-
-
-# endregion

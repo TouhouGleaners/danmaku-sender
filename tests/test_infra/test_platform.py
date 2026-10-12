@@ -7,7 +7,7 @@ from typing import ClassVar
 
 import pytest
 
-import danmaku_sender.runtime.infra.platform as platform_mod
+import danmaku_sender.infra.platform.notify as platform_mod
 
 
 class _RecordingToast:
