@@ -4,7 +4,7 @@ import logging
 from collections.abc import Callable
 from dataclasses import replace
 
-from danmaku_sender.config import ApiAuthConfig
+from danmaku_sender.config import ApiAuthConfig, NetworkPolicy
 from danmaku_sender.infra.bilibili.bili_api_client import BiliApiClient
 from danmaku_sender.infra.persistence.history_manager import HistoryManager
 from danmaku_sender.types.models.queue import TaskConfig
@@ -26,16 +26,19 @@ class SendPipeline:
 
     def __init__(
         self,
-        auth_config: ApiAuthConfig,
+        auth: ApiAuthConfig,
+        network: NetworkPolicy,
         history_manager: HistoryManager,
     ):
         """初始化流水线。
 
         Args:
-            auth_config (ApiAuthConfig): B 站接口的鉴权配置。
-            history_manager (HistoryManager): 本地账本，供存证与查重。
+            auth: 身份凭据。
+            network: 传输策略。
+            history_manager: 本地账本，供存证与查重。
         """
-        self.auth_config = auth_config
+        self.auth = auth
+        self.network = network
         self.history_manager = history_manager
 
     def execute(
@@ -57,7 +60,7 @@ class SendPipeline:
         ctx = SendingContext(total=len(job.danmakus), target=job.target)
 
         try:
-            with BiliApiClient.from_config(self.auth_config) as client:
+            with BiliApiClient(self.auth, self.network) as client:
                 executor = DanmakuExecutor(client)
                 scheduler = DanmakuScheduler(executor, self.history_manager)
 

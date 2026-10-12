@@ -14,7 +14,7 @@ from PySide6.QtWidgets import (
     QWidget,
 )
 
-from danmaku_sender.config import ApiAuthConfig
+from danmaku_sender.config import Settings
 from danmaku_sender.controller.account_controller import AccountController
 from danmaku_sender.state import AppState
 from danmaku_sender.types.models.account import AccountCredential
@@ -29,9 +29,10 @@ logger = logging.getLogger(__name__)
 class AccountDialog(QDialog):
     """账号管理主窗口"""
 
-    def __init__(self, state: AppState, parent=None):
+    def __init__(self, state: AppState, settings: Settings, parent=None):
         super().__init__(parent)
         self.state = state
+        self.settings = settings
         self.setWindowTitle("账号管理")
         self.setFixedSize(680, 480)
         self.setWindowFlags(
@@ -50,7 +51,7 @@ class AccountDialog(QDialog):
         self._rows: list[AccountRow] = []
         self._is_batching: bool = False
 
-        self._controller = AccountController(self)
+        self._controller = AccountController(settings, self)
         self._controller.checkFinished.connect(self._on_check_finished)
         self._controller.userInfoFetched.connect(self._on_user_info_fetched)
 
@@ -133,13 +134,6 @@ class AccountDialog(QDialog):
         if not self._is_batching:
             self._btn_clear.setEnabled(any(a.is_valid is False for a in self.accounts))
 
-    def _make_config(self, account: AccountCredential) -> ApiAuthConfig:
-        return ApiAuthConfig(
-            sessdata=account.sessdata,
-            bili_jct=account.bili_jct,
-            use_system_proxy=self.state.settings.global_config.use_system_proxy,
-        )
-
     def _use_account(self, account: AccountCredential):
         if account.sessdata == self.state.session.sessdata:
             return
@@ -148,14 +142,12 @@ class AccountDialog(QDialog):
         self.accept()
 
     def _add_account(self):
-        proxy = self.state.settings.global_config.use_system_proxy
-        dialog = AccountFormDialog(edit_data=None, use_system_proxy=proxy, parent=self)
+        dialog = AccountFormDialog(self.state, self.settings, edit_data=None, parent=self)
         dialog.saved.connect(self._on_account_saved)
         dialog.exec()
 
     def _edit_account(self, account: AccountCredential):
-        proxy = self.state.settings.global_config.use_system_proxy
-        dialog = AccountFormDialog(edit_data=account, use_system_proxy=proxy, parent=self)
+        dialog = AccountFormDialog(self.state, self.settings, edit_data=account, parent=self)
         dialog.saved.connect(lambda new, _old: self._on_edit_saved(new, account))
         dialog.exec()
 
@@ -185,12 +177,12 @@ class AccountDialog(QDialog):
             self._refresh()
 
     def _check_account(self, account: AccountCredential):
-        self._controller.check_account(account, self._make_config(account))
+        self._controller.check_account(account)
 
     def _on_check_finished(self, account: AccountCredential, is_valid: bool):
         account.is_valid = is_valid
         if is_valid:
-            self._controller.fetch_user_info(account, self._make_config(account))
+            self._controller.fetch_user_info(account)
 
         if self._batch_total > 0:
             self._batch_done += 1
@@ -213,7 +205,7 @@ class AccountDialog(QDialog):
             row.set_check_enabled(False)
 
         for acc in self.accounts:
-            self._controller.check_account(acc, self._make_config(acc))
+            self._controller.check_account(acc)
 
     def _finish_batch(self):
         self._batch_total = 0
@@ -245,7 +237,7 @@ class AccountDialog(QDialog):
         self.accounts.append(new)
         self._refresh()
 
-        self._controller.fetch_user_info(new, self._make_config(new))
+        self._controller.fetch_user_info(new)
 
     def _on_user_info_fetched(self, account: AccountCredential, info: dict | None):
         if not info or not info.get('isLogin'):

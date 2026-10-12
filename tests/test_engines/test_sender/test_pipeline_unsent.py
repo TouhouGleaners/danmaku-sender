@@ -7,7 +7,7 @@ from threading import Event
 
 import pytest
 
-from danmaku_sender.config import ApiAuthConfig, SenderConfig, SendPolicy
+from danmaku_sender.config import ApiAuthConfig, NetworkPolicy, SenderConfig, SendPolicy
 from danmaku_sender.infra.persistence.history_manager import HistoryManager
 from danmaku_sender.service.sender import SendJob, SendPipeline
 from danmaku_sender.service.sender import pipeline as pipeline_mod
@@ -15,7 +15,8 @@ from danmaku_sender.types.models.common import VideoTarget
 from danmaku_sender.types.models.danmaku import Danmaku
 
 TARGET = VideoTarget(bvid="BV1xx411c7mD", cid=1001)
-AUTH = ApiAuthConfig(sessdata="x", bili_jct="y", use_system_proxy=False)
+AUTH = ApiAuthConfig(sessdata="x", bili_jct="y")
+NETWORK = NetworkPolicy(use_system_proxy=False)
 
 
 class StubClient:
@@ -23,12 +24,8 @@ class StubClient:
 
     fail_on_exit = False
 
-    def __init__(self, auth_config):
+    def __init__(self, auth, network):
         self.sent = 0
-
-    @classmethod
-    def from_config(cls, auth_config):
-        return cls(auth_config)
 
     def __enter__(self):
         return self
@@ -47,8 +44,7 @@ class StubClient:
 class BrokenClient:
     """伪客户端：构造阶段就失败"""
 
-    @classmethod
-    def from_config(cls, auth_config):
+    def __init__(self, auth, network):
         raise RuntimeError("客户端构造失败")
 
 
@@ -75,7 +71,7 @@ def make_job(dms: list[Danmaku], **overrides) -> SendJob:
 
 
 def execute(hm: HistoryManager, job: SendJob, **overrides):
-    pipeline = SendPipeline(AUTH, hm)
+    pipeline = SendPipeline(AUTH, NETWORK, hm)
     return pipeline.execute(job, **overrides)
 
 

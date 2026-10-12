@@ -15,8 +15,10 @@ from PySide6.QtWidgets import (
     QVBoxLayout,
 )
 
+from danmaku_sender.config import Settings
 from danmaku_sender.config.app_meta import AppInfo, Links
 from danmaku_sender.controller.auth_controller import AuthController
+from danmaku_sender.state import AppState
 from danmaku_sender.types.models.common import AuthCookies
 
 logger = logging.getLogger(__name__)
@@ -161,17 +163,24 @@ class UpdateDialog(QDialog):
 
 class QRLoginDialog(QDialog):
     """扫码登录弹窗"""
-    def __init__(self, use_system_proxy: bool, parent=None):
+
+    def __init__(self, state: AppState, settings: Settings, parent=None):
+        """初始化弹窗。
+
+        Args:
+            state: 状态树聚合根，供授权控制器使用。
+            settings: 配置容器，取传输策略。
+            parent: 父控件。
+        """
         super().__init__(parent)
-        self.use_system_proxy = use_system_proxy
         self.cookies: AuthCookies = {'SESSDATA': '', 'bili_jct': ''}
 
-        self.auth_controller = AuthController(self)
+        self.auth_controller = AuthController(state, settings, self)
 
         self._create_ui()
         self._connect_signals()
 
-        self.auth_controller.start_qr_login(self.use_system_proxy)  # 对话框开启时直接启动业务逻辑
+        self.auth_controller.start_qr_login()  # 对话框开启时直接启动业务逻辑
 
     def _create_ui(self):
         self.setWindowTitle("扫码登录")

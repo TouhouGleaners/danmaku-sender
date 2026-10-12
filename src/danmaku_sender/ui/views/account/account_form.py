@@ -13,6 +13,8 @@ from PySide6.QtWidgets import (
     QWidget,
 )
 
+from danmaku_sender.config import Settings
+from danmaku_sender.state import AppState
 from danmaku_sender.types.models.account import AccountCredential
 from danmaku_sender.ui.dialogs import QRLoginDialog
 from danmaku_sender.ui.framework.icons import SvgIcon
@@ -23,10 +25,25 @@ class AccountFormDialog(QDialog):
 
     saved = Signal(AccountCredential, AccountCredential)  # (new, old)
 
-    def __init__(self, edit_data: AccountCredential | None = None, use_system_proxy: bool = True, parent=None):
+    def __init__(
+        self,
+        state: AppState,
+        settings: Settings,
+        edit_data: AccountCredential | None = None,
+        parent=None,
+    ):
+        """初始化账号表单弹窗。
+
+        Args:
+            state: 状态树聚合根，供扫码登录使用。
+            settings: 配置容器，取传输策略。
+            edit_data: 待编辑的已保存账号；为 None 表示新增。
+            parent: 父控件。
+        """
         super().__init__(parent)
+        self._state = state
+        self._settings = settings
         self._edit_data = edit_data
-        self._use_system_proxy = use_system_proxy
 
         is_edit = edit_data is not None
         self.setWindowTitle("编辑账号" if is_edit else "添加账号")
@@ -126,7 +143,7 @@ class AccountFormDialog(QDialog):
         self._error_label.hide()
 
     def _start_qr(self):
-        dialog = QRLoginDialog(self._use_system_proxy, self)
+        dialog = QRLoginDialog(self._state, self._settings, self)
         if dialog.exec() == QDialog.DialogCode.Accepted:
             cookies = dialog.cookies
             se = cookies.get('SESSDATA', '')

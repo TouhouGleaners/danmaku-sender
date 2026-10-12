@@ -1,21 +1,16 @@
 import logging
 from collections.abc import Generator
 from contextlib import contextmanager
-from typing import Any, Protocol
+from typing import Any
 
 import requests
 from requests.exceptions import ConnectionError, HTTPError, RequestException, Timeout
 
+from danmaku_sender.config import ApiAuthConfig, NetworkPolicy
 from danmaku_sender.types.exceptions.api_errors import BiliDmErrorCode
 from danmaku_sender.types.exceptions.exceptions import BiliApiError, BiliNetworkError
 
 from .wbi_signer import WbiSigner
-
-
-class BiliConfigProto(Protocol):
-    sessdata: str
-    bili_jct: str
-    use_system_proxy: bool
 
 
 class BiliApiClient:
@@ -27,10 +22,23 @@ class BiliApiClient:
         'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
         'Referer': 'https://www.bilibili.com/'
     }
-    def __init__(self, sessdata: str, bili_jct: str, use_system_proxy: bool, logger: logging.Logger | None = None):
-        self.sessdata = sessdata
-        self.bili_jct = bili_jct
-        self.use_system_proxy = use_system_proxy
+
+    def __init__(
+        self,
+        auth: ApiAuthConfig,
+        network: NetworkPolicy,
+        logger: logging.Logger | None = None,
+    ):
+        """初始化客户端。
+
+        Args:
+            auth: 身份凭据，决定以谁的名义调用。
+            network: 传输策略，决定怎么连网。
+            logger: 日志器；缺省用本模块的命名空间。
+        """
+        self.sessdata = auth.sessdata
+        self.bili_jct = auth.bili_jct
+        self.use_system_proxy = network.use_system_proxy
         self.logger = logger if logger else logging.getLogger(__name__)
         self.session = self._create_session()
 
@@ -41,19 +49,6 @@ class BiliApiClient:
                 code=BiliDmErrorCode.BILI_SERVER_ERROR.code,
                 message=f"获取WBI签名密钥失败: {e}"
             ) from e
-
-    @classmethod
-    def from_config(cls, config: BiliConfigProto, logger: logging.Logger | None = None):
-        """
-        工厂方法：直接从配置对象创建实例。
-        鸭子类型：只要 config 对象里有 sessdata, bili_jct, use_system_proxy 属性即可。
-        """
-        return cls(
-            sessdata=config.sessdata,
-            bili_jct=config.bili_jct,
-            use_system_proxy=config.use_system_proxy,
-            logger=logger
-        )
 
     def _create_session(self) -> requests.Session:
         """创建一个配置好 Headers 和 Cookies 的 requests.Session 对象"""

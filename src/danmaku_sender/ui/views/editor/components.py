@@ -29,6 +29,7 @@ from PySide6.QtWidgets import (
     QWidget,
 )
 
+from danmaku_sender.config import Settings
 from danmaku_sender.state import AppState
 from danmaku_sender.types.models.danmaku import Danmaku
 from danmaku_sender.types.models.editor_types import EditorField
@@ -121,10 +122,11 @@ class EditorTableModel(QAbstractTableModel):
 
 class ValidationRulesGroup(QGroupBox):
     """校验与过滤规则区"""
-    def __init__(self, state: AppState, parent=None):
+    def __init__(self, state: AppState, settings: Settings, parent=None):
         super().__init__("校验与过滤规则", parent)
         self.setSizePolicy(QSizePolicy.Policy.Preferred, QSizePolicy.Policy.Maximum)
         self.state = state
+        self.settings = settings
         self._create_ui()
 
     def _create_ui(self):
@@ -154,7 +156,7 @@ class ValidationRulesGroup(QGroupBox):
 
     def init_bindings(self):
         """绑定控件与 validation_config（实时修改表单）。"""
-        config = self.state.settings.validation_config
+        config = self.settings.validation_config
 
         LiveFormBinder.bind(self.enable_custom_checkbox, config, "enabled", after_write=self._on_config_written)
         # list[str] ↔ str 通过转换函数绑定，不再手动同步

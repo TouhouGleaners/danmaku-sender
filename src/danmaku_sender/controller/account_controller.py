@@ -3,7 +3,7 @@ import logging
 
 from PySide6.QtCore import QObject, Signal
 
-from danmaku_sender.config import ApiAuthConfig
+from danmaku_sender.config import ApiAuthConfig, NetworkPolicy, Settings
 from danmaku_sender.infra.bilibili.bili_api_client import BiliApiClient
 from danmaku_sender.infra.storage.account_storage import AccountStorage
 from danmaku_sender.service.auth_service import AuthService
@@ -17,16 +17,23 @@ logger = logging.getLogger(__name__)
 
 
 class AccountController(QObject):
-    """账号管理控制器"""
+    """账号管理控制器。"""
 
     checkFinished = Signal(AccountCredential, bool)
     userInfoFetched = Signal(AccountCredential, object)  # dict | None
 
-    def __init__(self, parent=None):
+    def __init__(self, settings: Settings, parent=None):
+        """初始化控制器。
+
+        Args:
+            settings: 配置容器，取传输策略。
+            parent: Qt 父对象。
+        """
         super().__init__(parent)
+        self.settings = settings
 
     @staticmethod
-    def save_credentials(state: AppState, profile: UserProfile | None, account_storage: AccountStorage):
+    def save_credentials(state: AppState, profile: UserProfile | None, account_storage: AccountStorage) -> None:
         """同步当前凭据到已保存账号列表并写盘。
 
         Args:
@@ -50,32 +57,60 @@ class AccountController(QObject):
         if session.saved_accounts:
             logger.info(f"已保存 {len(session.saved_accounts)} 个账号。")
 
-    def check_account(self, account: AccountCredential, config: ApiAuthConfig):
-        """异步检测账号是否有效"""
+    def check_account(self, account: AccountCredential) -> None:
+        """异步检测账号是否有效。
+
+        Args:
+            account: 待检测的已保存账号。
+        """
+        auth = ApiAuthConfig(sessdata=account.sessdata, bili_jct=account.bili_jct)
+        network = NetworkPolicy(use_system_proxy=self.settings.global_config.use_system_proxy)
         PoolTask.submit(
             self._task_check_login,
             lambda result: self.checkFinished.emit(account, result),
             lambda _: self.checkFinished.emit(account, False),
-            config,
+            auth, network,
         )
 
-    def fetch_user_info(self, account: AccountCredential, config: ApiAuthConfig):
-        """异步获取用户信息（昵称、uid）"""
+    def fetch_user_info(self, account: AccountCredential) -> None:
+        """异步获取用户信息（昵称、uid）。
+
+        Args:
+            account: 目标已保存账号。
+        """
+        auth = ApiAuthConfig(sessdata=account.sessdata, bili_jct=account.bili_jct)
+        network = NetworkPolicy(use_system_proxy=self.settings.global_config.use_system_proxy)
         PoolTask.submit(
             self._task_fetch_user_info,
             lambda result: self.userInfoFetched.emit(account, result),
             lambda _: self.userInfoFetched.emit(account, None),
-            config,
+            auth, network,
         )
 
     # ---- 后台任务 ----
 
-    def _task_check_login(self, config: ApiAuthConfig) -> bool:
-        """检测账号是否有效（后台线程执行）"""
-        with BiliApiClient.from_config(config) as client:
+    def _task_check_login(self, auth: ApiAuthConfig, network: NetworkPolicy) -> bool:
+        """检测账号是否有效（后台线程执行）。
+
+        Args:
+            auth: 身份凭据。
+            network: 传输策略。
+
+        Returns:
+            账号是否有效。
+        """
+        with BiliApiClient(auth, network) as client:
             return AuthService(client).check_login()
 
-    def _task_fetch_user_info(self, config: ApiAuthConfig) -> dict | None:
-        """获取用户信息（后台线程执行）"""
-        with BiliApiClient.from_config(config) as client:
+    def _task_fetch_user_info(self, auth: ApiAuthConfig, network: NetworkPolicy) -> dict | None:
+        """获取用户信息（后台线程执行）。
+
+        Args:
+            auth: 身份凭据。
+            network: 传输策略。
+
+        Returns:
+            用户信息字典；失败返回 None。
+        """
+        with BiliApiClient(auth, network) as client:
             return AuthService(client).fetch_raw_user_info()

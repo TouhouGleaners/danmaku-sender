@@ -9,7 +9,7 @@ import threading
 
 import pytest
 
-from danmaku_sender.config import ApiAuthConfig
+from danmaku_sender.config import ApiAuthConfig, NetworkPolicy, Settings
 from danmaku_sender.controller.monitor.controller import MonitorController
 from danmaku_sender.controller.monitor.workers import QueueMonitorWorker
 from danmaku_sender.infra.persistence.history_manager import HistoryManager
@@ -25,9 +25,10 @@ WRAPPING_CIDS = [
 
 def _wired_pair(tmp_path):
     """按 start_queue_monitor 的接线把 Worker 与 Controller 接起来。"""
-    controller = MonitorController(AppState(), HistoryManager(tmp_path / "history.db"))
+    controller = MonitorController(AppState(), Settings(), HistoryManager(tmp_path / "history.db"))
     worker = QueueMonitorWorker(
-        ApiAuthConfig(sessdata="x", bili_jct="y", use_system_proxy=False),
+        ApiAuthConfig(sessdata="x", bili_jct="y"),
+        NetworkPolicy(use_system_proxy=False),
         controller.history_manager,
         threading.Event(),
     )

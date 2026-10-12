@@ -51,6 +51,7 @@ class MainWindow(QMainWindow):
         super().__init__()
         self.rt = rt
         self.state = rt.app_state
+        self.settings = rt.settings
 
         self.setWindowTitle(UI.MAIN_WINDOW_TITLE)
         self.resize(900, 680)
@@ -59,10 +60,10 @@ class MainWindow(QMainWindow):
         self.theme_service = ThemeService(self)
 
         # 首屏主题必须在创建任何 UI 控件前生效，否则 SvgIcon 会拿到错误的调色板颜色
-        self.theme_service.apply_theme(self.state.settings.theme_config.theme_mode)
+        self.theme_service.apply_theme(self.settings.theme_config.theme_mode)
 
         # 控制器
-        self.auth_controller = AuthController(self)
+        self.auth_controller = AuthController(self.state, self.settings, self)
         self.system_controller = SystemController(self)
         self.logger = logging.getLogger(__name__)
         self._log_signals_connected = False
@@ -113,7 +114,7 @@ class MainWindow(QMainWindow):
 
         # 停掉待触发的防抖落盘：显式保存已覆盖，避免同一份配置重复写盘
         self._config_save_timer.stop()
-        self.rt.config_storage.save(self.state.settings)
+        self.rt.config_storage.save(self.settings)
 
         super().closeEvent(event)
 
@@ -185,10 +186,10 @@ class MainWindow(QMainWindow):
 
     def _init_pages(self):
         """初始化页面并绑定导航"""
-        self.page_settings = SettingsPage(self.state)
-        self.page_sender = SenderPage(self.state, self.rt.history_manager)
-        self.page_monitor = MonitorPage(self.state, self.rt.history_manager)
-        self.page_history = HistoryPage(self.state, self.rt.history_manager)
+        self.page_settings = SettingsPage(self.state, self.settings)
+        self.page_sender = SenderPage(self.state, self.settings, self.rt.history_manager)
+        self.page_monitor = MonitorPage(self.state, self.settings, self.rt.history_manager)
+        self.page_history = HistoryPage(self.state, self.settings, self.rt.history_manager)
 
         # 侧边栏导航页面（图标在 _refresh_icons 中按需重新获取）
         sidebar_entries = [
@@ -307,11 +308,11 @@ class MainWindow(QMainWindow):
     @Slot()
     def _save_config(self):
         """落盘非敏感配置"""
-        self.rt.config_storage.save(self.state.settings)
+        self.rt.config_storage.save(self.settings)
 
     def _open_account_dialog(self):
         """打开账号管理弹窗"""
-        dialog = AccountDialog(self.state, self)
+        dialog = AccountDialog(self.state, self.settings, self)
         dialog.exec()
 
     def _bind_state_to_pages(self):
@@ -384,7 +385,7 @@ class MainWindow(QMainWindow):
         if len(sessdata) > 20 and not bili_jct:
             return
 
-        self.auth_controller.refresh_user_info(self.state.session.get_api_auth())
+        self.auth_controller.refresh_user_info()
 
     def _render_avatar(self):
         """统一头像渲染：已登录显示真实头像，未登录显示随主题变色的默认 SVG"""
@@ -424,7 +425,7 @@ class MainWindow(QMainWindow):
 
     def _run_update_check(self, is_manual: bool = False):
         """启动更新检查"""
-        self.system_controller.check_for_updates(self.state.settings.global_config.use_system_proxy, is_manual)
+        self.system_controller.check_for_updates(self.settings.global_config.use_system_proxy, is_manual)
 
     @Slot(str, str, str)
     def _on_update_found(self, ver: str, notes: str, url: str):

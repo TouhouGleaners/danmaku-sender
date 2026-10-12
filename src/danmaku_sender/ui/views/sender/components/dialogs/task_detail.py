@@ -23,9 +23,10 @@ from PySide6.QtWidgets import (
     QWidget,
 )
 
-from danmaku_sender.config import SenderConfig
+from danmaku_sender.config import SenderConfig, Settings
 from danmaku_sender.controller.video_controller import VideoController
 from danmaku_sender.service.danmaku_xml import DanmakuXml
+from danmaku_sender.state import AppState
 from danmaku_sender.types.models.common import VideoTarget
 from danmaku_sender.types.models.queue import TaskView
 from danmaku_sender.types.models.video import VideoInfo
@@ -46,15 +47,30 @@ class TaskDetailDialog(QDialog):
         editing: 保存时提交的 ``TaskDraft``，在用户点击「保存」时组装完成。
     """
 
-    def __init__(self, task: TaskView, api_auth, queue_active: bool = False, parent=None):
+    def __init__(
+        self,
+        task: TaskView,
+        state: AppState,
+        settings: Settings,
+        queue_active: bool = False,
+        parent=None,
+    ):
+        """初始化任务详情弹窗。
+
+        Args:
+            task: 被编辑任务的只读视图。
+            state: 状态树聚合根，供视频控制器取身份凭据。
+            settings: 配置容器，供视频控制器取传输策略。
+            queue_active: 队列是否运行中；运行中禁止结构编辑。
+            parent: 父控件。
+        """
         super().__init__(parent)
         self.origin = task                  # 只读视图
         self.editing = task.to_draft()      # 保存载荷（保存那一刻才组装完）
-        self._api_auth = api_auth
         self._video_info: VideoInfo | None = None
         self._pending_part_page: int | None = None
         self._selected_file: Path | None = None
-        self._video_controller = VideoController(self)
+        self._video_controller = VideoController(state, settings, self)
         self._is_editable = (
             not queue_active
             and task.status.is_editable
@@ -222,7 +238,7 @@ class TaskDetailDialog(QDialog):
         self._fetch_btn.setText("获取中...")
         self._part_combo.clear()
         self._part_combo.setEnabled(False)
-        self._video_controller.fetch_single_info(bvid, self._api_auth)
+        self._video_controller.fetch_single_info(bvid)
 
     @Slot(str, VideoInfo)
     def _on_fetch_succeeded(self, bvid: str, info: VideoInfo):

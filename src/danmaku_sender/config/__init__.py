@@ -2,6 +2,7 @@ from .api_auth_config import ApiAuthConfig
 from .base import AtomicModel
 from .global_config import GlobalConfig
 from .monitor_config import MonitorConfig
+from .network_policy import NetworkPolicy
 from .send_policy import SendPolicy
 from .sender_config import SenderConfig
 from .settings import Settings
@@ -13,6 +14,7 @@ __all__ = [
     "AtomicModel",
     "GlobalConfig",
     "MonitorConfig",
+    "NetworkPolicy",
     "SendPolicy",
     "SenderConfig",
     "Settings",

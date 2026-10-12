@@ -6,7 +6,7 @@ from dataclasses import dataclass
 
 from PySide6.QtCore import Signal
 
-from danmaku_sender.config import ApiAuthConfig
+from danmaku_sender.config import ApiAuthConfig, NetworkPolicy
 from danmaku_sender.controller.concurrency import WorkerThread
 from danmaku_sender.infra.bilibili.bili_api_client import BiliApiClient
 from danmaku_sender.infra.persistence.history_manager import HistoryManager
@@ -49,7 +49,8 @@ class QueueMonitorWorker(WorkerThread):
 
     def __init__(
         self,
-        auth_config: ApiAuthConfig,
+        auth: ApiAuthConfig,
+        network: NetworkPolicy,
         history_manager: HistoryManager,
         stop_event: threading.Event,
         baseline: float = 0.0,
@@ -59,8 +60,23 @@ class QueueMonitorWorker(WorkerThread):
         post_send_watch_seconds: float = 300.0,
         parent=None,
     ):
+        """初始化队列监视 Worker。
+
+        Args:
+            auth: 身份凭据。
+            network: 传输策略。
+            history_manager: 本地账本，核销范围取自这里。
+            stop_event: 中止标记。
+            baseline: 核销基线时间戳，0 表示全量历史。
+            poll_interval: 轮询间隔（秒）。
+            prevent_sleep: 监视期间是否阻止系统休眠。
+            send_done: 「发送+监视」时传入的发送结束标记；None 表示独立监视。
+            post_send_watch_seconds: 发送结束后的继续监视时长（秒）。
+            parent: Qt 父对象。
+        """
         super().__init__(parent)
-        self.auth_config = auth_config
+        self.auth = auth
+        self.network = network
         self.history_manager = history_manager
         self.stop_event = stop_event
         self.baseline = baseline
@@ -138,7 +154,7 @@ class QueueMonitorWorker(WorkerThread):
         overall: MonitorStats = {"total": 0, "verified": 0, "pending": 0, "lost": 0}
 
         logger.info(f"🔍 在线核销开始，共 {len(samples)} 个分P。")
-        with BiliApiClient.from_config(self.auth_config) as client:
+        with BiliApiClient(self.auth, self.network) as client:
             verifier = DanmakuVerifier(api_client=client, history_manager=self.history_manager)
 
             for i, sample in enumerate(samples):

@@ -4,7 +4,7 @@
 """
 import pytest
 
-from danmaku_sender.config import SenderConfig
+from danmaku_sender.config import SenderConfig, Settings
 from danmaku_sender.infra.persistence.history_manager import HistoryManager
 from danmaku_sender.service.sender.context import SendingContext
 from danmaku_sender.state import AppState
@@ -19,8 +19,9 @@ TARGET = VideoTarget(bvid="BV1xx411c7mD", cid=1001)
 @pytest.fixture
 def page(qapp, tmp_path):
     state = AppState()
+    settings = Settings()
     hm = HistoryManager(tmp_path / "history.db")
-    widget = SenderPage(state, hm)
+    widget = SenderPage(state, settings, hm)
     yield widget
     widget.deleteLater()
     qapp.processEvents()

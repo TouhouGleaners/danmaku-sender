@@ -3,6 +3,7 @@
 凭证缺失与队列无可执行任务是两种独立的未满足条件；PAUSED 属于可启动范围。
 """
 
+from danmaku_sender.config import Settings
 from danmaku_sender.controller.sender import QueueReadiness, SenderController
 from danmaku_sender.infra.persistence.history_manager import HistoryManager
 from danmaku_sender.state import AppState
@@ -10,18 +11,19 @@ from danmaku_sender.types.models.common import VideoTarget
 from danmaku_sender.types.models.queue import TaskDraft, TaskStatus
 
 
-def _task(state: AppState, status: TaskStatus) -> TaskDraft:
+def _task(status: TaskStatus) -> TaskDraft:
     return TaskDraft(
         target=VideoTarget(bvid="BV1", cid=1),
         danmakus=[],
-        config=state.settings.sender_config.to_task_config(),
+        config=Settings().sender_config.to_task_config(),
         status=status,
     )
 
 
 def _controller(tmp_path) -> tuple[SenderController, AppState]:
     state = AppState()
-    return SenderController(state, HistoryManager(tmp_path / "history.db")), state
+    settings = Settings()
+    return SenderController(state, settings, HistoryManager(tmp_path / "history.db")), state
 
 
 def test_missing_credentials(tmp_path):
@@ -32,7 +34,7 @@ def test_missing_credentials(tmp_path):
 def test_paused_queue_is_ready(tmp_path):
     controller, state = _controller(tmp_path)
     state.session.sessdata, state.session.bili_jct = "x", "y"
-    state.workspace.queue_state.add_task(_task(state, TaskStatus.PAUSED))
+    state.workspace.queue_state.add_task(_task(TaskStatus.PAUSED))
 
     assert controller.queue_readiness is QueueReadiness.READY
 

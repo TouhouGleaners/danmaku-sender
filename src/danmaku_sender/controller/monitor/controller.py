@@ -5,7 +5,7 @@ import threading
 
 from PySide6.QtCore import QObject, Signal, Slot
 
-from danmaku_sender.config import ApiAuthConfig
+from danmaku_sender.config import ApiAuthConfig, NetworkPolicy, Settings
 from danmaku_sender.infra.persistence.history_manager import HistoryManager
 from danmaku_sender.state import AppState
 
@@ -30,25 +30,42 @@ class MonitorController(QObject):
     monitorFinished = Signal()
     monitorReady = Signal()
 
-    def __init__(self, state: AppState, history_manager: HistoryManager, parent=None):
+    def __init__(
+        self,
+        state: AppState,
+        settings: Settings,
+        history_manager: HistoryManager,
+        parent=None,
+    ):
+        """初始化控制器。
+
+        Args:
+            state: 状态树聚合根，取活动会话与统计基线。
+            settings: 配置容器，取监视参数与传输策略。
+            history_manager: 本地账本。
+            parent: Qt 父对象。
+        """
         super().__init__(parent)
         self.state = state
+        self.settings = settings
         self.history_manager = history_manager
         self._worker: QueueMonitorWorker | None = None
         self._stop_event = threading.Event()
 
     def start_queue_monitor(
         self,
-        auth_config: ApiAuthConfig | None = None,
         send_done: threading.Event | None = None,
         post_send_watch_seconds: float = 300.0,
     ) -> bool:
-        """启动队列监视 Worker。成功返回 True；拒绝启动返回 False。
+        """启动队列监视 Worker。
 
         Args:
-                Worker 每轮仍自行重查，以纳入发送中新出现的目标。
             send_done: 「发送+监视」时传入的发送结束标记；发送结束后再监视
                 ``post_send_watch_seconds`` 自动停。传 None 表示独立监视，跑到手动停。
+            post_send_watch_seconds: 发送结束后的继续监视时长（秒）。
+
+        Returns:
+            成功启动返回 True；拒绝启动返回 False。
         """
         if self.is_running():
             logger.warning("队列监视已在运行中。")
@@ -58,23 +75,24 @@ class MonitorController(QObject):
             logger.warning("上一个监视 Worker 仍在清理中，稍后再试。")
             return False
 
-        if auth_config is None:
-            auth_config = self.state.session.get_api_auth()
-
-        if not auth_config.sessdata:
+        session = self.state.session
+        auth = ApiAuthConfig(sessdata=session.sessdata, bili_jct=session.bili_jct)
+        if not auth.sessdata:
             logger.warning("凭证缺失，无法启动队列监视。")
             return False
 
+        network = NetworkPolicy(use_system_proxy=self.settings.global_config.use_system_proxy)
         baseline = float(self.state.workspace.stats_baseline)
 
         self._stop_event.clear()
         worker = QueueMonitorWorker(
-            auth_config=auth_config,
+            auth=auth,
+            network=network,
             history_manager=self.history_manager,
             stop_event=self._stop_event,
             baseline=baseline,
-            poll_interval=float(self.state.settings.monitor_config.refresh_interval),
-            prevent_sleep=self.state.settings.global_config.prevent_sleep,
+            poll_interval=float(self.settings.monitor_config.refresh_interval),
+            prevent_sleep=self.settings.global_config.prevent_sleep,
             send_done=send_done,
             post_send_watch_seconds=post_send_watch_seconds,
         )
@@ -94,7 +112,7 @@ class MonitorController(QObject):
         worker.start()
         logger.info(
             f"▶ 队列监视已启动：{len(self.state.workspace.queue_state.tasks)} 个任务，"
-            f"轮询间隔 {self.state.settings.monitor_config.refresh_interval} 秒"
+            f"轮询间隔 {self.settings.monitor_config.refresh_interval} 秒"
         )
         return True
 

@@ -17,6 +17,7 @@ from PySide6.QtWidgets import (
     QWidget,
 )
 
+from danmaku_sender.config import Settings
 from danmaku_sender.controller.history_controller import HistoryController
 from danmaku_sender.controller.video_controller import VideoController
 from danmaku_sender.infra.persistence.history_manager import HistoryManager
@@ -33,13 +34,14 @@ logger = logging.getLogger(__name__)
 
 
 class HistoryPage(QWidget):
-    def __init__(self, state: AppState, history_manager: HistoryManager):
+    def __init__(self, state: AppState, settings: Settings, history_manager: HistoryManager):
         super().__init__()
         self.state = state
+        self.settings = settings
         self._fetched_bvids = set()
 
-        self.video_controller = VideoController(self)
-        self.history_controller = HistoryController(history_manager, self)
+        self.video_controller = VideoController(state, settings, self)
+        self.history_controller = HistoryController(state, settings, history_manager, self)
 
         self._create_ui()
         self._connect_signals()
@@ -127,7 +129,6 @@ class HistoryPage(QWidget):
 
     def _fetch_missing_metadata(self, records):
         """扫描缺失元数据的 BVID 并推入后台队列"""
-        auth_config = self.state.session.get_api_auth()
         missing_bvids = []
         for row in records:
             bvid = row['bvid']
@@ -137,7 +138,7 @@ class HistoryPage(QWidget):
                 missing_bvids.append(bvid)
 
         if missing_bvids:
-            self.video_controller.fetch_multiple_infos(missing_bvids, auth_config)
+            self.video_controller.fetch_multiple_infos(missing_bvids)
 
     def _show_detail_dialog(self, record):
         video_info = self._model.get_video_info(record['bvid'])
@@ -193,22 +194,20 @@ class HistoryPage(QWidget):
 
     def _verify_records(self, record: dict):
         """触发单个分P的弹幕验证"""
-        auth_config = self.state.session.get_api_auth()
-        if not auth_config.sessdata:
+        if not self.state.session.sessdata:
             logger.warning("未登录，无法验证弹幕。")
             return
         cid = record['cid']
         logger.info(f"开始验证 CID {cid} 的弹幕状态...")
-        self.history_controller.verify_records(cid, auth_config)
+        self.history_controller.verify_records(cid)
 
     def _verify_all(self):
         """触发全部待验证弹幕的批量验证"""
-        auth_config = self.state.session.get_api_auth()
-        if not auth_config.sessdata:
+        if not self.state.session.sessdata:
             logger.warning("未登录，无法验证弹幕。")
             return
         logger.info("开始批量验证所有待验证弹幕...")
-        self.history_controller.verify_all(auth_config)
+        self.history_controller.verify_all()
 
     @Slot(dict)
     def _on_verify_completed(self, result: VerifyResult):

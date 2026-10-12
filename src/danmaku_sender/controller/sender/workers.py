@@ -5,7 +5,7 @@ import threading
 
 from PySide6.QtCore import Signal
 
-from danmaku_sender.config import ApiAuthConfig, SendPolicy
+from danmaku_sender.config import ApiAuthConfig, NetworkPolicy, SendPolicy
 from danmaku_sender.controller.concurrency import WorkerThread
 from danmaku_sender.infra.persistence.history_manager import HistoryManager
 from danmaku_sender.runtime.infra.platform import KeepSystemAwake
@@ -35,16 +35,30 @@ class QueueSendWorker(WorkerThread):
     def __init__(
         self,
         tasks: tuple[TaskSnapshot, ...],
-        auth_config: ApiAuthConfig,
+        auth: ApiAuthConfig,
+        network: NetworkPolicy,
         send_policy: SendPolicy,
         history_manager: HistoryManager,
         stop_event: threading.Event,
         prevent_sleep: bool = True,
         parent=None,
     ):
+        """初始化队列发送 Worker。
+
+        Args:
+            tasks: 启动时的任务快照，运行期间不再追加。
+            auth: 身份凭据。
+            network: 传输策略。
+            send_policy: 发送策略快照。
+            history_manager: 本地账本，供存证与查重。
+            stop_event: 中止标记。
+            prevent_sleep: 任务运行期间是否阻止系统休眠。
+            parent: Qt 父对象。
+        """
         super().__init__(parent)
         self.tasks = tasks
-        self.auth_config = auth_config
+        self.auth = auth
+        self.network = network
         self.send_policy = send_policy
         self.history_manager = history_manager
         self.stop_event = stop_event
@@ -124,7 +138,7 @@ class QueueSendWorker(WorkerThread):
 
         ctx = SendingContext(total=len(definition.danmakus), target=definition.target)
         try:
-            pipeline = SendPipeline(self.auth_config, self.history_manager)
+            pipeline = SendPipeline(self.auth, self.network, self.history_manager)
             job = SendJob(
                 task_id=definition.task_id,
                 target=definition.target,
