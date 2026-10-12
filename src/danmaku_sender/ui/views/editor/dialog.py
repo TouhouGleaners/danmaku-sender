@@ -453,8 +453,8 @@ class EditorDialog(QDialog):
         # 获取编辑后的弹幕数据
         final_list = self.controller.get_working_danmakus()
 
-        # 通过 QueueState 统一入口更新弹幕数据（自动处理状态转换 + 信号通知）
-        self.controller.state.workspace.queue_state.assign_danmakus(self.task.task_id, final_list)
+        # 通过 Controller 写回队列（自动处理状态转换 + 信号通知）
+        self.controller.save_danmakus(final_list)
 
         self.logger.info(f"已保存 {len(final_list)} 条弹幕到任务")
         QMessageBox.information(

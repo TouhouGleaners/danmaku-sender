@@ -14,8 +14,9 @@ from danmaku_sender.infra.persistence.history_manager import HistoryManager
 from danmaku_sender.service.danmaku_xml import DanmakuXml
 from danmaku_sender.service.sender.context import SendingContext
 from danmaku_sender.state import AppState
-from danmaku_sender.types.models.common import UnsentDanmakusRecord
-from danmaku_sender.types.models.queue import TaskStatus
+from danmaku_sender.types.models.common import RelativePosition, UnsentDanmakusRecord
+from danmaku_sender.types.models.danmaku import Danmaku
+from danmaku_sender.types.models.queue import TaskDraft, TaskStatus
 
 from .workers import QueueSendWorker
 
@@ -77,6 +78,90 @@ class SenderController(QObject):
         if not self.state.workspace.queue_state.has_startable_tasks:
             return QueueReadiness.NO_RUNNABLE_TASKS
         return QueueReadiness.READY
+
+    # region 队列结构命令（UI 只发命令，落账在本层）
+
+    def add_task(self, task: TaskDraft) -> None:
+        """把任务追加到队列末尾。
+
+        Args:
+            task: 任务草稿。
+        """
+        self.state.workspace.queue_state.add_task(task)
+
+    def insert_task(
+        self,
+        task: TaskDraft,
+        ref_task_id: str,
+        position: RelativePosition = RelativePosition.BELOW,
+    ) -> None:
+        """在参考任务上方/下方插入任务；参考不存在时追加到末尾。
+
+        Args:
+            task: 任务草稿。
+            ref_task_id: 参考任务标识。
+            position: 插在参考任务的哪一侧。
+        """
+        self.state.workspace.queue_state.insert_task(task, ref_task_id, position)
+
+    def remove_task(self, task_id: str) -> None:
+        """移除指定任务。
+
+        Args:
+            task_id: 任务标识。
+        """
+        self.state.workspace.queue_state.remove_task(task_id)
+
+    def move_task(self, task_id: str, toward: RelativePosition) -> None:
+        """上下移动一个任务。
+
+        Args:
+            task_id: 任务标识。
+            toward: 移向参考项的哪一侧，ABOVE 为上移，BELOW 为下移。
+        """
+        self.state.workspace.queue_state.move_task(task_id, toward)
+
+    def reorder_tasks(self, task_ids: list[str]) -> None:
+        """按给定顺序重排任务。
+
+        Args:
+            task_ids: 当前队列的全排列。
+        """
+        self.state.workspace.queue_state.reorder_tasks(task_ids)
+
+    def apply_edit(self, task_id: str, source: TaskDraft) -> None:
+        """全量应用任务详情的编辑结果。
+
+        Args:
+            task_id: 任务标识。
+            source: 编辑结果草稿。
+        """
+        self.state.workspace.queue_state.apply_edit(task_id, source)
+
+    def assign_danmakus(
+        self,
+        task_id: str,
+        danmakus: list[Danmaku],
+        xml_path: Path | None = None,
+    ) -> None:
+        """为任务分配或更新弹幕列表。
+
+        Args:
+            task_id: 任务标识。
+            danmakus: 弹幕列表。
+            xml_path: 弹幕来源文件；可为 None。
+        """
+        self.state.workspace.queue_state.assign_danmakus(task_id, danmakus, xml_path=xml_path)
+
+    def clear_all(self) -> None:
+        """清空队列中的全部任务。"""
+        self.state.workspace.queue_state.clear_all()
+
+    def reset_queue(self) -> None:
+        """重置队列：移除已完成，失败任务转待发。"""
+        self.state.workspace.queue_state.reset_queue()
+
+    # endregion
 
     # region Queue
 
