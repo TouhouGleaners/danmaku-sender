@@ -15,8 +15,8 @@ from PySide6.QtWidgets import (
 )
 
 from danmaku_sender.controller.video_controller import VideoController
-from danmaku_sender.runtime.state.app_state import AppState
 from danmaku_sender.service.danmaku_xml import DanmakuXml
+from danmaku_sender.state import AppState
 from danmaku_sender.types.models.common import RelativePosition, TaskMeta, VideoTarget
 from danmaku_sender.types.models.queue import TaskDraft
 from danmaku_sender.types.models.video import VideoInfo
@@ -39,7 +39,7 @@ class TaskBuilderDialog(QDialog):
         """初始化弹窗。
 
         Args:
-            state: 应用全局状态，弹窗经它写入队列。
+            state: 状态树聚合根，经 ``state.workspace`` 写入队列。
             ref_task_id: 参考任务标识。为 None 时追加到队尾，可连续添加且弹窗保持打开。
             insert_position: 插在参考任务的哪一侧。与 ref_task_id 一并给出时为相对插入，成功后自动关闭。
             parent: 父控件。
@@ -148,7 +148,7 @@ class TaskBuilderDialog(QDialog):
         self._part_combo.clear()
         self._part_combo.setEnabled(False)
 
-        self.video_controller.fetch_single_info(bvid, self.state.get_api_auth())
+        self.video_controller.fetch_single_info(bvid, self.state.session.get_api_auth())
 
     @Slot(str, VideoInfo)
     def _on_fetch_succeeded(self, bvid: str, info: VideoInfo):
@@ -238,11 +238,11 @@ class TaskBuilderDialog(QDialog):
                 xml_path=xml_path,
             ),
             danmakus=danmakus,
-            config=self.state.sender_config.to_task_config(),
+            config=self.state.settings.sender_config.to_task_config(),
         )
         task.status = task.initial_status
 
-        queue_state = self.state.queue_state
+        queue_state = self.state.workspace.queue_state
         if self._ref_task_id is None:
             queue_state.add_task(task)
             # 追加模式：允许连建，弹窗保持打开

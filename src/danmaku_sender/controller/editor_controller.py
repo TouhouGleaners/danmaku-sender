@@ -4,9 +4,9 @@ from pathlib import Path
 
 from PySide6.QtCore import QObject, Signal
 
-from danmaku_sender.runtime.state.app_state import AppState
 from danmaku_sender.service.danmaku_xml import DanmakuXml
 from danmaku_sender.service.editor_session import EditorSession
+from danmaku_sender.state import AppState
 from danmaku_sender.types.models.common import RelativePosition
 from danmaku_sender.types.models.danmaku import Danmaku
 from danmaku_sender.types.models.editor_types import ViewItem
@@ -147,7 +147,7 @@ class EditorController(QObject):
         """
         duration = self.task.meta.part_duration_ms
 
-        config = self.state.validation_config
+        config = self.state.settings.validation_config
         self.session.validate(duration_ms=duration, config=config)
         self.dataChanged.emit()
 

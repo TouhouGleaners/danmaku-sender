@@ -21,7 +21,7 @@ from PySide6.QtWidgets import (
 )
 
 from danmaku_sender.controller.editor_controller import EditorController
-from danmaku_sender.runtime.state.app_state import AppState
+from danmaku_sender.state import AppState
 from danmaku_sender.types.models.common import RelativePosition
 from danmaku_sender.types.models.editor_types import EditorField
 from danmaku_sender.types.models.queue import TaskView
@@ -236,7 +236,7 @@ class EditorDialog(QDialog):
         self._update_ui_state()
 
     def init_bindings(self):
-        """将 UI 控件与 AppState 进行双向绑定"""
+        """将 UI 控件与状态树进行双向绑定"""
         self.rules_group.init_bindings()
         self._update_ui_state()
 
@@ -453,7 +453,7 @@ class EditorDialog(QDialog):
         final_list = self.controller.get_working_danmakus()
 
         # 通过 QueueState 统一入口更新弹幕数据（自动处理状态转换 + 信号通知）
-        self.controller.state.queue_state.assign_danmakus(self.task.task_id, final_list)
+        self.controller.state.workspace.queue_state.assign_danmakus(self.task.task_id, final_list)
 
         self.logger.info(f"已保存 {len(final_list)} 条弹幕到任务")
         QMessageBox.information(

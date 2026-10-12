@@ -1,7 +1,7 @@
 """UI 层主题基础设施
 
 负责系统外观嗅探、调色板映射与全局样式表渲染。
-由 MainWindow 持有，通过 AppState.themeModeChanged 信号驱动。
+由 MainWindow 持有，通过设置页的 themeApplied 信号驱动。
 """
 
 import logging

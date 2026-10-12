@@ -14,7 +14,7 @@ from PySide6.QtWidgets import (
 )
 
 from danmaku_sender.config.theme_config import ThemeMode
-from danmaku_sender.runtime.state.app_state import AppState
+from danmaku_sender.state import AppState
 from danmaku_sender.ui.framework.form_binder import LiveFormBinder
 from danmaku_sender.ui.framework.icons import SvgIcon
 
@@ -243,21 +243,21 @@ class SettingsPage(QWidget):
         self.themeApplied.emit(value)
 
     def init_bindings(self) -> None:
-        """将 UI 控件与全局状态 (AppState) 进行单向写绑定"""
+        """将 UI 控件与配置模型进行单向写绑定"""
         # 主题：写成功后立刻广播，驱动 ThemeService 应用
         LiveFormBinder.bind(
             self.theme_combo,
-            self.state.theme_config,
+            self.state.settings.theme_config,
             "theme_mode",
             after_write=self._on_theme_written,
         )
 
         # 全局系统设置（跨发送器/监视器共享，单绑一份）
-        LiveFormBinder.bind(self.prevent_sleep_checkbox, self.state.global_config, "prevent_sleep", after_write=self._on_config_written)
-        LiveFormBinder.bind(self.proxy_checkbox, self.state.global_config, "use_system_proxy", after_write=self._on_config_written)
+        LiveFormBinder.bind(self.prevent_sleep_checkbox, self.state.settings.global_config, "prevent_sleep", after_write=self._on_config_written)
+        LiveFormBinder.bind(self.proxy_checkbox, self.state.settings.global_config, "use_system_proxy", after_write=self._on_config_written)
 
         # 发送延迟策略
-        config = self.state.sender_config
+        config = self.state.settings.sender_config
         LiveFormBinder.bind(self.min_delay, config, "min_delay", after_write=self._on_config_written)
         LiveFormBinder.bind(self.max_delay, config, "max_delay", after_write=self._on_config_written)
         LiveFormBinder.bind(self.burst_enabled_cb, config, "burst_enabled", after_write=self._on_config_written)
@@ -266,7 +266,7 @@ class SettingsPage(QWidget):
         LiveFormBinder.bind(self.burst_rest_max, config, "rest_max", after_write=self._on_config_written)
 
         # 队列运行策略（一次队列运行共享，不随单个任务走）
-        policy = self.state.send_policy
+        policy = self.state.settings.send_policy
         LiveFormBinder.bind(self.delay_between, policy, "delay_between_tasks", after_write=self._on_config_written)
         LiveFormBinder.bind(self.stop_count, policy, "stop_after_count", after_write=self._on_config_written)
         LiveFormBinder.bind(self.stop_time, policy, "stop_after_time", after_write=self._on_config_written)

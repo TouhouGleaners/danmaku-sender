@@ -6,8 +6,8 @@ import pytest
 
 from danmaku_sender.config import SenderConfig
 from danmaku_sender.infra.persistence.history_manager import HistoryManager
-from danmaku_sender.runtime.state.app_state import AppState
 from danmaku_sender.service.sender.context import SendingContext
+from danmaku_sender.state import AppState
 from danmaku_sender.types.models.common import VideoTarget
 from danmaku_sender.types.models.danmaku import Danmaku
 from danmaku_sender.types.models.queue import TaskDraft
@@ -39,7 +39,7 @@ def enqueue_task(state: AppState, dms: list[Danmaku]) -> str:
         danmakus=dms,
         config=SenderConfig(min_delay=0.1, max_delay=0.1).to_task_config(),
     )
-    state.queue_state.add_task(draft)
+    state.workspace.queue_state.add_task(draft)
     return draft.task_id
 
 

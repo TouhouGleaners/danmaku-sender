@@ -40,9 +40,9 @@ from PySide6.QtWidgets import (
 from danmaku_sender.controller.sender import QueueReadiness, SenderController
 from danmaku_sender.infra.persistence.history_manager import HistoryManager
 from danmaku_sender.runtime.infra.platform import send_windows_notification
-from danmaku_sender.runtime.state.app_state import AppState
 from danmaku_sender.service.danmaku_xml import DanmakuXml
 from danmaku_sender.service.sender import SendingContext
+from danmaku_sender.state import AppState
 from danmaku_sender.types.models.common import RelativePosition, UnsentDanmakusRecord
 from danmaku_sender.types.models.queue import TaskStatus, TaskView
 from danmaku_sender.ui.framework.drag_drop import DropOverlay, xml_files_from_drop
@@ -249,10 +249,10 @@ class SenderPage(QWidget):
         # 任务进度由 Controller 落账 QueueState，页面只听 taskProgressChanged
 
         # QueueState
-        self.state.queue_state.tasksChanged.connect(self._on_queue_changed)
-        self.state.queue_state.taskDataChanged.connect(self._on_queue_task_updated)
-        self.state.queue_state.taskProgressChanged.connect(self._on_queue_task_progress)
-        self.state.queue_state.taskStatusChanged.connect(self._on_queue_task_status_changed)
+        self.state.workspace.queue_state.tasksChanged.connect(self._on_queue_changed)
+        self.state.workspace.queue_state.taskDataChanged.connect(self._on_queue_task_updated)
+        self.state.workspace.queue_state.taskProgressChanged.connect(self._on_queue_task_progress)
+        self.state.workspace.queue_state.taskStatusChanged.connect(self._on_queue_task_status_changed)
 
     def append_log(self, message: str):
         """外部调用的日志接口"""
@@ -276,7 +276,7 @@ class SenderPage(QWidget):
             return
 
         menu = QMenu(self)
-        idle = not self.state.sender_is_active
+        idle = not self.state.workspace.sender_is_active
         # 编辑/移动只对未定稿的任务有意义；删除放宽到所有非发送中状态
         is_editable = idle and task.status.is_editable
         can_remove = idle and task.status is not TaskStatus.RUNNING
@@ -304,14 +304,14 @@ class SenderPage(QWidget):
 
     def _show_task_detail(self, task: TaskView):
         """查看/编辑任务详情和配置"""
-        auth_config = self.state.get_api_auth()
-        dialog = TaskDetailDialog(task, auth_config, self.state.sender_is_active, self)
+        auth_config = self.state.session.get_api_auth()
+        dialog = TaskDetailDialog(task, auth_config, self.state.workspace.sender_is_active, self)
         if dialog.exec() == QDialog.DialogCode.Accepted:
-            if self.state.sender_is_active:
+            if self.state.workspace.sender_is_active:
                 self.logger.warning("发送进行中，已忽略任务详情编辑结果。")
                 return
             # 通过 QueueState 统一应用编辑结果（自动发射 taskDataChanged）
-            self.state.queue_state.apply_edit(task.task_id, dialog.editing)
+            self.state.workspace.queue_state.apply_edit(task.task_id, dialog.editing)
             self.logger.info(f"已更新任务: {task.display_string}")
 
     def _edit_danmakus(self, task: TaskView):
@@ -328,15 +328,15 @@ class SenderPage(QWidget):
             task_id: 要移动的任务标识。
             toward: 移向参考项的哪一侧，ABOVE 为上移，BELOW 为下移。
         """
-        self.state.queue_state.move_task(task_id, toward)
+        self.state.workspace.queue_state.move_task(task_id, toward)
 
     def _remove_task(self, task_id: str):
-        self.state.queue_state.remove_task(task_id)
+        self.state.workspace.queue_state.remove_task(task_id)
 
     @Slot()
     def _delete_selected_task(self):
         """删除选中的任务（发送中的不可删，其余状态均可）"""
-        if self.state.sender_is_active:
+        if self.state.workspace.sender_is_active:
             return
 
         rows = sorted({i.row() for i in self._queue_table.selectedIndexes()}, reverse=True)
@@ -348,10 +348,10 @@ class SenderPage(QWidget):
     @Slot()
     def _clear_all_tasks(self):
         """清空队列中的全部任务（需确认，不可撤销）"""
-        if self.state.sender_is_active:
+        if self.state.workspace.sender_is_active:
             return
 
-        total = len(self.state.queue_state.tasks)
+        total = len(self.state.workspace.queue_state.tasks)
         if total == 0:
             return
 
@@ -363,7 +363,7 @@ class SenderPage(QWidget):
             QMessageBox.StandardButton.No,
         )
         if reply == QMessageBox.StandardButton.Yes:
-            self.state.queue_state.clear_all()
+            self.state.workspace.queue_state.clear_all()
 
     # region 导出未发送成功
 
@@ -463,7 +463,7 @@ class SenderPage(QWidget):
         if self.sender_controller.is_queue_running():
             return
 
-        auth_config = self.state.get_api_auth()
+        auth_config = self.state.session.get_api_auth()
         match self.sender_controller.queue_readiness:
             case QueueReadiness.MISSING_CREDENTIALS:
                 QMessageBox.warning(self, "凭证缺失", "请先登入账号。")
@@ -474,7 +474,7 @@ class SenderPage(QWidget):
 
         self._unsent_by_task.clear()
         self._btn_export_unsent.setEnabled(False)
-        self._queue_total_dm = self.state.queue_state.sendable_danmaku_count
+        self._queue_total_dm = self.state.workspace.queue_state.sendable_danmaku_count
         if not self.sender_controller.start_queue(auth_config):
             self.logger.warning("队列发送未能启动")
             return
@@ -490,10 +490,10 @@ class SenderPage(QWidget):
     @Slot()
     def _reset_queue(self):
         """重置队列：移除已完成、失败任务转待发（弹窗说明将执行的变更）"""
-        if self.state.sender_is_active:
+        if self.state.workspace.sender_is_active:
             return
 
-        counts = self.state.queue_state.status_counts
+        counts = self.state.workspace.queue_state.status_counts
         completed = counts.get(TaskStatus.COMPLETED, 0)
         failed = counts.get(TaskStatus.FAILED, 0)
         if completed == 0 and failed == 0:
@@ -528,7 +528,7 @@ class SenderPage(QWidget):
             QMessageBox.StandardButton.No,
         )
         if reply == QMessageBox.StandardButton.Yes:
-            self.state.queue_state.reset_queue()
+            self.state.workspace.queue_state.reset_queue()
             self.logger.info("队列已重置")
 
     # endregion
@@ -536,7 +536,7 @@ class SenderPage(QWidget):
 
     def _on_queue_reorder(self, task_ids: list[str]):
         """拖拽排序后按 task_id 顺序同步 QueueState"""
-        self.state.queue_state.reorder_tasks(task_ids)
+        self.state.workspace.queue_state.reorder_tasks(task_ids)
 
     def eventFilter(self, obj, event: QDragEnterEvent | QDragMoveEvent | QDropEvent) -> bool:
         """处理拖放到队列表格上的外部 XML 文件"""
@@ -584,7 +584,7 @@ class SenderPage(QWidget):
         return None
 
     def _on_table_drag_enter(self, event: QDragEnterEvent | QDragMoveEvent | QDropEvent) -> bool:
-        if self.state.sender_is_active:
+        if self.state.workspace.sender_is_active:
             return False
 
         if xml_files_from_drop(event):
@@ -598,7 +598,7 @@ class SenderPage(QWidget):
         receiver: QWidget,
         event: QDragEnterEvent | QDragMoveEvent | QDropEvent,
     ) -> bool:
-        if self.state.sender_is_active or not xml_files_from_drop(event):
+        if self.state.workspace.sender_is_active or not xml_files_from_drop(event):
             return False
 
         hit = self._drop_hit_task(receiver, event)
@@ -662,7 +662,7 @@ class SenderPage(QWidget):
         Returns:
             list[str]: 分配失败的文件及其原因。
         """
-        tasks = self.state.queue_state.tasks
+        tasks = self.state.workspace.queue_state.tasks
         pending_from_start = [
             t for t in tasks[start_row:]
             if t.status.is_editable
@@ -686,7 +686,7 @@ class SenderPage(QWidget):
         解析失败或文件中没有弹幕的不建任务，原因在右下角列出。
         返回建出的任务数。
         """
-        config = self.state.sender_config.to_task_config()
+        config = self.state.settings.sender_config.to_task_config()
         created = 0
         problems: list[str] = []
         for file_path in file_paths:
@@ -697,7 +697,7 @@ class SenderPage(QWidget):
                 self.logger.error(problem)
                 problems.append(problem)
                 continue
-            self.state.queue_state.add_task(task)
+            self.state.workspace.queue_state.add_task(task)
             created += 1
 
         if created:
@@ -715,20 +715,20 @@ class SenderPage(QWidget):
             str | None: 失败原因；成功时为 None。
         """
         try:
-            loaded = DanmakuXml.load_task(file_path, self.state.sender_config.to_task_config())
+            loaded = DanmakuXml.load_task(file_path, self.state.settings.sender_config.to_task_config())
         except Exception as e:
             problem = f"导入 {file_path} 失败：{e}"
             self.logger.error(problem)
             return problem
 
-        self.state.queue_state.assign_danmakus(
+        self.state.workspace.queue_state.assign_danmakus(
             task.task_id, list(loaded.danmakus), xml_path=file_path
         )
         return None
 
     def _refresh_table(self):
         """将队列任务同步进表格模型。"""
-        self._queue_model.set_tasks(self.state.queue_state.tasks)
+        self._queue_model.set_tasks(self.state.workspace.queue_state.tasks)
 
     @Slot()
     def _on_queue_changed(self):
@@ -758,7 +758,7 @@ class SenderPage(QWidget):
 
     @Slot(str)
     def _on_queue_task_started(self, task_id: str):
-        task = self.state.queue_state.get_task_by_id(task_id)
+        task = self.state.workspace.queue_state.get_task_by_id(task_id)
         if task:
             self.logger.info(f"开始发送: {task.display_string}")
 
@@ -770,7 +770,7 @@ class SenderPage(QWidget):
                 message="再次执行本任务会重复发送这些弹幕，请在重置队列前先核对。",
             )
 
-        task = self.state.queue_state.get_task_by_id(task_id)
+        task = self.state.workspace.queue_state.get_task_by_id(task_id)
         if task is None:
             return
 
@@ -790,7 +790,7 @@ class SenderPage(QWidget):
                 message="再次执行本任务会重复发送这些弹幕，请在重置队列前先核对。",
             )
 
-        task = self.state.queue_state.get_task_by_id(task_id)
+        task = self.state.workspace.queue_state.get_task_by_id(task_id)
         if task is None:
             return
 
@@ -824,7 +824,7 @@ class SenderPage(QWidget):
     def _update_bottom_bar(self, attempted: int, task_total: int):
         """更新底部进度条（队列级 + 弹幕总数 + ETA）"""
         total_dm = self._queue_total_dm
-        done_dm = self.state.queue_state.processed_danmaku_count
+        done_dm = self.state.workspace.queue_state.processed_danmaku_count
         pct = int((done_dm / total_dm) * 100) if total_dm > 0 else 0
 
         if total_dm > 0:
@@ -843,7 +843,7 @@ class SenderPage(QWidget):
         self.progress_bar.setAlignment(Qt.AlignmentFlag.AlignCenter)
 
     def _send_queue_notification(self):
-        queue_state = self.state.queue_state
+        queue_state = self.state.workspace.queue_state
         counts = queue_state.status_counts
         completed = counts.get(TaskStatus.COMPLETED, 0)
         failed = counts.get(TaskStatus.FAILED, 0)

@@ -1,10 +1,10 @@
-import sys
 import logging
 import logging.handlers
+import sys
+from datetime import UTC, datetime
 from pathlib import Path
-from datetime import datetime, timezone
 
-from PySide6.QtCore import SignalInstance
+from PySide6.QtCore import QObject, Signal
 
 from danmaku_sender.config.app_meta import AppInfo
 
@@ -15,50 +15,27 @@ class LogNamespace:
     MONITOR_PREFIXES = ("danmaku_sender.controller.monitor", "danmaku_sender.ui.views.monitor")
 
 
-class GuiLoggingHandler(logging.Handler):
+class GuiLoggingHandler(QObject, logging.Handler):
     """基于命名空间前缀路由日志到 UI 窗口。
 
-    回调约束: sender / monitor 信号必须是 Qt SignalInstance，
-    以确保跨线程 emit 时自动排队到主线程，避免后台线程直接操作 UI。
+    信号是 Qt Signal，跨线程 emit 时自动排队到主线程，避免后台线程直接操作 UI。
     """
-    def __init__(self):
-        super().__init__()
-        self._sender_signal: SignalInstance | None = None
-        self._monitor_signal: SignalInstance | None = None
 
-    @property
-    def sender_signal(self) -> SignalInstance | None:
-        return self._sender_signal
+    senderLogReceived = Signal(str)
+    monitorLogReceived = Signal(str)
 
-    @sender_signal.setter
-    def sender_signal(self, signal: SignalInstance | None):
-        if signal is not None and not isinstance(signal, SignalInstance):
-            raise TypeError(
-                f"sender_signal 必须是 SignalInstance，收到 {type(signal).__name__}。"
-                "直接 UI 操作在后台线程调用会导致崩溃。"
-            )
-        self._sender_signal = signal
-
-    @property
-    def monitor_signal(self) -> SignalInstance | None:
-        return self._monitor_signal
-
-    @monitor_signal.setter
-    def monitor_signal(self, signal: SignalInstance | None):
-        if signal is not None and not isinstance(signal, SignalInstance):
-            raise TypeError(
-                f"monitor_signal 必须是 SignalInstance，收到 {type(signal).__name__}。"
-                "直接 UI 操作在后台线程调用会导致崩溃。"
-            )
-        self._monitor_signal = signal
+    def __init__(self) -> None:
+        """初始化处理器，同时启用 QObject 信号与 logging.Handler。"""
+        QObject.__init__(self)
+        logging.Handler.__init__(self)
 
     def emit(self, record):
         """
         发出一条日志记录。
 
         该方法会处理日志记录，并根据模块路径前缀路由至对应的信号:
-        danmaku_sender.service.sender / danmaku_sender.ui.views.sender → sender_signal
-        danmaku_sender.controller.monitor / danmaku_sender.ui.views.monitor → monitor_signal
+        danmaku_sender.service.sender / danmaku_sender.ui.views.sender → senderLogReceived
+        danmaku_sender.controller.monitor / danmaku_sender.ui.views.monitor → monitorLogReceived
         其他模块的日志将被忽略
 
         Args:
@@ -66,10 +43,10 @@ class GuiLoggingHandler(logging.Handler):
         """
         try:
             text = self.format(record)
-            if record.name.startswith(LogNamespace.SENDER_PREFIXES) and self._sender_signal:
-                self._sender_signal.emit(text)
-            elif record.name.startswith(LogNamespace.MONITOR_PREFIXES) and self._monitor_signal:
-                self._monitor_signal.emit(text)
+            if record.name.startswith(LogNamespace.SENDER_PREFIXES):
+                self.senderLogReceived.emit(text)
+            elif record.name.startswith(LogNamespace.MONITOR_PREFIXES):
+                self.monitorLogReceived.emit(text)
             # 其他模块的日志直接忽略
         except Exception:
             self.handleError(record)
@@ -82,7 +59,7 @@ class DailyLogFileHandler(logging.handlers.TimedRotatingFileHandler):
         # 计算归档日期，保持文件名如：2026-03-27.log
         previous_rollover_time = self.rolloverAt - self.interval
         if self.utc:
-            archive_datetime = datetime.fromtimestamp(previous_rollover_time, tz=timezone.utc)
+            archive_datetime = datetime.fromtimestamp(previous_rollover_time, tz=UTC)
         else:
             archive_datetime = datetime.fromtimestamp(previous_rollover_time)
         base_path = Path(self.baseFilename)
