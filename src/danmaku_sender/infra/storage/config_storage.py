@@ -1,3 +1,4 @@
+"""配置落盘存储：config.json 读写。"""
 import json
 import logging
 
@@ -9,11 +10,11 @@ from danmaku_sender.config import (
     MonitorConfig,
     SenderConfig,
     SendPolicy,
+    Settings,
     ThemeConfig,
     ValidationConfig,
 )
 from danmaku_sender.config.app_meta import AppInfo
-from danmaku_sender.runtime.state.app_state import AppState
 from danmaku_sender.utils.file_utils import atomic_write, read_json
 
 logger = logging.getLogger(__name__)
@@ -21,18 +22,22 @@ logger = logging.getLogger(__name__)
 CONFIG_PATH = AppInfo.Paths.CONFIG
 
 
-class ConfigManager:
-    """配置管理器"""
+class ConfigStorage:
+    """配置存储：config.json 的加载与保存。"""
 
-    def save(self, state: AppState) -> None:
-        """保存非敏感配置到 config.json"""
+    def save(self, settings: Settings) -> None:
+        """保存非敏感配置到 config.json。
+
+        Args:
+            settings: 待落盘的配置容器。
+        """
         config_data = {
-            "global": state.global_config.model_dump(),
-            "sender": state.sender_config.model_dump(),
-            "send_policy": state.send_policy.model_dump(),
-            "monitor": state.monitor_config.model_dump(),
-            "theme": state.theme_config.model_dump(mode="json"),
-            "validation": state.validation_config.model_dump()
+            "global": settings.global_config.model_dump(),
+            "sender": settings.sender_config.model_dump(),
+            "send_policy": settings.send_policy.model_dump(),
+            "monitor": settings.monitor_config.model_dump(),
+            "theme": settings.theme_config.model_dump(mode="json"),
+            "validation": settings.validation_config.model_dump()
         }
 
         try:
@@ -42,8 +47,12 @@ class ConfigManager:
         except Exception as e:
             logger.error(f"保存配置失败: {e}")
 
-    def load(self, state: AppState) -> None:
-        """从 config.json 加载配置到 state"""
+    def load(self, settings: Settings) -> None:
+        """从 config.json 加载配置到 settings。
+
+        Args:
+            settings: 就地更新的配置容器。
+        """
         data = read_json(CONFIG_PATH)
         if not isinstance(data, dict):
             logger.info("未找到配置文件或格式异常，使用默认设置。")
@@ -52,8 +61,12 @@ class ConfigManager:
         def _apply_section[T: AtomicModel](key: str, model_class: type[T], target: T) -> None:
             """把 config.json 的段校验后原地灌进 target。
 
-            必须原地更新、不得换实例：UI 绑定表持有 target 的引用，
-            换实例会让既有绑定指向孤儿模型。
+            必须原地更新、不得换实例。
+
+            Args:
+                key: config.json 中的段名。
+                model_class: 该段对应的配置模型类。
+                target: 就地更新的配置模型实例。
             """
             if key not in data:
                 return
@@ -69,11 +82,11 @@ class ConfigManager:
                 return
             target.commit(fresh, data[key])
 
-        _apply_section("global", GlobalConfig, state.global_config)
-        _apply_section("sender", SenderConfig, state.sender_config)
-        _apply_section("send_policy", SendPolicy, state.send_policy)
-        _apply_section("monitor", MonitorConfig, state.monitor_config)
-        _apply_section("theme", ThemeConfig, state.theme_config)
-        _apply_section("validation", ValidationConfig, state.validation_config)
+        _apply_section("global", GlobalConfig, settings.global_config)
+        _apply_section("sender", SenderConfig, settings.sender_config)
+        _apply_section("send_policy", SendPolicy, settings.send_policy)
+        _apply_section("monitor", MonitorConfig, settings.monitor_config)
+        _apply_section("theme", ThemeConfig, settings.theme_config)
+        _apply_section("validation", ValidationConfig, settings.validation_config)
 
         logger.info(f"配置文件加载与校验流程结束[{CONFIG_PATH}]。")

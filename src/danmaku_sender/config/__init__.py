@@ -4,6 +4,7 @@ from .global_config import GlobalConfig
 from .monitor_config import MonitorConfig
 from .send_policy import SendPolicy
 from .sender_config import SenderConfig
+from .settings import Settings
 from .theme_config import ThemeConfig, ThemeMode
 from .validation_config import ValidationConfig
 
@@ -14,6 +15,7 @@ __all__ = [
     "MonitorConfig",
     "SendPolicy",
     "SenderConfig",
+    "Settings",
     "ThemeConfig",
     "ThemeMode",
     "ValidationConfig",

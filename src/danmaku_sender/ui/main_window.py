@@ -107,13 +107,13 @@ class MainWindow(QMainWindow):
     def closeEvent(self, event: QCloseEvent):
         """窗口关闭事件: 保存配置与凭证"""
         try:
-            AccountController.save_credentials(self.state, self._current_profile, self.rt.account_manager)
+            AccountController.save_credentials(self.state, self._current_profile, self.rt.account_storage)
         except (OSError, ValueError) as e:
             self.logger.error(f"保存凭证失败: {e}")
 
         # 停掉待触发的防抖落盘：显式保存已覆盖，避免同一份配置重复写盘
         self._config_save_timer.stop()
-        self.rt.config_manager.save(self.state)
+        self.rt.config_storage.save(self.state.settings)
 
         super().closeEvent(event)
 
@@ -307,7 +307,7 @@ class MainWindow(QMainWindow):
     @Slot()
     def _save_config(self):
         """落盘非敏感配置"""
-        self.rt.config_manager.save(self.state)
+        self.rt.config_storage.save(self.state.settings)
 
     def _open_account_dialog(self):
         """打开账号管理弹窗"""

@@ -3,16 +3,15 @@ import logging
 
 from PySide6.QtCore import QObject, Signal
 
-from .concurrency import PoolTask
-
+from danmaku_sender.config import ApiAuthConfig
+from danmaku_sender.infra.storage.account_storage import AccountStorage
+from danmaku_sender.repo.bili_api_client import BiliApiClient
+from danmaku_sender.runtime.state.app_state import AppState
+from danmaku_sender.service.auth_service import AuthService
 from danmaku_sender.types.models.account import AccountCredential
 from danmaku_sender.types.models.user import UserProfile
-from danmaku_sender.config import ApiAuthConfig
-from danmaku_sender.runtime.state.app_state import AppState
-from danmaku_sender.runtime.managers.account_manager import AccountManager
-from danmaku_sender.repo.bili_api_client import BiliApiClient
-from danmaku_sender.service.auth_service import AuthService
 
+from .concurrency import PoolTask
 
 logger = logging.getLogger(__name__)
 
@@ -27,8 +26,14 @@ class AccountController(QObject):
         super().__init__(parent)
 
     @staticmethod
-    def save_credentials(state: AppState, profile: UserProfile | None, account_manager: AccountManager):
-        """同步当前凭据到已保存账号列表并写盘"""
+    def save_credentials(state: AppState, profile: UserProfile | None, account_storage: AccountStorage):
+        """同步当前凭据到已保存账号列表并写盘。
+
+        Args:
+            state: 应用状态，取当前凭据与已保存账号列表。
+            profile: 用户资料，用于回填昵称；可为 None。
+            account_storage: 凭据存储。
+        """
         if state.sessdata and state.bili_jct:
             acc = next((a for a in state.saved_accounts if a.sessdata == state.sessdata), None)
             if acc:
@@ -40,7 +45,7 @@ class AccountController(QObject):
             if profile and profile.is_login:
                 acc.name = profile.username
 
-        account_manager.save_accounts(state.saved_accounts)
+        account_storage.save_accounts(state.saved_accounts)
         if state.saved_accounts:
             logger.info(f"已保存 {len(state.saved_accounts)} 个账号。")
 
