@@ -82,5 +82,12 @@ layers = [
     "danmaku_sender.service",
     "danmaku_sender.infra",
     "danmaku_sender.config",
-    "danmaku_sender.types | danmaku_sender.utils",
+    "danmaku_sender.types",
+    "danmaku_sender.utils",
 ]
+
+[[tool.importlinter.contracts]]
+name = "state 是表现层末端，不进入下行链"
+type = "forbidden"
+source_modules = ["danmaku_sender.state"]
+forbidden_modules = ["danmaku_sender.service", "danmaku_sender.infra"]
