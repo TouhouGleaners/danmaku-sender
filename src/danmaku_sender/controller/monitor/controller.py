@@ -7,7 +7,7 @@ from PySide6.QtCore import QObject, Signal, Slot
 
 from danmaku_sender.config import ApiAuthConfig
 from danmaku_sender.infra.persistence.history_manager import HistoryManager
-from danmaku_sender.runtime.state.app_state import AppState
+from danmaku_sender.state import AppState
 
 from .workers import QueueMonitorWorker
 
@@ -18,7 +18,7 @@ class MonitorController(QObject):
     """队列监视控制器：持有 QueueMonitorWorker，信号转发给 UI。
 
     本类在主线程运行，`stats_baseline` / `refresh_interval` 由这里取值
-    并作为冻结参数交给 Worker——Worker 不持有 AppState，也不写 QueueState。
+    并作为冻结参数交给 Worker——Worker 不持有任何 State，也不写 QueueState。
     """
 
     # cid 用 object 传：Qt 信号的 int 是 32 位，B 站新视频的 cid 会溢出绕回
@@ -59,13 +59,13 @@ class MonitorController(QObject):
             return False
 
         if auth_config is None:
-            auth_config = self.state.get_api_auth()
+            auth_config = self.state.session.get_api_auth()
 
         if not auth_config.sessdata:
             logger.warning("凭证缺失，无法启动队列监视。")
             return False
 
-        baseline = float(self.state.stats_baseline)
+        baseline = float(self.state.workspace.stats_baseline)
 
         self._stop_event.clear()
         worker = QueueMonitorWorker(
@@ -73,8 +73,8 @@ class MonitorController(QObject):
             history_manager=self.history_manager,
             stop_event=self._stop_event,
             baseline=baseline,
-            poll_interval=float(self.state.monitor_config.refresh_interval),
-            prevent_sleep=self.state.global_config.prevent_sleep,
+            poll_interval=float(self.state.settings.monitor_config.refresh_interval),
+            prevent_sleep=self.state.settings.global_config.prevent_sleep,
             send_done=send_done,
             post_send_watch_seconds=post_send_watch_seconds,
         )
@@ -90,11 +90,11 @@ class MonitorController(QObject):
         worker.finished.connect(worker.deleteLater)
 
         self._worker = worker
-        self.state.monitor_is_active = True
+        self.state.workspace.monitor_is_active = True
         worker.start()
         logger.info(
-            f"▶ 队列监视已启动：{len(self.state.queue_state.tasks)} 个任务，"
-            f"轮询间隔 {self.state.monitor_config.refresh_interval} 秒"
+            f"▶ 队列监视已启动：{len(self.state.workspace.queue_state.tasks)} 个任务，"
+            f"轮询间隔 {self.state.settings.monitor_config.refresh_interval} 秒"
         )
         return True
 
@@ -139,5 +139,5 @@ class MonitorController(QObject):
 
         logger.debug("QueueMonitorWorker 线程生命周期结束，正在清理控制器引用。")
         self._worker = None
-        self.state.monitor_is_active = False
+        self.state.workspace.monitor_is_active = False
         self.monitorReady.emit()

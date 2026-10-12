@@ -13,7 +13,7 @@ from danmaku_sender.config import ApiAuthConfig
 from danmaku_sender.controller.monitor.controller import MonitorController
 from danmaku_sender.controller.monitor.workers import QueueMonitorWorker
 from danmaku_sender.infra.persistence.history_manager import HistoryManager
-from danmaku_sender.runtime.state.app_state import AppState
+from danmaku_sender.state import AppState
 
 # 落在符号位上（低 32 位 >= 2^31）就会绕成负数，两种跨度都要覆盖：
 # 真实 cid（> 2^32，跨周期取低位）与 2^31~2^32 之间的边界值

@@ -12,7 +12,7 @@ from danmaku_sender.config import (
     SendPolicy,
     ValidationConfig,
 )
-from danmaku_sender.runtime.state.queue_state import QueueState
+from danmaku_sender.state import QueueState
 from danmaku_sender.types.models.common import RelativePosition, VideoTarget
 from danmaku_sender.types.models.danmaku import Danmaku
 from danmaku_sender.types.models.queue import TaskDraft, TaskStatus

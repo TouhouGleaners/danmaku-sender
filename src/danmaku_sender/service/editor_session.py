@@ -19,7 +19,7 @@ from .danmaku_validator import validate_danmaku_list
 class EditorSession:
     """
     纯净的弹幕编辑器核心会话层 (Sandbox)。
-    只负责暂存区的增删改查与撤销树维护，不主动干涉全局状态 (AppState)。
+    只负责暂存区的增删改查与撤销树维护，不主动干涉全局状态。
     """
     def __init__(self) -> None:
         self.logger = logging.getLogger(__name__)

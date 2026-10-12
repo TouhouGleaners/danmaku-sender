@@ -29,7 +29,7 @@ from PySide6.QtWidgets import (
     QWidget,
 )
 
-from danmaku_sender.runtime.state.app_state import AppState
+from danmaku_sender.state import AppState
 from danmaku_sender.types.models.danmaku import Danmaku
 from danmaku_sender.types.models.editor_types import EditorField
 from danmaku_sender.ui.framework.form_binder import LiveFormBinder
@@ -154,7 +154,7 @@ class ValidationRulesGroup(QGroupBox):
 
     def init_bindings(self):
         """绑定控件与 validation_config（实时修改表单）。"""
-        config = self.state.validation_config
+        config = self.state.settings.validation_config
 
         LiveFormBinder.bind(self.enable_custom_checkbox, config, "enabled", after_write=self._on_config_written)
         # list[str] ↔ str 通过转换函数绑定，不再手动同步

@@ -16,7 +16,7 @@ from PySide6.QtWidgets import (
 
 from danmaku_sender.config import ApiAuthConfig
 from danmaku_sender.controller.account_controller import AccountController
-from danmaku_sender.runtime.state.app_state import AppState
+from danmaku_sender.state import AppState
 from danmaku_sender.types.models.account import AccountCredential
 from danmaku_sender.ui.framework.icons import SvgIcon
 
@@ -42,7 +42,7 @@ class AccountDialog(QDialog):
         )
 
         self.accounts: list[AccountCredential] = [
-            a.model_copy() for a in state.saved_accounts
+            a.model_copy() for a in state.session.saved_accounts
         ]
 
         self._batch_total: int = 0
@@ -116,7 +116,7 @@ class AccountDialog(QDialog):
 
         self._rows.clear()
         for acc in self.accounts:
-            is_active = acc.sessdata == self.state.sessdata
+            is_active = acc.sessdata == self.state.session.sessdata
             row = AccountRow(acc, is_active=is_active)
             row.add_cred("SESSDATA", acc.masked_sessdata, acc.sessdata)
             row.add_cred("bili_jct", acc.masked_bili_jct, acc.bili_jct)
@@ -137,24 +137,24 @@ class AccountDialog(QDialog):
         return ApiAuthConfig(
             sessdata=account.sessdata,
             bili_jct=account.bili_jct,
-            use_system_proxy=self.state.global_config.use_system_proxy,
+            use_system_proxy=self.state.settings.global_config.use_system_proxy,
         )
 
     def _use_account(self, account: AccountCredential):
-        if account.sessdata == self.state.sessdata:
+        if account.sessdata == self.state.session.sessdata:
             return
-        self.state.sessdata = account.sessdata
-        self.state.bili_jct = account.bili_jct
+        self.state.session.sessdata = account.sessdata
+        self.state.session.bili_jct = account.bili_jct
         self.accept()
 
     def _add_account(self):
-        proxy = self.state.global_config.use_system_proxy
+        proxy = self.state.settings.global_config.use_system_proxy
         dialog = AccountFormDialog(edit_data=None, use_system_proxy=proxy, parent=self)
         dialog.saved.connect(self._on_account_saved)
         dialog.exec()
 
     def _edit_account(self, account: AccountCredential):
-        proxy = self.state.global_config.use_system_proxy
+        proxy = self.state.settings.global_config.use_system_proxy
         dialog = AccountFormDialog(edit_data=account, use_system_proxy=proxy, parent=self)
         dialog.saved.connect(lambda new, _old: self._on_edit_saved(new, account))
         dialog.exec()
@@ -265,7 +265,7 @@ class AccountDialog(QDialog):
         self._refresh()
 
     def _sync_state(self):
-        self.state.saved_accounts = [
+        self.state.session.saved_accounts = [
             a.model_copy() for a in self.accounts
         ]
 

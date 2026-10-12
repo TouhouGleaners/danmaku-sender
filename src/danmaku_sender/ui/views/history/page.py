@@ -20,7 +20,7 @@ from PySide6.QtWidgets import (
 from danmaku_sender.controller.history_controller import HistoryController
 from danmaku_sender.controller.video_controller import VideoController
 from danmaku_sender.infra.persistence.history_manager import HistoryManager
-from danmaku_sender.runtime.state.app_state import AppState
+from danmaku_sender.state import AppState
 from danmaku_sender.types.models.common import DanmakuStatus, VerifyResult
 from danmaku_sender.types.models.video import VideoInfo
 from danmaku_sender.ui.framework.empty_state import EmptyStateHint
@@ -127,7 +127,7 @@ class HistoryPage(QWidget):
 
     def _fetch_missing_metadata(self, records):
         """扫描缺失元数据的 BVID 并推入后台队列"""
-        auth_config = self.state.get_api_auth()
+        auth_config = self.state.session.get_api_auth()
         missing_bvids = []
         for row in records:
             bvid = row['bvid']
@@ -193,7 +193,7 @@ class HistoryPage(QWidget):
 
     def _verify_records(self, record: dict):
         """触发单个分P的弹幕验证"""
-        auth_config = self.state.get_api_auth()
+        auth_config = self.state.session.get_api_auth()
         if not auth_config.sessdata:
             logger.warning("未登录，无法验证弹幕。")
             return
@@ -203,7 +203,7 @@ class HistoryPage(QWidget):
 
     def _verify_all(self):
         """触发全部待验证弹幕的批量验证"""
-        auth_config = self.state.get_api_auth()
+        auth_config = self.state.session.get_api_auth()
         if not auth_config.sessdata:
             logger.warning("未登录，无法验证弹幕。")
             return

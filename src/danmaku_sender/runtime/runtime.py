@@ -3,8 +3,7 @@ import logging
 from danmaku_sender.config.app_meta import AppInfo
 from danmaku_sender.infra.persistence.history_manager import HistoryManager
 from danmaku_sender.infra.storage import AccountStorage, ConfigStorage
-
-from .state.app_state import AppState
+from danmaku_sender.state import AppState
 
 logger = logging.getLogger(__name__)
 
@@ -45,9 +44,9 @@ class Runtime:
     def _activate_saved_accounts(self) -> None:
         """加载已保存账号并激活第一个。"""
         accounts = self.account_storage.load_accounts()
-        self.app_state.saved_accounts = accounts
+        self.app_state.session.saved_accounts = accounts
         if accounts:
             first = accounts[0]
-            self.app_state.sessdata = first.sessdata
-            self.app_state.bili_jct = first.bili_jct
+            self.app_state.session.sessdata = first.sessdata
+            self.app_state.session.bili_jct = first.bili_jct
             logger.info(f"已激活账号: {first.name or '(未命名)'}")

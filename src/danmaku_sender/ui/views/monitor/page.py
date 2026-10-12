@@ -23,7 +23,7 @@ from PySide6.QtWidgets import (
 
 from danmaku_sender.controller.monitor import MonitorController
 from danmaku_sender.infra.persistence.history_manager import HistoryManager
-from danmaku_sender.runtime.state.app_state import AppState
+from danmaku_sender.state import AppState
 from danmaku_sender.types.models.common import MonitorStats
 from danmaku_sender.ui.framework.empty_state import EmptyStateHint
 from danmaku_sender.ui.framework.form_binder import LiveFormBinder
@@ -202,9 +202,9 @@ class MonitorPage(QWidget):
         self.monitor_controller.monitorReady.connect(self._on_monitor_ready)
 
         # QueueState
-        self.state.queue_state.tasksChanged.connect(self._on_queue_changed)
-        self.state.queue_state.taskDataChanged.connect(self._on_queue_changed)
-        self.state.queue_state.taskStatusChanged.connect(self._on_queue_task_status_changed)
+        self.state.workspace.queue_state.tasksChanged.connect(self._on_queue_changed)
+        self.state.workspace.queue_state.taskDataChanged.connect(self._on_queue_changed)
+        self.state.workspace.queue_state.taskStatusChanged.connect(self._on_queue_task_status_changed)
 
     @Slot(str, object)
     def _on_config_written(self, _field: str, _value: object) -> None:
@@ -212,10 +212,10 @@ class MonitorPage(QWidget):
         self.state.configChanged.emit()
 
     def init_bindings(self):
-        LiveFormBinder.bind(self.interval_spin, self.state.monitor_config, "refresh_interval", after_write=self._on_config_written)
+        LiveFormBinder.bind(self.interval_spin, self.state.settings.monitor_config, "refresh_interval", after_write=self._on_config_written)
 
-        if self.state.stats_baseline == 0.0:
-            self.state.stats_baseline = self.state.app_launch_time
+        if self.state.workspace.stats_baseline == 0.0:
+            self.state.workspace.stats_baseline = self.state.workspace.app_launch_time
 
             idx = self.anchor_combo.findData("launch")
             if idx >= 0:
@@ -223,7 +223,7 @@ class MonitorPage(QWidget):
                 self.anchor_combo.setCurrentIndex(idx)
                 self.anchor_combo.blockSignals(False)
 
-        self._update_anchor_display(self.state.stats_baseline)
+        self._update_anchor_display(self.state.workspace.stats_baseline)
 
     def showEvent(self, event):
         super().showEvent(event)
@@ -250,7 +250,7 @@ class MonitorPage(QWidget):
         只有已指定目标的任务才有核销目标，才占一行；账本只贡献存活统计，取不到即尚未发送。
         """
         rows = []
-        for task in self.state.queue_state.tasks:
+        for task in self.state.workspace.queue_state.tasks:
             bvid, cid = task.target.bvid, task.target.cid
             if bvid is None or cid is None:  # 没有核销目标，不占一行
                 continue
@@ -313,16 +313,16 @@ class MonitorPage(QWidget):
             return
 
         # 行清单来自队列，账本只提供核销范围与存活统计
-        if not self.state.queue_state.tasks:
+        if not self.state.workspace.queue_state.tasks:
             QMessageBox.information(self, "队列为空", "请先在「发射器」页面添加任务。")
             return
 
 
-        if not self.state.sessdata:
+        if not self.state.session.sessdata:
             QMessageBox.warning(self, "凭证缺失", "请先配置 Cookie。")
             return
 
-        if not self.monitor_controller.start_queue_monitor(self.state.get_api_auth()):
+        if not self.monitor_controller.start_queue_monitor(self.state.session.get_api_auth()):
             self._refresh_table()
             self._sync_overall_stats()
             self._set_ui_running(False)
@@ -373,19 +373,19 @@ class MonitorPage(QWidget):
         data = self.anchor_combo.currentData()
         new_baseline = 0.0
         if data == "launch":
-            new_baseline = self.state.app_launch_time
+            new_baseline = self.state.workspace.app_launch_time
         elif data == "24h":
             new_baseline = time.time() - 86400
         elif data == "all":
             new_baseline = 0.0
 
-        self.state.stats_baseline = new_baseline
+        self.state.workspace.stats_baseline = new_baseline
         self._update_anchor_display(new_baseline)
 
     @Slot()
     def _on_reset_anchor_clicked(self):
         current_ts = time.time()
-        self.state.stats_baseline = current_ts
+        self.state.workspace.stats_baseline = current_ts
         self._update_anchor_display(current_ts)
 
         self.anchor_combo.blockSignals(True)

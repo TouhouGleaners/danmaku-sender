@@ -59,7 +59,7 @@ class MainWindow(QMainWindow):
         self.theme_service = ThemeService(self)
 
         # 首屏主题必须在创建任何 UI 控件前生效，否则 SvgIcon 会拿到错误的调色板颜色
-        self.theme_service.apply_theme(self.state.theme_config.theme_mode)
+        self.theme_service.apply_theme(self.state.settings.theme_config.theme_mode)
 
         # 控制器
         self.auth_controller = AuthController(self)
@@ -321,41 +321,33 @@ class MainWindow(QMainWindow):
         self.page_monitor.init_bindings()
         self.page_history.init_bindings()
 
-        # 日志分流：信号 -> Tab 接口
-        if self._log_signals_connected:
-            self.state.senderLogReceived.disconnect(self.page_sender.append_log)
-            self.state.monitorLogReceived.disconnect(self.page_monitor.append_log)
-
-        self.state.senderLogReceived.connect(self.page_sender.append_log)
-        self.state.monitorLogReceived.connect(self.page_monitor.append_log)
-        self._log_signals_connected = True
-
-        # 信号接入：底层 Handler -> 信号发射
+        # 日志分流：Handler 信号 -> Tab 接口
         self._setup_log_routing()
 
     def _setup_log_routing(self):
-        """配置 GuiLoggingHandler 路由"""
+        """把 GuiLoggingHandler 的日志信号接到日志面板。"""
         root_logger = logging.getLogger()
-        gui_handler = None
-
-        # 遍历所有挂载的处理器，找到 GUI 路由
-        for h in root_logger.handlers:
-            if isinstance(h, GuiLoggingHandler):
-                gui_handler = h
-                break
-
-        if gui_handler:
-            # 将 Handler 的信号指向 AppState 的信号
-            gui_handler.sender_signal = self.state.senderLogReceived
-            gui_handler.monitor_signal = self.state.monitorLogReceived
-            self.logger.info("日志路由链路已接通。")
-        else:
+        gui_handler = next(
+            (h for h in root_logger.handlers if isinstance(h, GuiLoggingHandler)),
+            None,
+        )
+        if gui_handler is None:
             self.logger.error("日志路由系统初始化失败：未找到 GuiLoggingHandler。")
+            return
+
+        if self._log_signals_connected:
+            gui_handler.senderLogReceived.disconnect(self.page_sender.append_log)
+            gui_handler.monitorLogReceived.disconnect(self.page_monitor.append_log)
+
+        gui_handler.senderLogReceived.connect(self.page_sender.append_log)
+        gui_handler.monitorLogReceived.connect(self.page_monitor.append_log)
+        self._log_signals_connected = True
+        self.logger.info("日志路由链路已接通。")
 
     def _connect_global_signals(self):
         """全局信号绑定"""
         # 用户认证与基础信息
-        self.state.credentialsChanged.connect(lambda: self._auth_debounce_timer.start(800))
+        self.state.session.credentialsChanged.connect(lambda: self._auth_debounce_timer.start(800))
         self.auth_controller.userProfileReady.connect(self._on_user_profile_updated)
 
         # 自动更新检查流
@@ -367,8 +359,8 @@ class MainWindow(QMainWindow):
             QMessageBox.warning(self, "检查更新失败", f"无法连接到更新服务器:\n{err}") if is_m else None
         )
 
-        self.state.senderActiveChanged.connect(self._refresh_global_status)
-        self.state.monitorActiveChanged.connect(self._refresh_global_status)
+        self.state.workspace.senderActiveChanged.connect(self._refresh_global_status)
+        self.state.workspace.monitorActiveChanged.connect(self._refresh_global_status)
 
         self.page_sender.progressUpdated.connect(self._on_sender_progress_sync)
         self.page_monitor.statsUpdated.connect(self._on_monitor_stats_sync)
@@ -382,8 +374,8 @@ class MainWindow(QMainWindow):
     @Slot()
     def _refresh_user_info(self):
         """刷新用户信息"""
-        sessdata = self.state.sessdata.strip()
-        bili_jct = self.state.bili_jct.strip()
+        sessdata = self.state.session.sessdata.strip()
+        bili_jct = self.state.session.bili_jct.strip()
 
         if not sessdata:
             self._on_user_profile_updated(UserProfile(is_login=False, username="未登录"))
@@ -392,7 +384,7 @@ class MainWindow(QMainWindow):
         if len(sessdata) > 20 and not bili_jct:
             return
 
-        self.auth_controller.refresh_user_info(self.state.get_api_auth())
+        self.auth_controller.refresh_user_info(self.state.session.get_api_auth())
 
     def _render_avatar(self):
         """统一头像渲染：已登录显示真实头像，未登录显示随主题变色的默认 SVG"""
@@ -432,7 +424,7 @@ class MainWindow(QMainWindow):
 
     def _run_update_check(self, is_manual: bool = False):
         """启动更新检查"""
-        self.system_controller.check_for_updates(self.state.global_config.use_system_proxy, is_manual)
+        self.system_controller.check_for_updates(self.state.settings.global_config.use_system_proxy, is_manual)
 
     @Slot(str, str, str)
     def _on_update_found(self, ver: str, notes: str, url: str):
@@ -473,7 +465,7 @@ class MainWindow(QMainWindow):
     @Slot()
     def _refresh_global_status(self):
         # 组装发送器信息
-        if self.state.sender_is_active:
+        if self.state.workspace.sender_is_active:
             att, total = self._current_sender_progress
             perc = int((att/total)*100) if total > 0 else 0
             sender_info = f"发射器: {perc}% ({att}/{total})"
@@ -481,7 +473,7 @@ class MainWindow(QMainWindow):
             sender_info = "发射器: 待命"
 
         # 组装监视器信息
-        if self.state.monitor_is_active:
+        if self.state.workspace.monitor_is_active:
             s = self._current_monitor_stats
             monitor_info = f"监视器: 存活{s.get('verified',0)}/丢失{s.get('lost',0)}/待验{s.get('pending',0)}"
         else:
