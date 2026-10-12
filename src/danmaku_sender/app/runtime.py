@@ -88,5 +88,5 @@ class Runtime(QObject):
     def _save_credentials(self) -> None:
         """登记当前凭据并落盘账号列表。"""
         session = self.app_state.session
-        session.upsert_active_account()
+        session.upsert_account(session.sessdata, session.bili_jct)
         self.account_storage.save_accounts(session.saved_accounts)

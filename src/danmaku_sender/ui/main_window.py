@@ -388,10 +388,8 @@ class MainWindow(QMainWindow):
 
     @Slot(UserProfile)
     def _on_user_profile_updated(self, profile: UserProfile):
-        """同步更新 UI，并把昵称登记进已保存账号。"""
+        """同步更新 UI；昵称登记由授权控制器完成。"""
         self._current_profile = profile
-        if profile.is_login:
-            self.state.session.upsert_active_account(profile.username)
         self.username_label.setText(profile.username)
         self._render_avatar()
 
