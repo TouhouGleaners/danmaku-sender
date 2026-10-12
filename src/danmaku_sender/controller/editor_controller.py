@@ -99,9 +99,8 @@ class EditorController(QObject):
             on_success: 成功回调，接收解析数量
             on_error: 失败回调，接收错误信息
         """
-        parser = DanmakuXml
         PoolTask.submit(
-            parser.parse_file,
+            DanmakuXml.parse_file,
             lambda parsed: on_success(self._apply_parsed_to_workspace(parsed)),
             lambda err: on_error(str(err)),
             file_path,
@@ -140,7 +139,11 @@ class EditorController(QObject):
         )
 
     def get_working_danmakus(self) -> list[Danmaku]:
-        """提取当前工作区中所有未删除的弹幕 (供导出 XML 用)"""
+        """提取当前工作区中所有未删除的弹幕 (供导出 XML 用)
+
+        Returns:
+            未删除弹幕的列表，按工作区顺序排列。
+        """
         if not self.session.has_active_session:
             return []
         return [
@@ -148,6 +151,14 @@ class EditorController(QObject):
             for uid in self.session.item_order
             if not self.session.items[uid].is_deleted
         ]
+
+    def save_danmakus(self, danmakus: list[Danmaku]) -> None:
+        """把编辑后的弹幕写回队列。
+
+        Args:
+            danmakus: 编辑后的弹幕列表。
+        """
+        self.state.workspace.queue_state.assign_danmakus(self.task.task_id, danmakus)
 
     def run_validation(self):
         """执行校验：自动向沙盒注入最新的校验参数

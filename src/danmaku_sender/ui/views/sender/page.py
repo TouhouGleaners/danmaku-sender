@@ -311,8 +311,8 @@ class SenderPage(QWidget):
             if self.state.workspace.sender_is_active:
                 self.logger.warning("发送进行中，已忽略任务详情编辑结果。")
                 return
-            # 通过 QueueState 统一应用编辑结果（自动发射 taskDataChanged）
-            self.state.workspace.queue_state.apply_edit(task.task_id, dialog.editing)
+            # 通过 Controller 应用编辑结果（自动发射 taskDataChanged）
+            self.sender_controller.apply_edit(task.task_id, dialog.editing)
             self.logger.info(f"已更新任务: {task.display_string}")
 
     def _edit_danmakus(self, task: TaskView):
@@ -329,10 +329,10 @@ class SenderPage(QWidget):
             task_id: 要移动的任务标识。
             toward: 移向参考项的哪一侧，ABOVE 为上移，BELOW 为下移。
         """
-        self.state.workspace.queue_state.move_task(task_id, toward)
+        self.sender_controller.move_task(task_id, toward)
 
     def _remove_task(self, task_id: str):
-        self.state.workspace.queue_state.remove_task(task_id)
+        self.sender_controller.remove_task(task_id)
 
     @Slot()
     def _delete_selected_task(self):
@@ -364,7 +364,7 @@ class SenderPage(QWidget):
             QMessageBox.StandardButton.No,
         )
         if reply == QMessageBox.StandardButton.Yes:
-            self.state.workspace.queue_state.clear_all()
+            self.sender_controller.clear_all()
 
     # region 导出未发送成功
 
@@ -454,6 +454,7 @@ class SenderPage(QWidget):
         TaskBuilderDialog(
             self.state,
             self.settings,
+            self.sender_controller,
             ref_task_id=ref_task_id,
             insert_position=insert_position,
             parent=self,
@@ -529,7 +530,7 @@ class SenderPage(QWidget):
             QMessageBox.StandardButton.No,
         )
         if reply == QMessageBox.StandardButton.Yes:
-            self.state.workspace.queue_state.reset_queue()
+            self.sender_controller.reset_queue()
             self.logger.info("队列已重置")
 
     # endregion
@@ -537,7 +538,7 @@ class SenderPage(QWidget):
 
     def _on_queue_reorder(self, task_ids: list[str]):
         """拖拽排序后按 task_id 顺序同步 QueueState"""
-        self.state.workspace.queue_state.reorder_tasks(task_ids)
+        self.sender_controller.reorder_tasks(task_ids)
 
     def eventFilter(self, obj, event: QDragEnterEvent | QDragMoveEvent | QDropEvent) -> bool:
         """处理拖放到队列表格上的外部 XML 文件"""
@@ -698,7 +699,7 @@ class SenderPage(QWidget):
                 self.logger.error(problem)
                 problems.append(problem)
                 continue
-            self.state.workspace.queue_state.add_task(task)
+            self.sender_controller.add_task(task)
             created += 1
 
         if created:
@@ -722,7 +723,7 @@ class SenderPage(QWidget):
             self.logger.error(problem)
             return problem
 
-        self.state.workspace.queue_state.assign_danmakus(
+        self.sender_controller.assign_danmakus(
             task.task_id, list(loaded.danmakus), xml_path=file_path
         )
         return None

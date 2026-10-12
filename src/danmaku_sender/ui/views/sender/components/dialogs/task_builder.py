@@ -15,6 +15,7 @@ from PySide6.QtWidgets import (
 )
 
 from danmaku_sender.config import Settings
+from danmaku_sender.controller.sender import SenderController
 from danmaku_sender.controller.video_controller import VideoController
 from danmaku_sender.service.danmaku_xml import DanmakuXml
 from danmaku_sender.state import AppState
@@ -27,13 +28,14 @@ from danmaku_sender.utils.string_utils import parse_bilibili_link
 class TaskBuilderDialog(QDialog):
     """任务构建弹窗：选择视频 → 选择分P → 选择弹幕文件 → 写入队列
 
-    与 EditorDialog 一致：由弹窗在创建时直接写 QueueState，调用方只负责打开。
+    与 EditorDialog 一致：由弹窗经 Controller 入队，调用方只负责打开。
     """
 
     def __init__(
         self,
         state: AppState,
         settings: Settings,
+        sender_controller: SenderController,
         ref_task_id: str | None = None,
         insert_position: RelativePosition | None = None,
         parent=None,
@@ -41,8 +43,9 @@ class TaskBuilderDialog(QDialog):
         """初始化弹窗。
 
         Args:
-            state: 状态树聚合根，经 ``state.workspace`` 写入队列。
+            state: 状态树聚合根，供视频控制器取身份凭据。
             settings: 配置容器，取发送参数。
+            sender_controller: 发送控制器，入队经它落账。
             ref_task_id: 参考任务标识。为 None 时追加到队尾，可连续添加且弹窗保持打开。
             insert_position: 插在参考任务的哪一侧。与 ref_task_id 一并给出时为相对插入，成功后自动关闭。
             parent: 父控件。
@@ -50,6 +53,7 @@ class TaskBuilderDialog(QDialog):
         super().__init__(parent)
         self.state = state
         self.settings = settings
+        self._sender_controller = sender_controller
         self.video_controller = VideoController(state, settings, self)
         self._video_info: VideoInfo | None = None
         self._selected_files: list[Path] = []
@@ -246,14 +250,13 @@ class TaskBuilderDialog(QDialog):
         )
         task.status = task.initial_status
 
-        queue_state = self.state.workspace.queue_state
         if self._ref_task_id is None:
-            queue_state.add_task(task)
+            self._sender_controller.add_task(task)
             # 追加模式：允许连建，弹窗保持打开
             self._selected_files = []
             self._file_input.clear()
             return
 
-        # 相对插入：写入后关闭（上下文插入是一次性动作）
-        queue_state.insert_task(task, self._ref_task_id, self._insert_position)
+        # 相对插入：写入后关闭
+        self._sender_controller.insert_task(task, self._ref_task_id, self._insert_position)
         self.accept()
