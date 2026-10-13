@@ -43,19 +43,28 @@ class ConfigStorage:
         try:
             with atomic_write(CONFIG_PATH) as f:
                 json.dump(config_data, f, indent=2, ensure_ascii=False)
-            logger.info(f"配置已保存: {CONFIG_PATH}")
+            logger.info(f"配置已保存：{CONFIG_PATH}")
         except Exception as e:
-            logger.error(f"保存配置失败: {e}")
+            logger.error(f"配置保存失败，改动未落盘：{CONFIG_PATH} —— {e}")
 
     def load(self, settings: Settings) -> None:
         """从 config.json 加载配置到 settings。
 
+        文件缺失视为首次启动；解析失败则按默认值运行。
+
         Args:
             settings: 就地更新的配置容器。
         """
+        if not CONFIG_PATH.is_file():
+            logger.info(f"配置文件不存在，按默认值启动：{CONFIG_PATH}")
+            return
+
         data = read_json(CONFIG_PATH)
         if not isinstance(data, dict):
-            logger.info("未找到配置文件或格式异常，使用默认设置。")
+            logger.warning(
+                f"配置文件损坏，无法解析；本次按默认值运行，"
+                f"后续保存会覆盖该文件：{CONFIG_PATH}"
+            )
             return
 
         def _apply_section[T: AtomicModel](key: str, model_class: type[T], target: T) -> None:
@@ -78,7 +87,10 @@ class ConfigStorage:
             try:
                 fresh = model_class.model_validate(probe)
             except ValidationError as e:
-                logger.warning(f"模块 [{key}] 配置存在非法值，已回退为安全默认值。详情:\n{e}")
+                logger.warning(
+                    f"配置段 [{key}] 含非法值，该段按默认值运行，"
+                    f"后续保存会覆盖该段：{CONFIG_PATH}\n{e}"
+                )
                 return
             target.commit(fresh, data[key])
 
@@ -89,4 +101,4 @@ class ConfigStorage:
         _apply_section("theme", ThemeConfig, settings.theme_config)
         _apply_section("validation", ValidationConfig, settings.validation_config)
 
-        logger.info(f"配置文件加载与校验流程结束[{CONFIG_PATH}]。")
+        logger.info(f"配置已加载：{CONFIG_PATH}")
