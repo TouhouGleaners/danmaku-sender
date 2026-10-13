@@ -71,11 +71,9 @@ class Runtime(QObject):
 
     def shutdown(self) -> None:
         """退出前强制落盘配置与凭据。"""
-        logger.info("退出落盘开始。")
         self._config_save_timer.stop()
         self._save_config()
         self._save_credentials()
-        logger.info("退出落盘结束。")
 
     def _activate_saved_accounts(self) -> None:
         """加载已保存账号并激活第一个。"""
