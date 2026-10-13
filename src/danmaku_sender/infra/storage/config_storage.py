@@ -15,6 +15,7 @@ from danmaku_sender.config import (
     ValidationConfig,
 )
 from danmaku_sender.config.app_meta import AppInfo
+from danmaku_sender.types.exceptions.exceptions import ConfigStorageError
 from danmaku_sender.utils.file_utils import atomic_write, read_json
 
 logger = logging.getLogger(__name__)
@@ -30,6 +31,9 @@ class ConfigStorage:
 
         Args:
             settings: 待落盘的配置容器。
+
+        Raises:
+            ConfigStorageError: 落盘失败，改动未写入。
         """
         config_data = {
             "global": settings.global_config.model_dump(),
@@ -43,17 +47,25 @@ class ConfigStorage:
         try:
             with atomic_write(CONFIG_PATH) as f:
                 json.dump(config_data, f, indent=2, ensure_ascii=False)
-            logger.info(f"配置已保存：{CONFIG_PATH}")
         except Exception as e:
-            logger.error(f"配置保存失败，改动未落盘：{CONFIG_PATH} —— {e}")
+            raise ConfigStorageError(
+                f"配置保存失败，改动未落盘：{CONFIG_PATH}",
+                path=CONFIG_PATH,
+                original_error=e,
+            ) from e
+        logger.info(f"配置已保存：{CONFIG_PATH}")
 
     def load(self, settings: Settings) -> None:
         """从 config.json 加载配置到 settings。
 
-        文件缺失视为首次启动；解析失败则按默认值运行。
+        文件缺失视为首次启动，不视为错误。段内含非法值时跳过该段并保留
+        当前值，不中断其余段的加载。
 
         Args:
             settings: 就地更新的配置容器。
+
+        Raises:
+            ConfigStorageError: 文件损坏无法解析，未写入任何配置。
         """
         if not CONFIG_PATH.is_file():
             logger.info(f"配置文件不存在，按默认值启动：{CONFIG_PATH}")
@@ -61,11 +73,10 @@ class ConfigStorage:
 
         data = read_json(CONFIG_PATH)
         if not isinstance(data, dict):
-            logger.warning(
-                f"配置文件损坏，无法解析；本次按默认值运行，"
-                f"后续保存会覆盖该文件：{CONFIG_PATH}"
+            raise ConfigStorageError(
+                f"配置文件损坏，无法解析：{CONFIG_PATH}",
+                path=CONFIG_PATH,
             )
-            return
 
         def _apply_section[T: AtomicModel](key: str, model_class: type[T], target: T) -> None:
             """把 config.json 的段校验后原地灌进 target。

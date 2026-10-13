@@ -8,6 +8,7 @@ from danmaku_sender.config.app_meta import AppInfo
 from danmaku_sender.infra.persistence.history_manager import HistoryManager
 from danmaku_sender.infra.storage import AccountStorage, ConfigStorage
 from danmaku_sender.state import AppState
+from danmaku_sender.types.exceptions.exceptions import ConfigStorageError
 
 logger = logging.getLogger(__name__)
 
@@ -60,7 +61,10 @@ class Runtime(QObject):
         except Exception as e:
             logger.error(f"凭据加载失败，将以未登录状态继续: {e}")
 
-        self.config_storage.load(self.settings)
+        try:
+            self.config_storage.load(self.settings)
+        except ConfigStorageError as e:
+            logger.error(f"{e}；本次按默认值运行，后续保存会覆盖原文件。")
 
         # 配置写回 → 防抖落盘
         self.app_state.configChanged.connect(self._config_save_timer.start)
@@ -84,8 +88,11 @@ class Runtime(QObject):
             logger.info(f"已激活账号: {first.name or '(未命名)'}")
 
     def _save_config(self) -> None:
-        """落盘持久化配置。"""
-        self.config_storage.save(self.settings)
+        """落盘持久化配置。失败记错误，不中断调用方。"""
+        try:
+            self.config_storage.save(self.settings)
+        except ConfigStorageError as e:
+            logger.error(str(e))
 
     def _save_credentials(self) -> None:
         """登记当前凭据并落盘账号列表。"""

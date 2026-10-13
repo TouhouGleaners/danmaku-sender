@@ -1,3 +1,6 @@
+from pathlib import Path
+
+
 class BiliNetworkError(Exception):
     """
     物理层网络错误
@@ -30,4 +33,23 @@ class HistoryStorageError(Exception):
 
     def __init__(self, message: str, original_error: Exception | None = None):
         super().__init__(message)
+        self.original_error = original_error
+
+
+class ConfigStorageError(Exception):
+    """配置存储读写失败。
+
+    Attributes:
+        path (Path | None): 相关的配置文件路径。
+        original_error (Exception | None): 底层异常。
+    """
+
+    def __init__(
+        self,
+        message: str,
+        path: Path | None = None,
+        original_error: Exception | None = None,
+    ):
+        super().__init__(message)
+        self.path = path
         self.original_error = original_error
