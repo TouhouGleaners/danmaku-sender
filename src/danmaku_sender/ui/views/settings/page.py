@@ -5,7 +5,6 @@ from PySide6.QtWidgets import (
     QDoubleSpinBox,
     QFormLayout,
     QFrame,
-    QGroupBox,
     QHBoxLayout,
     QLabel,
     QSpinBox,
@@ -16,6 +15,7 @@ from PySide6.QtWidgets import (
 from danmaku_sender.config import Settings
 from danmaku_sender.config.theme_config import ThemeMode
 from danmaku_sender.state import AppState
+from danmaku_sender.ui.framework.card import Card
 from danmaku_sender.ui.framework.form_binder import LiveFormBinder
 from danmaku_sender.ui.framework.icons import SvgIcon
 
@@ -43,7 +43,7 @@ class SettingsPage(QWidget):
         main_layout.setSpacing(15)
 
         # --- 系统设置 ---
-        system_group = QGroupBox("系统设置")
+        system_group = Card("系统设置")
         system_layout = QFormLayout()
 
         self.theme_combo = QComboBox()
@@ -57,11 +57,11 @@ class SettingsPage(QWidget):
         self.prevent_sleep_checkbox.setToolTip("保持网络和CPU运行，但允许屏幕关闭。")
 
         system_layout.addRow(self.prevent_sleep_checkbox)
-        system_group.setLayout(system_layout)
+        system_group.layout().addLayout(system_layout)
         main_layout.addWidget(system_group)
 
         # --- 网络设置 ---
-        network_group = QGroupBox("网络设置")
+        network_group = Card("网络设置")
         network_layout = QFormLayout()
 
         self.proxy_checkbox = QCheckBox("使用系统代理")
@@ -69,11 +69,11 @@ class SettingsPage(QWidget):
         self.proxy_checkbox.setToolTip("启用后，程序将使用系统设置的代理服务器进行网络请求。")
 
         network_layout.addRow(self.proxy_checkbox)
-        network_group.setLayout(network_layout)
+        network_group.layout().addLayout(network_layout)
         main_layout.addWidget(network_group)
 
         # --- 发送延迟 ---
-        delay_group = QGroupBox("发送延迟")
+        delay_group = Card("发送延迟")
         delay_layout = QHBoxLayout()
         delay_layout.setContentsMargins(10, 20, 10, 20)
 
@@ -134,11 +134,11 @@ class SettingsPage(QWidget):
         ]
 
         delay_layout.addStretch()
-        delay_group.setLayout(delay_layout)
+        delay_group.layout().addLayout(delay_layout)
         main_layout.addWidget(delay_group)
 
         # --- 队列设置 ---
-        queue_group = QGroupBox("队列设置")
+        queue_group = Card("队列设置")
         queue_layout = QHBoxLayout()
         queue_layout.setContentsMargins(10, 20, 10, 20)
 
@@ -178,7 +178,7 @@ class SettingsPage(QWidget):
         queue_layout.addStretch()
         queue_layout.addWidget(QLabel("(0为不限制)"))
 
-        queue_group.setLayout(queue_layout)
+        queue_group.layout().addLayout(queue_layout)
         main_layout.addWidget(queue_group)
 
         # --- 危险区 ---

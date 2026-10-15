@@ -180,6 +180,7 @@ class MainWindow(QMainWindow):
 
         # --- 右侧内容容器 ---
         self.content_stack = QStackedWidget()
+        self.content_stack.setObjectName("contentStack")
 
         self.main_layout.addWidget(self.sidebar_frame)
         self.main_layout.addWidget(self.content_stack)

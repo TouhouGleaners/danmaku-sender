@@ -1,12 +1,17 @@
 /* 全局基础色 */
 QMainWindow {
-    background-color: {bg_base};
+    background-color: {bg_canvas};
 }
 
 /* 侧边栏整体 */
 QFrame#sidebarFrame {
-    background-color: {bg_surface};
+    background-color: {bg_chrome};
     border-right: 1px solid {border_color};
+}
+
+/* 内容区 */
+QStackedWidget#contentStack {
+    background-color: {bg_page};
 }
 
 /* 用户状态区 */
@@ -21,7 +26,7 @@ QLabel#avatarLabel {
 
 /* 侧边栏 */
 QListWidget#sidebar {
-    background-color: {bg_surface};
+    background-color: {bg_chrome};
     border: none;
     border-right: 1px solid {border_color};
     outline: none;
@@ -43,7 +48,7 @@ QListWidget#sidebar::item:hover {
 
 /* 侧边栏item 选中 */
 QListWidget#sidebar::item:selected {
-    background-color: {bg_base};
+    background-color: {bg_layer};
     color: {primary};
     font-weight: 600;
     border-left: 4px solid {primary};
@@ -177,6 +182,29 @@ QLabel#accountStatus[status="unknown"] {
     color: {text_secondary};
 }
 
+/* 卡片容器：圆角填充加细边框，用于分组呈现内容。
+   appearance 取自表面层级：layer 为表面、alt 为表面内的次级填充、
+   canvas 为最底层、overlay 为半透明覆盖。 */
+QFrame#card {
+    background-color: {bg_layer};
+    border: 1px solid {stroke_card};
+    border-radius: 4px;
+}
+QFrame#card[appearance="alt"] {
+    background-color: {bg_layer_alt};
+}
+QFrame#card[appearance="canvas"] {
+    background-color: {bg_canvas};
+    border: none;
+}
+QFrame#card[appearance="overlay"] {
+    background-color: {bg_layer_overlay};
+    border: none;
+}
+QFrame#card[border="false"] {
+    border: none;
+}
+
 /* 设置页 - 危险区：QFrame 画框，QGroupBox 不碰 */
 QFrame#dangerFrame {
     border: 1px solid {danger};
@@ -217,7 +245,7 @@ QLabel#emptyStateHintDesc {
 
 /* 应用内通知卡片 */
 QFrame#notificationCard {
-    background-color: {bg_surface};
+    background-color: {bg_layer};
     border: 1px solid {border_color};
     border-radius: 6px;
 }
