@@ -6,7 +6,7 @@
 
 from enum import Enum
 
-from PySide6.QtWidgets import QFrame, QLabel, QVBoxLayout, QWidget
+from PySide6.QtWidgets import QFrame, QWidget
 
 
 class CardAppearance(Enum):
@@ -22,33 +22,22 @@ class CardAppearance(Enum):
 
 
 class Card(QFrame):
-    """圆角卡片容器，子控件由调用方的布局管理。
+    """圆角卡片表面，内容与布局由调用方管理。
 
-    Attributes:
-        title_label: 标题控件；未提供标题时为 ``None``。
+    本类只负责外观属性与样式重绘，不创建布局——调用方或子类自行
+    建立布局挂载内容。
     """
 
-    def __init__(self, title: str | None = None, parent: QWidget | None = None):
+    def __init__(self, parent: QWidget | None = None):
         """初始化卡片。
 
         Args:
-            title: 卡片标题；为空则不显示标题行。
             parent: 父控件。
         """
         super().__init__(parent)
         self.setObjectName("card")
         self.setProperty("appearance", CardAppearance.LAYER.value)
         self.setProperty("border", "true")
-
-        self._layout = QVBoxLayout(self)
-        self._layout.setContentsMargins(16, 14, 16, 16)
-        self._layout.setSpacing(10)
-
-        self.title_label: QLabel | None = None
-        if title:
-            self.title_label = QLabel(title)
-            self.title_label.setStyleSheet("font-weight: bold; font-size: 14px;")
-            self._layout.addWidget(self.title_label)
 
     def appearance(self) -> CardAppearance:
         """返回当前填充表面。"""
