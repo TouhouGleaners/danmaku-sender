@@ -1,6 +1,6 @@
 """UI 层主题基础设施
 
-负责系统外观嗅探、调色板映射与全局样式表渲染。
+负责系统外观检测、调色板映射与全局样式表渲染。
 由 MainWindow 持有，通过设置页的 themeApplied 信号驱动。
 """
 
@@ -24,7 +24,7 @@ QSS_PATH = AppInfo.Paths.ASSETS / "qss" / "style.qss"
 
 
 # QPalette.ColorRole 到颜色来源的映射：取值为 Palette 的属性名，
-# 或以 # 开头的字面色。须覆盖 Qt 全部 ColorRole，未覆盖的角色会被 Qt 回退为系统默认值。
+# 或以 # 开头的颜色字面量。须覆盖 Qt 全部 ColorRole，未覆盖的角色会被 Qt 回退为系统默认值。
 ROLE_SOURCES: dict[QPalette.ColorRole, str] = {
     QPalette.ColorRole.Window: "bg_canvas",
     QPalette.ColorRole.WindowText: "text_main",
@@ -51,8 +51,8 @@ ROLE_SOURCES: dict[QPalette.ColorRole, str] = {
     QPalette.ColorRole.Shadow: "border_color",
 }
 
-# setColor(role, color) 连 Disabled 组一起写入，禁用态文字会与正常态同色，
-# Qt 原生置灰被抹掉。这些文字角色须在 Disabled 组另行赋弱化色（见 to_qpalette）。
+# setColor(role, color) 会同时写入 Disabled 组，使禁用态文字与正常态同色，
+# 覆盖 Qt 原生的置灰效果。这些文字角色须在 Disabled 组另行赋弱化色（见 to_qpalette）。
 DISABLED_TEXT_ROLES: tuple[QPalette.ColorRole, ...] = (
     QPalette.ColorRole.WindowText,
     QPalette.ColorRole.Text,
@@ -84,7 +84,7 @@ class Palette:
         """映射为 Qt 原生调色板，供未被 QSS 覆盖的控件使用。
 
         按 :data:`ROLE_SOURCES` 设置全部 ColorRole。
-        未设置的角色会被 Qt回退为系统默认值，因此映射表必须保持完整。
+        未设置的角色会被 Qt 回退为系统默认值，因此映射表必须保持完整。
 
         Returns:
             填充了全部 ColorRole 的调色板。
@@ -93,7 +93,7 @@ class Palette:
         for role, source in ROLE_SOURCES.items():
             color = source if source.startswith("#") else getattr(self, source)
             p.setColor(role, QColor(color))
-        # 覆写 Disabled 组文字色，恢复禁用态的置灰观感（见 DISABLED_TEXT_ROLES）
+        # 覆写 Disabled 组文字色，恢复禁用态的置灰效果（见 DISABLED_TEXT_ROLES）
         for role in DISABLED_TEXT_ROLES:
             p.setColor(QPalette.ColorGroup.Disabled, role, QColor(self.text_secondary))
         return p
@@ -131,7 +131,7 @@ class ThemeService(QObject):
             raise ValueError(f"主题文件结构非法: {path}") from e
 
     def apply_theme(self, mode: ThemeMode) -> None:
-        """计算环境并应用主题（唯一的渲染入口）"""
+        """判定深浅色并应用主题（唯一的渲染入口）。"""
         self._current_mode = mode
         is_dark = False
 
@@ -146,7 +146,7 @@ class ThemeService(QObject):
         self._render(palette)
 
     def _render(self, palette: Palette) -> None:
-        """同时更新 QPalette 与 QSS 样式表，保证渲染副作用原子生效"""
+        """同步更新 QPalette 与 QSS 样式表，使两者的渲染变更同时生效。"""
         self.current_palette = palette
 
         app = QApplication.instance()
