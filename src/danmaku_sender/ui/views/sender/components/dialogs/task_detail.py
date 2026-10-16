@@ -8,7 +8,6 @@ from PySide6.QtWidgets import (
     QCheckBox,
     QComboBox,
     QDialog,
-    QDoubleSpinBox,
     QFileDialog,
     QFormLayout,
     QGroupBox,
@@ -17,7 +16,6 @@ from PySide6.QtWidgets import (
     QLineEdit,
     QMessageBox,
     QPushButton,
-    QSpinBox,
     QTabWidget,
     QVBoxLayout,
     QWidget,
@@ -30,6 +28,7 @@ from danmaku_sender.state import AppState
 from danmaku_sender.types.models.common import VideoTarget
 from danmaku_sender.types.models.queue import TaskView
 from danmaku_sender.types.models.video import VideoInfo
+from danmaku_sender.ui.framework.field import DoubleNumberBox, NumberBox
 from danmaku_sender.ui.framework.form_binder import DraftFormBinder
 from danmaku_sender.utils.string_utils import parse_bilibili_link
 
@@ -408,14 +407,14 @@ class TaskDetailDialog(QDialog):
 
         delay_row = QHBoxLayout()
         delay_row.setSpacing(2)
-        self._min_delay = QDoubleSpinBox()
+        self._min_delay = DoubleNumberBox()
         self._min_delay.setRange(0.1, 60.0)
         self._min_delay.setSingleStep(0.5)
         self._min_delay.setFixedWidth(70)
         DraftFormBinder.map(self._min_delay, "min_delay")
         delay_row.addWidget(self._min_delay)
         delay_row.addWidget(QLabel("-"))
-        self._max_delay = QDoubleSpinBox()
+        self._max_delay = DoubleNumberBox()
         self._max_delay.setRange(0.1, 60.0)
         self._max_delay.setSingleStep(0.5)
         self._max_delay.setFixedWidth(70)
@@ -432,19 +431,19 @@ class TaskDetailDialog(QDialog):
         DraftFormBinder.map(self._burst_cb, "burst_enabled")
         burst_row.addWidget(self._burst_cb)
         burst_row.addWidget(QLabel("每"))
-        self._burst_size = QSpinBox()
+        self._burst_size = NumberBox()
         self._burst_size.setRange(2, 100)
         self._burst_size.setFixedWidth(70)
         DraftFormBinder.map(self._burst_size, "burst_size")
         burst_row.addWidget(self._burst_size)
         burst_row.addWidget(QLabel("条，休息"))
-        self._rest_min = QDoubleSpinBox()
+        self._rest_min = DoubleNumberBox()
         self._rest_min.setRange(0.0, 300.0)
         self._rest_min.setFixedWidth(60)
         DraftFormBinder.map(self._rest_min, "rest_min")
         burst_row.addWidget(self._rest_min)
         burst_row.addWidget(QLabel("-"))
-        self._rest_max = QDoubleSpinBox()
+        self._rest_max = DoubleNumberBox()
         self._rest_max.setRange(0.0, 300.0)
         self._rest_max.setFixedWidth(60)
         DraftFormBinder.map(self._rest_max, "rest_max")

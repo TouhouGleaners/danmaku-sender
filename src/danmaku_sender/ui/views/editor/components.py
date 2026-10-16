@@ -15,7 +15,6 @@ from PySide6.QtWidgets import (
     QCheckBox,
     QColorDialog,
     QComboBox,
-    QDoubleSpinBox,
     QFormLayout,
     QGroupBox,
     QHBoxLayout,
@@ -33,6 +32,7 @@ from danmaku_sender.config import Settings
 from danmaku_sender.state import AppState
 from danmaku_sender.types.models.danmaku import Danmaku
 from danmaku_sender.types.models.editor_types import EditorField
+from danmaku_sender.ui.framework.field import DoubleNumberBox
 from danmaku_sender.ui.framework.form_binder import LiveFormBinder
 from danmaku_sender.ui.framework.icons import SvgIcon
 from danmaku_sender.utils.string_utils import join_keywords, parse_keywords
@@ -202,7 +202,7 @@ class DanmakuPropertyForm(QWidget):
         form_layout = QFormLayout()
 
         # 时间
-        self.prop_time = QDoubleSpinBox()
+        self.prop_time = DoubleNumberBox()
         self.prop_time.setRange(0, 999999)
         self.prop_time.setDecimals(3)
         self.prop_time.setSuffix(" 秒")

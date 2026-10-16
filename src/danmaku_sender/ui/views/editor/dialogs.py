@@ -2,7 +2,7 @@ from typing import Any
 
 from PySide6.QtWidgets import (
     QDialog, QVBoxLayout, QHBoxLayout, QFormLayout, QLineEdit, QLabel, QPushButton,
-    QComboBox, QSpinBox, QDoubleSpinBox, QGroupBox
+    QComboBox, QGroupBox
 )
 from PySide6.QtCore import Qt, Slot
 
@@ -10,6 +10,7 @@ from .components import DanmakuPropertyForm
 
 from danmaku_sender.types.models.danmaku import Danmaku
 from danmaku_sender.types.models.editor_types import EditorField
+from danmaku_sender.ui.framework.field import DoubleNumberBox, NumberBox
 
 
 class EditDanmakuDialog(QDialog):
@@ -89,7 +90,7 @@ class TimeOffsetDialog(QDialog):
         group = QGroupBox("设置偏移秒数")
         g_layout = QVBoxLayout(group)
 
-        self.offset_spin = QDoubleSpinBox()
+        self.offset_spin = DoubleNumberBox()
         self.offset_spin.setRange(-86400, 86400)
         self.offset_spin.setSuffix(" 秒")
         self.offset_spin.setDecimals(3)
@@ -156,7 +157,7 @@ class ArrayGeneratorDialog(QDialog):
         self.color_combo.addItem("HSV 丝滑彩虹", "rainbow")
         form.addRow("色彩:", self.color_combo)
 
-        self.count_spin = QSpinBox()
+        self.count_spin = NumberBox()
         self.count_spin.setRange(2, 100)
         self.count_spin.setValue(10)
         self.count_spin.setSuffix(" 条")

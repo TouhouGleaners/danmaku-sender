@@ -64,6 +64,27 @@ QScrollBar::add-page, QScrollBar::sub-page {
     background: none;
 }
 
+/* 数值框：边框由 ui/framework/field.py 绘制，QSS 只管内边距与步进按钮归零。
+   仿 Fluent-Qt NumberBox 默认档，步进按钮隐藏（上游默认即 Hidden）。 */
+QSpinBox, QDoubleSpinBox {
+    background: transparent;
+    border: none;
+    padding: 4px 8px;
+    selection-background-color: {primary};
+}
+QSpinBox::up-button, QSpinBox::down-button,
+QDoubleSpinBox::up-button, QDoubleSpinBox::down-button {
+    width: 0;
+    border: none;
+    background: none;
+}
+QSpinBox::up-arrow, QSpinBox::down-arrow,
+QDoubleSpinBox::up-arrow, QDoubleSpinBox::down-arrow {
+    width: 0;
+    height: 0;
+    border: none;
+}
+
 /* 用户状态区 */
 QFrame#userWidget:hover {
     background-color: {bg_hover}; /* 动态悬停反馈 */
