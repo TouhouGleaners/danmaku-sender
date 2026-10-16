@@ -23,6 +23,47 @@ QScrollArea > QWidget > QWidget {
     background-color: transparent;
 }
 
+/* 滚动条：轨道透明，滑块为内缩胶囊，尺寸恒定。
+   圆角取短边一半，再大 Qt 会画出方角。 */
+QScrollBar:vertical {
+    background: transparent;
+    border: none;
+    width: 12px;
+}
+QScrollBar:horizontal {
+    background: transparent;
+    border: none;
+    height: 12px;
+}
+QScrollBar::handle:vertical {
+    background-color: {border_color};
+    min-height: 24px;
+    margin: 4px 3px;
+    border-radius: 3px;
+}
+QScrollBar::handle:horizontal {
+    background-color: {border_color};
+    min-width: 24px;
+    margin: 3px 4px;
+    border-radius: 3px;
+}
+QScrollBar::handle:hover {
+    background-color: {text_secondary};
+}
+QScrollBar::add-line:vertical, QScrollBar::sub-line:vertical {
+    height: 0;
+    border: none;
+    background: none;
+}
+QScrollBar::add-line:horizontal, QScrollBar::sub-line:horizontal {
+    width: 0;
+    border: none;
+    background: none;
+}
+QScrollBar::add-page, QScrollBar::sub-page {
+    background: none;
+}
+
 /* 用户状态区 */
 QFrame#userWidget:hover {
     background-color: {bg_hover}; /* 动态悬停反馈 */
