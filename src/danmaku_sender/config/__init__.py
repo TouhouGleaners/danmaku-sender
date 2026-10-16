@@ -6,12 +6,13 @@ from .network_policy import NetworkPolicy
 from .send_policy import SendPolicy
 from .sender_config import SenderConfig
 from .settings import Settings
-from .theme_config import ThemeConfig, ThemeMode
+from .theme_config import FontChoice, ThemeConfig, ThemeMode
 from .validation_config import ValidationConfig
 
 __all__ = [
     "ApiAuthConfig",
     "AtomicModel",
+    "FontChoice",
     "GlobalConfig",
     "MonitorConfig",
     "NetworkPolicy",

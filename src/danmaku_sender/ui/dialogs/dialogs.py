@@ -73,7 +73,7 @@ class AboutDialog(QDialog):
         layout.addStretch()
 
         # 字体署名（MiSans 许可协议第 2.1 条要求）
-        font_credit = QLabel("界面字体使用 MiSans，版权归小米科技有限责任公司")
+        font_credit = QLabel("本软件随附并可选用 MiSans 字体，版权归小米科技有限责任公司")
         font_credit.setAlignment(Qt.AlignmentFlag.AlignCenter)
         font_credit.setStyleSheet("color: #888; font-size: 11px;")
         layout.addWidget(font_credit)
