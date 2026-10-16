@@ -72,6 +72,12 @@ class AboutDialog(QDialog):
 
         layout.addStretch()
 
+        # 字体署名（MiSans 许可协议第 2.1 条要求）
+        font_credit = QLabel("界面字体使用 MiSans，版权归小米科技有限责任公司")
+        font_credit.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        font_credit.setStyleSheet("color: #888; font-size: 11px;")
+        layout.addWidget(font_credit)
+
         # 关闭按钮
         close_btn = QPushButton("关闭")
         close_btn.setFixedWidth(100)

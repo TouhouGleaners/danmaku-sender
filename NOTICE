@@ -22,3 +22,21 @@ assets/icons/account_levels/
 ----------------------------
 
 该目录下的图标带有 iconfont 平台的导出标记，非 Material Symbols。其授权条件由图标在该平台上的作者声明决定，与上述 Apache 2.0 无关；纳入发行物前请自行确认授权。
+
+
+MiSans
+------
+
+版权：小米科技有限责任公司（Xiaomi Inc.）
+
+许可：MiSans 字体知识产权许可协议（全文见 assets/fonts/MiSans-LICENSE）
+
+位置：assets/fonts/MiSans-Regular.ttf、assets/fonts/MiSans-Semibold.ttf
+
+来源：https://hyperos.mi.com/font/
+
+本软件使用 MiSans 字体渲染界面文字，字体文件随发行物一并分发，不提供任何
+提取、导出或单独再分发字体文件的通道。
+
+依协议第 2.1 条，特此注明本软件使用了 MiSans 字体。依协议第 2.2 条，字体
+未作改编或二次开发，字体族名保持 MiSans 不变。

@@ -35,6 +35,7 @@ from danmaku_sender.types.models.user import UserProfile
 from danmaku_sender.ui.support.log_utils import GuiLoggingHandler
 
 from .dialogs import AboutDialog, UpdateDialog
+from .framework.fonts import FontService
 from .framework.icons import SvgIcon, get_app_icon
 from .framework.image_processor import QtImageProcessor
 from .framework.notification import Notification
@@ -72,8 +73,13 @@ class MainWindow(QMainWindow):
         # 主题服务（UI 层持有，订阅 theme_config 变更驱动）
         self.theme_service = ThemeService(self)
 
-        # 首屏主题必须在创建任何 UI 控件前生效，否则 SvgIcon 会拿到错误的调色板颜色
+        # 字体服务（与主题服务平级，同为外观基础设施）
+        self.font_service = FontService(self)
+
+        # 首屏外观必须在创建任何 UI 控件前生效，否则 SvgIcon 会拿到错误的调色板颜色，
+        # 控件也会按旧字体测量
         self.theme_service.apply_theme(self.settings.theme_config.theme_mode)
+        self.font_service.apply(self.settings.theme_config.font_name)
 
         # 控制器
         self.auth_controller = AuthController(self.state, self.settings, self)
@@ -96,6 +102,9 @@ class MainWindow(QMainWindow):
         # 主题链路：设置页写配置 → themeApplied 显式信号 → 立即应用（无隐式订阅）
         self.page_settings.themeApplied.connect(self.theme_service.apply_theme)
         self.theme_service.themeChanged.connect(self._on_theme_applied)
+
+        # 字体链路同形
+        self.page_settings.fontApplied.connect(self.font_service.apply)
 
         # 信号与状态绑定
         self._init_auth_system()
