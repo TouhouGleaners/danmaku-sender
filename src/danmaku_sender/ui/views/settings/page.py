@@ -14,7 +14,7 @@ from PySide6.QtWidgets import (
 )
 
 from danmaku_sender.config import Settings
-from danmaku_sender.config.theme_config import ThemeMode
+from danmaku_sender.config.theme_config import FontChoice, ThemeMode
 from danmaku_sender.state import AppState
 from danmaku_sender.ui.framework.fonts import PROFILES
 from danmaku_sender.ui.framework.form_binder import LiveFormBinder
@@ -34,8 +34,8 @@ class SettingsPage(QWidget):
     排布沿用 Fluent 设置页：页标题、节标题、每项一张卡片行。
     """
 
-    themeApplied = Signal(object)  # ThemeMode：主题已写入配置，可立即应用
-    fontApplied = Signal(str)  # 字体档位名：已写入配置，可立即应用
+    themeApplied = Signal(ThemeMode)  # 主题已写入配置，可立即应用
+    fontApplied = Signal(FontChoice)  # 字体档位已写入配置，可立即应用
 
     def __init__(self, state: AppState, settings: Settings):
         super().__init__()
@@ -127,8 +127,16 @@ class SettingsPage(QWidget):
         )
 
         self.font_combo = QComboBox()
-        for key, profile in PROFILES.items():
-            self.font_combo.addItem(profile.label, key)
+        font_tips = {
+            FontChoice.MISANS: "随附字体，渲染经校准",
+            FontChoice.YAHEI: "保留细体锐利，避免粗体被过度加粗",
+            FontChoice.SYSTEM: "使用系统默认字体，渲染交给平台",
+        }
+        for choice in FontChoice:
+            self.font_combo.addItem(PROFILES[choice].label, choice)
+            self.font_combo.setItemData(
+                self.font_combo.count() - 1, font_tips[choice], Qt.ItemDataRole.ToolTipRole
+            )
         self.font_combo.setFixedWidth(160)
         main_layout.addWidget(
             self._row("界面字体", "切换字体会同步调整笔画渲染，保持清晰", SvgIcon.SHORT_TEXT, self.font_combo)
@@ -340,7 +348,7 @@ class SettingsPage(QWidget):
     def _on_font_written(self, _field: str, value: object) -> None:
         """字体写回成功 → 广播变更并立刻应用字体。"""
         self.state.configChanged.emit()
-        self.fontApplied.emit(str(value))
+        self.fontApplied.emit(value)
 
     def init_bindings(self) -> None:
         """将 UI 控件与配置模型进行单向写绑定"""

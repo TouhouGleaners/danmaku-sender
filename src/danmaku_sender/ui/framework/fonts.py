@@ -13,6 +13,7 @@ from PySide6.QtGui import QFont, QFontDatabase
 from PySide6.QtWidgets import QApplication, QWidget
 
 from danmaku_sender.config.app_meta import AppInfo
+from danmaku_sender.config.theme_config import DEFAULT_FONT, FontChoice
 
 logger = logging.getLogger(__name__)
 
@@ -72,23 +73,23 @@ _MISANS_HINTING = (
     else QFont.HintingPreference.PreferVerticalHinting
 )
 
-PROFILES: dict[str, FontProfile] = {
-    "misans": FontProfile(
+PROFILES: dict[FontChoice, FontProfile] = {
+    FontChoice.MISANS: FontProfile(
         label="MiSans",
         families=("MiSans",),
         bundled=True,
         body_hinting=_MISANS_HINTING,
         bold_hinting=_MISANS_HINTING,
     ),
-    "yahei": FontProfile(
-        label="微软雅黑",
+    FontChoice.YAHEI: FontProfile(
+        label="微软雅黑（优化渲染）",
         families=("Microsoft YaHei UI",),
         bundled=False,
         # 细体启用 hinting 以保持锐利，粗体禁用以避免垂直网格对齐导致的加粗
         body_hinting=QFont.HintingPreference.PreferDefaultHinting,
         bold_hinting=QFont.HintingPreference.PreferNoHinting,
     ),
-    "system": FontProfile(
+    FontChoice.SYSTEM: FontProfile(
         label="跟随系统",
         families=(),
         bundled=False,
@@ -96,7 +97,6 @@ PROFILES: dict[str, FontProfile] = {
         bold_hinting=QFont.HintingPreference.PreferDefaultHinting,
     ),
 }
-DEFAULT_PROFILE = "misans"
 
 
 class FontService(QObject):
@@ -111,7 +111,7 @@ class FontService(QObject):
 
     def __init__(self, parent: QObject | None = None):
         super().__init__(parent)
-        self.profile: FontProfile = PROFILES[DEFAULT_PROFILE]
+        self.profile: FontProfile = PROFILES[DEFAULT_FONT]
         self._bundled_registered = False
         self._hinting_filter = _HintingByWeight(self)
         self._hinting_filter.profile = self.profile
@@ -120,18 +120,18 @@ class FontService(QObject):
         if isinstance(app, QApplication):
             app.installEventFilter(self._hinting_filter)
 
-    def apply(self, profile_name: str = DEFAULT_PROFILE) -> None:
+    def apply(self, choice: FontChoice = DEFAULT_FONT) -> None:
         """按档位设置全局字体与文字渲染策略，并施加到已存在的控件。
 
         Args:
-            profile_name: :data:`PROFILES` 的键；未登记的键使用默认档位。
+            choice (FontChoice): 字体档位。
         """
         app = QApplication.instance()
         if not isinstance(app, QApplication):
             logger.error("FontService.apply 需在 QApplication 构造之后调用")
             return
 
-        self.profile = PROFILES.get(profile_name, PROFILES[DEFAULT_PROFILE])
+        self.profile = PROFILES.get(choice, PROFILES[DEFAULT_FONT])
         self._hinting_filter.profile = self.profile
 
         if self.profile.bundled:
@@ -210,7 +210,7 @@ class _HintingByWeight(QObject):
 
     def __init__(self, parent: QObject | None = None):
         super().__init__(parent)
-        self.profile: FontProfile = PROFILES[DEFAULT_PROFILE]
+        self.profile: FontProfile = PROFILES[DEFAULT_FONT]
         self._applying = False
 
     def eventFilter(self, obj: QObject, event: QEvent) -> bool:
