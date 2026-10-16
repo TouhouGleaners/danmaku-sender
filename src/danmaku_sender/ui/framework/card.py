@@ -1,7 +1,7 @@
 """Fluent 风格卡片容器。
 
-非交互式表面，用于分组呈现调用方的内容。外观由 ``style.qss`` 的
-``QFrame#card`` 规则绘制，本模块只负责维护外观属性。
+非交互式表面，用于分组呈现调用方的内容。
+外观由 ``style.qss`` 的``QFrame#card`` 规则绘制，本模块只负责维护外观属性。
 """
 
 from enum import Enum
@@ -32,7 +32,7 @@ class Card(QFrame):
         """初始化卡片。
 
         Args:
-            parent: 父控件。
+            parent (QWidget | None): 父控件。
         """
         super().__init__(parent)
         self.setObjectName("card")
@@ -47,7 +47,7 @@ class Card(QFrame):
         """设置填充表面。
 
         Args:
-            appearance: 目标表面。
+            appearance (CardAppearance): 目标表面。
         """
         if self.appearance() is appearance:
             return
@@ -62,7 +62,7 @@ class Card(QFrame):
         """设置边框显隐。
 
         Args:
-            visible: 是否显示边框。
+            visible (bool): 是否显示边框。
         """
         if self.isBorderVisible() == visible:
             return

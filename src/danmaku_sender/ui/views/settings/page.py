@@ -7,6 +7,7 @@ from PySide6.QtWidgets import (
     QFrame,
     QHBoxLayout,
     QLabel,
+    QScrollArea,
     QSpinBox,
     QVBoxLayout,
     QWidget,
@@ -16,8 +17,9 @@ from danmaku_sender.config import Settings
 from danmaku_sender.config.theme_config import ThemeMode
 from danmaku_sender.state import AppState
 from danmaku_sender.ui.framework.form_binder import LiveFormBinder
-from danmaku_sender.ui.framework.icons import SvgIcon
+from danmaku_sender.ui.framework.icons import SvgIcon, rerender
 from danmaku_sender.ui.framework.settings_row import ICON_SIZE, SettingsRow
+from danmaku_sender.ui.framework.wrap_layout import WrapLayout
 
 
 class SettingsPage(QWidget):
@@ -37,6 +39,7 @@ class SettingsPage(QWidget):
 
         self.state = state
         self.settings = settings
+        self._icon_jobs: list[tuple[QLabel, QIcon]] = []
         self._create_ui()
 
     # ── 排版构件 ────────────────────────────────────────────────────────
@@ -53,13 +56,35 @@ class SettingsPage(QWidget):
         label.setObjectName("settingsSectionTitle")
         return label
 
-    @staticmethod
-    def _icon(icon: QIcon) -> QLabel:
-        """构造设置行图标，居中于占位框内。"""
+    def _icon(self, icon: QIcon) -> QLabel:
+        """构造设置行图标，居中于占位框内。
+
+        Args:
+            icon (QIcon): 图标来源；主题切换后可据此重绘。
+
+        Returns:
+            QLabel: 承载图标的标签。
+        """
         label = QLabel()
-        label.setPixmap(icon.pixmap(ICON_SIZE, ICON_SIZE))
         label.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        self._icon_jobs.append((label, icon))
+        self._paint_icon(label, icon)
         return label
+
+    @staticmethod
+    def _paint_icon(label: QLabel, icon: QIcon) -> None:
+        """按当前调色板渲染图标到标签。
+
+        Args:
+            label (QLabel): 承载图标的标签。
+            icon (QIcon): 图标来源。
+        """
+        label.setPixmap(rerender(icon).pixmap(ICON_SIZE, ICON_SIZE))
+
+    def refresh_icons(self) -> None:
+        """主题切换后按当前调色板重绘设置行图标。"""
+        for label, icon in self._icon_jobs:
+            self._paint_icon(label, icon)
 
     def _row(self, title: str, subtitle: str, icon, trailing: QWidget) -> SettingsRow:
         return SettingsRow(title, subtitle, trailing=trailing, icon=self._icon(icon))
@@ -78,7 +103,8 @@ class SettingsPage(QWidget):
     # ── 页面构建 ────────────────────────────────────────────────────────
 
     def _create_ui(self):
-        main_layout = QVBoxLayout()
+        content = QWidget(self)
+        main_layout = QVBoxLayout(content)
         main_layout.setContentsMargins(48, 34, 48, 48)
         main_layout.setSpacing(10)
 
@@ -166,9 +192,7 @@ class SettingsPage(QWidget):
         ]
 
         burst_box = QWidget()
-        burst_lay = QHBoxLayout(burst_box)
-        burst_lay.setContentsMargins(0, 0, 0, 0)
-        burst_lay.setSpacing(6)
+        burst_lay = WrapLayout(burst_box, spacing=6)
         burst_lay.addWidget(self.burst_enabled_cb)
         burst_lay.addWidget(QLabel("每"))
         burst_lay.addWidget(self.burst_size)
@@ -225,7 +249,15 @@ class SettingsPage(QWidget):
         info_label.setStyleSheet("color: gray; font-size: 12px;")
         main_layout.addWidget(info_label)
 
-        self.setLayout(main_layout)
+        scroll = QScrollArea(self)
+        scroll.setWidgetResizable(True)
+        scroll.setFrameShape(QFrame.Shape.NoFrame)
+        scroll.setHorizontalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
+        scroll.setWidget(content)
+
+        outer = QVBoxLayout(self)
+        outer.setContentsMargins(0, 0, 0, 0)
+        outer.addWidget(scroll)
 
     def _create_danger_block(self) -> QVBoxLayout:
         """构建危险区：保留红色强调外观，与普通卡片行区分。"""

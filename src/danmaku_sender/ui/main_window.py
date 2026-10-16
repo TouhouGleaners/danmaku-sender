@@ -483,6 +483,9 @@ class MainWindow(QMainWindow):
         for i, icon in enumerate(icons):
             self.sidebar.item(i).setIcon(icon)
 
+        # 设置页行内图标
+        self.page_settings.refresh_icons()
+
         # 头像
         self._render_avatar()
 

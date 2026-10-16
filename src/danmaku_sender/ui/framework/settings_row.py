@@ -1,9 +1,9 @@
 """Fluent 风格的设置项行：图标、名称、说明与尾部控件。
 
-设置行本身就是一张卡片（继承 :class:`Card`），栅格内边距即卡片的内容
-边距，不再嵌套第二层容器。排布对齐 WinUI 的设置行：图标垂直居中于左侧，
-名称与说明夹在上下留白之间整体居中，尾部控件靠右。宽度不足时尾部控件
-换行到文字下方。
+设置行本身就是一张卡片（继承 :class:`Card`），栅格内边距即卡片的内容边距，不再嵌套第二层容器。
+排布对齐 WinUI 的设置行：
+图标垂直居中于左侧，名称与说明夹在上下留白之间整体居中，尾部控件靠右。
+宽度不足时尾部控件换行到文字下方。
 """
 
 from PySide6.QtCore import Qt
@@ -22,9 +22,9 @@ class SettingsRow(Card):
     """一行设置项，本身即卡片。
 
     Attributes:
-        icon_label: 图标控件；未提供图标时为 ``None``。
-        title_label: 名称控件。
-        subtitle_label: 说明控件。
+        icon_label (QWidget | None): 图标控件；未提供图标时为 ``None``。
+        title_label (QLabel): 名称控件。
+        subtitle_label (QLabel): 说明控件。
     """
 
     def __init__(
@@ -38,11 +38,11 @@ class SettingsRow(Card):
         """初始化设置行。
 
         Args:
-            title: 名称文本。
-            subtitle: 说明文本，超长自动换行。
-            trailing: 尾部控件，如开关或下拉框。
-            icon: 图标控件；省略则不显示图标列。
-            parent: 父控件。
+            title (str): 名称文本。
+            subtitle (str): 说明文本，超长自动换行。
+            trailing (QWidget | None): 尾部控件，如开关或下拉框。
+            icon (QWidget | None): 图标控件；省略则不显示图标列。
+            parent (QWidget | None): 父控件。
         """
         super().__init__(parent=parent)
         self.setMinimumHeight(ROW_MIN_HEIGHT)
@@ -81,6 +81,8 @@ class SettingsRow(Card):
         self._trailing = trailing
         self._stacked = False
         if trailing is not None:
+            trailing.setAccessibleName(title)
+            trailing.setAccessibleDescription(subtitle)
             self._place_trailing()
 
     def _place_trailing(self) -> None:
@@ -90,7 +92,8 @@ class SettingsRow(Card):
         self._grid.removeWidget(self._trailing)
         self._trailing.setParent(self)
         if self._stacked:
-            self._grid.addWidget(self._trailing, 1, 1, Qt.AlignmentFlag.AlignVCenter)
+            # 跨满整行，不与文字同列，避免尾部控件被文字列挤窄后溢出
+            self._grid.addWidget(self._trailing, 1, 0, 1, -1, Qt.AlignmentFlag.AlignVCenter)
             self.setMinimumHeight(ROW_MIN_HEIGHT_STACKED)
         else:
             self._grid.addWidget(

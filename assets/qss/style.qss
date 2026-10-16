@@ -14,6 +14,15 @@ QStackedWidget#contentStack {
     background-color: {bg_page};
 }
 
+/* 滚动区域：不画自身底色，沿用所在容器的表面色 */
+QScrollArea {
+    border: none;
+    background-color: transparent;
+}
+QScrollArea > QWidget > QWidget {
+    background-color: transparent;
+}
+
 /* 用户状态区 */
 QFrame#userWidget:hover {
     background-color: {bg_hover}; /* 动态悬停反馈 */
@@ -200,6 +209,11 @@ QFrame#card[appearance="canvas"] {
 QFrame#card[appearance="overlay"] {
     background-color: {bg_layer_overlay};
     border: none;
+}
+/* canvas / overlay 默认无边框，显式要求绘制时仍按属性兑现 */
+QFrame#card[appearance="canvas"][border="true"],
+QFrame#card[appearance="overlay"][border="true"] {
+    border: 1px solid {stroke_card};
 }
 QFrame#card[border="false"] {
     border: none;
