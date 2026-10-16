@@ -4,6 +4,7 @@
   <img src="https://img.shields.io/github/v/tag/TouhouGleaners/danmaku-sender?filter=v*&label=Pre-Release&color=orange" alt="Pre-release">
   <img src="https://img.shields.io/github/v/release/TouhouGleaners/danmaku-sender?label=Release&color=bright-green" alt="Release">
   <img src="https://img.shields.io/github/downloads/TouhouGleaners/danmaku-sender/total?label=Downloads" alt="Total Downloads">
+  <img src="https://img.shields.io/badge/Platform-Windows%2010%2B-0078D6.svg" alt="Windows 10 or later">
   <img src="https://img.shields.io/badge/Python-3.12+-blue.svg" alt="Python 3.12+">
   <img src="https://img.shields.io/badge/UI-PySide6-41cd52.svg" alt="PySide6">
   <img src="https://img.shields.io/badge/Build-Nuitka-cea113.svg" alt="Nuitka">
@@ -25,7 +26,6 @@
 - 任务间可设防风控间隔
 
 ### 🛡️ 风控规避
-- 原生支持 B 站 WBI 签名算法
 - 随机延迟 + 爆发模式（每发 N 条休息一段时间）
 - 限流自动重试（指数退避），致命错误自动熔断
 - 任务运行期间自动阻止系统休眠
@@ -195,6 +195,8 @@ A: 队列完成后，失败的弹幕记录会保留在任务中。也可前往"�
 ## 🤝 贡献
 
 本项目基于 [GNU GPLv3](LICENSE)（或任何后续版本）开源；界面图标等第三方资源的许可见 [NOTICE](NOTICE)。
+
+界面字体使用 [MiSans](https://hyperos.mi.com/font/)（版权归小米科技有限责任公司），字体文件随发行物一并分发，不提供单独提取或再分发的通道。许可全文与署名见 [NOTICE](NOTICE) 及 `assets/fonts/MiSans-LICENSE`。
 
 - 遇到 Bug？请提交 [Issue](https://github.com/TouhouGleaners/danmaku-sender/issues)
 - 有新功能想法？欢迎提交 PR！
