@@ -112,7 +112,7 @@ class FontService(QObject):
     def __init__(self, parent: QObject | None = None):
         super().__init__(parent)
         self.profile: FontProfile = PROFILES[DEFAULT_FONT]
-        self._bundled_registered = False
+        self._missing_fonts: tuple[str, ...] | None = None
         self._hinting_filter = _HintingByWeight(self)
         self._hinting_filter.profile = self.profile
 
@@ -131,11 +131,8 @@ class FontService(QObject):
             logger.error("FontService.apply 需在 QApplication 构造之后调用")
             return
 
-        self.profile = PROFILES.get(choice, PROFILES[DEFAULT_FONT])
+        self.profile = self._select_profile(choice)
         self._hinting_filter.profile = self.profile
-
-        if self.profile.bundled:
-            self._ensure_bundled_fonts()
 
         families = self._target_families()
 
@@ -149,11 +146,28 @@ class FontService(QObject):
         self._apply_to_existing_widgets(app, families)
         logger.info(f"全局字体已设为 {self.profile.label}")
 
+    def _select_profile(self, choice: FontChoice) -> FontProfile:
+        """选定实际生效的档位。
+
+        随附字体注册失败时回退到跟随系统。
+
+        Args:
+            choice (FontChoice): 请求的字体档位。
+
+        Returns:
+            FontProfile: 实际生效的档位。
+        """
+        profile = PROFILES.get(choice, PROFILES[DEFAULT_FONT])
+        if not profile.bundled:
+            return profile
+        missing = self._ensure_bundled_fonts()
+        return profile if not missing else PROFILES[FontChoice.SYSTEM]
+
     def _target_families(self) -> list[str]:
         """返回当前档位的字体族列表。
 
         Returns:
-            按回退顺序排列的字体族名称。
+            list[str]: 按回退顺序排列的字体族名称。
         """
         if self.profile.families:
             return list(self.profile.families)
@@ -163,8 +177,7 @@ class FontService(QObject):
         """把字体族与 hinting 施加到已存在的控件。
 
         ``QApplication.setFont`` 只对调用之后创建的控件生效，已存在的控件须逐个改写。
-        各控件保留自身的字号、字重与斜体；一次 ``setFont`` 写全字体族与 hinting，
-        避免再由 FontChange 回环补齐。
+        各控件保留自身的字号、字重与斜体；一次 ``setFont`` 写全字体族与 hinting，避免再由 FontChange 回环补齐。
 
         Args:
             app: 应用实例。
@@ -178,20 +191,39 @@ class FontService(QObject):
             widget.setFont(font)
             widget.updateGeometry()
 
-    def _ensure_bundled_fonts(self) -> None:
-        """将随附字体注册进 Qt 字体库，仅执行一次。"""
-        if self._bundled_registered:
-            return
-        self._bundled_registered = True
+    def _ensure_bundled_fonts(self) -> tuple[str, ...]:
+        """将随附字体注册进 Qt 字体库，仅注册一次。
 
-        for name in FONT_FILES:
-            path = FONTS_DIR / name
-            if not path.is_file():
-                logger.error(f"缺少字体文件: {path}")
-                continue
-            font_id = QFontDatabase.addApplicationFont(str(path))
-            if font_id < 0 or not QFontDatabase.applicationFontFamilies(font_id):
-                logger.error(f"字体注册失败: {path}")
+        Returns:
+            tuple[str, ...]: 未能注册的字体文件名。
+        """
+        if self._missing_fonts is None:
+            self._missing_fonts = tuple(
+                name for name in FONT_FILES if not self._register_font(name)
+            )
+            if self._missing_fonts:
+                logger.warning(f"随附字体未能全部注册：{self._missing_fonts}")
+        return self._missing_fonts
+
+    @staticmethod
+    def _register_font(filename: str) -> bool:
+        """注册单个随附字体文件。
+
+        Args:
+            filename (str): :data:`FONTS_DIR` 下的字体文件名。
+
+        Returns:
+            bool: 注册成功时为 ``True``。
+        """
+        path = FONTS_DIR / filename
+        if not path.is_file():
+            logger.error(f"缺少字体文件: {path}")
+            return False
+        font_id = QFontDatabase.addApplicationFont(str(path))
+        if font_id < 0 or not QFontDatabase.applicationFontFamilies(font_id):
+            logger.error(f"字体注册失败: {path}")
+            return False
+        return True
 
 
 class _HintingByWeight(QObject):
@@ -201,8 +233,8 @@ class _HintingByWeight(QObject):
     细体依赖 hinting 保持锐利，粗体需禁用 hinting 以避免笔画加粗。
     过滤器在控件样式初始化时按当前字重应用对应策略。
 
-    ``setFont`` 会再送 FontChange，本过滤器须能重入；否则 hinting 取不齐时
-    会与自己互相触发直至耗尽调用栈。
+    ``setFont`` 会再送 FontChange，本过滤器须能重入；
+    否则 hinting 取不齐时会与自己互相触发直至耗尽调用栈。
 
     Attributes:
         profile: 当前生效的字体档位，提供字重对应的 hinting 偏好。

@@ -111,7 +111,6 @@ class UpdateDialog(QDialog):
 
         self.browser.setStyleSheet("""
             QTextBrowser {
-                font-family: "Segoe UI", "Microsoft YaHei UI", "Microsoft YaHei", sans-serif;
                 font-size: 10px;
                 line-height: 1.6;
                 color: #24292e;

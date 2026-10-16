@@ -104,7 +104,7 @@ class MonitorPage(QWidget):
         def create_stat_block(title, color):
             lbl_num = QLabel("0")
             lbl_num.setAlignment(Qt.AlignmentFlag.AlignCenter)
-            lbl_num.setStyleSheet(f"font-size: 32px; font-weight: bold; color: {color}; font-family: 'Segoe UI', sans-serif;")
+            lbl_num.setStyleSheet(f"font-size: 32px; font-weight: bold; color: {color};")
 
             lbl_title = QLabel(title)
             lbl_title.setAlignment(Qt.AlignmentFlag.AlignCenter)
