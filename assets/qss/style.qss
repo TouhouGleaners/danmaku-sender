@@ -1,12 +1,26 @@
 /* 全局基础色 */
 QMainWindow {
-    background-color: {bg_base};
+    background-color: {bg_canvas};
 }
 
 /* 侧边栏整体 */
 QFrame#sidebarFrame {
-    background-color: {bg_surface};
+    background-color: {bg_chrome};
     border-right: 1px solid {border_color};
+}
+
+/* 内容区 */
+QStackedWidget#contentStack {
+    background-color: {bg_page};
+}
+
+/* 滚动区域：不画自身底色，沿用所在容器的表面色 */
+QScrollArea {
+    border: none;
+    background-color: transparent;
+}
+QScrollArea > QWidget > QWidget {
+    background-color: transparent;
 }
 
 /* 用户状态区 */
@@ -21,7 +35,7 @@ QLabel#avatarLabel {
 
 /* 侧边栏 */
 QListWidget#sidebar {
-    background-color: {bg_surface};
+    background-color: {bg_chrome};
     border: none;
     border-right: 1px solid {border_color};
     outline: none;
@@ -43,7 +57,7 @@ QListWidget#sidebar::item:hover {
 
 /* 侧边栏item 选中 */
 QListWidget#sidebar::item:selected {
-    background-color: {bg_base};
+    background-color: {bg_layer};
     color: {primary};
     font-weight: 600;
     border-left: 4px solid {primary};
@@ -177,6 +191,56 @@ QLabel#accountStatus[status="unknown"] {
     color: {text_secondary};
 }
 
+/* 卡片容器：圆角填充加细边框，用于分组呈现内容。
+   appearance 取自表面层级：layer 为表面、alt 为表面内的次级填充、
+   canvas 为最底层、overlay 为半透明覆盖。 */
+QFrame#card {
+    background-color: {bg_layer};
+    border: 1px solid {stroke_card};
+    border-radius: 4px;
+}
+QFrame#card[appearance="alt"] {
+    background-color: {bg_layer_alt};
+}
+QFrame#card[appearance="canvas"] {
+    background-color: {bg_canvas};
+    border: none;
+}
+QFrame#card[appearance="overlay"] {
+    background-color: {bg_layer_overlay};
+    border: none;
+}
+/* canvas / overlay 默认无边框，显式要求绘制时仍按属性兑现 */
+QFrame#card[appearance="canvas"][border="true"],
+QFrame#card[appearance="overlay"][border="true"] {
+    border: 1px solid {stroke_card};
+}
+QFrame#card[border="false"] {
+    border: none;
+}
+
+/* 设置项行：名称半粗、说明次级 */
+QLabel#settingsRowTitle {
+    font-size: 14px;
+    font-weight: 600;
+}
+QLabel#settingsRowSubtitle {
+    font-size: 12px;
+    color: {text_secondary};
+}
+
+/* 设置页两级标题：页标题靠字号拉开，节标题与行名称同号，
+   层级由「在卡片外」这一位置关系体现 */
+QLabel#settingsPageTitle {
+    font-size: 28px;
+    font-weight: 600;
+}
+QLabel#settingsSectionTitle {
+    font-size: 14px;
+    font-weight: 600;
+    min-height: 24px;
+}
+
 /* 设置页 - 危险区：QFrame 画框，QGroupBox 不碰 */
 QFrame#dangerFrame {
     border: 1px solid {danger};
@@ -217,7 +281,7 @@ QLabel#emptyStateHintDesc {
 
 /* 应用内通知卡片 */
 QFrame#notificationCard {
-    background-color: {bg_surface};
+    background-color: {bg_layer};
     border: 1px solid {border_color};
     border-radius: 6px;
 }

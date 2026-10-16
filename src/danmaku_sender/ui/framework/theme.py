@@ -26,17 +26,17 @@ QSS_PATH = AppInfo.Paths.ASSETS / "qss" / "style.qss"
 # QPalette.ColorRole 到颜色来源的映射：取值为 Palette 的属性名，
 # 或以 # 开头的字面色。须覆盖 Qt 全部 ColorRole，未覆盖的角色会被 Qt 回退为系统默认值。
 ROLE_SOURCES: dict[QPalette.ColorRole, str] = {
-    QPalette.ColorRole.Window: "bg_base",
+    QPalette.ColorRole.Window: "bg_canvas",
     QPalette.ColorRole.WindowText: "text_main",
-    QPalette.ColorRole.Base: "bg_surface",
-    QPalette.ColorRole.AlternateBase: "bg_base",
+    QPalette.ColorRole.Base: "bg_control",
+    QPalette.ColorRole.AlternateBase: "bg_layer_alt",
     QPalette.ColorRole.Text: "text_main",
     QPalette.ColorRole.Button: "bg_hover",
     QPalette.ColorRole.ButtonText: "text_main",
     QPalette.ColorRole.BrightText: "primary",
     QPalette.ColorRole.Highlight: "primary",
     QPalette.ColorRole.HighlightedText: "#ffffff",
-    QPalette.ColorRole.ToolTipBase: "bg_surface",
+    QPalette.ColorRole.ToolTipBase: "bg_layer",
     QPalette.ColorRole.ToolTipText: "text_main",
     QPalette.ColorRole.PlaceholderText: "text_secondary",
     QPalette.ColorRole.Link: "primary",
@@ -45,7 +45,7 @@ ROLE_SOURCES: dict[QPalette.ColorRole, str] = {
     # Light / Midlight / Mid / Dark / Shadow 服务于立体边框与阴影。
     # 本项目为平面化界面，这些角色统一取中性色。
     QPalette.ColorRole.Light: "bg_hover",
-    QPalette.ColorRole.Midlight: "bg_surface",
+    QPalette.ColorRole.Midlight: "bg_control",
     QPalette.ColorRole.Mid: "border_color",
     QPalette.ColorRole.Dark: "border_color",
     QPalette.ColorRole.Shadow: "border_color",
@@ -63,10 +63,16 @@ DISABLED_TEXT_ROLES: tuple[QPalette.ColorRole, ...] = (
 @dataclass(frozen=True)
 class Palette:
     """系统色彩语义 Token（不可变）"""
-    bg_base: str
-    bg_surface: str
+    bg_canvas: str
+    bg_chrome: str
+    bg_page: str
+    bg_layer: str
+    bg_layer_alt: str
+    bg_layer_overlay: str
+    bg_control: str
     bg_hover: str
     border_color: str
+    stroke_card: str
     text_main: str
     text_secondary: str
     primary: str
@@ -158,10 +164,16 @@ class ThemeService(QObject):
             try:
                 css = QSS_PATH.read_text(encoding="utf-8")
                 for token, color in {
-                    "{bg_base}": palette.bg_base,
-                    "{bg_surface}": palette.bg_surface,
+                    "{bg_canvas}": palette.bg_canvas,
+                    "{bg_chrome}": palette.bg_chrome,
+                    "{bg_page}": palette.bg_page,
+                    "{bg_layer}": palette.bg_layer,
+                    "{bg_layer_alt}": palette.bg_layer_alt,
+                    "{bg_layer_overlay}": palette.bg_layer_overlay,
+                    "{bg_control}": palette.bg_control,
                     "{bg_hover}": palette.bg_hover,
                     "{border_color}": palette.border_color,
+                    "{stroke_card}": palette.stroke_card,
                     "{text_main}": palette.text_main,
                     "{text_secondary}": palette.text_secondary,
                     "{primary}": palette.primary,

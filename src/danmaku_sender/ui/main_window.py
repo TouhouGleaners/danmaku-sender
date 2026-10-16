@@ -180,6 +180,7 @@ class MainWindow(QMainWindow):
 
         # --- 右侧内容容器 ---
         self.content_stack = QStackedWidget()
+        self.content_stack.setObjectName("contentStack")
 
         self.main_layout.addWidget(self.sidebar_frame)
         self.main_layout.addWidget(self.content_stack)
@@ -481,6 +482,9 @@ class MainWindow(QMainWindow):
         icons = [SvgIcon.SETTINGS, SvgIcon.SEND, SvgIcon.MONITOR, SvgIcon.HISTORY]
         for i, icon in enumerate(icons):
             self.sidebar.item(i).setIcon(icon)
+
+        # 设置页行内图标
+        self.page_settings.refresh_icons()
 
         # 头像
         self._render_avatar()
