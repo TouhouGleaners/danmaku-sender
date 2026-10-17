@@ -381,17 +381,22 @@ class _FieldChrome:
             bool: 事件已由步进区消费时为 ``True``。
         """
         direction = self._hit(x, y)
-        if not direction:
+        if not direction or not self._owner.isEnabled():
             return False
         self._owner.stepBy(direction)
         self._repeat.start(self.REPEAT_DELAY_MS)
         return True
 
     def _repeat_step(self) -> None:
-        """连续步进一步；指针已离开步进区时跳过。"""
+        """连续步进一步；指针已离开步进区或控件已禁用时跳过。"""
+        if not self._owner.isEnabled():
+            self._stop_repeat()
+            return
+
         direction = self._down()
         if not direction:
             return
+
         self._owner.stepBy(direction)
         self._repeat.setInterval(self.REPEAT_INTERVAL_MS)
 
