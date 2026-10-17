@@ -3,12 +3,10 @@ from PySide6.QtGui import QIcon
 from PySide6.QtWidgets import (
     QCheckBox,
     QComboBox,
-    QDoubleSpinBox,
     QFrame,
     QHBoxLayout,
     QLabel,
     QScrollArea,
-    QSpinBox,
     QVBoxLayout,
     QWidget,
 )
@@ -19,6 +17,7 @@ from danmaku_sender.state import AppState
 from danmaku_sender.ui.framework.fonts import PROFILES
 from danmaku_sender.ui.framework.form_binder import LiveFormBinder
 from danmaku_sender.ui.framework.icons import SvgIcon, rerender
+from danmaku_sender.ui.framework.number_box import DoubleNumberBox, NumberBox
 from danmaku_sender.ui.framework.settings_row import ICON_SIZE, SettingsRow
 from danmaku_sender.ui.framework.wrap_layout import WrapLayout
 
@@ -172,12 +171,12 @@ class SettingsPage(QWidget):
         # --- 发送 ---
         main_layout.addWidget(self._section_title("发送"))
 
-        self.min_delay = QDoubleSpinBox()
+        self.min_delay = DoubleNumberBox()
         self.min_delay.setRange(0.1, 60.0)
         self.min_delay.setValue(8.0)
         self.min_delay.setSingleStep(0.5)
         self.min_delay.setAccessibleName("随机间隔 下限")
-        self.max_delay = QDoubleSpinBox()
+        self.max_delay = DoubleNumberBox()
         self.max_delay.setRange(0.1, 60.0)
         self.max_delay.setValue(8.5)
         self.max_delay.setSingleStep(0.5)
@@ -200,15 +199,15 @@ class SettingsPage(QWidget):
         self.burst_enabled_cb.toggled.connect(self._on_burst_toggled)
         self.burst_enabled_cb.setAccessibleName("爆发模式")
 
-        self.burst_size = QSpinBox()
+        self.burst_size = NumberBox()
         self.burst_size.setRange(2, 100)
         self.burst_size.setValue(3)
         self.burst_size.setAccessibleName("爆发模式 每轮条数")
-        self.burst_rest_min = QDoubleSpinBox()
+        self.burst_rest_min = DoubleNumberBox()
         self.burst_rest_min.setRange(0.0, 300.0)
         self.burst_rest_min.setValue(10.0)
         self.burst_rest_min.setAccessibleName("爆发模式 休息下限")
-        self.burst_rest_max = QDoubleSpinBox()
+        self.burst_rest_max = DoubleNumberBox()
         self.burst_rest_max.setRange(0.0, 300.0)
         self.burst_rest_max.setValue(20.0)
         self.burst_rest_max.setAccessibleName("爆发模式 休息上限")
@@ -230,7 +229,7 @@ class SettingsPage(QWidget):
             self._row("爆发模式", "连续发送若干条后暂停一段时间再继续", SvgIcon.AUTO_AWESOME, burst_box)
         )
 
-        self.delay_between = QDoubleSpinBox()
+        self.delay_between = DoubleNumberBox()
         self.delay_between.setRange(0.0, 300.0)
         self.delay_between.setSingleStep(5.0)
         self.delay_between.setAccessibleName("任务间隔")
@@ -243,7 +242,7 @@ class SettingsPage(QWidget):
             )
         )
 
-        self.stop_count = QSpinBox()
+        self.stop_count = NumberBox()
         self.stop_count.setRange(0, 99999)
         self.stop_count.setAccessibleName("已发送达到")
         main_layout.addWidget(
@@ -255,7 +254,7 @@ class SettingsPage(QWidget):
             )
         )
 
-        self.stop_time = QSpinBox()
+        self.stop_time = NumberBox()
         self.stop_time.setRange(0, 99999)
         self.stop_time.setAccessibleName("已用时达到")
         main_layout.addWidget(

@@ -23,6 +23,68 @@ QScrollArea > QWidget > QWidget {
     background-color: transparent;
 }
 
+/* 滚动条：轨道透明，滑块为内缩胶囊，尺寸恒定。
+   圆角取短边一半，再大 Qt 会画出方角。 */
+QScrollBar:vertical {
+    background: transparent;
+    border: none;
+    width: 12px;
+}
+QScrollBar:horizontal {
+    background: transparent;
+    border: none;
+    height: 12px;
+}
+QScrollBar::handle:vertical {
+    background-color: {border_color};
+    min-height: 24px;
+    margin: 4px 3px;
+    border-radius: 3px;
+}
+QScrollBar::handle:horizontal {
+    background-color: {border_color};
+    min-width: 24px;
+    margin: 3px 4px;
+    border-radius: 3px;
+}
+QScrollBar::handle:hover {
+    background-color: {text_secondary};
+}
+QScrollBar::add-line:vertical, QScrollBar::sub-line:vertical {
+    height: 0;
+    border: none;
+    background: none;
+}
+QScrollBar::add-line:horizontal, QScrollBar::sub-line:horizontal {
+    width: 0;
+    border: none;
+    background: none;
+}
+QScrollBar::add-page, QScrollBar::sub-page {
+    background: none;
+}
+
+/* 数值框：边框与步进区由 ui/framework/field.py 绘制，QSS 只管内边距。
+   左右内边距为步进区让位，数字居中其内，加减号悬停时复现。 */
+QSpinBox, QDoubleSpinBox {
+    background: transparent;
+    border: none;
+    padding: 4px 12px;
+    selection-background-color: {primary};
+}
+QSpinBox::up-button, QSpinBox::down-button,
+QDoubleSpinBox::up-button, QDoubleSpinBox::down-button {
+    width: 0;
+    border: none;
+    background: none;
+}
+QSpinBox::up-arrow, QSpinBox::down-arrow,
+QDoubleSpinBox::up-arrow, QDoubleSpinBox::down-arrow {
+    width: 0;
+    height: 0;
+    border: none;
+}
+
 /* 用户状态区 */
 QFrame#userWidget:hover {
     background-color: {bg_hover}; /* 动态悬停反馈 */

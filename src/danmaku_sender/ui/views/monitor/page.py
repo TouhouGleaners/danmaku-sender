@@ -14,7 +14,6 @@ from PySide6.QtWidgets import (
     QLabel,
     QMessageBox,
     QPushButton,
-    QSpinBox,
     QTableView,
     QTextEdit,
     QVBoxLayout,
@@ -29,6 +28,7 @@ from danmaku_sender.types.models.common import MonitorStats
 from danmaku_sender.ui.framework.empty_state import EmptyStateHint
 from danmaku_sender.ui.framework.form_binder import LiveFormBinder
 from danmaku_sender.ui.framework.icons import SvgIcon
+from danmaku_sender.ui.framework.number_box import NumberBox
 
 from .table import MonitorRow, QueueMonitorModel
 
@@ -131,7 +131,7 @@ class MonitorPage(QWidget):
         # --- 设置与日志 ---
         param_layout = QHBoxLayout()
         param_layout.addWidget(QLabel("轮询间隔(秒):"))
-        self.interval_spin = QSpinBox()
+        self.interval_spin = NumberBox()
         self.interval_spin.setRange(10, 3600)
         self.interval_spin.setValue(60)
         param_layout.addWidget(self.interval_spin)
