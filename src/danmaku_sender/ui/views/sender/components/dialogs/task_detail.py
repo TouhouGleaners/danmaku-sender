@@ -28,8 +28,8 @@ from danmaku_sender.state import AppState
 from danmaku_sender.types.models.common import VideoTarget
 from danmaku_sender.types.models.queue import TaskView
 from danmaku_sender.types.models.video import VideoInfo
-from danmaku_sender.ui.framework.field import DoubleNumberBox, NumberBox
 from danmaku_sender.ui.framework.form_binder import DraftFormBinder
+from danmaku_sender.ui.framework.number_box import DoubleNumberBox, NumberBox
 from danmaku_sender.utils.string_utils import parse_bilibili_link
 
 logger = logging.getLogger(__name__)

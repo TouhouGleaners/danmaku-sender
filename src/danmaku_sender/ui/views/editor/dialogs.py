@@ -1,16 +1,23 @@
 from typing import Any
 
-from PySide6.QtWidgets import (
-    QDialog, QVBoxLayout, QHBoxLayout, QFormLayout, QLineEdit, QLabel, QPushButton,
-    QComboBox, QGroupBox
-)
 from PySide6.QtCore import Qt, Slot
-
-from .components import DanmakuPropertyForm
+from PySide6.QtWidgets import (
+    QComboBox,
+    QDialog,
+    QFormLayout,
+    QGroupBox,
+    QHBoxLayout,
+    QLabel,
+    QLineEdit,
+    QPushButton,
+    QVBoxLayout,
+)
 
 from danmaku_sender.types.models.danmaku import Danmaku
 from danmaku_sender.types.models.editor_types import EditorField
-from danmaku_sender.ui.framework.field import DoubleNumberBox, NumberBox
+from danmaku_sender.ui.framework.number_box import DoubleNumberBox, NumberBox
+
+from .components import DanmakuPropertyForm
 
 
 class EditDanmakuDialog(QDialog):

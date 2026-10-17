@@ -14,10 +14,10 @@ from PySide6.QtWidgets import (
 from danmaku_sender.config import Settings
 from danmaku_sender.config.theme_config import FontChoice, ThemeMode
 from danmaku_sender.state import AppState
-from danmaku_sender.ui.framework.field import DoubleNumberBox, NumberBox
 from danmaku_sender.ui.framework.fonts import PROFILES
 from danmaku_sender.ui.framework.form_binder import LiveFormBinder
 from danmaku_sender.ui.framework.icons import SvgIcon, rerender
+from danmaku_sender.ui.framework.number_box import DoubleNumberBox, NumberBox
 from danmaku_sender.ui.framework.settings_row import ICON_SIZE, SettingsRow
 from danmaku_sender.ui.framework.wrap_layout import WrapLayout
 

@@ -26,9 +26,9 @@ from danmaku_sender.infra.persistence.history_manager import HistoryManager
 from danmaku_sender.state import AppState
 from danmaku_sender.types.models.common import MonitorStats
 from danmaku_sender.ui.framework.empty_state import EmptyStateHint
-from danmaku_sender.ui.framework.field import NumberBox
 from danmaku_sender.ui.framework.form_binder import LiveFormBinder
 from danmaku_sender.ui.framework.icons import SvgIcon
+from danmaku_sender.ui.framework.number_box import NumberBox
 
 from .table import MonitorRow, QueueMonitorModel
 
