@@ -1,9 +1,9 @@
-"""字段输入框的边框与步进区。
+"""字段输入框的外框与步进区。
 
-圆角填充、细框、底部灰线，聚焦时底部灰线换为强调色。
-底部灰线不沿周长描边，而是两端各内缩一个圆角半径的圆头短线。
-取值居中，左右为步进区，悬停或聚焦时复现加减号。
-笔画与外框按设备像素对齐，高 DPI 下边缘不发虚。
+字段外观由圆角填充、外框与底部灰线组成，聚焦时底部灰线改用强调色。
+底部灰线为独立绘制的圆头短线，两端各内缩一个圆角半径，不随外框环绕。
+取值居中，左右两侧为步进区，悬停或聚焦时显示加减号。
+笔画与外框对齐至设备像素，在高 DPI 缩放下保持边缘清晰。
 """
 
 import math
@@ -31,16 +31,16 @@ from PySide6.QtWidgets import (
 
 
 class _Stroke(NamedTuple):
-    """对齐到设备像素后的描边矩形与笔宽。"""
+    """对齐至设备像素后的描边矩形与笔宽。"""
 
     rect: QRectF
     width: float
 
 
 class _PaintMetrics:
-    """将矩形与笔画对齐到设备像素。
+    """将矩形与笔画对齐至设备像素。
 
-    以画笔的 ``deviceTransform`` 为准，它同时覆盖高 DPI 缩放、重定向绘制与小数位移。
+    以画笔的 ``deviceTransform`` 为基准，该变换同时涵盖高 DPI 缩放、重定向绘制与小数位移。
 
     Typical usage example::
 
@@ -49,7 +49,7 @@ class _PaintMetrics:
     """
 
     def __init__(self, painter: QPainter) -> None:
-        """读取画笔的设备变换并判定是否可压齐。
+        """读取画笔的设备变换并判定是否可对齐。
 
         Args:
             painter (QPainter): 正在绘制的画笔。
@@ -67,7 +67,7 @@ class _PaintMetrics:
 
     @staticmethod
     def _qround(value: float) -> int:
-        """按 Qt 的 qRound 取整，半数远离零。
+        """按 ``qRound`` 语义取整，中值取远离零的一侧。
 
         Args:
             value (float): 待取整的数值。
@@ -78,13 +78,13 @@ class _PaintMetrics:
         return int(value + 0.5) if value >= 0 else int(value - 0.5)
 
     def aligned_outer_rect(self, rect: QRectF) -> QRectF:
-        """把逻辑矩形的四边压到设备像素。
+        """将逻辑矩形的四边对齐至设备像素。
 
         Args:
             rect (QRectF): 逻辑坐标下的矩形。
 
         Returns:
-            QRectF: 压齐后的逻辑矩形。
+            QRectF: 对齐后的逻辑矩形。
         """
         if not self._axis_aligned or not rect.isValid() or rect.isEmpty():
             return rect
@@ -98,14 +98,14 @@ class _PaintMetrics:
         return inverted.mapRect(snapped).normalized() if ok else rect
 
     def aligned_stroke(self, rect: QRectF, width: float) -> _Stroke:
-        """返回对齐到设备像素的描边矩形与笔宽。
+        """返回对齐至设备像素的描边矩形与笔宽。
 
         Args:
             rect (QRectF): 逻辑坐标下的外框矩形。
             width (float): 逻辑笔宽。
 
         Returns:
-            _Stroke: 对齐后的描边矩形与笔宽；笔宽非正时笔宽为 0。
+            _Stroke: 对齐后的描边矩形与笔宽；笔宽非正时宽度为 0。
         """
         if width <= 0 or not rect.isValid() or rect.isEmpty():
             return _Stroke(rect, 0.0)
@@ -124,14 +124,14 @@ class _PaintMetrics:
 
 
 class _FieldChrome:
-    """字段边框与步进区的外观与交互。
+    """字段外框与步进区的外观与交互。
 
     由 :class:`NumberBox` / :class:`DoubleNumberBox` 持有，
-    在各自的``paintEvent`` / ``eventFilter`` / 鼠标事件里转调。
-    取色走应用级 QPalette，颜色来源见 ThemeService 的 ROLE_SOURCES。
+    在各自的 ``paintEvent`` / ``eventFilter`` 与鼠标事件中转调。
+    配色取自应用级 QPalette，来源见 ThemeService 的 ROLE_SOURCES。
     """
 
-    # 框线：圆角与 Card 同为 4px
+    # 外框，圆角与 Card 一致为 4px
     CORNER_RADIUS = 4
     BORDER_WIDTH = 1
     ACCENT_WIDTH = 2
@@ -142,19 +142,19 @@ class _FieldChrome:
     STEPPER_ARM = 10
     STEPPER_WEIGHT = 2
 
-    # 悬停与按压底板
+    # 步进区的悬停与按压底板
     PLATE_SIZE = 20
     PLATE_RADIUS = 6
     PRESS_SINK = 1
     HOVER_ALPHA = 0.12
     PRESS_ALPHA = 0.28
 
-    # 连发
+    # 连发时序
     REPEAT_DELAY_MS = 400
     REPEAT_INTERVAL_MS = 80
 
     def __init__(self, owner: QAbstractSpinBox) -> None:
-        """接管取值排布与内部编辑器的事件。
+        """接管取值排布，并安装内部编辑器的事件过滤器。
 
         Args:
             owner (QAbstractSpinBox): 承载字段外观的数值框。
@@ -170,25 +170,25 @@ class _FieldChrome:
     # ── 事件 ────────────────────────────────────────────────────────
 
     def before_paint(self) -> None:
-        """在取值绘制之前铺好填充、框线与底部灰线。"""
+        """在取值绘制之前绘制填充、外框与底部灰线。"""
         self._paint_frame()
 
     def after_paint(self) -> None:
-        """在取值绘制之后补上加减号。"""
+        """在取值绘制之后绘制加减号。"""
         self._paint_steppers()
 
     def filter_editor(self, watched: QObject, event: QEvent) -> bool:
-        """处置内部编辑器转来的事件。
+        """处理内部编辑器转发的事件。
 
-        编辑器铺满整个控件，点击与悬停都归它：
-        步进区的按压转为步进，悬停其上时光标切回箭头。
+        内部编辑器铺满整个控件，按压与悬停均由其接收：
+        落在步进区的按压转为步进，悬停其上时将光标改为箭头。
 
         Args:
             watched (QObject): 事件来源，即内部编辑器。
-            event (QEvent): 转来的事件。
+            event (QEvent): 转发的事件。
 
         Returns:
-            bool: 已按步进区消费时为 ``True``。
+            bool: 事件已由步进区消费时为 ``True``。
         """
         if not isinstance(watched, QLineEdit) or not isinstance(event, QMouseEvent):
             return False
@@ -213,20 +213,20 @@ class _FieldChrome:
         return False
 
     def on_press(self, event: QMouseEvent) -> bool:
-        """按压落在步进区时走一步。
+        """按压落在步进区时步进一步。
 
         Args:
             event (QMouseEvent): 鼠标按压事件。
 
         Returns:
-            bool: 已按步进区消费时为 ``True``。
+            bool: 事件已由步进区消费时为 ``True``。
         """
         pos = event.position().toPoint()
         self._owner.update()
         return self._step(pos.x(), pos.y())
 
     def on_release(self) -> None:
-        """松开后停掉连发并重绘。"""
+        """松开后停止连发并重绘。"""
         self._stop_repeat()
         self._owner.update()
 
@@ -246,7 +246,7 @@ class _FieldChrome:
         )
 
     def _hit(self, x: int, y: int) -> int:
-        """返回命中位置的步进方向，未命中为 0。
+        """返回命中位置的步进方向，未命中返回 0。
 
         Args:
             x (int): 鼠标位置的横坐标，控件局部坐标。
@@ -263,7 +263,7 @@ class _FieldChrome:
         return 0
 
     def _over(self) -> int:
-        """返回指针所在的步进方向，不在步进区为 0。
+        """返回指针所在的步进方向，不在步进区返回 0。
 
         Returns:
             int: 减号区为 -1，加号区为 1，其余为 0。
@@ -272,7 +272,7 @@ class _FieldChrome:
         return self._hit(pos.x(), pos.y())
 
     def _down(self) -> int:
-        """返回当前按压中的步进方向，无按压为 0。
+        """返回当前按压的步进方向，无按压返回 0。
 
         Returns:
             int: 按住减号区为 -1，按住加号区为 1，其余为 0。
@@ -282,14 +282,14 @@ class _FieldChrome:
         return self._over()
 
     def _step(self, x: int, y: int) -> bool:
-        """命中步进区时走一步，并启动连发。
+        """命中步进区时步进一步，并启动连发。
 
         Args:
             x (int): 鼠标位置的横坐标，控件局部坐标。
             y (int): 鼠标位置的纵坐标，控件局部坐标。
 
         Returns:
-            bool: 命中步进区并已步进时为 ``True``。
+            bool: 事件已由步进区消费时为 ``True``。
         """
         direction = self._hit(x, y)
         if not direction:
@@ -299,7 +299,7 @@ class _FieldChrome:
         return True
 
     def _repeat_step(self) -> None:
-        """连发一拍：仍按在步进区上才继续。"""
+        """执行一次连发；指针已离开步进区时跳过。"""
         direction = self._down()
         if not direction:
             return
@@ -307,7 +307,7 @@ class _FieldChrome:
         self._repeat.setInterval(self.REPEAT_INTERVAL_MS)
 
     def _stop_repeat(self) -> None:
-        """停掉连发。"""
+        """停止连发。"""
         self._repeat.stop()
 
     # ── 绘制 ────────────────────────────────────────────────────────
@@ -322,7 +322,7 @@ class _FieldChrome:
         return app.palette() if isinstance(app, QApplication) else self._owner.palette()
 
     def _paint_frame(self) -> None:
-        """按控件状态绘制字段边框。"""
+        """按控件状态绘制字段外框。"""
         owner = self._owner
         palette = self._palette()
         rect = QRectF(owner.rect())
@@ -382,7 +382,7 @@ class _FieldChrome:
         )
 
     def _paint_steppers(self) -> None:
-        """悬停或聚焦时在左右步进区绘制减号与加号。"""
+        """悬停或聚焦时在左右步进区绘制加减号。"""
         owner = self._owner
         if not (owner.isEnabled() and (owner.hasFocus() or owner.underMouse())):
             return
@@ -429,10 +429,11 @@ class _FieldChrome:
 
 
 class NumberBox(QSpinBox):
-    """整数数值框
+    """整数数值框。
 
     取值规则沿用 :class:`QSpinBox`。
-    数字居中，左右为步进区，悬停或聚焦时复现加减号，点按各走一步，按住连发。
+    取值居中，左右为步进区，悬停或聚焦时显示加减号；
+    点按步进一步，按住连续步进。
 
     Typical usage example::
 
@@ -465,10 +466,11 @@ class NumberBox(QSpinBox):
 
 
 class DoubleNumberBox(QDoubleSpinBox):
-    """小数数值框
+    """小数数值框。
 
     取值规则沿用 :class:`QDoubleSpinBox`。
-    数字居中，左右为步进区，悬停或聚焦时复现加减号，点按各走一步，按住连发。
+    取值居中，左右为步进区，悬停或聚焦时显示加减号；
+    点按步进一步，按住连续步进。
 
     Typical usage example::
 
