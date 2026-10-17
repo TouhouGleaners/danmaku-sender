@@ -64,12 +64,12 @@ QScrollBar::add-page, QScrollBar::sub-page {
     background: none;
 }
 
-/* 数值框：边框由 ui/framework/field.py 绘制，QSS 只管内边距与步进按钮归零。
-   仿 Fluent-Qt NumberBox 默认档，步进按钮隐藏（上游默认即 Hidden）。 */
+/* 数值框：边框与步进区由 ui/framework/field.py 绘制，QSS 只管内边距。
+   左右内边距为步进区让位，数字居中其内，加减号悬停时复现。 */
 QSpinBox, QDoubleSpinBox {
     background: transparent;
     border: none;
-    padding: 4px 8px;
+    padding: 4px 12px;
     selection-background-color: {primary};
 }
 QSpinBox::up-button, QSpinBox::down-button,
