@@ -263,23 +263,33 @@ class _FieldChrome:
         """
         if not isinstance(watched, QLineEdit):
             return False
+
         if event.type() in (QEvent.Type.Enter, QEvent.Type.Leave):
             self._owner.update()
             return False
+
         if not isinstance(event, QMouseEvent):
             return False
+
         pos = self._owner.mapFromGlobal(event.globalPosition().toPoint())
-        if event.type() == QEvent.Type.MouseButtonPress:
-            self._owner.update()
-            return self._step(pos.x(), pos.y())
-        if event.type() == QEvent.Type.MouseButtonRelease:
-            self._stop_repeat()
-        if event.type() == QEvent.Type.MouseMove:
-            watched.setCursor(
-                Qt.CursorShape.ArrowCursor
-                if self._hit(pos.x(), pos.y())
-                else Qt.CursorShape.IBeamCursor
-            )
+        match event.type():
+            case QEvent.Type.MouseButtonPress:
+                if event.button() != Qt.MouseButton.LeftButton:
+                    return False
+                self._owner.update()
+                return self._step(pos.x(), pos.y())
+
+            case QEvent.Type.MouseButtonRelease:
+                if event.button() == Qt.MouseButton.LeftButton:
+                    self._stop_repeat()
+
+            case QEvent.Type.MouseMove:
+                watched.setCursor(
+                    Qt.CursorShape.ArrowCursor
+                    if self._hit(pos.x(), pos.y())
+                    else Qt.CursorShape.IBeamCursor
+                )
+
         self._owner.update()
         return False
 
@@ -292,12 +302,20 @@ class _FieldChrome:
         Returns:
             bool: 事件已由步进区消费时为 ``True``。
         """
+        if event.button() != Qt.MouseButton.LeftButton:
+            return False
         pos = event.position().toPoint()
         self._owner.update()
         return self._step(pos.x(), pos.y())
 
-    def on_release(self) -> None:
-        """松开后停止连续步进并重绘。"""
+    def on_release(self, event: QMouseEvent) -> None:
+        """松开后停止连续步进并重绘。
+
+        Args:
+            event (QMouseEvent): 鼠标释放事件。
+        """
+        if event.button() != Qt.MouseButton.LeftButton:
+            return
         self._stop_repeat()
         self._owner.update()
 
@@ -544,7 +562,7 @@ class NumberBox(QSpinBox):
         super().mousePressEvent(event)
 
     def mouseReleaseEvent(self, event: QMouseEvent) -> None:
-        self._chrome.on_release()
+        self._chrome.on_release(event)
         super().mouseReleaseEvent(event)
 
 
@@ -581,5 +599,5 @@ class DoubleNumberBox(QDoubleSpinBox):
         super().mousePressEvent(event)
 
     def mouseReleaseEvent(self, event: QMouseEvent) -> None:
-        self._chrome.on_release()
+        self._chrome.on_release(event)
         super().mouseReleaseEvent(event)
