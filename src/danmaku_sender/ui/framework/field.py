@@ -9,7 +9,18 @@
 import math
 from typing import NamedTuple
 
-from PySide6.QtCore import QEvent, QLineF, QObject, QRect, QRectF, Qt, QTimer
+from PySide6.QtCore import (
+    QAbstractAnimation,
+    QEasingCurve,
+    QEvent,
+    QLineF,
+    QObject,
+    QRect,
+    QRectF,
+    Qt,
+    QTimer,
+    QVariantAnimation,
+)
 from PySide6.QtGui import (
     QColor,
     QCursor,
@@ -123,6 +134,63 @@ class _PaintMetrics:
         return _Stroke(aligned, physical / self._scale_x)
 
 
+class _Reveal:
+    """浮层元素的渐显进度，取值 0 到 1。
+
+    Typical usage example::
+
+        reveal = _Reveal(widget)
+        reveal.target(1.0)
+        alpha = reveal.value()
+    """
+
+    # 渐显时长
+    FADE_MS = 150
+
+    def __init__(self, owner: QWidget) -> None:
+        """建立渐显进度，变化时重绘所属控件。
+
+        Args:
+            owner (QWidget): 受渐显影响的控件。
+        """
+        self._owner = owner
+        self._value = 0.0
+        self._anim = QVariantAnimation(owner)
+        self._anim.setDuration(self.FADE_MS)
+        self._anim.setEasingCurve(QEasingCurve.Type.OutCubic)
+        self._anim.valueChanged.connect(self._accept)
+
+    def value(self) -> float:
+        """返回当前渐显进度。
+
+        Returns:
+            float: 0 到 1 之间的进度值。
+        """
+        return self._value
+
+    def target(self, goal: float) -> None:
+        """将渐显进度推向目标值。
+
+        Args:
+            goal (float): 目标进度，取值 0 到 1。
+        """
+        if abs(self._value - goal) < 1e-6:
+            return
+        if (
+            self._anim.state() != QAbstractAnimation.State.Stopped
+            and self._anim.endValue() == goal
+        ):
+            return
+        self._anim.stop()
+        self._anim.setStartValue(self._value)
+        self._anim.setEndValue(goal)
+        self._anim.start()
+
+    def _accept(self, value: float) -> None:
+        self._value = float(value)
+        self._owner.update()
+
+
 class _FieldChrome:
     """字段外框与步进区的外观与交互。
 
@@ -149,7 +217,7 @@ class _FieldChrome:
     HOVER_ALPHA = 0.12
     PRESS_ALPHA = 0.28
 
-    # 连发时序
+    # 连续步进时序
     REPEAT_DELAY_MS = 400
     REPEAT_INTERVAL_MS = 80
 
@@ -162,6 +230,8 @@ class _FieldChrome:
         self._owner = owner
         self._repeat = QTimer(owner)
         self._repeat.timeout.connect(self._repeat_step)
+        self._glyph_reveal = _Reveal(owner)
+        self._plate_reveal = _Reveal(owner)
         owner.setAlignment(Qt.AlignmentFlag.AlignCenter)
         for editor in owner.findChildren(QLineEdit):
             editor.setMouseTracking(True)
@@ -175,6 +245,7 @@ class _FieldChrome:
 
     def after_paint(self) -> None:
         """在取值绘制之后绘制加减号。"""
+        self._sync_reveal()
         self._paint_steppers()
 
     def filter_editor(self, watched: QObject, event: QEvent) -> bool:
@@ -190,7 +261,12 @@ class _FieldChrome:
         Returns:
             bool: 事件已由步进区消费时为 ``True``。
         """
-        if not isinstance(watched, QLineEdit) or not isinstance(event, QMouseEvent):
+        if not isinstance(watched, QLineEdit):
+            return False
+        if event.type() in (QEvent.Type.Enter, QEvent.Type.Leave):
+            self._owner.update()
+            return False
+        if not isinstance(event, QMouseEvent):
             return False
         pos = self._owner.mapFromGlobal(event.globalPosition().toPoint())
         if event.type() == QEvent.Type.MouseButtonPress:
@@ -204,12 +280,7 @@ class _FieldChrome:
                 if self._hit(pos.x(), pos.y())
                 else Qt.CursorShape.IBeamCursor
             )
-        if event.type() in (
-            QEvent.Type.MouseMove,
-            QEvent.Type.MouseButtonPress,
-            QEvent.Type.MouseButtonRelease,
-        ):
-            self._owner.update()
+        self._owner.update()
         return False
 
     def on_press(self, event: QMouseEvent) -> bool:
@@ -226,7 +297,7 @@ class _FieldChrome:
         return self._step(pos.x(), pos.y())
 
     def on_release(self) -> None:
-        """松开后停止连发并重绘。"""
+        """松开后停止连续步进并重绘。"""
         self._stop_repeat()
         self._owner.update()
 
@@ -282,7 +353,7 @@ class _FieldChrome:
         return self._over()
 
     def _step(self, x: int, y: int) -> bool:
-        """命中步进区时步进一步，并启动连发。
+        """命中步进区时步进一步，并启动连续步进。
 
         Args:
             x (int): 鼠标位置的横坐标，控件局部坐标。
@@ -299,7 +370,7 @@ class _FieldChrome:
         return True
 
     def _repeat_step(self) -> None:
-        """执行一次连发；指针已离开步进区时跳过。"""
+        """连续步进一步；指针已离开步进区时跳过。"""
         direction = self._down()
         if not direction:
             return
@@ -307,7 +378,7 @@ class _FieldChrome:
         self._repeat.setInterval(self.REPEAT_INTERVAL_MS)
 
     def _stop_repeat(self) -> None:
-        """停止连发。"""
+        """停止连续步进。"""
         self._repeat.stop()
 
     # ── 绘制 ────────────────────────────────────────────────────────
@@ -381,14 +452,25 @@ class _FieldChrome:
             )
         )
 
+    def _sync_reveal(self) -> None:
+        """按悬停与焦点状态推进渐显进度。"""
+        owner = self._owner
+        on = owner.isEnabled() and (owner.hasFocus() or owner.underMouse())
+        self._glyph_reveal.target(1.0 if on else 0.0)
+        self._plate_reveal.target(1.0 if (on and self._over()) else 0.0)
+
     def _paint_steppers(self) -> None:
         """悬停或聚焦时在左右步进区绘制加减号。"""
         owner = self._owner
-        if not (owner.isEnabled() and (owner.hasFocus() or owner.underMouse())):
+        glyph_alpha = self._glyph_reveal.value()
+        plate_reveal = self._plate_reveal.value()
+        if glyph_alpha <= 0 or not owner.isEnabled():
             return
 
-        color = self._palette().color(QPalette.ColorRole.PlaceholderText)
-        plate_color = QColor(color)
+        base = self._palette().color(QPalette.ColorRole.PlaceholderText)
+        color = QColor(base)
+        color.setAlphaF(color.alphaF() * glyph_alpha)
+        plate_color = QColor(base)
         down = self._down()
         over = self._over()
 
@@ -406,6 +488,7 @@ class _FieldChrome:
                 alpha = self.PRESS_ALPHA
             else:
                 alpha = self.HOVER_ALPHA if direction == over else 0.0
+            alpha *= plate_reveal
             if alpha:
                 plate_color.setAlphaF(alpha)
                 painter.setPen(Qt.PenStyle.NoPen)
@@ -433,7 +516,7 @@ class NumberBox(QSpinBox):
 
     取值规则沿用 :class:`QSpinBox`。
     取值居中，左右为步进区，悬停或聚焦时显示加减号；
-    点按步进一步，按住连续步进。
+    点按步进一步，按住连续加减。
 
     Typical usage example::
 
@@ -470,7 +553,7 @@ class DoubleNumberBox(QDoubleSpinBox):
 
     取值规则沿用 :class:`QDoubleSpinBox`。
     取值居中，左右为步进区，悬停或聚焦时显示加减号；
-    点按步进一步，按住连续步进。
+    点按步进一步，按住连续加减。
 
     Typical usage example::
 
