@@ -45,7 +45,6 @@ class SettingsPage(QWidget):
     PAGE_SYSTEM = 1
     PAGE_NETWORK = 2
     PAGE_SEND = 3
-    PAGE_DANGER = 4
 
     def __init__(self, state: AppState, settings: Settings):
         super().__init__()
@@ -87,8 +86,17 @@ class SettingsPage(QWidget):
         for label, icon in self._icon_jobs:
             self._paint_icon(label, icon)
 
-    def _row(self, title: str, subtitle: str, icon, trailing: QWidget | None = None) -> SettingsRow:
-        return SettingsRow(title, subtitle, trailing=trailing, icon=self._icon(icon))
+    def _row(
+        self,
+        title: str,
+        subtitle: str,
+        icon,
+        trailing: QWidget | None = None,
+        danger: bool = False,
+    ) -> SettingsRow:
+        return SettingsRow(
+            title, subtitle, trailing=trailing, icon=self._icon(icon), danger=danger
+        )
 
     def _nav_row(self, title: str, subtitle: str, icon, target: int) -> SettingsRow:
         """构造目录页的可点条目，点击进入对应子页。
@@ -104,7 +112,6 @@ class SettingsPage(QWidget):
         """
         row = self._row(title, subtitle, icon, trailing=self._icon(SvgIcon.CHEVRON_RIGHT))
         row.setHoverable(True)
-        row.setCursor(Qt.CursorShape.PointingHandCursor)
         row.mousePressEvent = lambda _event: self._stack.setCurrentIndex(target)
         return row
 
@@ -156,14 +163,13 @@ class SettingsPage(QWidget):
         self._stack.addWidget(self._build_system_page())  # PAGE_SYSTEM
         self._stack.addWidget(self._build_network_page()) # PAGE_NETWORK
         self._stack.addWidget(self._build_send_page())    # PAGE_SEND
-        self._stack.addWidget(self._build_danger_page())  # PAGE_DANGER
 
         outer = QVBoxLayout(self)
         outer.setContentsMargins(0, 0, 0, 0)
         outer.addWidget(self._stack)
 
     def _build_directory(self) -> QWidget:
-        """构建目录页：四个分类条目加页脚提示。"""
+        """构建目录页：三个分类条目加页脚提示。"""
         page, body = self._subpage(["设置"])
 
         body.addWidget(self._nav_row(
@@ -174,9 +180,6 @@ class SettingsPage(QWidget):
         ))
         body.addWidget(self._nav_row(
             "发送", "发送间隔、爆发节奏与停止条件", SvgIcon.TUNE, self.PAGE_SEND
-        ))
-        body.addWidget(self._nav_row(
-            "危险区", "影响弹幕查重的高风险选项", SvgIcon.WARNING, self.PAGE_DANGER
         ))
         body.addStretch()
 
@@ -344,42 +347,25 @@ class SettingsPage(QWidget):
                 self._spin_with_unit(self.stop_time, "分钟"),
             )
         )
-        body.addStretch()
-        return page
 
-    def _build_danger_page(self) -> QWidget:
-        """构建危险区子页。"""
-        page, body = self._subpage(["设置", "危险区"])
-        body.addWidget(self._danger_card())
-        body.addStretch()
-        return page
+        body.addSpacing(6)
+        danger_heading = QLabel("危险区")
+        danger_heading.setObjectName("settingsSectionTitle")
+        body.addWidget(danger_heading)
 
-    def _danger_card(self) -> QFrame:
-        """构建危险区卡片，保留红色强调外观，与普通卡片行区分。"""
         self.allow_duplicates = QCheckBox()
         self.allow_duplicates.setAccessibleName("允许重复发送")
-        danger_title = QLabel("允许重复发送")
-        danger_title.setStyleSheet("font-weight: bold;")
-        danger_hint = QLabel("开启后，发送将不再比对数据库。已经发出的弹幕会允许再次发送，视频内会出现重复。")
-        danger_hint.setObjectName("dangerHint")
-        danger_hint.setWordWrap(True)
-
-        danger_text = QVBoxLayout()
-        danger_text.setSpacing(2)
-        danger_text.addWidget(danger_title)
-        danger_text.addWidget(danger_hint)
-
-        danger_row = QHBoxLayout()
-        danger_row.addWidget(self.allow_duplicates)
-        danger_row.addLayout(danger_text, 1)
-
-        danger_frame = QFrame()
-        danger_frame.setObjectName("dangerFrame")
-        danger_inner = QVBoxLayout()
-        danger_inner.setContentsMargins(12, 10, 12, 12)
-        danger_inner.addLayout(danger_row)
-        danger_frame.setLayout(danger_inner)
-        return danger_frame
+        body.addWidget(
+            self._row(
+                "允许重复发送",
+                "开启后，发送将不再比对数据库。已经发出的弹幕会允许再次发送，视频内会出现重复。",
+                SvgIcon.CONTENT_COPY,
+                self.allow_duplicates,
+                danger=True,
+            )
+        )
+        body.addStretch()
+        return page
 
     def _on_burst_toggled(self, checked: bool):
         for ctrl in self._burst_controls:

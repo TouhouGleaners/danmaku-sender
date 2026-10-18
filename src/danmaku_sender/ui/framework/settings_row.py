@@ -33,6 +33,7 @@ class SettingsRow(Card):
         subtitle: str,
         trailing: QWidget | None = None,
         icon: QWidget | None = None,
+        danger: bool = False,
         parent: QWidget | None = None,
     ):
         """初始化设置行。
@@ -42,10 +43,13 @@ class SettingsRow(Card):
             subtitle (str): 说明文本，超长自动换行。
             trailing (QWidget | None): 尾部控件，如开关或下拉框。
             icon (QWidget | None): 图标控件；省略则不显示图标列。
+            danger (bool): 是否为高风险项，启用红色强调外观。
             parent (QWidget | None): 父控件。
         """
         super().__init__(parent=parent)
         self.setFixedHeight(ROW_HEIGHT)
+        if danger:
+            self.setProperty("danger", "true")
 
         self._grid = QGridLayout(self)
         self._grid.setContentsMargins(20, 8, 20, 8)
