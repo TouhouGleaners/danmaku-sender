@@ -127,7 +127,7 @@ class SettingsPage(QWidget):
         content = QWidget()
         body = QVBoxLayout(content)
         body.setContentsMargins(48, 34, 48, 48)
-        body.setSpacing(10)
+        body.setSpacing(4)
 
         breadcrumb = BreadcrumbBar(content)
         breadcrumb.setItems(trail)

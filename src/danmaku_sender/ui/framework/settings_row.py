@@ -11,7 +11,7 @@ from PySide6.QtWidgets import QGridLayout, QLabel, QVBoxLayout, QWidget
 
 from danmaku_sender.ui.framework.card import Card
 
-ROW_HEIGHT = 74
+ROW_HEIGHT = 68
 ROW_HEIGHT_STACKED = 120
 STACKED_THRESHOLD = 420
 ICON_BOX = 30
