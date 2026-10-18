@@ -1,5 +1,7 @@
-from PySide6.QtCore import Qt, Signal, Slot
-from PySide6.QtGui import QIcon
+from enum import IntEnum
+
+from PySide6.QtCore import QEvent, QObject, Qt, Signal, Slot
+from PySide6.QtGui import QIcon, QMouseEvent
 from PySide6.QtWidgets import (
     QCheckBox,
     QComboBox,
@@ -24,6 +26,22 @@ from danmaku_sender.ui.framework.settings_row import ICON_SIZE, SettingsRow
 from danmaku_sender.ui.framework.wrap_layout import WrapLayout
 
 
+class Subpage(IntEnum):
+    """设置页子页，取值即栈下标。
+
+    Attributes:
+        DIRECTORY: 目录页，列出全部分类。
+        SYSTEM: 系统子页。
+        NETWORK: 网络子页。
+        SEND: 发送子页。
+    """
+
+    DIRECTORY = 0
+    SYSTEM = 1
+    NETWORK = 2
+    SEND = 3
+
+
 class SettingsPage(QWidget):
     """全局设置页。
 
@@ -32,19 +50,12 @@ class SettingsPage(QWidget):
     主题需要即时生效，因此在 ``after_write`` 中发射 ``themeApplied``。
     页面显示时调用 ``fill()`` 刷新控件值。
 
-    页面为子页导航：目录页列出四个分类，各分类为独立子页，
+    页面为子页导航：目录页列出三个分类，各分类为独立子页。
     页头为路径式导航条，末段是当前子页，其余段可点击返回目录。
-    排布沿用 Fluent 设置页：页标题、节标题、每项一张卡片行。
     """
 
     themeApplied = Signal(ThemeMode)  # 主题已写入配置，可立即应用
     fontApplied = Signal(FontChoice)  # 字体档位已写入配置，可立即应用
-
-    # 子页下标
-    PAGE_DIRECTORY = 0
-    PAGE_SYSTEM = 1
-    PAGE_NETWORK = 2
-    PAGE_SEND = 3
 
     def __init__(self, state: AppState, settings: Settings):
         super().__init__()
@@ -98,22 +109,44 @@ class SettingsPage(QWidget):
             title, subtitle, trailing=trailing, icon=self._icon(icon), danger=danger
         )
 
-    def _nav_row(self, title: str, subtitle: str, icon, target: int) -> SettingsRow:
+    def _nav_row(self, title: str, subtitle: str, icon, target: Subpage) -> SettingsRow:
         """构造目录页的可点条目，点击进入对应子页。
 
         Args:
             title (str): 分类名称。
             subtitle (str): 该分类的内容概述。
             icon: 分类图标。
-            target (int): 目标子页下标。
+            target (Subpage): 目标子页。
 
         Returns:
             SettingsRow: 可点的目录条目。
         """
         row = self._row(title, subtitle, icon, trailing=self._icon(SvgIcon.CHEVRON_RIGHT))
         row.setHoverable(True)
-        row.mousePressEvent = lambda _event: self._stack.setCurrentIndex(target)
+        row.setProperty("target", target.value)
+        row.installEventFilter(self)
         return row
+
+    def eventFilter(self, watched: QObject, event: QEvent) -> bool:
+        """把目录条目的左键按压转为子页切换。
+
+        Args:
+            watched (QObject): 事件来源。
+            event (QEvent): 转发的事件。
+
+        Returns:
+            bool: 事件已消费时为 ``True``。
+        """
+        if (
+            isinstance(event, QMouseEvent)
+            and event.type() == QEvent.Type.MouseButtonPress
+            and isinstance(watched, SettingsRow)
+        ):
+            target = watched.property("target")
+            if target is not None and event.button() == Qt.MouseButton.LeftButton:
+                self._stack.setCurrentIndex(Subpage(target))
+                return True
+        return super().eventFilter(watched, event)
 
     def _subpage(self, trail: list[str]) -> tuple[QScrollArea, QVBoxLayout]:
         """构造子页骨架：滚动容器与内容布局，页头已排入布局。
@@ -132,7 +165,7 @@ class SettingsPage(QWidget):
         breadcrumb = BreadcrumbBar(content)
         breadcrumb.setItems(trail)
         breadcrumb.itemActivated.connect(
-            lambda _index: self._stack.setCurrentIndex(self.PAGE_DIRECTORY)
+            lambda _index: self._stack.setCurrentIndex(Subpage.DIRECTORY)
         )
         body.addWidget(breadcrumb)
         body.addSpacing(6)
@@ -159,10 +192,10 @@ class SettingsPage(QWidget):
 
     def _create_ui(self):
         self._stack = QStackedWidget(self)
-        self._stack.addWidget(self._build_directory())    # PAGE_DIRECTORY
-        self._stack.addWidget(self._build_system_page())  # PAGE_SYSTEM
-        self._stack.addWidget(self._build_network_page()) # PAGE_NETWORK
-        self._stack.addWidget(self._build_send_page())    # PAGE_SEND
+        self._stack.addWidget(self._build_directory())     # Subpage.DIRECTORY
+        self._stack.addWidget(self._build_system_page())   # Subpage.SYSTEM
+        self._stack.addWidget(self._build_network_page())  # Subpage.NETWORK
+        self._stack.addWidget(self._build_send_page())     # Subpage.SEND
 
         outer = QVBoxLayout(self)
         outer.setContentsMargins(0, 0, 0, 0)
@@ -172,15 +205,9 @@ class SettingsPage(QWidget):
         """构建目录页：三个分类条目加页脚提示。"""
         page, body = self._subpage(["设置"])
 
-        body.addWidget(self._nav_row(
-            "系统", "界面主题、字体与休眠行为", SvgIcon.SETTINGS, self.PAGE_SYSTEM
-        ))
-        body.addWidget(self._nav_row(
-            "网络", "网络请求的代理方式", SvgIcon.SYNC_ALT, self.PAGE_NETWORK
-        ))
-        body.addWidget(self._nav_row(
-            "发送", "发送间隔、爆发节奏与停止条件", SvgIcon.TUNE, self.PAGE_SEND
-        ))
+        body.addWidget(self._nav_row("系统", "界面主题、字体与休眠行为", SvgIcon.SETTINGS, Subpage.SYSTEM))
+        body.addWidget(self._nav_row("网络", "网络请求的代理方式", SvgIcon.SYNC_ALT, Subpage.NETWORK))
+        body.addWidget(self._nav_row("发送", "发送间隔、爆发节奏与停止条件", SvgIcon.TUNE, Subpage.SEND))
         body.addStretch()
 
         info_label = QLabel("💡 账号管理请点击左上角头像区域。")

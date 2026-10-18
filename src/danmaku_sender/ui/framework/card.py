@@ -40,7 +40,7 @@ class Card(QFrame):
     # 悬停底板：内缩一个边框宽度，避免覆盖样式绘制的描边
     PLATE_INSET = 1
     PLATE_RADIUS = 3
-    PLATE_MAX_ALPHA = 0.35
+    PLATE_SCRIM_ALPHA = 0.022
     FADE_MS = 150
 
     def __init__(self, parent: QWidget | None = None):
@@ -126,16 +126,16 @@ class Card(QFrame):
 
         app = QApplication.instance()
         palette = app.palette() if isinstance(app, QApplication) else self.palette()
-        color = QColor(palette.color(QPalette.ColorRole.Button))
-        color.setAlphaF(color.alphaF() * self.PLATE_MAX_ALPHA * self._plate_reveal)
+        # 以前景色作薄纱：浅色主题下压暗、深色主题下提亮，两向均有对比
+        color = QColor(palette.color(QPalette.ColorRole.Text))
+        color.setAlphaF(color.alphaF() * self.PLATE_SCRIM_ALPHA * self._plate_reveal)
 
         painter = QPainter(self)
         painter.setRenderHint(QPainter.RenderHint.Antialiasing)
         painter.setPen(Qt.PenStyle.NoPen)
         painter.setBrush(color)
         painter.drawRoundedRect(
-            self.rect().adjusted(self.PLATE_INSET, self.PLATE_INSET,
-                                 -self.PLATE_INSET, -self.PLATE_INSET),
+            self.rect().adjusted(self.PLATE_INSET, self.PLATE_INSET, -self.PLATE_INSET, -self.PLATE_INSET),
             self.PLATE_RADIUS,
             self.PLATE_RADIUS,
         )
@@ -146,14 +146,15 @@ class Card(QFrame):
         Args:
             goal (float): 目标进度，取值 0 到 1。
         """
+        running = self._fade.state() != QAbstractAnimation.State.Stopped
+        if running and self._fade.endValue() != goal:
+            # 反向改目标时先停下，否则当前值尚未推进会让后续判断误跳过
+            self._fade.stop()
+            running = False
         if abs(self._plate_reveal - goal) < 1e-6:
             return
-        if (
-            self._fade.state() != QAbstractAnimation.State.Stopped
-            and self._fade.endValue() == goal
-        ):
+        if running:
             return
-        self._fade.stop()
         self._fade.setStartValue(self._plate_reveal)
         self._fade.setEndValue(goal)
         self._fade.start()
