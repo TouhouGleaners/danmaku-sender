@@ -179,6 +179,7 @@ class SvgIcon:
     ARROW_UPWARD = _IconDescriptor("arrow_upward.svg")
     CANCEL = _IconDescriptor("cancel.svg")
     CHECK_CIRCLE = _IconDescriptor("check_circle.svg")
+    CHEVRON_RIGHT = _IconDescriptor("chevron_right.svg")
     CLOSE = _IconDescriptor("close.svg")
     CONTENT_COPY = _IconDescriptor("content_copy.svg")
     DEFAULT_AVATAR = _IconDescriptor("default_avatar.svg")

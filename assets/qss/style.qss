@@ -291,11 +291,6 @@ QLabel#settingsRowSubtitle {
     color: {text_secondary};
 }
 
-/* 设置目录条目：整行可点，悬停画底板 */
-QFrame#card[nav="true"]:hover {
-    background-color: {bg_hover};
-}
-
 /* 设置页 - 危险区：QFrame 画框，QGroupBox 不碰 */
 QFrame#dangerFrame {
     border: 1px solid {danger};

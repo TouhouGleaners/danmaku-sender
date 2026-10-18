@@ -1,6 +1,7 @@
 """路径式导航条，按段展示当前位置并支持回溯。
 
 段与段之间以 chevron 分隔，末段表示当前位置，其余段可点击回溯。
+悬停反馈仅作用于文字颜色，不绘制底板，光标保持箭头。
 外观自绘，配色取自应用级 QPalette，来源见 ThemeService 的 ROLE_SOURCES。
 """
 
@@ -39,7 +40,6 @@ class BreadcrumbBar(QWidget):
     # 段与分隔槽
     ITEM_PADDING = 8
     SEPARATOR_WIDTH = 24
-    PLATE_RADIUS = 4
 
     # 分隔 chevron 折线
     CHEVRON_WIDTH = 7
@@ -201,7 +201,7 @@ class BreadcrumbBar(QWidget):
         super().mousePressEvent(event)
 
     def paintEvent(self, event: QPaintEvent) -> None:
-        """绘制各段文字、悬停底板与分隔 chevron。"""
+        """绘制各段文字与分隔 chevron。"""
         painter = QPainter(self)
         painter.setRenderHint(QPainter.RenderHint.Antialiasing)
         font = self._font()
@@ -217,28 +217,13 @@ class BreadcrumbBar(QWidget):
             if record.index == last:
                 painter.setPen(main)
             else:
-                if self._hovered == record.index:
-                    self._paint_plate(painter, record.rect, palette)
-                painter.setPen(secondary)
+                painter.setPen(main if self._hovered == record.index else secondary)
             painter.setFont(font)
             painter.drawText(
                 record.rect.adjusted(self.ITEM_PADDING, 0, -self.ITEM_PADDING, 0),
                 Qt.AlignmentFlag.AlignVCenter | Qt.AlignmentFlag.AlignLeft,
                 self._items[record.index],
             )
-
-    def _paint_plate(self, painter: QPainter, rect: QRectF, palette: QPalette) -> None:
-        """绘制悬停段的圆角底板。
-
-        Args:
-            painter (QPainter): 正在绘制的画笔。
-            rect (QRectF): 段的命中矩形。
-            palette (QPalette): 主题调色板。
-        """
-        painter.setPen(Qt.PenStyle.NoPen)
-        painter.setBrush(palette.color(QPalette.ColorRole.Button))
-        painter.drawRoundedRect(rect, self.PLATE_RADIUS, self.PLATE_RADIUS)
-        painter.setBrush(Qt.BrushStyle.NoBrush)
 
     def _paint_chevron(self, painter: QPainter, rect: QRectF, color: QColor) -> None:
         """绘制分隔 chevron 折线。
@@ -266,18 +251,14 @@ class BreadcrumbBar(QWidget):
         painter.drawPath(path)
 
     def _update_hover(self, pos: QPointF) -> None:
-        """按指针位置更新悬停段与光标形状。
+        """按指针位置更新悬停段。
+
+        光标始终保持箭头，不改为手型。
 
         Args:
             pos (QPointF): 控件坐标系下的指针位置。
         """
-        index = self._hit(pos)
-        self._set_hover(index)
-        self.setCursor(
-            Qt.CursorShape.PointingHandCursor
-            if index is not None
-            else Qt.CursorShape.ArrowCursor
-        )
+        self._set_hover(self._hit(pos))
 
     def _set_hover(self, index: int | None) -> None:
         """记录悬停段并在变化时触发重绘。

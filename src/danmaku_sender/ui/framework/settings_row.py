@@ -11,8 +11,8 @@ from PySide6.QtWidgets import QGridLayout, QLabel, QVBoxLayout, QWidget
 
 from danmaku_sender.ui.framework.card import Card
 
-ROW_MIN_HEIGHT = 74
-ROW_MIN_HEIGHT_STACKED = 120
+ROW_HEIGHT = 74
+ROW_HEIGHT_STACKED = 120
 STACKED_THRESHOLD = 420
 ICON_BOX = 30
 ICON_SIZE = 20
@@ -45,7 +45,7 @@ class SettingsRow(Card):
             parent (QWidget | None): 父控件。
         """
         super().__init__(parent=parent)
-        self.setMinimumHeight(ROW_MIN_HEIGHT)
+        self.setFixedHeight(ROW_HEIGHT)
 
         self._grid = QGridLayout(self)
         self._grid.setContentsMargins(20, 8, 20, 8)
@@ -94,12 +94,12 @@ class SettingsRow(Card):
         if self._stacked:
             # 跨满整行，不与文字同列，避免尾部控件被文字列挤窄后溢出
             self._grid.addWidget(self._trailing, 1, 0, 1, -1, Qt.AlignmentFlag.AlignVCenter)
-            self.setMinimumHeight(ROW_MIN_HEIGHT_STACKED)
+            self.setFixedHeight(ROW_HEIGHT_STACKED)
         else:
             self._grid.addWidget(
                 self._trailing, 0, 2, Qt.AlignmentFlag.AlignRight | Qt.AlignmentFlag.AlignVCenter
             )
-            self.setMinimumHeight(ROW_MIN_HEIGHT)
+            self.setFixedHeight(ROW_HEIGHT)
         self._trailing.show()
 
     def resizeEvent(self, event) -> None:

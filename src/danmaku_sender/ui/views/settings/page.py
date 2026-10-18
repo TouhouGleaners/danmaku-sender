@@ -102,8 +102,8 @@ class SettingsPage(QWidget):
         Returns:
             SettingsRow: 可点的目录条目。
         """
-        row = self._row(title, subtitle, icon)
-        row.setProperty("nav", "true")
+        row = self._row(title, subtitle, icon, trailing=self._icon(SvgIcon.CHEVRON_RIGHT))
+        row.setHoverable(True)
         row.setCursor(Qt.CursorShape.PointingHandCursor)
         row.mousePressEvent = lambda _event: self._stack.setCurrentIndex(target)
         return row
