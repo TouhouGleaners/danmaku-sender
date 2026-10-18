@@ -281,10 +281,9 @@ QFrame#card[border="false"] {
     border: none;
 }
 
-/* 设置项行：名称半粗、说明次级 */
+/* 设置项行：名称与说明以字号和色阶分层 */
 QLabel#settingsRowTitle {
     font-size: 14px;
-    font-weight: 600;
 }
 QLabel#settingsRowSubtitle {
     font-size: 12px;

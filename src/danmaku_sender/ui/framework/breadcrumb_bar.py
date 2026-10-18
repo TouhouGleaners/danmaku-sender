@@ -35,7 +35,7 @@ class BreadcrumbBar(QWidget):
     # 文字
     ROW_HEIGHT = 40
     FONT_SIZE = 28
-    FONT_WEIGHT = QFont.Weight.DemiBold
+    FONT_WEIGHT = QFont.Weight.Normal
 
     # 段与分隔槽
     ITEM_PADDING = 8
