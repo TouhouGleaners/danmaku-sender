@@ -259,6 +259,7 @@ QLabel#accountStatus[status="unknown"] {
 QFrame#card {
     background-color: {bg_layer};
     border: 1px solid {stroke_card};
+    border-bottom-color: {border_color};
     border-radius: 4px;
 }
 QFrame#card[appearance="alt"] {

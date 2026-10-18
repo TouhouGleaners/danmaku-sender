@@ -40,6 +40,7 @@ class Card(QFrame):
     # 悬停底板：内缩一个边框宽度，避免覆盖样式绘制的描边
     PLATE_INSET = 1
     PLATE_RADIUS = 3
+    PLATE_MAX_ALPHA = 0.35
     FADE_MS = 150
 
     def __init__(self, parent: QWidget | None = None):
@@ -126,7 +127,7 @@ class Card(QFrame):
         app = QApplication.instance()
         palette = app.palette() if isinstance(app, QApplication) else self.palette()
         color = QColor(palette.color(QPalette.ColorRole.Button))
-        color.setAlphaF(color.alphaF() * self._plate_reveal)
+        color.setAlphaF(color.alphaF() * self.PLATE_MAX_ALPHA * self._plate_reveal)
 
         painter = QPainter(self)
         painter.setRenderHint(QPainter.RenderHint.Antialiasing)
