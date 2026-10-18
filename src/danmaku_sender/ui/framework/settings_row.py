@@ -6,13 +6,14 @@
 宽度不足时尾部控件换行到文字下方。
 """
 
-from PySide6.QtCore import Qt
+from PySide6.QtCore import Qt, Signal
+from PySide6.QtGui import QMouseEvent
 from PySide6.QtWidgets import QGridLayout, QLabel, QVBoxLayout, QWidget
 
 from danmaku_sender.ui.framework.card import Card
 
-ROW_MIN_HEIGHT = 74
-ROW_MIN_HEIGHT_STACKED = 120
+ROW_HEIGHT = 68
+ROW_HEIGHT_STACKED = 120
 STACKED_THRESHOLD = 420
 ICON_BOX = 30
 ICON_SIZE = 20
@@ -33,6 +34,7 @@ class SettingsRow(Card):
         subtitle: str,
         trailing: QWidget | None = None,
         icon: QWidget | None = None,
+        danger: bool = False,
         parent: QWidget | None = None,
     ):
         """初始化设置行。
@@ -42,10 +44,13 @@ class SettingsRow(Card):
             subtitle (str): 说明文本，超长自动换行。
             trailing (QWidget | None): 尾部控件，如开关或下拉框。
             icon (QWidget | None): 图标控件；省略则不显示图标列。
+            danger (bool): 是否为高风险项，启用红色强调外观。
             parent (QWidget | None): 父控件。
         """
         super().__init__(parent=parent)
-        self.setMinimumHeight(ROW_MIN_HEIGHT)
+        self.setFixedHeight(ROW_HEIGHT)
+        if danger:
+            self.setProperty("danger", "true")
 
         self._grid = QGridLayout(self)
         self._grid.setContentsMargins(20, 8, 20, 8)
@@ -94,12 +99,12 @@ class SettingsRow(Card):
         if self._stacked:
             # 跨满整行，不与文字同列，避免尾部控件被文字列挤窄后溢出
             self._grid.addWidget(self._trailing, 1, 0, 1, -1, Qt.AlignmentFlag.AlignVCenter)
-            self.setMinimumHeight(ROW_MIN_HEIGHT_STACKED)
+            self.setFixedHeight(ROW_HEIGHT_STACKED)
         else:
             self._grid.addWidget(
                 self._trailing, 0, 2, Qt.AlignmentFlag.AlignRight | Qt.AlignmentFlag.AlignVCenter
             )
-            self.setMinimumHeight(ROW_MIN_HEIGHT)
+            self.setFixedHeight(ROW_HEIGHT)
         self._trailing.show()
 
     def resizeEvent(self, event) -> None:
@@ -109,3 +114,42 @@ class SettingsRow(Card):
             self._stacked = stacked
             self._place_trailing()
         super().resizeEvent(event)
+
+
+class NavRow(SettingsRow):
+    """可点设置行，左键按压时发出登记的目标下标。
+
+    Attributes:
+        activated (Signal(int)): 点击时发射，参数为构造时登记的目标下标。
+    """
+
+    activated = Signal(int)
+
+    def __init__(
+        self,
+        title: str,
+        subtitle: str,
+        target: int,
+        trailing: QWidget | None = None,
+        icon: QWidget | None = None,
+        parent: QWidget | None = None,
+    ):
+        """初始化可点设置行。
+
+        Args:
+            title (str): 名称文本。
+            subtitle (str): 说明文本，超长自动换行。
+            target (int): 点击时经 ``activated`` 报出的目标下标。
+            trailing (QWidget | None): 尾部控件。
+            icon (QWidget | None): 图标控件；省略则不显示图标列。
+            parent (QWidget | None): 父控件。
+        """
+        super().__init__(title, subtitle, trailing=trailing, icon=icon, parent=parent)
+        self._target = target
+        self.setHoverable(True)
+
+    def mousePressEvent(self, event: QMouseEvent) -> None:
+        """左键按压时发出目标下标。"""
+        if event.button() == Qt.MouseButton.LeftButton:
+            self.activated.emit(self._target)
+        super().mousePressEvent(event)

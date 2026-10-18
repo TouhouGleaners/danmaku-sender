@@ -64,7 +64,7 @@ QScrollBar::add-page, QScrollBar::sub-page {
     background: none;
 }
 
-/* 数值框：边框与步进区由 ui/framework/field.py 绘制，QSS 只管内边距。
+/* 数值框：边框与步进区由 ui/framework/number_box.py 绘制，QSS 只负责内边距。
    左右内边距为步进区让位，数字居中其内，加减号悬停时复现。 */
 QSpinBox, QDoubleSpinBox {
     background: transparent;
@@ -259,6 +259,7 @@ QLabel#accountStatus[status="unknown"] {
 QFrame#card {
     background-color: {bg_layer};
     border: 1px solid {stroke_card};
+    border-bottom-color: {border_color};
     border-radius: 4px;
 }
 QFrame#card[appearance="alt"] {
@@ -281,41 +282,26 @@ QFrame#card[border="false"] {
     border: none;
 }
 
-/* 设置项行：名称半粗、说明次级 */
+/* 设置项行：名称与说明以字号和色阶分层 */
 QLabel#settingsRowTitle {
     font-size: 14px;
-    font-weight: 600;
 }
 QLabel#settingsRowSubtitle {
     font-size: 12px;
     color: {text_secondary};
 }
 
-/* 设置页两级标题：页标题靠字号拉开，节标题与行名称同号，
-   层级由「在卡片外」这一位置关系体现 */
-QLabel#settingsPageTitle {
-    font-size: 28px;
-    font-weight: 600;
-}
+/* 设置页节标题：与设置行名称同号，层级由「在卡片外」体现 */
 QLabel#settingsSectionTitle {
     font-size: 14px;
     font-weight: 600;
     min-height: 24px;
 }
 
-/* 设置页 - 危险区：QFrame 画框，QGroupBox 不碰 */
-QFrame#dangerFrame {
-    border: 1px solid {danger};
-    border-radius: 2px;
+/* 高风险设置行：红框红底，文字配色与普通设置行一致 */
+QFrame#card[danger="true"] {
+    border-color: {danger};
     background-color: {danger_bg};
-}
-QLabel#dangerTitle {
-    color: {danger};
-    font-weight: bold;
-}
-QLabel#dangerHint {
-    color: {danger};
-    font-size: 11px;
 }
 
 /* 拖放覆盖层：遮罩色随主题反向取，浅色压暗、深色提亮 */

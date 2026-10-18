@@ -1,3 +1,5 @@
+from enum import IntEnum
+
 from PySide6.QtCore import Qt, Signal, Slot
 from PySide6.QtGui import QIcon
 from PySide6.QtWidgets import (
@@ -7,6 +9,7 @@ from PySide6.QtWidgets import (
     QHBoxLayout,
     QLabel,
     QScrollArea,
+    QStackedWidget,
     QVBoxLayout,
     QWidget,
 )
@@ -14,12 +17,29 @@ from PySide6.QtWidgets import (
 from danmaku_sender.config import Settings
 from danmaku_sender.config.theme_config import FontChoice, ThemeMode
 from danmaku_sender.state import AppState
+from danmaku_sender.ui.framework.breadcrumb_bar import BreadcrumbBar
 from danmaku_sender.ui.framework.fonts import PROFILES
 from danmaku_sender.ui.framework.form_binder import LiveFormBinder
 from danmaku_sender.ui.framework.icons import SvgIcon, rerender
 from danmaku_sender.ui.framework.number_box import DoubleNumberBox, NumberBox
-from danmaku_sender.ui.framework.settings_row import ICON_SIZE, SettingsRow
+from danmaku_sender.ui.framework.settings_row import ICON_SIZE, NavRow, SettingsRow
 from danmaku_sender.ui.framework.wrap_layout import WrapLayout
+
+
+class Subpage(IntEnum):
+    """设置页子页，取值即栈下标。
+
+    Attributes:
+        DIRECTORY: 目录页，列出全部分类。
+        SYSTEM: 系统子页。
+        NETWORK: 网络子页。
+        SEND: 发送子页。
+    """
+
+    DIRECTORY = 0
+    SYSTEM = 1
+    NETWORK = 2
+    SEND = 3
 
 
 class SettingsPage(QWidget):
@@ -30,7 +50,8 @@ class SettingsPage(QWidget):
     主题需要即时生效，因此在 ``after_write`` 中发射 ``themeApplied``。
     页面显示时调用 ``fill()`` 刷新控件值。
 
-    排布沿用 Fluent 设置页：页标题、节标题、每项一张卡片行。
+    页面为子页导航：目录页列出三个分类，各分类为独立子页。
+    页头为路径式导航条，末段是当前子页，其余段可点击返回目录。
     """
 
     themeApplied = Signal(ThemeMode)  # 主题已写入配置，可立即应用
@@ -45,18 +66,6 @@ class SettingsPage(QWidget):
         self._create_ui()
 
     # ── 排版构件 ────────────────────────────────────────────────────────
-
-    @staticmethod
-    def _page_title(text: str) -> QLabel:
-        label = QLabel(text)
-        label.setObjectName("settingsPageTitle")
-        return label
-
-    @staticmethod
-    def _section_title(text: str) -> QLabel:
-        label = QLabel(text)
-        label.setObjectName("settingsSectionTitle")
-        return label
 
     def _icon(self, icon: QIcon) -> QLabel:
         """构造设置行图标，居中于占位框内。
@@ -88,8 +97,68 @@ class SettingsPage(QWidget):
         for label, icon in self._icon_jobs:
             self._paint_icon(label, icon)
 
-    def _row(self, title: str, subtitle: str, icon, trailing: QWidget) -> SettingsRow:
-        return SettingsRow(title, subtitle, trailing=trailing, icon=self._icon(icon))
+    def _row(
+        self,
+        title: str,
+        subtitle: str,
+        icon,
+        trailing: QWidget | None = None,
+        danger: bool = False,
+    ) -> SettingsRow:
+        return SettingsRow(
+            title, subtitle, trailing=trailing, icon=self._icon(icon), danger=danger
+        )
+
+    def _nav_row(self, title: str, subtitle: str, icon, target: Subpage) -> NavRow:
+        """构造目录页的可点条目，点击进入对应子页。
+
+        Args:
+            title (str): 分类名称。
+            subtitle (str): 该分类的内容概述。
+            icon: 分类图标。
+            target (Subpage): 目标子页。
+
+        Returns:
+            NavRow: 可点的目录条目。
+        """
+        row = NavRow(
+            title,
+            subtitle,
+            target,
+            trailing=self._icon(SvgIcon.CHEVRON_RIGHT),
+            icon=self._icon(icon),
+        )
+        row.activated.connect(self._stack.setCurrentIndex)
+        return row
+
+    def _subpage(self, trail: list[str]) -> tuple[QScrollArea, QVBoxLayout]:
+        """构造子页骨架：滚动容器与内容布局，页头已排入布局。
+
+        Args:
+            trail (list[str]): 面包屑路径，末段为当前子页名。
+
+        Returns:
+            tuple[QScrollArea, QVBoxLayout]: 入栈的滚动容器，以及待填充的内容布局。
+        """
+        content = QWidget()
+        body = QVBoxLayout(content)
+        body.setContentsMargins(48, 34, 48, 48)
+        body.setSpacing(4)
+
+        breadcrumb = BreadcrumbBar(content)
+        breadcrumb.setItems(trail)
+        breadcrumb.itemActivated.connect(
+            lambda _index: self._stack.setCurrentIndex(Subpage.DIRECTORY)
+        )
+        body.addWidget(breadcrumb)
+        body.addSpacing(6)
+
+        scroll = QScrollArea()
+        scroll.setWidgetResizable(True)
+        scroll.setFrameShape(QFrame.Shape.NoFrame)
+        scroll.setHorizontalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
+        scroll.setWidget(content)
+        return scroll, body
 
     @staticmethod
     def _spin_with_unit(spin: QWidget, unit: str) -> QWidget:
@@ -105,23 +174,40 @@ class SettingsPage(QWidget):
     # ── 页面构建 ────────────────────────────────────────────────────────
 
     def _create_ui(self):
-        content = QWidget(self)
-        main_layout = QVBoxLayout(content)
-        main_layout.setContentsMargins(48, 34, 48, 48)
-        main_layout.setSpacing(10)
+        self._stack = QStackedWidget(self)
+        self._stack.addWidget(self._build_directory())     # Subpage.DIRECTORY
+        self._stack.addWidget(self._build_system_page())   # Subpage.SYSTEM
+        self._stack.addWidget(self._build_network_page())  # Subpage.NETWORK
+        self._stack.addWidget(self._build_send_page())     # Subpage.SEND
 
-        main_layout.addWidget(self._page_title("设置"))
-        main_layout.addSpacing(6)
+        outer = QVBoxLayout(self)
+        outer.setContentsMargins(0, 0, 0, 0)
+        outer.addWidget(self._stack)
 
-        # --- 系统 ---
-        main_layout.addWidget(self._section_title("系统"))
+    def _build_directory(self) -> QWidget:
+        """构建目录页：三个分类条目加页脚提示。"""
+        page, body = self._subpage(["设置"])
+
+        body.addWidget(self._nav_row("系统", "界面主题、字体与休眠行为", SvgIcon.SETTINGS, Subpage.SYSTEM))
+        body.addWidget(self._nav_row("网络", "网络请求的代理方式", SvgIcon.SYNC_ALT, Subpage.NETWORK))
+        body.addWidget(self._nav_row("发送", "发送间隔、爆发节奏与停止条件", SvgIcon.TUNE, Subpage.SEND))
+        body.addStretch()
+
+        info_label = QLabel("💡 账号管理请点击左上角头像区域。")
+        info_label.setStyleSheet("color: gray; font-size: 12px;")
+        body.addWidget(info_label)
+        return page
+
+    def _build_system_page(self) -> QWidget:
+        """构建系统子页。"""
+        page, body = self._subpage(["设置", "系统"])
 
         self.theme_combo = QComboBox()
         self.theme_combo.addItem("跟随系统", ThemeMode.SYSTEM)
         self.theme_combo.addItem("浅色模式", ThemeMode.LIGHT)
         self.theme_combo.addItem("深色模式", ThemeMode.DARK)
         self.theme_combo.setFixedWidth(160)
-        main_layout.addWidget(
+        body.addWidget(
             self._row("界面主题", "选择浅色、深色，或跟随系统外观", SvgIcon.GRADIENT, self.theme_combo)
         )
 
@@ -137,14 +223,14 @@ class SettingsPage(QWidget):
                 self.font_combo.count() - 1, font_tips[choice], Qt.ItemDataRole.ToolTipRole
             )
         self.font_combo.setFixedWidth(160)
-        main_layout.addWidget(
+        body.addWidget(
             self._row("界面字体", "切换字体会同步调整笔画渲染，保持清晰", SvgIcon.SHORT_TEXT, self.font_combo)
         )
 
         self.prevent_sleep_checkbox = QCheckBox()
         self.prevent_sleep_checkbox.setChecked(True)
         self.prevent_sleep_checkbox.setToolTip("保持网络和CPU运行，但允许屏幕关闭。")
-        main_layout.addWidget(
+        body.addWidget(
             self._row(
                 "阻止电脑休眠",
                 "任务运行期间保持网络与处理器工作，屏幕仍可关闭",
@@ -152,14 +238,17 @@ class SettingsPage(QWidget):
                 self.prevent_sleep_checkbox,
             )
         )
+        body.addStretch()
+        return page
 
-        # --- 网络 ---
-        main_layout.addWidget(self._section_title("网络"))
+    def _build_network_page(self) -> QWidget:
+        """构建网络子页。"""
+        page, body = self._subpage(["设置", "网络"])
 
         self.proxy_checkbox = QCheckBox()
         self.proxy_checkbox.setChecked(True)
         self.proxy_checkbox.setToolTip("启用后，程序将使用系统设置的代理服务器进行网络请求。")
-        main_layout.addWidget(
+        body.addWidget(
             self._row(
                 "使用系统代理",
                 "经由系统设置的代理服务器发起网络请求",
@@ -167,9 +256,12 @@ class SettingsPage(QWidget):
                 self.proxy_checkbox,
             )
         )
+        body.addStretch()
+        return page
 
-        # --- 发送 ---
-        main_layout.addWidget(self._section_title("发送"))
+    def _build_send_page(self) -> QWidget:
+        """构建发送子页。"""
+        page, body = self._subpage(["设置", "发送"])
 
         self.min_delay = DoubleNumberBox()
         self.min_delay.setRange(0.1, 60.0)
@@ -190,7 +282,7 @@ class SettingsPage(QWidget):
         delay_lay.addWidget(QLabel("至"))
         delay_lay.addWidget(self.max_delay)
         delay_lay.addWidget(QLabel("秒"))
-        main_layout.addWidget(
+        body.addWidget(
             self._row("随机间隔", "相邻两条弹幕之间的发送间隔", SvgIcon.TUNE, delay_box)
         )
 
@@ -225,7 +317,7 @@ class SettingsPage(QWidget):
         burst_lay.addWidget(QLabel("至"))
         burst_lay.addWidget(self.burst_rest_max)
         burst_lay.addWidget(QLabel("秒"))
-        main_layout.addWidget(
+        body.addWidget(
             self._row("爆发模式", "连续发送若干条后暂停一段时间再继续", SvgIcon.AUTO_AWESOME, burst_box)
         )
 
@@ -233,7 +325,7 @@ class SettingsPage(QWidget):
         self.delay_between.setRange(0.0, 300.0)
         self.delay_between.setSingleStep(5.0)
         self.delay_between.setAccessibleName("任务间隔")
-        main_layout.addWidget(
+        body.addWidget(
             self._row(
                 "任务间隔",
                 "相邻两个任务之间的等待时间",
@@ -245,7 +337,7 @@ class SettingsPage(QWidget):
         self.stop_count = NumberBox()
         self.stop_count.setRange(0, 99999)
         self.stop_count.setAccessibleName("已发送达到")
-        main_layout.addWidget(
+        body.addWidget(
             self._row(
                 "已发送达到",
                 "累计发送量到达该值后停止队列，0 为不限制",
@@ -257,7 +349,7 @@ class SettingsPage(QWidget):
         self.stop_time = NumberBox()
         self.stop_time.setRange(0, 99999)
         self.stop_time.setAccessibleName("已用时达到")
-        main_layout.addWidget(
+        body.addWidget(
             self._row(
                 "已用时达到",
                 "队列运行时长到达该值后停止，0 为不限制",
@@ -266,67 +358,24 @@ class SettingsPage(QWidget):
             )
         )
 
-        # --- 危险区 ---
-        main_layout.addSpacing(6)
-        main_layout.addLayout(self._create_danger_block())
-
-        main_layout.addStretch()
-
-        info_label = QLabel("💡 账号管理请点击左上角头像区域。")
-        info_label.setStyleSheet("color: gray; font-size: 12px;")
-        main_layout.addWidget(info_label)
-
-        scroll = QScrollArea(self)
-        scroll.setWidgetResizable(True)
-        scroll.setFrameShape(QFrame.Shape.NoFrame)
-        scroll.setHorizontalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
-        scroll.setWidget(content)
-
-        outer = QVBoxLayout(self)
-        outer.setContentsMargins(0, 0, 0, 0)
-        outer.addWidget(scroll)
-
-    def _create_danger_block(self) -> QVBoxLayout:
-        """构建危险区：保留红色强调外观，与普通卡片行区分。"""
-        header = QHBoxLayout()
-        header.setSpacing(6)
-        danger_icon = QLabel()
-        danger_icon.setPixmap(SvgIcon.WARNING(color="#e74c3c").pixmap(20, 20))
-        header.addWidget(danger_icon)
-        danger_label = QLabel("危险区")
-        danger_label.setObjectName("dangerTitle")
-        header.addWidget(danger_label)
-        header.addStretch()
+        body.addSpacing(6)
+        danger_heading = QLabel("危险区")
+        danger_heading.setObjectName("settingsSectionTitle")
+        body.addWidget(danger_heading)
 
         self.allow_duplicates = QCheckBox()
         self.allow_duplicates.setAccessibleName("允许重复发送")
-        danger_title = QLabel("允许重复发送")
-        danger_title.setStyleSheet("font-weight: bold;")
-        danger_hint = QLabel("开启后，发送将不再比对数据库。已经发出的弹幕会允许再次发送，视频内会出现重复。")
-        danger_hint.setObjectName("dangerHint")
-        danger_hint.setWordWrap(True)
-
-        danger_text = QVBoxLayout()
-        danger_text.setSpacing(2)
-        danger_text.addWidget(danger_title)
-        danger_text.addWidget(danger_hint)
-
-        danger_row = QHBoxLayout()
-        danger_row.addWidget(self.allow_duplicates)
-        danger_row.addLayout(danger_text, 1)
-
-        danger_frame = QFrame()
-        danger_frame.setObjectName("dangerFrame")
-        danger_inner = QVBoxLayout()
-        danger_inner.setContentsMargins(12, 10, 12, 12)
-        danger_inner.addLayout(danger_row)
-        danger_frame.setLayout(danger_inner)
-
-        block = QVBoxLayout()
-        block.setSpacing(6)
-        block.addLayout(header)
-        block.addWidget(danger_frame)
-        return block
+        body.addWidget(
+            self._row(
+                "允许重复发送",
+                "开启后，发送将不再比对数据库。已经发出的弹幕会允许再次发送，视频内会出现重复。",
+                SvgIcon.CONTENT_COPY,
+                self.allow_duplicates,
+                danger=True,
+            )
+        )
+        body.addStretch()
+        return page
 
     def _on_burst_toggled(self, checked: bool):
         for ctrl in self._burst_controls:
