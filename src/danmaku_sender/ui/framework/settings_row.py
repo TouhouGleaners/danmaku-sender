@@ -6,7 +6,8 @@
 宽度不足时尾部控件换行到文字下方。
 """
 
-from PySide6.QtCore import Qt
+from PySide6.QtCore import Qt, Signal
+from PySide6.QtGui import QMouseEvent
 from PySide6.QtWidgets import QGridLayout, QLabel, QVBoxLayout, QWidget
 
 from danmaku_sender.ui.framework.card import Card
@@ -113,3 +114,42 @@ class SettingsRow(Card):
             self._stacked = stacked
             self._place_trailing()
         super().resizeEvent(event)
+
+
+class NavRow(SettingsRow):
+    """可点设置行，左键按压时发出登记的目标下标。
+
+    Attributes:
+        activated (Signal(int)): 点击时发射，参数为构造时登记的目标下标。
+    """
+
+    activated = Signal(int)
+
+    def __init__(
+        self,
+        title: str,
+        subtitle: str,
+        target: int,
+        trailing: QWidget | None = None,
+        icon: QWidget | None = None,
+        parent: QWidget | None = None,
+    ):
+        """初始化可点设置行。
+
+        Args:
+            title (str): 名称文本。
+            subtitle (str): 说明文本，超长自动换行。
+            target (int): 点击时经 ``activated`` 报出的目标下标。
+            trailing (QWidget | None): 尾部控件。
+            icon (QWidget | None): 图标控件；省略则不显示图标列。
+            parent (QWidget | None): 父控件。
+        """
+        super().__init__(title, subtitle, trailing=trailing, icon=icon, parent=parent)
+        self._target = target
+        self.setHoverable(True)
+
+    def mousePressEvent(self, event: QMouseEvent) -> None:
+        """左键按压时发出目标下标。"""
+        if event.button() == Qt.MouseButton.LeftButton:
+            self.activated.emit(self._target)
+        super().mousePressEvent(event)

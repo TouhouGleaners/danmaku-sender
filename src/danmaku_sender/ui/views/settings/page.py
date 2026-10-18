@@ -1,7 +1,7 @@
 from enum import IntEnum
 
-from PySide6.QtCore import QEvent, QObject, Qt, Signal, Slot
-from PySide6.QtGui import QIcon, QMouseEvent
+from PySide6.QtCore import Qt, Signal, Slot
+from PySide6.QtGui import QIcon
 from PySide6.QtWidgets import (
     QCheckBox,
     QComboBox,
@@ -22,7 +22,7 @@ from danmaku_sender.ui.framework.fonts import PROFILES
 from danmaku_sender.ui.framework.form_binder import LiveFormBinder
 from danmaku_sender.ui.framework.icons import SvgIcon, rerender
 from danmaku_sender.ui.framework.number_box import DoubleNumberBox, NumberBox
-from danmaku_sender.ui.framework.settings_row import ICON_SIZE, SettingsRow
+from danmaku_sender.ui.framework.settings_row import ICON_SIZE, NavRow, SettingsRow
 from danmaku_sender.ui.framework.wrap_layout import WrapLayout
 
 
@@ -109,7 +109,7 @@ class SettingsPage(QWidget):
             title, subtitle, trailing=trailing, icon=self._icon(icon), danger=danger
         )
 
-    def _nav_row(self, title: str, subtitle: str, icon, target: Subpage) -> SettingsRow:
+    def _nav_row(self, title: str, subtitle: str, icon, target: Subpage) -> NavRow:
         """构造目录页的可点条目，点击进入对应子页。
 
         Args:
@@ -119,34 +119,17 @@ class SettingsPage(QWidget):
             target (Subpage): 目标子页。
 
         Returns:
-            SettingsRow: 可点的目录条目。
+            NavRow: 可点的目录条目。
         """
-        row = self._row(title, subtitle, icon, trailing=self._icon(SvgIcon.CHEVRON_RIGHT))
-        row.setHoverable(True)
-        row.setProperty("target", target.value)
-        row.installEventFilter(self)
+        row = NavRow(
+            title,
+            subtitle,
+            target,
+            trailing=self._icon(SvgIcon.CHEVRON_RIGHT),
+            icon=self._icon(icon),
+        )
+        row.activated.connect(self._stack.setCurrentIndex)
         return row
-
-    def eventFilter(self, watched: QObject, event: QEvent) -> bool:
-        """把目录条目的左键按压转为子页切换。
-
-        Args:
-            watched (QObject): 事件来源。
-            event (QEvent): 转发的事件。
-
-        Returns:
-            bool: 事件已消费时为 ``True``。
-        """
-        if (
-            isinstance(event, QMouseEvent)
-            and event.type() == QEvent.Type.MouseButtonPress
-            and isinstance(watched, SettingsRow)
-        ):
-            target = watched.property("target")
-            if target is not None and event.button() == Qt.MouseButton.LeftButton:
-                self._stack.setCurrentIndex(Subpage(target))
-                return True
-        return super().eventFilter(watched, event)
 
     def _subpage(self, trail: list[str]) -> tuple[QScrollArea, QVBoxLayout]:
         """构造子页骨架：滚动容器与内容布局，页头已排入布局。
