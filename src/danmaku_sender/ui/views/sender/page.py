@@ -1,6 +1,7 @@
 import logging
 import threading
 from dataclasses import dataclass
+from enum import IntEnum
 from pathlib import Path
 
 from PySide6.QtCore import (
@@ -13,10 +14,13 @@ from PySide6.QtCore import (
     Slot,
 )
 from PySide6.QtGui import (
+    QAction,
+    QActionGroup,
     QColor,
     QDragEnterEvent,
     QDragMoveEvent,
     QDropEvent,
+    QIcon,
     QKeySequence,
     QShortcut,
     QTextCursor,
@@ -70,6 +74,26 @@ class TaskUnsent:
 
     label: str
     records: list[UnsentDanmakusRecord]
+
+
+class RunAction(IntEnum):
+    """运行菜单里的候选动作，取值即菜单项的数据键。
+
+    Attributes:
+        SEND_COUPLED: 发送并监视。
+        SEND_ONLY: 仅发送。
+        PAUSE: 暂停发送。
+        PAUSE_COUPLED: 暂停发送并停止监视。
+        STOP_LINGER: 终止发送并继续监视，按既定时限收尾。
+        STOP_NOW: 终止发送并立即停止监视。
+    """
+
+    SEND_COUPLED = 0
+    SEND_ONLY = 1
+    PAUSE = 2
+    PAUSE_COUPLED = 3
+    STOP_LINGER = 4
+    STOP_NOW = 5
 
 
 class SenderPage(QWidget):
@@ -237,6 +261,7 @@ class SenderPage(QWidget):
         self._run_button.clicked.connect(self._on_run_primary)
         self._run_menu = QMenu(self._run_button)
         self._run_button.setMenu(self._run_menu)
+        self._run_choice = RunAction.SEND_COUPLED
         self._build_run_menu()
         self._sync_run_button(False)
 
@@ -507,33 +532,88 @@ class SenderPage(QWidget):
     # region 运行控制（分体按钮）
 
     def _build_run_menu(self) -> None:
-        """装配运行菜单：范围两种、暂停两种、终止两种。"""
-        self._act_send_coupled = self._run_menu.addAction("发送并监视")
-        self._act_send_only = self._run_menu.addAction("仅发送")
+        """装配运行菜单。
 
+        条目是候选动作而非命令：点选只把选择落到主半边，执行仍要再点一次主半边。
+        """
+        self._run_group = QActionGroup(self._run_menu)
+        self._run_group.setExclusive(True)
+        self._run_choices: dict[QAction, RunAction] = {}
+
+        self._add_run_choices(RunAction.SEND_COUPLED, RunAction.SEND_ONLY)
         self._run_menu.addSeparator()
-        self._act_pause = self._run_menu.addAction("暂停发送")
-        self._act_pause_coupled = self._run_menu.addAction("暂停发送并停止监视")
+        self._add_run_choices(RunAction.PAUSE, RunAction.PAUSE_COUPLED)
+        self._run_menu.addSeparator()
+        self._add_run_choices(RunAction.STOP_LINGER, RunAction.STOP_NOW)
+
         # 队列级暂停与终止的差别尚未定，先不上线
-        self._act_pause.setEnabled(False)
-        self._act_pause_coupled.setEnabled(False)
+        for action, value in self._run_choices.items():
+            if value in (RunAction.PAUSE, RunAction.PAUSE_COUPLED):
+                action.setEnabled(False)
 
-        self._run_menu.addSeparator()
-        self._act_stop_linger = self._run_menu.addAction("终止发送并继续监视五分钟后停止")
-        self._act_stop_now = self._run_menu.addAction("终止发送并立即停止监视")
+        self._run_group.triggered.connect(self._on_pick_run_action)
 
-        self._act_send_coupled.triggered.connect(self._start_queue_with_monitor)
-        self._act_send_only.triggered.connect(self._start_queue)
-        self._act_stop_linger.triggered.connect(self._stop_queue)
-        self._act_stop_now.triggered.connect(self._stop_queue_and_monitor)
+    def _add_run_choices(self, *values: RunAction) -> None:
+        """往菜单里登记候选动作。
+
+        Args:
+            *values (RunAction): 待登记的动作。
+        """
+        for value in values:
+            menu_label, _, _ = self._run_meta(value)
+            action = self._run_menu.addAction(menu_label)
+            action.setCheckable(True)
+            self._run_group.addAction(action)
+            self._run_choices[action] = value
+
+    @staticmethod
+    def _run_meta(value: RunAction) -> tuple[str, str, QIcon]:
+        """返回候选动作的菜单文案、主半边文案与图标。
+
+        Args:
+            value (RunAction): 候选动作。
+
+        Returns:
+            tuple[str, str, QIcon]: 菜单文案、主半边文案与图标。
+        """
+        match value:
+            case RunAction.SEND_COUPLED:
+                return "发送并监视", "发送并监视", SvgIcon.START
+            case RunAction.SEND_ONLY:
+                return "仅发送", "仅发送", SvgIcon.START
+            case RunAction.PAUSE:
+                return "暂停发送", "暂停发送", SvgIcon.PAUSE
+            case RunAction.PAUSE_COUPLED:
+                return "暂停发送并停止监视", "暂停并停止监视", SvgIcon.PAUSE
+            case RunAction.STOP_LINGER:
+                return "终止发送并继续监视五分钟后停止", "终止并继续监视", SvgIcon.STOP
+            case _:
+                return "终止发送并立即停止监视", "终止并立即停止监视", SvgIcon.STOP
+
+    @Slot(object)
+    def _on_pick_run_action(self, action: QAction) -> None:
+        """把选中的动作落到主半边，不执行。
+
+        Args:
+            action (QAction): 被点选的菜单项。
+        """
+        self._run_choice = self._run_choices[action]
+        self._sync_run_button(self.sender_controller.is_queue_running())
 
     @Slot()
     def _on_run_primary(self) -> None:
-        """主半边：待命时发送并监视，运行中时终止并继续监视。"""
-        if self.sender_controller.is_queue_running():
-            self._stop_queue()
-        else:
-            self._start_queue_with_monitor()
+        """执行主半边当前选定的动作。"""
+        match self._run_choice:
+            case RunAction.SEND_COUPLED:
+                self._start_queue_with_monitor()
+            case RunAction.SEND_ONLY:
+                self._start_queue()
+            case RunAction.STOP_LINGER:
+                self._stop_queue()
+            case RunAction.STOP_NOW:
+                self._stop_queue_and_monitor()
+            case _:
+                self.logger.warning("该动作尚未上线，已忽略。")
 
     @Slot()
     def _start_queue_with_monitor(self) -> None:
@@ -554,22 +634,55 @@ class SenderPage(QWidget):
         self.monitor_controller.stop_queue_monitor()
 
     def _sync_run_button(self, running: bool) -> None:
-        """按运行状态换主半边文案与菜单可见项。"""
+        """按运行状态换主半边文案、图标与菜单可见项。
+
+        选定的动作只在当前状态仍合法时保留，否则回落到该状态的默认动作。
+
+        Args:
+            running (bool): 队列是否正在运行。
+        """
+        valid = self._run_valid(running)
+        if self._run_choice not in valid:
+            self._run_choice = self._run_default(running)
+
+        _, label, icon = self._run_meta(self._run_choice)
+        self._run_button.setText(label)
+        self._run_button.setIcon(icon)
+
+        for action, value in self._run_choices.items():
+            action.setVisible(value in valid)
+            action.setChecked(value is self._run_choice)
+
+    @staticmethod
+    def _run_default(running: bool) -> RunAction:
+        """返回当前状态下的默认动作。
+
+        Args:
+            running (bool): 队列是否正在运行。
+
+        Returns:
+            RunAction: 该状态的默认动作。
+        """
+        return RunAction.STOP_LINGER if running else RunAction.SEND_COUPLED
+
+    @staticmethod
+    def _run_valid(running: bool) -> tuple[RunAction, ...]:
+        """返回当前状态下合法的候选动作，首个为默认动作。
+
+        Args:
+            running (bool): 队列是否正在运行。
+
+        Returns:
+            tuple[RunAction, ...]: 合法动作，按菜单顺序排列。
+        """
         if running:
-            self._run_button.setText("终止并继续监视")
-            self._run_button.setIcon(SvgIcon.STOP)
-        else:
-            self._run_button.setText("发送并监视")
-            self._run_button.setIcon(SvgIcon.START)
-        for action in (self._act_send_coupled, self._act_send_only):
-            action.setVisible(not running)
-        for action in (
-            self._act_pause,
-            self._act_pause_coupled,
-            self._act_stop_linger,
-            self._act_stop_now,
-        ):
-            action.setVisible(running)
+            return (
+                RunAction.PAUSE,
+                RunAction.PAUSE_COUPLED,
+                RunAction.STOP_LINGER,
+                RunAction.STOP_NOW,
+            )
+        return (RunAction.SEND_COUPLED, RunAction.SEND_ONLY)
 
     def apply_theme(self, palette: Palette) -> None:
         """主题切换后按当前调色板重设强调面。
