@@ -42,13 +42,13 @@ ROLE_SOURCES: dict[QPalette.ColorRole, str] = {
     QPalette.ColorRole.Link: "primary",
     QPalette.ColorRole.LinkVisited: "primary",
     QPalette.ColorRole.Accent: "primary",
-    # Light / Midlight / Mid / Dark / Shadow 服务于立体边框与阴影。
-    # 本项目为平面化界面，这些角色统一取中性色。
-    QPalette.ColorRole.Light: "bg_hover",
-    QPalette.ColorRole.Midlight: "bg_control",
+    # Light / Midlight 承载控件填充阶梯的悬停与按压档。
+    # Mid / Dark / Shadow 服务于描边：Dark 为立体描边的强端，Shadow 为弱端与分隔线。
+    QPalette.ColorRole.Light: "control_secondary",
+    QPalette.ColorRole.Midlight: "control_tertiary",
     QPalette.ColorRole.Mid: "border_color",
-    QPalette.ColorRole.Dark: "border_color",
-    QPalette.ColorRole.Shadow: "border_color",
+    QPalette.ColorRole.Dark: "stroke_secondary",
+    QPalette.ColorRole.Shadow: "stroke_divider",
 }
 
 # setColor(role, color) 会同时写入 Disabled 组，使禁用态文字与正常态同色，
@@ -71,7 +71,11 @@ class Palette:
     bg_layer_overlay: str
     bg_control: str
     bg_hover: str
+    control_secondary: str
+    control_tertiary: str
     border_color: str
+    stroke_secondary: str
+    stroke_divider: str
     stroke_card: str
     text_main: str
     text_secondary: str
@@ -172,8 +176,12 @@ class ThemeService(QObject):
                     "{bg_layer_overlay}": palette.bg_layer_overlay,
                     "{bg_control}": palette.bg_control,
                     "{bg_hover}": palette.bg_hover,
+                    "{control_secondary}": palette.control_secondary,
+                    "{control_tertiary}": palette.control_tertiary,
                     "{border_color}": palette.border_color,
                     "{stroke_card}": palette.stroke_card,
+                    "{stroke_secondary}": palette.stroke_secondary,
+                    "{stroke_divider}": palette.stroke_divider,
                     "{text_main}": palette.text_main,
                     "{text_secondary}": palette.text_secondary,
                     "{primary}": palette.primary,

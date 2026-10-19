@@ -179,6 +179,7 @@ class SvgIcon:
     ARROW_UPWARD = _IconDescriptor("arrow_upward.svg")
     CANCEL = _IconDescriptor("cancel.svg")
     CHECK_CIRCLE = _IconDescriptor("check_circle.svg")
+    CHEVRON_DOWN = _IconDescriptor("chevron_down.svg")
     CHEVRON_RIGHT = _IconDescriptor("chevron_right.svg")
     CLOSE = _IconDescriptor("close.svg")
     CONTENT_COPY = _IconDescriptor("content_copy.svg")
@@ -204,6 +205,7 @@ class SvgIcon:
     MONITOR = _IconDescriptor("monitor.svg")
     NOTE_ADD = _IconDescriptor("note_add.svg")
     OPEN_IN_NEW = _IconDescriptor("open_in_new.svg")
+    PAUSE = _IconDescriptor("pause.svg")
     PERSON_ADD = _IconDescriptor("person_add.svg")
     PLAYLIST_ADD = _IconDescriptor("playlist_add.svg")
     PLAY_ARROW = _IconDescriptor("play_arrow.svg")
@@ -235,11 +237,12 @@ class SvgIcon:
         _render_svg_icon.cache_clear()
 
 
-def rerender(icon: QIcon) -> QIcon:
-    """按当前调色板前景色重新渲染主题图标。
+def rerender(icon: QIcon, color: str | None = None) -> QIcon:
+    """重新渲染主题图标。
 
     Args:
         icon (QIcon): 先前由 :class:`SvgIcon` 取得的图标。
+        color (str | None): 填充色；省略则取当前调色板前景色。
 
     Returns:
         QIcon: 重新渲染后的图标；非主题图标按原样返回。
@@ -248,5 +251,8 @@ def rerender(icon: QIcon) -> QIcon:
 
         # 主题切换后重绘已固化到控件上的位图
         label.setPixmap(rerender(stored_icon).pixmap(20, 20))
+
+        # 按所在控件的文字色渲染
+        rerender(stored_icon, text_color.name())
     """
-    return icon() if isinstance(icon, _ThemedIcon) else icon
+    return icon(color=color) if isinstance(icon, _ThemedIcon) else icon
