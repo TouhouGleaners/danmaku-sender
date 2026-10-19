@@ -32,13 +32,14 @@ from PySide6.QtGui import (
     QPen,
 )
 from PySide6.QtWidgets import (
-    QAbstractSpinBox,
     QApplication,
     QDoubleSpinBox,
     QLineEdit,
     QSpinBox,
     QWidget,
 )
+
+from .keyboard_focus import KeyboardFocus
 
 
 class _Stroke(NamedTuple):
@@ -221,11 +222,11 @@ class _FieldChrome:
     REPEAT_DELAY_MS = 400
     REPEAT_INTERVAL_MS = 80
 
-    def __init__(self, owner: QAbstractSpinBox) -> None:
+    def __init__(self, owner: "NumberBox | DoubleNumberBox") -> None:
         """接管取值排布，并安装内部编辑器的事件过滤器。
 
         Args:
-            owner (QAbstractSpinBox): 承载字段外观的数值框。
+            owner (NumberBox | DoubleNumberBox): 承载字段外观的数值框。
         """
         self._owner = owner
         self._repeat = QTimer(owner)
@@ -422,7 +423,7 @@ class _FieldChrome:
         rect = QRectF(owner.rect())
 
         enabled = owner.isEnabled()
-        focused = enabled and owner.hasFocus()
+        focused = enabled and owner.hasKeyboardFocus()
         active = focused or (enabled and owner.underMouse())
 
         mid = palette.color(QPalette.ColorRole.Mid)
@@ -534,7 +535,7 @@ class _FieldChrome:
                 painter.drawLine(QLineF(cx, gy - half, cx, gy + half))
 
 
-class NumberBox(QSpinBox):
+class NumberBox(KeyboardFocus, QSpinBox):
     """整数数值框。
 
     取值规则沿用 :class:`QSpinBox`。
@@ -571,7 +572,7 @@ class NumberBox(QSpinBox):
         super().mouseReleaseEvent(event)
 
 
-class DoubleNumberBox(QDoubleSpinBox):
+class DoubleNumberBox(KeyboardFocus, QDoubleSpinBox):
     """小数数值框。
 
     取值规则沿用 :class:`QDoubleSpinBox`。
