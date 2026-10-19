@@ -1,4 +1,5 @@
 import logging
+import threading
 from dataclasses import dataclass
 from pathlib import Path
 
@@ -12,6 +13,7 @@ from PySide6.QtCore import (
     Slot,
 )
 from PySide6.QtGui import (
+    QColor,
     QDragEnterEvent,
     QDragMoveEvent,
     QDropEvent,
@@ -38,6 +40,7 @@ from PySide6.QtWidgets import (
 )
 
 from danmaku_sender.config import Settings
+from danmaku_sender.controller.monitor import MonitorController
 from danmaku_sender.controller.sender import QueueReadiness, SenderController
 from danmaku_sender.infra.persistence.history_manager import HistoryManager
 from danmaku_sender.infra.platform import send_windows_notification
@@ -50,6 +53,8 @@ from danmaku_sender.ui.framework.drag_drop import DropOverlay, xml_files_from_dr
 from danmaku_sender.ui.framework.empty_state import EmptyStateHint
 from danmaku_sender.ui.framework.icons import SvgIcon
 from danmaku_sender.ui.framework.notification import Notification
+from danmaku_sender.ui.framework.split_button import SplitButton
+from danmaku_sender.ui.framework.theme import Palette
 from danmaku_sender.ui.views.editor import EditorDialog
 from danmaku_sender.utils.string_utils import safe_filename
 from danmaku_sender.utils.time_utils import format_duration
@@ -70,12 +75,29 @@ class TaskUnsent:
 class SenderPage(QWidget):
     progressUpdated = Signal(int, int, float)
 
-    def __init__(self, state: AppState, settings: Settings, history_manager: HistoryManager):
+    def __init__(
+        self,
+        state: AppState,
+        settings: Settings,
+        history_manager: HistoryManager,
+        monitor_controller: MonitorController,
+    ):
+        """初始化发射器页。
+
+        Args:
+            state: 状态树聚合根。
+            settings: 配置容器。
+            history_manager: 本地账本。
+            monitor_controller: 队列监视控制器，由装配处注入并与其他页共用。
+        """
         super().__init__()
         self.state = state
         self.settings = settings
         self.logger = logging.getLogger(__name__)
         self.sender_controller = SenderController(state, settings, history_manager, self)
+        self.monitor_controller = monitor_controller
+        # 「发送并监视」时交给监视器的发送结束标记；发送结束后再核销到时限
+        self._send_done: threading.Event | None = None
 
         self._queue_total = 0
         self._queue_current = 0
@@ -211,23 +233,16 @@ class SenderPage(QWidget):
         self.progress_bar = QProgressBar()
         self.progress_bar.setValue(0)
 
-        self._btn_start_queue = QPushButton("启动队列")
-        self._btn_start_queue.setIcon(SvgIcon.START)
-        self._btn_start_queue.setFixedWidth(100)
-        self._btn_start_queue.setProperty("action", "true")
-        self._btn_start_queue.setProperty("state", "ready")
-
-        self._btn_stop_queue = QPushButton("停止队列")
-        self._btn_stop_queue.setIcon(SvgIcon.STOP)
-        self._btn_stop_queue.setFixedWidth(100)
-        self._btn_stop_queue.setProperty("action", "true")
-        self._btn_stop_queue.setProperty("state", "running")
-        self._btn_stop_queue.setVisible(False)
+        self._run_button = SplitButton()
+        self._run_button.clicked.connect(self._on_run_primary)
+        self._run_menu = QMenu(self._run_button)
+        self._run_button.setMenu(self._run_menu)
+        self._build_run_menu()
+        self._sync_run_button(False)
 
         action_layout.addWidget(self.status_label)
         action_layout.addWidget(self.progress_bar, stretch=1)
-        action_layout.addWidget(self._btn_start_queue)
-        action_layout.addWidget(self._btn_stop_queue)
+        action_layout.addWidget(self._run_button)
 
         main_layout.addLayout(action_layout)
 
@@ -238,8 +253,6 @@ class SenderPage(QWidget):
         self._btn_reset_queue.clicked.connect(self._reset_queue)
         self._btn_clear_all.clicked.connect(self._clear_all_tasks)
         self._btn_export_unsent.clicked.connect(self._export_all_unsent)
-        self._btn_start_queue.clicked.connect(self._start_queue)
-        self._btn_stop_queue.clicked.connect(self._stop_queue)
 
         # SenderController (队列)
         self.sender_controller.queueTaskStarted.connect(self._on_queue_task_started)
@@ -484,10 +497,89 @@ class SenderPage(QWidget):
 
     @Slot()
     def _stop_queue(self):
-        """停止队列发送"""
+        """停止队列发送；监视器按既定时限继续核销后自行收尾。"""
+        if self._send_done is not None:
+            self._send_done.set()
         if self.sender_controller.is_queue_running():
             self.sender_controller.stop_queue()
             self.logger.info("队列: 正在请求中止...")
+
+    # region 运行控制（分体按钮）
+
+    def _build_run_menu(self) -> None:
+        """装配运行菜单：范围两种、暂停两种、终止两种。"""
+        self._act_send_coupled = self._run_menu.addAction("发送并监视")
+        self._act_send_only = self._run_menu.addAction("仅发送")
+
+        self._run_menu.addSeparator()
+        self._act_pause = self._run_menu.addAction("暂停发送")
+        self._act_pause_coupled = self._run_menu.addAction("暂停发送并停止监视")
+        # 队列级暂停与终止的差别尚未定，先不上线
+        self._act_pause.setEnabled(False)
+        self._act_pause_coupled.setEnabled(False)
+
+        self._run_menu.addSeparator()
+        self._act_stop_linger = self._run_menu.addAction("终止发送并继续监视五分钟后停止")
+        self._act_stop_now = self._run_menu.addAction("终止发送并立即停止监视")
+
+        self._act_send_coupled.triggered.connect(self._start_queue_with_monitor)
+        self._act_send_only.triggered.connect(self._start_queue)
+        self._act_stop_linger.triggered.connect(self._stop_queue)
+        self._act_stop_now.triggered.connect(self._stop_queue_and_monitor)
+
+    @Slot()
+    def _on_run_primary(self) -> None:
+        """主半边：待命时发送并监视，运行中时终止并继续监视。"""
+        if self.sender_controller.is_queue_running():
+            self._stop_queue()
+        else:
+            self._start_queue_with_monitor()
+
+    @Slot()
+    def _start_queue_with_monitor(self) -> None:
+        """启动发送，同时启动队列监视；发送结束后继续核销到时限。"""
+        self._start_queue()
+        if not self.sender_controller.is_queue_running():
+            return
+        self._send_done = threading.Event()
+        if not self.monitor_controller.start_queue_monitor(send_done=self._send_done):
+            self.logger.warning("队列监视未能随发送启动")
+            return
+        self.logger.info("已启动「发送并监视」")
+
+    @Slot()
+    def _stop_queue_and_monitor(self) -> None:
+        """停止发送并立即停止监视。"""
+        self._stop_queue()
+        self.monitor_controller.stop_queue_monitor()
+
+    def _sync_run_button(self, running: bool) -> None:
+        """按运行状态换主半边文案与菜单可见项。"""
+        if running:
+            self._run_button.setText("终止并继续监视")
+            self._run_button.setIcon(SvgIcon.STOP)
+        else:
+            self._run_button.setText("发送并监视")
+            self._run_button.setIcon(SvgIcon.START)
+        for action in (self._act_send_coupled, self._act_send_only):
+            action.setVisible(not running)
+        for action in (
+            self._act_pause,
+            self._act_pause_coupled,
+            self._act_stop_linger,
+            self._act_stop_now,
+        ):
+            action.setVisible(running)
+
+    def apply_theme(self, palette: Palette) -> None:
+        """主题切换后按当前调色板重设强调面。
+
+        Args:
+            palette (Palette): 生效中的色彩语义令牌。
+        """
+        self._run_button.setAccent(QColor(palette.success))
+
+    # endregion
 
     @Slot()
     def _reset_queue(self):
@@ -813,6 +905,9 @@ class SenderPage(QWidget):
     @Slot()
     def _on_queue_finished(self):
         self.logger.info("队列执行完毕。")
+        if self._send_done is not None:
+            # 交给监视器：发送已结束，转入时限收尾
+            self._send_done.set()
         self._send_queue_notification()
         self._prompt_export_unsent()
         # UI 解锁延迟到 _on_queue_cleanup，避免竞态
@@ -873,8 +968,7 @@ class SenderPage(QWidget):
         self._queue_model.queue_running = running
 
         # 底部按钮切换
-        self._btn_start_queue.setVisible(not running)
-        self._btn_stop_queue.setVisible(running)
+        self._sync_run_button(running)
 
         if running:
             self.log_output.clear()

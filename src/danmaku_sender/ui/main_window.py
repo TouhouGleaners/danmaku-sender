@@ -27,6 +27,7 @@ from PySide6.QtWidgets import (
 from danmaku_sender.config import Settings
 from danmaku_sender.config.app_meta import UI, AppInfo, Links
 from danmaku_sender.controller.auth_controller import AuthController
+from danmaku_sender.controller.monitor import MonitorController
 from danmaku_sender.controller.system_controller import SystemController
 from danmaku_sender.infra.persistence.history_manager import HistoryManager
 from danmaku_sender.state import AppState
@@ -84,6 +85,8 @@ class MainWindow(QMainWindow):
         # 控制器
         self.auth_controller = AuthController(self.state, self.settings, self)
         self.system_controller = SystemController(self)
+        # 队列监视由本窗持有并注入各页：发射器的「发送并监视」与监视器页共用同一实例
+        self.monitor_controller = MonitorController(self.state, self.settings, self.history_manager, self)
         self.logger = logging.getLogger(__name__)
         self._log_signals_connected = False
         self._current_profile: UserProfile | None = None
@@ -200,8 +203,12 @@ class MainWindow(QMainWindow):
     def _init_pages(self):
         """初始化页面并绑定导航"""
         self.page_settings = SettingsPage(self.state, self.settings)
-        self.page_sender = SenderPage(self.state, self.settings, self.history_manager)
-        self.page_monitor = MonitorPage(self.state, self.settings, self.history_manager)
+        self.page_sender = SenderPage(
+            self.state, self.settings, self.history_manager, self.monitor_controller
+        )
+        self.page_monitor = MonitorPage(
+            self.state, self.settings, self.history_manager, self.monitor_controller
+        )
         self.page_history = HistoryPage(self.state, self.settings, self.history_manager)
 
         # 侧边栏导航页面（图标在 _refresh_icons 中按需重新获取）
@@ -219,6 +226,9 @@ class MainWindow(QMainWindow):
 
         self.sidebar.currentRowChanged.connect(self.content_stack.setCurrentIndex)
         self.sidebar.setCurrentRow(1)
+
+        # themeChanged 的接线在控件创建之后，此处补一次首屏强调面
+        self.page_sender.apply_theme(self.theme_service.current_palette)
 
         # 用户页眉点击打开账号管理弹窗
         self.user_widget.setCursor(Qt.CursorShape.PointingHandCursor)
@@ -483,6 +493,7 @@ class MainWindow(QMainWindow):
     @Slot(Palette)
     def _on_theme_applied(self, palette: Palette):
         """主题应用完成后，刷新需要重绘颜色的位图资源"""
+        self.page_sender.apply_theme(palette)
         self._refresh_icons()
 
     def _refresh_icons(self):

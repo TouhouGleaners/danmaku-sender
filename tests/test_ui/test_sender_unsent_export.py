@@ -5,6 +5,7 @@
 import pytest
 
 from danmaku_sender.config import SenderConfig, Settings
+from danmaku_sender.controller.monitor import MonitorController
 from danmaku_sender.infra.persistence.history_manager import HistoryManager
 from danmaku_sender.service.sender.context import SendingContext
 from danmaku_sender.state import AppState
@@ -21,7 +22,8 @@ def page(qapp, tmp_path):
     state = AppState()
     settings = Settings()
     hm = HistoryManager(tmp_path / "history.db")
-    widget = SenderPage(state, settings, hm)
+    monitor = MonitorController(state, settings, hm)
+    widget = SenderPage(state, settings, hm, monitor)
     yield widget
     widget.deleteLater()
     qapp.processEvents()

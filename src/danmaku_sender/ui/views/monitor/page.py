@@ -38,14 +38,28 @@ class MonitorPage(QWidget):
 
     statsUpdated = Signal(dict)
 
-    def __init__(self, state: AppState, settings: Settings, history_manager: HistoryManager):
+    def __init__(
+        self,
+        state: AppState,
+        settings: Settings,
+        history_manager: HistoryManager,
+        monitor_controller: MonitorController,
+    ):
+        """初始化监视页。
+
+        Args:
+            state: 状态树聚合根。
+            settings: 配置容器。
+            history_manager: 本地账本。
+            monitor_controller: 队列监视控制器，由装配处注入并与其他页共用。
+        """
         super().__init__()
         self.state = state
         self.settings = settings
         self.logger = logging.getLogger(__name__)
         self.history_manager = history_manager
 
-        self.monitor_controller = MonitorController(state, settings, history_manager, self)
+        self.monitor_controller = monitor_controller
 
         self._queue_monitoring = False
         self._monitor_failed = False
