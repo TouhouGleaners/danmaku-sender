@@ -214,6 +214,7 @@ class MonitorPage(QWidget):
         self.monitor_controller.overallStatsUpdated.connect(self._on_overall_stats_updated)
         self.monitor_controller.statusUpdated.connect(self.status_label.setText)
         self.monitor_controller.monitorFailed.connect(self._on_monitor_failed)
+        self.monitor_controller.monitorStarted.connect(self._on_monitor_started)
         self.monitor_controller.monitorFinished.connect(self._on_monitor_finished)
         self.monitor_controller.monitorReady.connect(self._on_monitor_ready)
 
@@ -244,6 +245,11 @@ class MonitorPage(QWidget):
     def showEvent(self, event):
         super().showEvent(event)
         LiveFormBinder.fill(self)
+        # 监视可能由发射器页启动，展示时按控制器的真实状态对齐界面
+        running = self.monitor_controller.is_running()
+        if running != self._queue_monitoring:
+            self._queue_monitoring = running
+            self._set_ui_running(running)
         self._refresh_table()
 
     def _update_btn_style(self, running: bool):
@@ -365,6 +371,15 @@ class MonitorPage(QWidget):
 
     @Slot(object)
     def _on_overall_stats_updated(self, stats):
+        self._sync_overall_stats()
+
+    @Slot()
+    @Slot()
+    def _on_monitor_started(self):
+        """监视已启动，无论由哪一页启动，界面一律跟随控制器状态。"""
+        self._queue_monitoring = True
+        self._set_ui_running(True)
+        self._refresh_table()
         self._sync_overall_stats()
 
     @Slot()

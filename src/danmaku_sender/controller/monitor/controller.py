@@ -27,6 +27,7 @@ class MonitorController(QObject):
     overallStatsUpdated = Signal(object)           # MonitorStats
     statusUpdated = Signal(str)
     monitorFailed = Signal(str)                    # 异常终止
+    monitorStarted = Signal()
     monitorFinished = Signal()
     monitorReady = Signal()
 
@@ -110,6 +111,7 @@ class MonitorController(QObject):
         self._worker = worker
         self.state.workspace.monitor_is_active = True
         worker.start()
+        self.monitorStarted.emit()
         logger.info(
             f"▶ 队列监视已启动：{len(self.state.workspace.queue_state.tasks)} 个任务，"
             f"轮询间隔 {self.settings.monitor_config.refresh_interval} 秒"
