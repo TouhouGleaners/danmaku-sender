@@ -663,10 +663,10 @@ class SenderPage(QWidget):
         return (RunAction.SEND,)
 
     def apply_theme(self, palette: Palette) -> None:
-        """主题切换后按当前调色板重设强调面。
+        """主题切换后按当前调色板重设强调色。
 
         Args:
-            palette (Palette): 生效中的色彩语义令牌。
+            palette (Palette): 当前生效的调色板。
         """
         self._run_button.setAccent(QColor(palette.success))
 

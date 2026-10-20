@@ -227,7 +227,7 @@ class MainWindow(QMainWindow):
         self.sidebar.currentRowChanged.connect(self.content_stack.setCurrentIndex)
         self.sidebar.setCurrentRow(1)
 
-        # 补设首屏强调面
+        # 补设首屏强调色
         self.page_sender.apply_theme(self.theme_service.current_palette)
 
         # 用户页眉点击打开账号管理弹窗

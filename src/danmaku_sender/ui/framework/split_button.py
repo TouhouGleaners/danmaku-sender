@@ -1,9 +1,9 @@
 """主次两半的分体按钮。
 
 左半执行主动作，右半弹出菜单。
-填充取控件填充阶梯，强调面按不透明度叠在画布色上；
-描边平铺一圈，明暗只落在上、下横边，按下时仅该半边扁平化。
-配色取自应用级 QPalette，来源见 ThemeService 的 ROLE_SOURCES。
+填充按静止、悬停、按压三档取色，强调色按不透明度叠在画布色上；
+描边平铺一圈，明暗只落在上、下横边，按下时仅该半边改用淡化实色。
+配色取自全局 QPalette，来源见 ThemeService 的 ROLE_SOURCES。
 """
 
 import math
@@ -49,7 +49,7 @@ class SplitButton(QWidget):
 
     clicked = Signal()
 
-    # 外框；FOCUS_MARGIN 是留给焦点框的透明余量，按钮表面画在余量内侧
+    # 外框；FOCUS_MARGIN 是留给焦点框的空白，按钮表面画在其内侧
     RADIUS = 4
     HEIGHT = 28
     BORDER_WIDTH = 1
@@ -72,18 +72,18 @@ class SplitButton(QWidget):
     PRESS_SINK = 0.5
     PRESS_BOUNCE = 0.5
 
-    # 强调面的悬停与按压：填充换成强调色的半透明罩，底色透上来
+    # 强调色的悬停与按压：填充换成强调色的半透明罩，底色透上来
     ACCENT_HOVER_OPACITY = 0.9
     ACCENT_PRESS_OPACITY = 0.8
 
-    # 强调面描边与中缝（WinUI ControlStrokeColorOnAccent*）
+    # 强调色上的描边与中缝（WinUI ControlStrokeColorOnAccent*）
     ACCENT_STROKE_FAINT = QColor(255, 255, 255, 20)
     ACCENT_STROKE_STRONG = QColor(0, 0, 0, 55)
 
     # 按压时图文减淡的倍率
     SUNK_TEXT_ALPHA = 0.7
 
-    # 双层焦点框：外环为主、内环为辅，整体落在按钮表面之外的余量里
+    # 双层焦点框：外环为主、内环为辅，画在按钮表面之外
     FOCUS_OUTER_WIDTH = 2
     FOCUS_INNER_WIDTH = 1
     FOCUS_OUTER_OUTSET = 4.0
@@ -200,20 +200,20 @@ class SplitButton(QWidget):
         return self._icon
 
     def setAccent(self, color: QColor | None) -> None:
-        """设置强调面底色。
+        """设置强调色。
 
         Args:
-            color (QColor | None): 强调色；为 ``None`` 时用中性控件面。
+            color (QColor | None): 强调色；为 ``None`` 时不使用强调色。
                 alpha 忽略，一律按不透明处理。
         """
         self._accent = QColor(color) if color is not None else None
         self.update()
 
     def accent(self) -> QColor | None:
-        """返回强调面底色。
+        """返回强调色。
 
         Returns:
-            QColor | None: 强调色；中性面时为 ``None``。
+            QColor | None: 强调色；未设置时为 ``None``。
         """
         return QColor(self._accent) if self._accent is not None else None
 
@@ -319,7 +319,7 @@ class SplitButton(QWidget):
         )
 
     def _surface_rect(self) -> QRect:
-        """返回按钮表面矩形，四周留出焦点框余量。
+        """返回按钮表面矩形，四周留出焦点框的位置。
 
         Returns:
             QRect: 扣除 :attr:`FOCUS_MARGIN` 后的表面矩形。
@@ -361,7 +361,7 @@ class SplitButton(QWidget):
         return None
 
     def _palette(self) -> QPalette:
-        """返回应用级调色板。
+        """返回全局调色板。
 
         Returns:
             QPalette: 主题调色板。
@@ -645,7 +645,7 @@ class SplitButton(QWidget):
             sunk (bool): 是否处于按压外观。
 
         Returns:
-            QColor: 强调面取白色，中性面取主文字色；按压时减淡。
+            QColor: 带强调色时取白色，否则取主文字色；按压时减淡。
         """
         color = (
             QColor("#ffffff")
@@ -660,7 +660,7 @@ class SplitButton(QWidget):
     def _chevron_color(self, palette: QPalette, sunk: bool) -> QColor:
         """返回右半边 chevron 色。
 
-        中性面的 chevron 比文字淡一档，按压再淡一档；强调面与文字同色。
+        不带强调色时 chevron 比文字淡一档，按压再淡一档；带强调色时与文字同色。
 
         Args:
             palette (QPalette): 主题调色板。
@@ -711,7 +711,7 @@ class SplitButton(QWidget):
         primary: QRect,
         secondary: QRect,
     ) -> None:
-        """在悬停或按压的半边叠加填充阶梯色。"""
+        """在悬停或按压的半边叠加状态填充色。"""
         if not self.isEnabled():
             return
         _, hover, press = self._surface_colors(palette)
@@ -740,7 +740,7 @@ class SplitButton(QWidget):
         primary: QRect,
         secondary: QRect,
     ) -> None:
-        """绘制立体描边；按压的那一半改用弱化实色，强调面在菜单弹出时描边消失。"""
+        """绘制描边；按压的半边改用淡化实色，强调色在菜单弹出时描边消失。"""
         if not self.isEnabled():
             return
 
@@ -776,7 +776,7 @@ class SplitButton(QWidget):
         faint, strong = self._stroke_colors(palette)
         self._stroke_ring(painter, faint, full)
 
-        # 浅色主题强端在下缘、深色在上缘；只描横边，两端各让开圆角半径
+        # 浅色主题加强色在下缘、深色在上缘；只描横边，两端各让开圆角半径
         y = full.bottom() - 0.5 if self._flipped() else full.top() + 0.5
         pen = QPen(strong, self.BORDER_WIDTH)
         pen.setCapStyle(Qt.PenCapStyle.FlatCap)
@@ -787,13 +787,13 @@ class SplitButton(QWidget):
         )
 
     def _stroke_colors(self, palette: QPalette) -> tuple[QColor, QColor]:
-        """返回描边两色：弱端与强端。
+        """返回描边两色：基础色与加强色。
 
         Args:
             palette (QPalette): 主题调色板。
 
         Returns:
-            tuple[QColor, ...]: 弱端描边色与强端描边色。
+            tuple[QColor, ...]: 基础描边色与加强描边色。
         """
         if self._accent is None:
             return (
@@ -806,12 +806,12 @@ class SplitButton(QWidget):
         )
 
     def _flipped(self) -> bool:
-        """返回立体描边的强端是否在下缘。
+        """返回描边的加强色是否画在下缘。
 
-        浅色主题的强端在下缘，深色主题在上缘。
+        浅色主题画在下缘，深色主题画在上缘。
 
         Returns:
-            bool: 强端在下缘时为 ``True``。
+            bool: 加强色画在下缘时为 ``True``。
         """
         app = QApplication.instance()
         window = app.palette().color(QPalette.ColorRole.Window) if isinstance(app, QApplication) else QColor()
@@ -925,7 +925,7 @@ class SplitButton(QWidget):
     def _paint_focus(self, painter: QPainter, palette: QPalette, full: QRectF) -> None:
         """键盘导航时绘制双层焦点框。
 
-        焦点框画在按钮表面之外的透明余量内；鼠标点击不绘制。
+        焦点框画在按钮表面之外的空白内；鼠标点击不绘制。
 
         Args:
             painter (QPainter): 正在绘制的画笔。
