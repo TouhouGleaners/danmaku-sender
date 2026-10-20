@@ -23,6 +23,7 @@ from PySide6.QtCore import (
 from PySide6.QtGui import (
     QColor,
     QEnterEvent,
+    QFocusEvent,
     QFontMetrics,
     QHideEvent,
     QIcon,
@@ -36,10 +37,9 @@ from PySide6.QtGui import (
 from PySide6.QtWidgets import QApplication, QMenu, QWidget
 
 from .icons import SvgIcon, rerender
-from .keyboard_focus import KeyboardFocus
 
 
-class SplitButton(KeyboardFocus, QWidget):
+class SplitButton(QWidget):
     """主次两半的分体按钮。
 
     Attributes:
@@ -89,6 +89,15 @@ class SplitButton(KeyboardFocus, QWidget):
     FOCUS_INNER_OUTSET = 2.5
     FOCUS_INNER_ALPHA = 0.7
 
+    # 系统焦点视觉只在键盘导航时出现，鼠标点击不画（WinUI UseSystemFocusVisuals）
+    _KEYBOARD_REASONS = frozenset(
+        {
+            Qt.FocusReason.TabFocusReason,
+            Qt.FocusReason.BacktabFocusReason,
+            Qt.FocusReason.ShortcutFocusReason,
+        }
+    )
+
     class _Half(IntEnum):
         """两个可按半边。
 
@@ -112,10 +121,12 @@ class SplitButton(KeyboardFocus, QWidget):
         self.setFixedHeight(self.HEIGHT + 2 * self.FOCUS_MARGIN)
 
         self._text = ""
+        self._candidates: list[str] = []
         self._icon = QIcon()
         self._menu: QMenu | None = None
         self._accent: QColor | None = None
 
+        self._keyboard_focus = False
         self._hover: SplitButton._Half | None = None
         self._pressed: SplitButton._Half | None = None
         self._animated: SplitButton._Half | None = None
@@ -149,6 +160,26 @@ class SplitButton(KeyboardFocus, QWidget):
             str: 主半边显示的文字。
         """
         return self._text
+
+    def setCandidateTexts(self, texts: list[str]) -> None:
+        """声明主半边可能出现的文案。
+
+        控件按其中最长的一条量算宽度，主半边换文案时不再跳动。
+
+        Args:
+            texts (list[str]): 主半边可能出现的文案。
+        """
+        self._candidates = list(texts)
+        self.updateGeometry()
+        self.update()
+
+    def candidateTexts(self) -> list[str]:
+        """返回主半边可能出现的文案。
+
+        Returns:
+            list[str]: 先前经 :meth:`setCandidateTexts` 声明的文案。
+        """
+        return list(self._candidates)
 
     def setIcon(self, icon: QIcon) -> None:
         """设置主半边图标。
@@ -245,6 +276,12 @@ class SplitButton(KeyboardFocus, QWidget):
         """
         return self.sizeHint()
 
+    def changeEvent(self, event: QEvent) -> None:
+        """字体变更后按新度量重算尺寸。"""
+        super().changeEvent(event)
+        if event.type() == QEvent.Type.FontChange:
+            self.updateGeometry()
+
     # ── 排布 ────────────────────────────────────────────────────────
 
     def _content_width(self) -> float:
@@ -258,25 +295,28 @@ class SplitButton(KeyboardFocus, QWidget):
             primary += self.ICON_SIZE
             if self._text:
                 primary += self.ICON_GAP
-        primary += self._text_width()
+        primary += max(self._text_width(t) for t in self._candidates or [self._text])
         primary = max(float(self.PRIMARY_MIN_WIDTH), primary)
         return primary + self.DIVIDER_WIDTH + self.SECONDARY_WIDTH + 2 * self.FOCUS_MARGIN
 
-    def _text_width(self) -> float:
+    def _text_width(self, text: str) -> float:
         """返回文字墨水所需宽度。
 
         墨水可能超出排版进宽，取三种度量的最大值以保证量算与绘制一致。
 
+        Args:
+            text (str): 待量算的文字。
+
         Returns:
             float: 进宽、外接框与紧致外接框三者的最大值。
         """
-        if not self._text:
+        if not text:
             return 0.0
         metrics = QFontMetrics(self.font())
         return max(
-            float(metrics.horizontalAdvance(self._text)),
-            float(metrics.boundingRect(self._text).width()),
-            float(metrics.tightBoundingRect(self._text).width()),
+            float(metrics.horizontalAdvance(text)),
+            float(metrics.boundingRect(text).width()),
+            float(metrics.tightBoundingRect(text).width()),
         )
 
     def _surface_rect(self) -> QRect:
@@ -336,6 +376,26 @@ class SplitButton(KeyboardFocus, QWidget):
         """指针进入时按落点更新悬停半边。"""
         super().enterEvent(event)
         self._set_hover(self._hit(event.position().toPoint()))
+
+    def hasKeyboardFocus(self) -> bool:
+        """返回当前焦点是否来自键盘导航。
+
+        Returns:
+            bool: 由 Tab / 反向 Tab / 快捷键取得焦点时为 ``True``。
+        """
+        return self._keyboard_focus
+
+    def focusInEvent(self, event: QFocusEvent) -> None:
+        """记录焦点来源并重绘。"""
+        super().focusInEvent(event)
+        self._keyboard_focus = event.reason() in self._KEYBOARD_REASONS
+        self.update()
+
+    def focusOutEvent(self, event: QFocusEvent) -> None:
+        """清除键盘焦点标记并重绘。"""
+        super().focusOutEvent(event)
+        self._keyboard_focus = False
+        self.update()
 
     def leaveEvent(self, event: QEvent) -> None:
         """指针离开时清除悬停半边，按压半边保留到松开。"""

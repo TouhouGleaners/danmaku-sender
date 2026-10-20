@@ -275,7 +275,6 @@ class SettingsPage(QWidget):
                 self.auto_monitor_checkbox,
             )
         )
-        body.addSpacing(6)
 
         self.min_delay = DoubleNumberBox()
         self.min_delay.setRange(0.1, 60.0)
