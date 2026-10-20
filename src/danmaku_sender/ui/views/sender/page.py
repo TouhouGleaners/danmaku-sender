@@ -79,21 +79,19 @@ class TaskUnsent:
 class RunAction(IntEnum):
     """运行菜单里的候选动作，取值即菜单项的数据键。
 
+    发送与监视是两个运行体，此处只管发送；要不要顺带监视是设置项。
+
     Attributes:
-        SEND_COUPLED: 发送并监视。
-        SEND_ONLY: 仅发送。
-        PAUSE: 暂停发送。
-        PAUSE_COUPLED: 暂停发送并停止监视。
-        STOP_LINGER: 终止发送并继续监视，按既定时限收尾。
-        STOP_NOW: 终止发送并立即停止监视。
+        SEND: 启动队列发送。
+        PAUSE: 暂停队列发送。
+        RESUME: 继续队列发送。
+        STOP: 终止队列发送。
     """
 
-    SEND_COUPLED = 0
-    SEND_ONLY = 1
-    PAUSE = 2
-    PAUSE_COUPLED = 3
-    STOP_LINGER = 4
-    STOP_NOW = 5
+    SEND = 0
+    PAUSE = 1
+    RESUME = 2
+    STOP = 3
 
 
 class SenderPage(QWidget):
@@ -261,7 +259,7 @@ class SenderPage(QWidget):
         self._run_button.clicked.connect(self._on_run_primary)
         self._run_menu = QMenu(self._run_button)
         self._run_button.setMenu(self._run_menu)
-        self._run_choice = RunAction.SEND_COUPLED
+        self._run_choice = RunAction.SEND
         self._build_run_menu()
         self._sync_run_button(False)
 
@@ -518,16 +516,8 @@ class SenderPage(QWidget):
         if not self.sender_controller.start_queue():
             self.logger.warning("队列发送未能启动")
             return
+        self._start_monitor_if_needed()
         self._update_queue_ui(running=True)
-
-    @Slot()
-    def _stop_queue(self):
-        """停止队列发送；监视器按既定时限继续核销后自行收尾。"""
-        if self._send_done is not None:
-            self._send_done.set()
-        if self.sender_controller.is_queue_running():
-            self.sender_controller.stop_queue()
-            self.logger.info("队列: 正在请求中止...")
 
     # region 运行控制（分体按钮）
 
@@ -539,18 +529,16 @@ class SenderPage(QWidget):
         self._run_group = QActionGroup(self._run_menu)
         self._run_group.setExclusive(True)
         self._run_choices: dict[QAction, RunAction] = {}
-
-        self._add_run_choices(RunAction.SEND_COUPLED, RunAction.SEND_ONLY)
-        self._run_menu.addSeparator()
-        self._add_run_choices(RunAction.PAUSE, RunAction.PAUSE_COUPLED)
-        self._run_menu.addSeparator()
-        self._add_run_choices(RunAction.STOP_LINGER, RunAction.STOP_NOW)
+        self._add_run_choices(*RunAction)
 
         # 队列级暂停与终止的差别尚未定，先不上线
         for action, value in self._run_choices.items():
-            if value in (RunAction.PAUSE, RunAction.PAUSE_COUPLED):
+            if value is not RunAction.SEND and value is not RunAction.STOP:
                 action.setEnabled(False)
 
+        self._run_button.setCandidateTexts(
+            [self._run_meta(value)[1] for value in RunAction]
+        )
         self._run_group.triggered.connect(self._on_pick_run_action)
 
     def _add_run_choices(self, *values: RunAction) -> None:
@@ -577,18 +565,14 @@ class SenderPage(QWidget):
             tuple[str, str, QIcon]: 菜单文案、主半边文案与图标。
         """
         match value:
-            case RunAction.SEND_COUPLED:
-                return "发送并监视", "发送并监视", SvgIcon.START
-            case RunAction.SEND_ONLY:
-                return "仅发送", "仅发送", SvgIcon.START
             case RunAction.PAUSE:
-                return "暂停发送", "暂停发送", SvgIcon.PAUSE
-            case RunAction.PAUSE_COUPLED:
-                return "暂停发送并停止监视", "暂停并停止监视", SvgIcon.PAUSE
-            case RunAction.STOP_LINGER:
-                return "终止发送并继续监视五分钟后停止", "终止并继续监视", SvgIcon.STOP
+                return "暂停发送", "暂停", SvgIcon.PAUSE
+            case RunAction.RESUME:
+                return "继续发送", "继续", SvgIcon.START
+            case RunAction.STOP:
+                return "终止发送", "终止", SvgIcon.STOP
             case _:
-                return "终止发送并立即停止监视", "终止并立即停止监视", SvgIcon.STOP
+                return "启动发送", "发送", SvgIcon.START
 
     @Slot(object)
     def _on_pick_run_action(self, action: QAction) -> None:
@@ -604,34 +588,33 @@ class SenderPage(QWidget):
     def _on_run_primary(self) -> None:
         """执行主半边当前选定的动作。"""
         match self._run_choice:
-            case RunAction.SEND_COUPLED:
-                self._start_queue_with_monitor()
-            case RunAction.SEND_ONLY:
+            case RunAction.SEND:
                 self._start_queue()
-            case RunAction.STOP_LINGER:
+            case RunAction.STOP:
                 self._stop_queue()
-            case RunAction.STOP_NOW:
-                self._stop_queue_and_monitor()
             case _:
                 self.logger.warning("该动作尚未上线，已忽略。")
 
     @Slot()
-    def _start_queue_with_monitor(self) -> None:
-        """启动发送，同时启动队列监视；发送结束后继续核销到时限。"""
-        self._start_queue()
-        if not self.sender_controller.is_queue_running():
+    def _stop_queue(self) -> None:
+        """终止队列发送；监视器归自己管，这里不动它。"""
+        if self._send_done is not None:
+            self._send_done.set()
+        if self.sender_controller.is_queue_running():
+            self.sender_controller.stop_queue()
+            self.logger.info("队列: 正在请求中止...")
+
+    def _start_monitor_if_needed(self) -> None:
+        """按设置决定要不要随发送一并启动队列监视。"""
+        if not self.settings.monitor_config.auto_start_with_send:
+            return
+        if self.monitor_controller.is_running():
             return
         self._send_done = threading.Event()
         if not self.monitor_controller.start_queue_monitor(send_done=self._send_done):
             self.logger.warning("队列监视未能随发送启动")
             return
-        self.logger.info("已启动「发送并监视」")
-
-    @Slot()
-    def _stop_queue_and_monitor(self) -> None:
-        """停止发送并立即停止监视。"""
-        self._stop_queue()
-        self.monitor_controller.stop_queue_monitor()
+        self.logger.info("已随发送启动队列监视")
 
     def _sync_run_button(self, running: bool) -> None:
         """按运行状态换主半边文案、图标与菜单可见项。
@@ -657,13 +640,15 @@ class SenderPage(QWidget):
     def _run_default(running: bool) -> RunAction:
         """返回当前状态下的默认动作。
 
+        暂停尚未上线，默认动作暂取终止；待其落地后改回暂停。
+
         Args:
             running (bool): 队列是否正在运行。
 
         Returns:
             RunAction: 该状态的默认动作。
         """
-        return RunAction.STOP_LINGER if running else RunAction.SEND_COUPLED
+        return RunAction.STOP if running else RunAction.SEND
 
     @staticmethod
     def _run_valid(running: bool) -> tuple[RunAction, ...]:
@@ -676,13 +661,8 @@ class SenderPage(QWidget):
             tuple[RunAction, ...]: 合法动作，按菜单顺序排列。
         """
         if running:
-            return (
-                RunAction.PAUSE,
-                RunAction.PAUSE_COUPLED,
-                RunAction.STOP_LINGER,
-                RunAction.STOP_NOW,
-            )
-        return (RunAction.SEND_COUPLED, RunAction.SEND_ONLY)
+            return (RunAction.PAUSE, RunAction.STOP)
+        return (RunAction.SEND,)
 
     def apply_theme(self, palette: Palette) -> None:
         """主题切换后按当前调色板重设强调面。

@@ -7,3 +7,4 @@ class MonitorConfig(AtomicModel):
     """监视器的配置数据"""
 
     refresh_interval: int = Field(default=60, ge=10)
+    auto_start_with_send: bool = True

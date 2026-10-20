@@ -263,6 +263,20 @@ class SettingsPage(QWidget):
         """构建发送子页。"""
         page, body = self._subpage(["设置", "发送"])
 
+        self.auto_monitor_checkbox = QCheckBox()
+        self.auto_monitor_checkbox.setChecked(True)
+        self.auto_monitor_checkbox.setToolTip("启动队列时一并开始核销，发送结束后再盯一段时间。")
+        self.auto_monitor_checkbox.setAccessibleName("发送时自动开始监视")
+        body.addWidget(
+            self._row(
+                "发送时自动开始监视",
+                "启动队列时一并开始核销，发送结束后再盯一段时间",
+                SvgIcon.MONITOR,
+                self.auto_monitor_checkbox,
+            )
+        )
+        body.addSpacing(6)
+
         self.min_delay = DoubleNumberBox()
         self.min_delay.setRange(0.1, 60.0)
         self.min_delay.setValue(8.0)
@@ -426,6 +440,14 @@ class SettingsPage(QWidget):
         LiveFormBinder.bind(self.burst_size, config, "burst_size", after_write=self._on_config_written)
         LiveFormBinder.bind(self.burst_rest_min, config, "rest_min", after_write=self._on_config_written)
         LiveFormBinder.bind(self.burst_rest_max, config, "rest_max", after_write=self._on_config_written)
+
+        # 监视器行为
+        LiveFormBinder.bind(
+            self.auto_monitor_checkbox,
+            self.settings.monitor_config,
+            "auto_start_with_send",
+            after_write=self._on_config_written,
+        )
 
         # 队列运行策略（一次队列运行共享，不随单个任务走）
         policy = self.settings.send_policy
