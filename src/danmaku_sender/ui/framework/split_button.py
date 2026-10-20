@@ -72,8 +72,6 @@ class SplitButton(QWidget):
     PRESS_SINK = 0.5
     PRESS_BOUNCE = 0.5
 
-    # 强调色上的文字：亮度高取深字，否则取白字
-    ON_ACCENT_LUMA = 0.4
     SUNK_TEXT_ALPHA = 0.7
 
     # 强调色的悬停与按压：填充换成强调色的半透明罩，底色透上来
@@ -83,9 +81,6 @@ class SplitButton(QWidget):
     # 强调色上的描边与中缝（WinUI ControlStrokeColorOnAccent*）
     ACCENT_STROKE_FAINT = QColor(255, 255, 255, 20)
     ACCENT_STROKE_STRONG = QColor(0, 0, 0, 55)
-
-    # 强调色上的文字：亮度高取深字，否则取白字
-    ON_ACCENT_LUMA = 0.4
 
     # 按压时图文减淡的倍率
     SUNK_TEXT_ALPHA = 0.7
@@ -652,10 +647,10 @@ class SplitButton(QWidget):
             sunk (bool): 是否处于按压外观。
 
         Returns:
-            QColor: 带强调色时按亮度取深浅字色，否则取主文字色；按压时减淡。
+            QColor: 带强调色时取白字，否则取主文字色；按压时减淡。
         """
         color = (
-            self._on_accent(self._accent)
+            QColor("#ffffff")
             if self._accent is not None
             else QColor(palette.color(QPalette.ColorRole.WindowText))
         )
@@ -663,26 +658,6 @@ class SplitButton(QWidget):
             color = QColor(color)
             color.setAlphaF(color.alphaF() * self.SUNK_TEXT_ALPHA)
         return color
-    def _on_accent(self, accent: QColor) -> QColor:
-        """返回叠在强调色上的文字色。
-
-        Args:
-            accent (QColor): 强调色。
-
-        Returns:
-            QColor: 亮度高时取深字，否则取白字。
-        """
-
-        def linear(channel: int) -> float:
-            value = channel / 255.0
-            return value / 12.92 if value <= 0.04045 else ((value + 0.055) / 1.055) ** 2.4
-
-        luma = (
-            0.2126 * linear(accent.red())
-            + 0.7152 * linear(accent.green())
-            + 0.0722 * linear(accent.blue())
-        )
-        return QColor("#191919") if luma > self.ON_ACCENT_LUMA else QColor("#ffffff")
 
     def _chevron_color(self, palette: QPalette, sunk: bool) -> QColor:
         """返回右半边 chevron 色。
