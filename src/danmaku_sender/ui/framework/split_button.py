@@ -279,12 +279,6 @@ class SplitButton(QWidget):
         """
         return self.sizeHint()
 
-    def changeEvent(self, event: QEvent) -> None:
-        """字体变更后按新度量重算尺寸。"""
-        super().changeEvent(event)
-        if event.type() == QEvent.Type.FontChange:
-            self.updateGeometry()
-
     # ── 排布 ────────────────────────────────────────────────────────
 
     def _content_width(self) -> float:
