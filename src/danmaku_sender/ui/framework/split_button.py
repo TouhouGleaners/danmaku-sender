@@ -193,6 +193,8 @@ class SplitButton(KeyboardFocus, QWidget):
         if self._menu is not None:
             self._menu.aboutToShow.disconnect(self._on_menu_shown)
             self._menu.aboutToHide.disconnect(self._on_menu_hidden)
+            # 先摘连接再收起，否则旧菜单仍会保持弹出
+            self._menu.hide()
 
         if self._open:
             self._open = False
@@ -352,6 +354,8 @@ class SplitButton(KeyboardFocus, QWidget):
             super().mousePressEvent(event)
             return
 
+        # 已有键盘焦点时不会再走 focusInEvent，鼠标交互即撤掉键盘焦点标记
+        self._keyboard_focus = False
         self._start_rebound(self._pressed)
         self.update()
         event.accept()
@@ -627,11 +631,11 @@ class SplitButton(KeyboardFocus, QWidget):
         primary: QRect,
         secondary: QRect,
     ) -> None:
-        """绘制立体描边；按压的那一半改用弱化实色，强调面按压时描边消失。"""
+        """绘制立体描边；按压的那一半改用弱化实色，强调面两半都按下时描边消失。"""
         if not self.isEnabled():
             return
 
-        sunk = any(self._is_sunk(half) for half in SplitButton._Half)
+        sunk = all(self._is_sunk(half) for half in SplitButton._Half)
         if self._accent is not None:
             if not sunk:
                 self._paint_elevation(painter, palette, full)

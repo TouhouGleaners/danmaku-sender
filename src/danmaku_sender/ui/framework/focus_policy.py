@@ -13,10 +13,10 @@ from PySide6.QtWidgets import QApplication, QWidget
 
 
 class ClickAwayFocusFilter(QObject):
-    """点击不可聚焦区域时撤掉当前焦点。"""
+    """点击鼠标点不走焦点的控件时撤掉当前焦点。"""
 
     def eventFilter(self, obj: QObject, event: QEvent) -> bool:
-        """在鼠标按压时判断落点，命中不可聚焦区域则撤掉当前焦点。
+        """在鼠标按压时判断落点，命中鼠标点不走焦点的控件则撤掉当前焦点。
 
         Args:
             obj (QObject): 被监听的对象。
@@ -27,7 +27,7 @@ class ClickAwayFocusFilter(QObject):
         """
         if event.type() != QEvent.Type.MouseButtonPress or not isinstance(obj, QWidget):
             return False
-        if obj.focusPolicy() != Qt.FocusPolicy.NoFocus:
+        if obj.focusPolicy() & Qt.FocusPolicy.ClickFocus:
             return False
 
         focused = QApplication.focusWidget()
