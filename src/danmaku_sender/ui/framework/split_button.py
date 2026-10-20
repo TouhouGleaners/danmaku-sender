@@ -1,8 +1,9 @@
 """主次两半的分体按钮。
 
-左半执行主动作，右半弹出菜单。表面、立体描边、中缝与图文全部自绘。
-填充走控件填充阶梯，强调面按不透明度叠在画布色上；描边为竖向渐变，
-按下时仅该半边扁平化。配色取自应用级 QPalette，来源见 ThemeService 的 ROLE_SOURCES。
+左半执行主动作，右半弹出菜单。
+填充取控件填充阶梯，强调面按不透明度叠在画布色上；
+描边平铺一圈，明暗只落在上、下横边，按下时仅该半边扁平化。
+配色取自应用级 QPalette，来源见 ThemeService 的 ROLE_SOURCES。
 """
 
 import math
@@ -99,7 +100,7 @@ class SplitButton(QWidget):
     )
 
     class _Half(IntEnum):
-        """两个可按半边。
+        """分体按钮的两个可按半边。
 
         Attributes:
             PRIMARY: 左半，执行主动作。
@@ -164,7 +165,7 @@ class SplitButton(QWidget):
     def setCandidateTexts(self, texts: list[str]) -> None:
         """声明主半边可能出现的文案。
 
-        控件按其中最长的一条量算宽度，主半边换文案时不再跳动。
+        控件按其中最长的一条量算宽度，更换文案时控件尺寸不变。
 
         Args:
             texts (list[str]): 主半边可能出现的文案。
@@ -219,7 +220,7 @@ class SplitButton(QWidget):
     def setMenu(self, menu: QMenu | None) -> None:
         """设置右半边弹出的菜单。
 
-        菜单可见期间两半均呈按压态。
+        菜单弹出期间右半边呈按压态。
 
         Args:
             menu (QMenu | None): 右半边弹出的菜单；为 ``None`` 时右半边不响应。
@@ -251,7 +252,7 @@ class SplitButton(QWidget):
         return self._menu
 
     def isOpen(self) -> bool:
-        """返回菜单是否正弹出。
+        """返回菜单是否弹出。
 
         Returns:
             bool: 菜单可见时为 ``True``。
@@ -300,15 +301,13 @@ class SplitButton(QWidget):
         return primary + self.DIVIDER_WIDTH + self.SECONDARY_WIDTH + 2 * self.FOCUS_MARGIN
 
     def _text_width(self, text: str) -> float:
-        """返回文字墨水所需宽度。
-
-        墨水可能超出排版进宽，取三种度量的最大值以保证量算与绘制一致。
+        """返回文字所需宽度。
 
         Args:
             text (str): 待量算的文字。
 
         Returns:
-            float: 进宽、外接框与紧致外接框三者的最大值。
+            float: 排版进宽、外接框与紧致外接框三者的最大值。
         """
         if not text:
             return 0.0
@@ -430,10 +429,7 @@ class SplitButton(QWidget):
         self._set_hover(self._hit(event.position().toPoint()))
 
     def mousePressEvent(self, event: QMouseEvent) -> None:
-        """按下半边：记下按压半边并启动回弹。
-
-        两半都收下按压，避免事件上浮到父控件。
-        """
+        """按下半边：记下按压半边并启动回弹。"""
         if event.button() != Qt.MouseButton.LeftButton or not self.isEnabled():
             super().mousePressEvent(event)
             return
@@ -473,7 +469,7 @@ class SplitButton(QWidget):
         super().keyPressEvent(event)
 
     def mouseReleaseEvent(self, event: QMouseEvent) -> None:
-        """松开：主半边在原地发出主动作，次半边在原地弹出菜单。"""
+        """松开时，主半边发出主动作信号，次半边弹出菜单。"""
         if event.button() == Qt.MouseButton.LeftButton and self.isEnabled():
             released = self._hit(event.position().toPoint())
             pressed = self._pressed
@@ -664,7 +660,7 @@ class SplitButton(QWidget):
     def _chevron_color(self, palette: QPalette, sunk: bool) -> QColor:
         """返回右半边 chevron 色。
 
-        中性面的 chevron 本就比文字淡一档，按压再淡一档；强调面与文字同色。
+        中性面的 chevron 比文字淡一档，按压再淡一档；强调面与文字同色。
 
         Args:
             palette (QPalette): 主题调色板。
@@ -770,10 +766,7 @@ class SplitButton(QWidget):
             painter.restore()
 
     def _paint_elevation(self, painter: QPainter, palette: QPalette, full: QRectF) -> None:
-        """绘制平描一圈的描边，明暗只落在上/下横边。
-
-        渐变铺满描边环会把竖边底端一起拉暗，形成「竖边往上长几像素」的脏角；
-        竖边因此保持均匀，立体感只由两条横边的强弱差承担。
+        """绘制描边：平铺一圈，明暗只落在上、下横边。
 
         Args:
             painter (QPainter): 正在绘制的画笔。
@@ -841,7 +834,7 @@ class SplitButton(QWidget):
         )
 
     def _paint_divider(self, painter: QPainter, palette: QPalette, secondary: QRect) -> None:
-        """绘制通高的中缝发丝线。"""
+        """绘制通高的中缝。"""
         if not self.isEnabled():
             return
         # 中缝取强调面的强端描边色（WinUI SplitButtonBorderBrushCheckedDivider）
@@ -850,7 +843,7 @@ class SplitButton(QWidget):
             if self._accent is not None
             else palette.color(QPalette.ColorRole.Shadow)
         )
-        # 整像素矩形填充，避免画笔走线在两列之间糊开；高度只到按钮表面
+        # 整像素矩形填充，高度只到按钮表面
         surface = self._surface_rect()
         painter.fillRect(
             QRect(secondary.left(), surface.top(), self.DIVIDER_WIDTH, surface.height()),
@@ -932,8 +925,7 @@ class SplitButton(QWidget):
     def _paint_focus(self, painter: QPainter, palette: QPalette, full: QRectF) -> None:
         """键盘导航时绘制双层焦点框。
 
-        落在按钮表面之外的透明余量里：与 WinUI 的焦点视觉同形，又不被 Qt
-        裁在控件矩形内切出角楔。鼠标点击不画，对应 ``UseSystemFocusVisuals``。
+        焦点框画在按钮表面之外的透明余量内；鼠标点击不绘制。
 
         Args:
             painter (QPainter): 正在绘制的画笔。

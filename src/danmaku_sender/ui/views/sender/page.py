@@ -107,10 +107,10 @@ class SenderPage(QWidget):
         """初始化发射器页。
 
         Args:
-            state: 状态树聚合根。
-            settings: 配置容器。
-            history_manager: 本地账本。
-            monitor_controller: 队列监视控制器，由装配处注入并与其他页共用。
+            state (AppState): 状态树聚合根。
+            settings (Settings): 配置容器。
+            history_manager (HistoryManager): 本地账本。
+            monitor_controller (MonitorController): 队列监视控制器，由装配处注入并与其他页共用。
         """
         super().__init__()
         self.state = state
@@ -118,7 +118,7 @@ class SenderPage(QWidget):
         self.logger = logging.getLogger(__name__)
         self.sender_controller = SenderController(state, settings, history_manager, self)
         self.monitor_controller = monitor_controller
-        # 「发送并监视」时交给监视器的发送结束标记；发送结束后再核销到时限
+        # 交给监视器的发送结束标记；发送结束后按既定时限继续核销
         self._send_done: threading.Event | None = None
 
         self._queue_total = 0
@@ -524,14 +524,14 @@ class SenderPage(QWidget):
     def _build_run_menu(self) -> None:
         """装配运行菜单。
 
-        条目是候选动作而非命令：点选只把选择落到主半边，执行仍要再点一次主半边。
+        条目是候选动作：点选仅更新主半边，执行由主半边发出。
         """
         self._run_group = QActionGroup(self._run_menu)
         self._run_group.setExclusive(True)
         self._run_choices: dict[QAction, RunAction] = {}
         self._add_run_choices(*RunAction)
 
-        # 队列级暂停与终止的差别尚未定，先不上线
+        # 暂停与继续尚未启用
         for action, value in self._run_choices.items():
             if value is not RunAction.SEND and value is not RunAction.STOP:
                 action.setEnabled(False)
@@ -597,7 +597,7 @@ class SenderPage(QWidget):
 
     @Slot()
     def _stop_queue(self) -> None:
-        """终止队列发送；监视器归自己管，这里不动它。"""
+        """终止队列发送；监视器由监视器页自行启停。"""
         if self._send_done is not None:
             self._send_done.set()
         if self.sender_controller.is_queue_running():
@@ -639,8 +639,6 @@ class SenderPage(QWidget):
     @staticmethod
     def _run_default(running: bool) -> RunAction:
         """返回当前状态下的默认动作。
-
-        暂停尚未上线，默认动作暂取终止；待其落地后改回暂停。
 
         Args:
             running (bool): 队列是否正在运行。

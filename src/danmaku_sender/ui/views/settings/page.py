@@ -265,12 +265,12 @@ class SettingsPage(QWidget):
 
         self.auto_monitor_checkbox = QCheckBox()
         self.auto_monitor_checkbox.setChecked(True)
-        self.auto_monitor_checkbox.setToolTip("启动队列时一并开始核销，发送结束后再盯一段时间。")
+        self.auto_monitor_checkbox.setToolTip("启动队列时一并开始核销，发送结束后继续核销一段时间。")
         self.auto_monitor_checkbox.setAccessibleName("发送时自动开始监视")
         body.addWidget(
             self._row(
                 "发送时自动开始监视",
-                "启动队列时一并开始核销，发送结束后再盯一段时间",
+                "启动队列时一并开始核销，发送结束后继续核销一段时间",
                 SvgIcon.MONITOR,
                 self.auto_monitor_checkbox,
             )

@@ -48,10 +48,10 @@ class MonitorPage(QWidget):
         """初始化监视页。
 
         Args:
-            state: 状态树聚合根。
-            settings: 配置容器。
-            history_manager: 本地账本。
-            monitor_controller: 队列监视控制器，由装配处注入并与其他页共用。
+            state (AppState): 状态树聚合根。
+            settings (Settings): 配置容器。
+            history_manager (HistoryManager): 本地账本。
+            monitor_controller (MonitorController): 队列监视控制器，由装配处注入并与其他页共用。
         """
         super().__init__()
         self.state = state

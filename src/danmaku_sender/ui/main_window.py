@@ -85,7 +85,7 @@ class MainWindow(QMainWindow):
         # 控制器
         self.auth_controller = AuthController(self.state, self.settings, self)
         self.system_controller = SystemController(self)
-        # 队列监视由本窗持有并注入各页：发射器的「发送并监视」与监视器页共用同一实例
+        # 队列监视控制器由本窗持有并注入各页，供发射器与监视器页共用
         self.monitor_controller = MonitorController(self.state, self.settings, self.history_manager, self)
         self.logger = logging.getLogger(__name__)
         self._log_signals_connected = False
@@ -227,7 +227,7 @@ class MainWindow(QMainWindow):
         self.sidebar.currentRowChanged.connect(self.content_stack.setCurrentIndex)
         self.sidebar.setCurrentRow(1)
 
-        # themeChanged 的接线在控件创建之后，此处补一次首屏强调面
+        # 补设首屏强调面
         self.page_sender.apply_theme(self.theme_service.current_palette)
 
         # 用户页眉点击打开账号管理弹窗

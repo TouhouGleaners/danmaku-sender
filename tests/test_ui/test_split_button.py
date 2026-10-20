@@ -1,6 +1,6 @@
 """SplitButton 的分半命中与主动作信号测试。
 
-约定的边界是两半之分：左半发主动作，右半弹菜单，互不串台。
+左半发主动作，右半弹菜单，两半互不影响。
 """
 import pytest
 from PySide6.QtCore import QAbstractAnimation, QEvent, QPointF, Qt
@@ -105,7 +105,7 @@ class TestSplitButtonActivation:
         assert spy.count() == 0
 
     def test_secondary_half_opens_menu(self, button):
-        """次半边原地松开后弹出菜单"""
+        """次半边松开后弹出菜单"""
         _click(button, SplitButton._Half.SECONDARY)
         assert button.menu().isVisible()
 
@@ -197,7 +197,7 @@ class TestSplitButtonHitTest:
         assert button._hit(rect.center()) is SplitButton._Half.PRIMARY
 
     def test_secondary_zone_hit(self, button):
-        """次半边内命下次半边"""
+        """次半边内命中次半边"""
         rect = button._zones()[int(SplitButton._Half.SECONDARY)]
         assert button._hit(rect.center()) is SplitButton._Half.SECONDARY
 
