@@ -27,6 +27,7 @@ class ClickAwayFocusFilter(QObject):
         """
         if event.type() != QEvent.Type.MouseButtonPress or not isinstance(obj, QWidget):
             return False
+
         if obj.focusPolicy() & Qt.FocusPolicy.ClickFocus:
             return False
 

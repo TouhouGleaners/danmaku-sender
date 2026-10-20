@@ -24,6 +24,7 @@ from PySide6.QtGui import (
     QColor,
     QEnterEvent,
     QFontMetrics,
+    QHideEvent,
     QIcon,
     QKeyEvent,
     QMouseEvent,
@@ -335,6 +336,27 @@ class SplitButton(KeyboardFocus, QWidget):
         self._hover = None
         self.update()
 
+    def hideEvent(self, event: QHideEvent) -> None:
+        """隐藏时取消未完成的按压。
+
+        Args:
+            event (QHideEvent): 隐藏事件。
+        """
+        super().hideEvent(event)
+        self._cancel_press()
+
+    def changeEvent(self, event: QEvent) -> None:
+        """禁用时取消未完成的按压；字体变更后按新度量重算尺寸。
+
+        Args:
+            event (QEvent): 变更事件。
+        """
+        super().changeEvent(event)
+        if event.type() == QEvent.Type.EnabledChange and not self.isEnabled():
+            self._cancel_press()
+        elif event.type() == QEvent.Type.FontChange:
+            self.updateGeometry()
+
     def mouseMoveEvent(self, event: QMouseEvent) -> None:
         """指针移动时更新悬停半边。"""
         super().mouseMoveEvent(event)
@@ -458,6 +480,15 @@ class SplitButton(KeyboardFocus, QWidget):
     def _finish_rebound(self) -> None:
         self._rebound = 0.0
         self._animated = None
+        self.update()
+
+    def _cancel_press(self) -> None:
+        """取消未完成的按压，回到未按下外观。"""
+        self._hover = None
+        self._pressed = None
+        self._animated = None
+        self._rebound = 0.0
+        self._press_anim.stop()
         self.update()
 
     def _content_offset(self, half: _Half) -> float:

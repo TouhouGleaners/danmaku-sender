@@ -165,6 +165,19 @@ class TestSplitButtonRebound:
         assert button._content_offset(SplitButton._Half.PRIMARY) == pytest.approx(0.0)
         assert mid == pytest.approx(button.PRESS_BOUNCE)
 
+    def test_hide_cancels_press(self, button):
+        """隐藏控件时未完成的按压被取消"""
+        _press(button, SplitButton._Half.PRIMARY)
+        assert button._pressed is SplitButton._Half.PRIMARY
+        button.hide()
+        assert button._pressed is None
+
+    def test_disable_cancels_press(self, button):
+        """禁用控件时未完成的按压被取消"""
+        _press(button, SplitButton._Half.PRIMARY)
+        button.setEnabled(False)
+        assert button._pressed is None
+
 
 class TestSplitButtonHitTest:
     def test_primary_zone_hit(self, button):
