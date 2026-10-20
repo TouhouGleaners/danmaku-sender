@@ -25,6 +25,7 @@ from PySide6.QtGui import (
     QEnterEvent,
     QFontMetrics,
     QIcon,
+    QKeyEvent,
     QMouseEvent,
     QPainter,
     QPaintEvent,
@@ -188,9 +189,15 @@ class SplitButton(KeyboardFocus, QWidget):
         """
         if self._menu is menu:
             return
+
         if self._menu is not None:
             self._menu.aboutToShow.disconnect(self._on_menu_shown)
             self._menu.aboutToHide.disconnect(self._on_menu_hidden)
+
+        if self._open:
+            self._open = False
+            self.update()
+
         self._menu = menu
         if menu is not None:
             menu.aboutToShow.connect(self._on_menu_shown)
@@ -321,10 +328,9 @@ class SplitButton(KeyboardFocus, QWidget):
         self._set_hover(self._hit(event.position().toPoint()))
 
     def leaveEvent(self, event: QEvent) -> None:
-        """指针离开时清除悬停与按压半边。"""
+        """指针离开时清除悬停半边，按压半边保留到松开。"""
         super().leaveEvent(event)
         self._hover = None
-        self._pressed = None
         self.update()
 
     def mouseMoveEvent(self, event: QMouseEvent) -> None:
@@ -333,17 +339,45 @@ class SplitButton(KeyboardFocus, QWidget):
         self._set_hover(self._hit(event.position().toPoint()))
 
     def mousePressEvent(self, event: QMouseEvent) -> None:
-        """按下半边：记下按压并启动回弹，次半边不交由基类。"""
+        """按下半边：记下按压半边并启动回弹。
+
+        两半都收下按压，避免事件上浮到父控件。
+        """
         if event.button() != Qt.MouseButton.LeftButton or not self.isEnabled():
             super().mousePressEvent(event)
             return
+
         self._pressed = self._hit(event.position().toPoint())
+        if self._pressed is None:
+            super().mousePressEvent(event)
+            return
+
         self._start_rebound(self._pressed)
         self.update()
-        if self._pressed is SplitButton._Half.SECONDARY:
+        event.accept()
+
+    def keyPressEvent(self, event: QKeyEvent) -> None:
+        """空格与回车触发主动作，Alt+下 或 F4 弹出菜单。
+
+        Args:
+            event (QKeyEvent): 键盘事件。
+        """
+        if event.key() in (Qt.Key.Key_Space, Qt.Key.Key_Return, Qt.Key.Key_Enter):
+            self.clicked.emit()
             event.accept()
             return
-        super().mousePressEvent(event)
+
+        alt_down = (
+            event.key() == Qt.Key.Key_Down
+            and event.modifiers() & Qt.KeyboardModifier.AltModifier
+        )
+
+        if self._menu is not None and (alt_down or event.key() == Qt.Key.Key_F4):
+            self._popup_menu()
+            event.accept()
+            return
+
+        super().keyPressEvent(event)
 
     def mouseReleaseEvent(self, event: QMouseEvent) -> None:
         """松开：主半边在原地发出主动作，次半边在原地弹出菜单。"""
@@ -352,17 +386,21 @@ class SplitButton(KeyboardFocus, QWidget):
             pressed = self._pressed
             self._pressed = None
             self.update()
+
             if pressed is SplitButton._Half.SECONDARY and released is pressed:
                 self._popup_menu()
                 event.accept()
                 return
+
             if pressed is SplitButton._Half.PRIMARY and released is pressed:
                 self.clicked.emit()
                 event.accept()
                 return
+
             if pressed is not None:
                 event.accept()
                 return
+
         self._pressed = None
         self.update()
         super().mouseReleaseEvent(event)
@@ -592,16 +630,23 @@ class SplitButton(KeyboardFocus, QWidget):
         """绘制立体描边；按压的那一半改用弱化实色，强调面按压时描边消失。"""
         if not self.isEnabled():
             return
-        self._paint_elevation(painter, palette, full)
+
+        sunk = any(self._is_sunk(half) for half in SplitButton._Half)
         if self._accent is not None:
+            if not sunk:
+                self._paint_elevation(painter, palette, full)
             return
+
+        self._paint_elevation(painter, palette, full)
         faded = palette.color(QPalette.ColorRole.Shadow)
+
         for half, zone in (
             (SplitButton._Half.PRIMARY, primary),
             (SplitButton._Half.SECONDARY, secondary),
         ):
             if not self._is_sunk(half):
                 continue
+
             painter.save()
             painter.setClipRect(QRectF(zone))
             self._stroke_ring(painter, QColor(faded), full)
@@ -716,12 +761,15 @@ class SplitButton(KeyboardFocus, QWidget):
             icon_rect = QRectF(
                 cursor, primary.top() + primary_offset, self.ICON_SIZE, primary.height()
             )
+            painter.save()
+            painter.setOpacity(label.alphaF())
             rerender(self._icon, label.name()).paint(
                 painter,
                 icon_rect.toRect(),
                 Qt.AlignmentFlag.AlignCenter,
                 QIcon.Mode.Normal if self.isEnabled() else QIcon.Mode.Disabled,
             )
+            painter.restore()
             cursor += self.ICON_SIZE
             if self._text:
                 cursor += self.ICON_GAP
@@ -756,9 +804,12 @@ class SplitButton(KeyboardFocus, QWidget):
             self.CHEVRON_SIZE,
             self.CHEVRON_SIZE,
         )
+        painter.save()
+        painter.setOpacity(color.alphaF())
         rerender(SvgIcon.CHEVRON_DOWN, color.name()).paint(
             painter, icon_rect.toRect(), Qt.AlignmentFlag.AlignCenter
         )
+        painter.restore()
 
     def _paint_focus(self, painter: QPainter, palette: QPalette, full: QRectF) -> None:
         """键盘导航时绘制双层焦点框。
