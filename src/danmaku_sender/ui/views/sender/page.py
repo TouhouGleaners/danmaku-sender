@@ -259,6 +259,7 @@ class SenderPage(QWidget):
         self._run_button.clicked.connect(self._on_run_primary)
         self._run_menu = QMenu(self._run_button)
         self._run_button.setMenu(self._run_menu)
+        self._palette: Palette | None = None
         self._run_choice = RunAction.SEND
         self._build_run_menu()
         self._sync_run_button(False)
@@ -631,6 +632,8 @@ class SenderPage(QWidget):
         _, label, icon = self._run_meta(self._run_choice)
         self._run_button.setText(label)
         self._run_button.setIcon(icon)
+        if self._palette is not None:
+            self._run_button.setAccent(self._run_accent(self._palette, self._run_choice))
 
         for action, value in self._run_choices.items():
             action.setVisible(value in valid)
@@ -662,13 +665,33 @@ class SenderPage(QWidget):
             return (RunAction.PAUSE, RunAction.STOP)
         return (RunAction.SEND,)
 
+    @staticmethod
+    def _run_accent(palette: Palette, value: RunAction) -> QColor:
+        """返回候选动作对应的强调色。
+
+        Args:
+            palette (Palette): 当前生效的调色板。
+            value (RunAction): 候选动作。
+
+        Returns:
+            QColor: 启动用成功色、暂停与继续用警示色、终止用危险色。
+        """
+        match value:
+            case RunAction.PAUSE | RunAction.RESUME:
+                return QColor(palette.caution)
+            case RunAction.STOP:
+                return QColor(palette.danger)
+            case _:
+                return QColor(palette.success)
+
     def apply_theme(self, palette: Palette) -> None:
         """主题切换后按当前调色板重设强调色。
 
         Args:
             palette (Palette): 当前生效的调色板。
         """
-        self._run_button.setAccent(QColor(palette.success))
+        self._palette = palette
+        self._sync_run_button(self.sender_controller.is_queue_running())
 
     # endregion
 

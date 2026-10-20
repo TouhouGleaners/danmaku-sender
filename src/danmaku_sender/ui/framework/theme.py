@@ -81,6 +81,7 @@ class Palette:
     text_secondary: str
     primary: str
     success: str
+    caution: str
     danger: str
     danger_bg: str
 
@@ -186,6 +187,7 @@ class ThemeService(QObject):
                     "{text_secondary}": palette.text_secondary,
                     "{primary}": palette.primary,
                     "{success}": palette.success,
+                    "{caution}": palette.caution,
                     "{danger}": palette.danger,
                     "{danger_bg}": palette.danger_bg,
                 }.items():
