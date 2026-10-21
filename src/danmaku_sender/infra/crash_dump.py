@@ -4,7 +4,7 @@
 """
 
 import logging
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from pathlib import Path
 from typing import IO
 
@@ -67,7 +67,7 @@ class CrashDumpLog:
         # 归档名取本地日期，先按 UTC 取时刻再转本地时区
         day = (
             datetime
-                .fromtimestamp(current.stat().st_mtime, tz=timezone.utc)
+                .fromtimestamp(current.stat().st_mtime, tz=UTC)
                 .astimezone()
                 .strftime("%Y%m%d")
         )
