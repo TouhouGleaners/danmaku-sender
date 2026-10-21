@@ -1,5 +1,4 @@
 """装配总线：构造各层、接线应用级行为、管理生命周期。"""
-import faulthandler
 import logging
 
 from PySide6.QtCore import QObject, QTimer
@@ -67,15 +66,10 @@ class Runtime(QObject):
         self.app_state.configChanged.connect(self._config_save_timer.start)
 
     def shutdown(self) -> None:
-        """退出前强制落盘配置与凭据，并停用崩溃转储。"""
+        """退出前强制落盘配置与凭据。"""
         self._config_save_timer.stop()
-        try:
-            self._save_config()
-            self._save_credentials()
-        finally:
-            # 转储句柄随 main 返回而关闭，须先停用以免致命错误落到已关闭的句柄；
-            # 落盘失败也不例外
-            faulthandler.disable()
+        self._save_config()
+        self._save_credentials()
 
     def _activate_saved_accounts(self) -> None:
         """加载已保存账号并激活第一个。"""

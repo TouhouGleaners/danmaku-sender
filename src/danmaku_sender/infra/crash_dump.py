@@ -22,6 +22,10 @@ class CrashDumpLog:
     ARCHIVE_PREFIX = "faulthandler-"
     ARCHIVE_SUFFIX = ".log"
 
+    # 进程级资源：句柄须活到解释器结束，否则转储会在启动失败、
+    # 退出时仍有线程运行、解释器关闭三个窗口里落到已关闭的句柄
+    _handle: IO[str] | None = None
+
     def __init__(self, keep: int = 5) -> None:
         """建立轮转器。
 
@@ -43,7 +47,8 @@ class CrashDumpLog:
         try:
             self._archive(current)
             self._prune(log_dir)
-            return open(current, "w", encoding="utf-8")
+            type(self)._handle = open(current, "w", encoding="utf-8")
+            return type(self)._handle
         except OSError as e:
             logger.warning(f"崩溃转储不可用，已跳过诊断: {e}")
             return None
