@@ -5,6 +5,7 @@ from PySide6.QtWidgets import QApplication
 
 from danmaku_sender.config.app_meta import AppInfo
 from danmaku_sender.ui.framework.cursor_policy import AutoHandCursorFilter
+from danmaku_sender.ui.framework.focus_policy import ClickAwayFocusFilter
 from danmaku_sender.ui.framework.icons import get_app_icon
 from danmaku_sender.ui.support.log_utils import init_app_logging
 
@@ -35,6 +36,7 @@ def main(argv=None):
     app = QApplication(argv)
     # 必须早于任何控件创建：光标在控件 polish 时设置
     app.installEventFilter(AutoHandCursorFilter(app))
+    app.installEventFilter(ClickAwayFocusFilter(app))
     app.setStyle("Fusion")
     app.setWindowIcon(get_app_icon())
     app.setApplicationName(AppInfo.NAME)
