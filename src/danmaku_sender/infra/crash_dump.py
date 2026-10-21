@@ -1,7 +1,6 @@
-"""崩溃转储文件的轮转。
+"""崩溃转储文件的启动轮转。
 
-faulthandler 只认文件描述符，写入期间无法轮转，因此轮转发生在启动时：
-上一份非空转储改名留存，超出上限的旧件清理，再开一份空的等写入。
+启动时留存上一份非空转储、清理超出上限的旧件，并创建本次运行的转储文件。
 """
 
 import logging
@@ -24,7 +23,7 @@ class CrashDumpLog:
     ARCHIVE_SUFFIX = ".log"
 
     def __init__(self, keep: int = 5) -> None:
-        """建立整理器。
+        """建立轮转器。
 
         Args:
             keep (int): 留存的历史转储份数，超出的最旧者被删除。
@@ -50,7 +49,7 @@ class CrashDumpLog:
             return None
 
     def _archive(self, current: Path) -> None:
-        """把上一份非空转储改名为按日期归组的归档。
+        """将上一份非空转储重命名为按日期归组的归档。
 
         同日多次崩溃依次取 ``faulthandler-YYYYMMDD.log``、``-1``、``-2``……
 
