@@ -5,6 +5,7 @@ import sys
 from PySide6.QtWidgets import QApplication
 
 from danmaku_sender.config.app_meta import AppInfo
+from danmaku_sender.infra.crash_dump import CrashDumpLog
 from danmaku_sender.ui.framework.cursor_policy import AutoHandCursorFilter
 from danmaku_sender.ui.framework.focus_policy import ClickAwayFocusFilter
 from danmaku_sender.ui.framework.icons import get_app_icon
@@ -37,16 +38,9 @@ def main(argv=None):
     from .app.runtime import Runtime
     from .ui.main_window import MainWindow
 
-    # 硬崩时留下 C 级调用栈。上一份留存为 .prev，本次截断写以免反复崩溃撑爆磁盘；
-    # 打不开输出流时跳过诊断，不阻断启动
-    try:
-        previous = log_dir / "faulthandler.log"
-        if previous.exists() and previous.stat().st_size > 0:
-            previous.replace(log_dir / "faulthandler.prev.log")
-        crash_dump: object = open(previous, "w", encoding="utf-8")
-    except OSError:
-        crash_dump = sys.stderr if sys.stderr is not None else sys.__stderr__
-    if crash_dump is not None and getattr(crash_dump, "fileno", lambda: -1)() >= 0:
+    # 硬崩时留下 C 级调用栈；转储不可用时跳过诊断，不阻断启动
+    crash_dump = CrashDumpLog().prepare(log_dir)
+    if crash_dump is not None:
         faulthandler.enable(file=crash_dump, all_threads=True)
 
     # 必须早于任何控件创建：光标在控件 polish 时设置
