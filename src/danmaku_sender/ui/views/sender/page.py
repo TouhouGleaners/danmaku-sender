@@ -296,6 +296,7 @@ class SenderPage(QWidget):
         self.state.workspace.queue_state.taskProgressChanged.connect(self._on_queue_task_progress)
         self.state.workspace.queue_state.taskStatusChanged.connect(self._on_queue_task_status_changed)
 
+    @Slot(str)
     def append_log(self, message: str):
         """外部调用的日志接口"""
         self.log_output.append(message)

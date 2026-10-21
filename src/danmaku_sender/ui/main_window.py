@@ -346,8 +346,13 @@ class MainWindow(QMainWindow):
             gui_handler.senderLogReceived.disconnect(self.page_sender.append_log)
             gui_handler.monitorLogReceived.disconnect(self.page_monitor.append_log)
 
-        gui_handler.senderLogReceived.connect(self.page_sender.append_log)
-        gui_handler.monitorLogReceived.connect(self.page_monitor.append_log)
+        # 显式排队：日志来自 worker 线程，QTextEdit 只能在主线程动
+        gui_handler.senderLogReceived.connect(
+            self.page_sender.append_log, Qt.ConnectionType.QueuedConnection
+        )
+        gui_handler.monitorLogReceived.connect(
+            self.page_monitor.append_log, Qt.ConnectionType.QueuedConnection
+        )
         self._log_signals_connected = True
         self.logger.info("日志路由链路已接通。")
 

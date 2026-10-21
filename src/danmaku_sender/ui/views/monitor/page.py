@@ -437,6 +437,7 @@ class MonitorPage(QWidget):
 
     # endregion
 
+    @Slot(str)
     def append_log(self, message: str):
         self.log_output.append(message)
         self.log_output.moveCursor(QTextCursor.MoveOperation.End)
