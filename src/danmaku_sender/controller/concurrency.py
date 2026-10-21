@@ -1,11 +1,10 @@
 import logging
 import threading
 import traceback
-from typing import Callable
 from abc import abstractmethod
+from collections.abc import Callable
 
-from PySide6.QtCore import QThread, QObject, Signal, QRunnable, Slot, QThreadPool
-
+from PySide6.QtCore import QObject, QRunnable, Qt, QThread, QThreadPool, Signal, Slot
 
 logger = logging.getLogger(__name__)
 
@@ -83,8 +82,17 @@ class PoolTask(QRunnable):
 
         self.setAutoDelete(False)  # 对象生命周期管理: C++ -> Python GC
 
+        # 保活引用须在主线程上丢，否则 Python 包装会在池线程上被回收，
+        # 附带的 QObject 也随之跨线程析构
+        self.signals.finished.connect(self._release, Qt.ConnectionType.QueuedConnection)
+
         with PoolTask._registry_lock:
             PoolTask._keep_alive_registry.add(self)
+
+    def _release(self) -> None:
+        """在主线程上丢掉保活引用。"""
+        with PoolTask._registry_lock:
+            PoolTask._keep_alive_registry.discard(self)
 
     def run(self):
         """重写 QRunnable.run(): 线程池调度入口"""
@@ -100,8 +108,6 @@ class PoolTask(QRunnable):
             self.signals.error.emit(e)
         finally:
             self.signals.finished.emit()
-            with PoolTask._registry_lock:
-                PoolTask._keep_alive_registry.discard(self)
 
     @classmethod
     def submit(cls, fn: Callable, on_result: Callable, on_error: Callable, *args, **kwargs) -> 'PoolTask':

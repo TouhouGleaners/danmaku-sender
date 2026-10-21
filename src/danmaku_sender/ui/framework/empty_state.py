@@ -139,7 +139,11 @@ class EmptyStateHint(QWidget):
         Returns:
             bool: 恒为 False，不拦截事件传递。
         """
-        if watched in (self._view, self.parentWidget()) and event.type() in (
+        # 对象进入销毁期后 PySide 会清空属性表，此时仍可能收到事件
+        view = self.__dict__.get("_view")
+        if view is None:
+            return False
+        if watched in (view, self.parentWidget()) and event.type() in (
             QEvent.Type.Resize,
             QEvent.Type.Show,
         ):
@@ -148,4 +152,6 @@ class EmptyStateHint(QWidget):
 
     def _reflow(self) -> None:
         """将自身几何设为表格可视区大小，由内部布局完成居中。"""
-        self.setGeometry(self._view.viewport().rect())
+        view = self.__dict__.get("_view")
+        if view is not None:
+            self.setGeometry(view.viewport().rect())
