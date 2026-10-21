@@ -36,8 +36,11 @@ def main(argv=None):
     log_dir = AppInfo.Paths.LOGS
     init_app_logging(log_dir)
 
-    # 硬崩时留下 C 级调用栈；句柄须存活到进程结束
-    crash_dump = open(log_dir / "faulthandler.log", "a", encoding="utf-8")
+    # 硬崩时留下 C 级调用栈。写入失败不阻断启动；截断写以免反复崩溃撑爆磁盘
+    try:
+        crash_dump = open(log_dir / "faulthandler.log", "w", encoding="utf-8")
+    except OSError:
+        crash_dump = sys.stderr
     faulthandler.enable(file=crash_dump, all_threads=True)
 
     # 必须早于任何控件创建：光标在控件 polish 时设置
@@ -57,7 +60,10 @@ def main(argv=None):
     # 退出前强制落盘配置与凭据
     app.aboutToQuit.connect(rt.shutdown)
 
-    sys.exit(app.exec())
+    code = app.exec()
+    # 解释器关闭期间的致命错误须落在仍然打开的句柄上
+    faulthandler.disable()
+    sys.exit(code)
 
 
 if __name__ == "__main__":
