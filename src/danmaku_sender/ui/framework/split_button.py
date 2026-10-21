@@ -72,8 +72,6 @@ class SplitButton(QWidget):
     PRESS_SINK = 0.5
     PRESS_BOUNCE = 0.5
 
-    SUNK_TEXT_ALPHA = 0.7
-
     # 强调色的悬停与按压：填充换成强调色的半透明罩，底色透上来
     ACCENT_HOVER_OPACITY = 0.9
     ACCENT_PRESS_OPACITY = 0.8
