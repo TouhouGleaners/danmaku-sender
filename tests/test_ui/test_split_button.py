@@ -178,6 +178,17 @@ class TestSplitButtonRebound:
         button.setEnabled(False)
         assert button._pressed is None
 
+    def test_press_visual_follows_pointer(self, button):
+        """按下外观随指针移出移回而消失与恢复，按压记录保持不变"""
+        _press(button, SplitButton._Half.PRIMARY)
+        button._set_hover(SplitButton._Half.PRIMARY)
+        assert button._is_pressed(SplitButton._Half.PRIMARY)
+        button._set_hover(None)
+        assert not button._is_pressed(SplitButton._Half.PRIMARY)
+        assert button._pressed is SplitButton._Half.PRIMARY
+        button._set_hover(SplitButton._Half.PRIMARY)
+        assert button._is_pressed(SplitButton._Half.PRIMARY)
+
 
 class TestSplitButtonHitTest:
     def test_primary_zone_hit(self, button):
