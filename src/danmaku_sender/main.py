@@ -27,21 +27,27 @@ def main(argv=None):
     if argv is None:
         argv = sys.argv
 
-    from .app.runtime import Runtime
-    from .ui.main_window import MainWindow
-
     app = QApplication(argv)
 
-    # GuiLoggingHandler 是 QObject，须在 QApplication 之后建以防线程归属问题
+    # GuiLoggingHandler 是 QObject，须在 QApplication 之后建以防线程归属问题；
+    # 下述导入里的启动告警也须落在日志通道建立之后
     log_dir = AppInfo.Paths.LOGS
     init_app_logging(log_dir)
 
-    # 硬崩时留下 C 级调用栈。写入失败不阻断启动；截断写以免反复崩溃撑爆磁盘
+    from .app.runtime import Runtime
+    from .ui.main_window import MainWindow
+
+    # 硬崩时留下 C 级调用栈。上一份留存为 .prev，本次截断写以免反复崩溃撑爆磁盘；
+    # 打不开输出流时跳过诊断，不阻断启动
     try:
-        crash_dump = open(log_dir / "faulthandler.log", "w", encoding="utf-8")
+        previous = log_dir / "faulthandler.log"
+        if previous.exists() and previous.stat().st_size > 0:
+            previous.replace(log_dir / "faulthandler.prev.log")
+        crash_dump: object = open(previous, "w", encoding="utf-8")
     except OSError:
-        crash_dump = sys.stderr
-    faulthandler.enable(file=crash_dump, all_threads=True)
+        crash_dump = sys.stderr if sys.stderr is not None else sys.__stderr__
+    if crash_dump is not None and getattr(crash_dump, "fileno", lambda: -1)() >= 0:
+        faulthandler.enable(file=crash_dump, all_threads=True)
 
     # 必须早于任何控件创建：光标在控件 polish 时设置
     app.installEventFilter(AutoHandCursorFilter(app))
