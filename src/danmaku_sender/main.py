@@ -27,7 +27,12 @@ def main(argv=None):
     if argv is None:
         argv = sys.argv
 
-    # 初始化日志
+    from .app.runtime import Runtime
+    from .ui.main_window import MainWindow
+
+    app = QApplication(argv)
+
+    # GuiLoggingHandler 是 QObject，须在 QApplication 之后建以防线程归属问题
     log_dir = AppInfo.Paths.LOGS
     init_app_logging(log_dir)
 
@@ -35,10 +40,6 @@ def main(argv=None):
     crash_dump = open(log_dir / "faulthandler.log", "a", encoding="utf-8")
     faulthandler.enable(file=crash_dump, all_threads=True)
 
-    from .app.runtime import Runtime
-    from .ui.main_window import MainWindow
-
-    app = QApplication(argv)
     # 必须早于任何控件创建：光标在控件 polish 时设置
     app.installEventFilter(AutoHandCursorFilter(app))
     app.installEventFilter(ClickAwayFocusFilter(app))
