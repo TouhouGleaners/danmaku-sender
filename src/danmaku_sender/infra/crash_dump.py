@@ -5,6 +5,7 @@ faulthandler 只认文件描述符，写入期间无法轮转，因此轮转发�
 """
 
 import logging
+from datetime import datetime
 from pathlib import Path
 from typing import IO
 
@@ -19,6 +20,7 @@ class CrashDumpLog:
     """
 
     FILE_NAME = "faulthandler.log"
+    ARCHIVE_PREFIX = "faulthandler-"
     ARCHIVE_SUFFIX = ".log"
 
     def __init__(self, keep: int = 5) -> None:
@@ -48,15 +50,23 @@ class CrashDumpLog:
             return None
 
     def _archive(self, current: Path) -> None:
-        """把上一份非空转储改名为带序号的归档。
+        """把上一份非空转储改名为按日期归组的归档。
+
+        同日多次崩溃依次取 ``faulthandler-YYYYMMDD.log``、``-1``、``-2``……
 
         Args:
             current (Path): 本次运行使用的转储路径。
         """
         if not current.exists() or current.stat().st_size == 0:
             return
-        stamp = current.stat().st_mtime_ns
-        current.replace(current.with_name(f"{self.FILE_NAME}{stamp}{self.ARCHIVE_SUFFIX}"))
+        day = datetime.fromtimestamp(current.stat().st_mtime).strftime("%Y%m%d")
+        target = current.with_name(f"{self.ARCHIVE_PREFIX}{day}{self.ARCHIVE_SUFFIX}")
+        stem = f"{self.ARCHIVE_PREFIX}{day}"
+        counter = 1
+        while target.exists():
+            target = current.with_name(f"{stem}-{counter}{self.ARCHIVE_SUFFIX}")
+            counter += 1
+        current.replace(target)
 
     def _prune(self, log_dir: Path) -> None:
         """按留存上限删除最旧的归档。
@@ -64,7 +74,7 @@ class CrashDumpLog:
         Args:
             log_dir (Path): 转储所在目录。
         """
-        pattern = f"{self.FILE_NAME}*{self.ARCHIVE_SUFFIX}"
+        pattern = f"{self.ARCHIVE_PREFIX}*{self.ARCHIVE_SUFFIX}"
         archives = sorted(log_dir.glob(pattern), key=lambda p: p.stat().st_mtime_ns)
         for stale in archives[: max(0, len(archives) - self.keep)]:
             stale.unlink(missing_ok=True)
