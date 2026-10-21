@@ -172,6 +172,7 @@ class SplitButton(KeyboardFocus, QWidget):
 
         Args:
             color (QColor | None): 强调色；为 ``None`` 时用中性控件面。
+                alpha 忽略，一律按不透明处理。
         """
         self._accent = QColor(color) if color is not None else None
         self.update()
