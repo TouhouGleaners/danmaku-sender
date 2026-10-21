@@ -230,9 +230,11 @@ class SplitButton(KeyboardFocus, QWidget):
         """返回按内容量算的尺寸。
 
         Returns:
-            QSize: 图标、文字与右半边的合计宽度，高度固定。
+            QSize: 图标、文字与右半边的合计宽度，高度为按钮表面加两侧焦点框余量。
         """
-        return QSize(math.ceil(self._content_width()), self.HEIGHT)
+        return QSize(
+            math.ceil(self._content_width()), self.HEIGHT + 2 * self.FOCUS_MARGIN
+        )
 
     def minimumSizeHint(self) -> QSize:
         """返回最小尺寸。

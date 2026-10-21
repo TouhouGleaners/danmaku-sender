@@ -79,10 +79,10 @@ class TestSplitButtonProperties:
         assert button.menu().actions()[0].text() == "仅发送"
 
     def test_size_hint_covers_content(self, button):
-        """量算宽度不低于右半边宽度，高度固定"""
+        """量算宽度不低于右半边宽度，高度为按钮表面加两侧焦点框余量"""
         hint = button.sizeHint()
         assert hint.width() >= button.SECONDARY_WIDTH
-        assert hint.height() == button.HEIGHT
+        assert hint.height() == button.HEIGHT + 2 * button.FOCUS_MARGIN
 
     def test_wider_text_widens_size_hint(self, button):
         """文字变长时量算宽度随之增加"""
