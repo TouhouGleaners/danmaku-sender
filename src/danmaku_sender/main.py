@@ -38,7 +38,7 @@ def main(argv=None):
     from .app.runtime import Runtime
     from .ui.main_window import MainWindow
 
-    # 硬崩时留下 C 级调用栈；转储不可用时跳过诊断，不阻断启动
+    # 硬崩时留下各线程的 Python 栈；转储不可用时跳过诊断，不阻断启动
     crash_dump = CrashDumpLog().prepare(log_dir)
     if crash_dump is not None:
         faulthandler.enable(file=crash_dump, all_threads=True)
