@@ -123,6 +123,15 @@ class MonitorController(QObject):
         if self.is_running():
             self._stop_event.set()
 
+    def restart_send_watch(self, send_done: threading.Event) -> None:
+        """给运行中的监视换上新的发送结束标记，并撤掉旧的收尾时限。
+
+        Args:
+            send_done (threading.Event): 新一轮发送的结束标记。
+        """
+        if self._worker is not None:
+            self._worker.restart_send_watch(send_done)
+
     def is_running(self) -> bool:
         return self._worker is not None and self._worker.isRunning()
 

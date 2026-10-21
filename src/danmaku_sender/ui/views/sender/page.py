@@ -284,6 +284,9 @@ class SenderPage(QWidget):
         self.sender_controller.queueTaskFailed.connect(self._on_queue_task_failed)
         self.sender_controller.queueFinished.connect(self._on_queue_finished)
         self.sender_controller.queueReady.connect(lambda: self._update_queue_ui(running=False))
+
+        # MonitorController：上一轮监视退场后，发送仍在跑就补起一次
+        self.monitor_controller.monitorReady.connect(self._on_monitor_ready)
         self.sender_controller.queueProgressUpdated.connect(self._on_queue_progress)
         # 任务进度由 Controller 落账 QueueState，页面只听 taskProgressChanged
 
@@ -598,22 +601,30 @@ class SenderPage(QWidget):
 
     @Slot()
     def _stop_queue(self) -> None:
-        """终止队列发送；监视器由监视器页自行启停。"""
-        if self._send_done is not None:
-            self._send_done.set()
+        """终止队列发送；监视器在发送真正结束后转入时限收尾。"""
         if self.sender_controller.is_queue_running():
             self.sender_controller.stop_queue()
             self.logger.info("队列: 正在请求中止...")
+
+    @Slot()
+    def _on_monitor_ready(self) -> None:
+        """监视器退场后，发送仍在跑则按设置补起一次。"""
+        if self.sender_controller.is_queue_running():
+            self._start_monitor_if_needed()
 
     def _start_monitor_if_needed(self) -> None:
         """按设置决定要不要随发送一并启动队列监视。"""
         if not self.settings.monitor_config.auto_start_with_send:
             return
-        if self.monitor_controller.is_running():
-            return
         self._send_done = threading.Event()
+        if self.monitor_controller.is_running():
+            # 上一轮的监视器还活着：换上新标记并撤掉旧的收尾时限，
+            # 否则它会带着已置位的旧标记在本轮发送中途自行退场
+            self.monitor_controller.restart_send_watch(self._send_done)
+            return
         if not self.monitor_controller.start_queue_monitor(send_done=self._send_done):
             self.logger.warning("队列监视未能随发送启动")
+            self._send_done = None
             return
         self.logger.info("已随发送启动队列监视")
 

@@ -86,6 +86,16 @@ class QueueMonitorWorker(WorkerThread):
         # 传 None 表示独立监视，跑到用户手动停为止。
         self.send_done = send_done
         self.post_send_watch_seconds = post_send_watch_seconds
+        self._deadline: float | None = None
+
+    def restart_send_watch(self, send_done: threading.Event) -> None:
+        """换上新的发送结束标记，并撤掉旧的收尾时限。
+
+        Args:
+            send_done (threading.Event): 新一轮发送的结束标记。
+        """
+        self.send_done = send_done
+        self._deadline = None
 
     @property
     def targets(self) -> list[MonitorSample]:
@@ -97,18 +107,18 @@ class QueueMonitorWorker(WorkerThread):
         failed = False
         try:
             with KeepSystemAwake(self.prevent_sleep):
-                deadline: float | None = None
+                self._deadline = None
                 while not self.stop_event.is_set():
-                    deadline = self._arm_deadline(deadline)
-                    if self._expired(deadline):
+                    self._deadline = self._arm_deadline(self._deadline)
+                    if self._expired(self._deadline):
                         logger.info("发送后监视时限已到，队列监视终止。")
                         break
 
-                    self._run_round(deadline)
+                    self._run_round(self._deadline)
                     # 发送可能正好在本轮核销期间结束，返回后要再武装一次
-                    deadline = self._arm_deadline(deadline)
+                    self._deadline = self._arm_deadline(self._deadline)
 
-                    if self._wait(self.poll_interval, deadline):
+                    if self._wait(self.poll_interval, self._deadline):
                         logger.info("收到停止信号，队列监视终止。")
                         break
         except Exception as e:
