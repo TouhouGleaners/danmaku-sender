@@ -5,7 +5,7 @@ faulthandler 只认文件描述符，写入期间无法轮转，因此轮转发�
 """
 
 import logging
-from datetime import datetime
+from datetime import datetime, timezone
 from pathlib import Path
 from typing import IO
 
@@ -59,12 +59,18 @@ class CrashDumpLog:
         """
         if not current.exists() or current.stat().st_size == 0:
             return
-        day = datetime.fromtimestamp(current.stat().st_mtime).strftime("%Y%m%d")
+
+        # 归档名取本地日期，先按 UTC 取时刻再转本地时区
+        day = (
+            datetime
+                .fromtimestamp(current.stat().st_mtime, tz=timezone.utc)
+                .astimezone()
+                .strftime("%Y%m%d")
+        )
         target = current.with_name(f"{self.ARCHIVE_PREFIX}{day}{self.ARCHIVE_SUFFIX}")
-        stem = f"{self.ARCHIVE_PREFIX}{day}"
         counter = 1
         while target.exists():
-            target = current.with_name(f"{stem}-{counter}{self.ARCHIVE_SUFFIX}")
+            target = current.with_name(f"{self.ARCHIVE_PREFIX}{day}-{counter}{self.ARCHIVE_SUFFIX}")
             counter += 1
         current.replace(target)
 

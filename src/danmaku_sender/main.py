@@ -61,8 +61,6 @@ def main(argv=None):
     app.aboutToQuit.connect(rt.shutdown)
 
     code = app.exec()
-    # 解释器关闭期间的致命错误须落在仍然打开的句柄上
-    faulthandler.disable()
     sys.exit(code)
 
 
