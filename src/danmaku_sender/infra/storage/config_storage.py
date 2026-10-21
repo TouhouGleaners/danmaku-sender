@@ -15,6 +15,7 @@ from danmaku_sender.config import (
     ValidationConfig,
 )
 from danmaku_sender.config.app_meta import AppInfo
+from danmaku_sender.types.exceptions.exceptions import ConfigStorageError
 from danmaku_sender.utils.file_utils import atomic_write, read_json
 
 logger = logging.getLogger(__name__)
@@ -30,6 +31,9 @@ class ConfigStorage:
 
         Args:
             settings: 待落盘的配置容器。
+
+        Raises:
+            ConfigStorageError: 落盘失败，改动未写入。
         """
         config_data = {
             "global": settings.global_config.model_dump(),
@@ -43,20 +47,36 @@ class ConfigStorage:
         try:
             with atomic_write(CONFIG_PATH) as f:
                 json.dump(config_data, f, indent=2, ensure_ascii=False)
-            logger.info(f"配置已保存: {CONFIG_PATH}")
         except Exception as e:
-            logger.error(f"保存配置失败: {e}")
+            raise ConfigStorageError(
+                f"配置保存失败，改动未落盘：{CONFIG_PATH}",
+                path=CONFIG_PATH,
+                original_error=e,
+            ) from e
+        logger.info(f"配置已保存：{CONFIG_PATH}")
 
     def load(self, settings: Settings) -> None:
         """从 config.json 加载配置到 settings。
 
+        文件缺失视为首次启动，不视为错误。段内含非法值时跳过该段并保留
+        当前值，不中断其余段的加载。
+
         Args:
             settings: 就地更新的配置容器。
+
+        Raises:
+            ConfigStorageError: 文件损坏无法解析，未写入任何配置。
         """
+        if not CONFIG_PATH.is_file():
+            logger.info(f"配置文件不存在，按默认值启动：{CONFIG_PATH}")
+            return
+
         data = read_json(CONFIG_PATH)
         if not isinstance(data, dict):
-            logger.info("未找到配置文件或格式异常，使用默认设置。")
-            return
+            raise ConfigStorageError(
+                f"配置文件损坏，无法解析：{CONFIG_PATH}",
+                path=CONFIG_PATH,
+            )
 
         def _apply_section[T: AtomicModel](key: str, model_class: type[T], target: T) -> None:
             """把 config.json 的段校验后原地灌进 target。
@@ -78,7 +98,10 @@ class ConfigStorage:
             try:
                 fresh = model_class.model_validate(probe)
             except ValidationError as e:
-                logger.warning(f"模块 [{key}] 配置存在非法值，已回退为安全默认值。详情:\n{e}")
+                logger.warning(
+                    f"配置段 [{key}] 含非法值，该段按默认值运行，"
+                    f"后续保存会覆盖该段：{CONFIG_PATH}\n{e}"
+                )
                 return
             target.commit(fresh, data[key])
 
@@ -89,4 +112,4 @@ class ConfigStorage:
         _apply_section("theme", ThemeConfig, settings.theme_config)
         _apply_section("validation", ValidationConfig, settings.validation_config)
 
-        logger.info(f"配置文件加载与校验流程结束[{CONFIG_PATH}]。")
+        logger.info(f"配置已加载：{CONFIG_PATH}")
