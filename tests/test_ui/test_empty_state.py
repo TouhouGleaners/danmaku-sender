@@ -1,9 +1,10 @@
 """EmptyStateHint 的行为测试。
 
-覆盖：默认隐藏、set_empty 控显隐、随可视区重定位、CTA 按钮形态与样式。
+覆盖：默认隐藏、set_empty 控显隐、随可视区重定位、CTA 按钮形态与样式、
+销毁期对已拆解自身的免疫。
 """
 import pytest
-from PySide6.QtCore import QObject, QStringListModel, Signal
+from PySide6.QtCore import QEvent, QObject, QStringListModel, Signal
 from PySide6.QtWidgets import QLabel, QPushButton, QTableView
 
 from danmaku_sender.ui.framework.empty_state import EmptyStateHint
@@ -110,3 +111,30 @@ class TestEmptyStateHint:
 
         table.close()
         table.deleteLater()
+
+    def test_event_filter_immune_after_teardown(self, view):
+        """销毁期属性表被清空后，事件过滤不再抛异常"""
+        hint = EmptyStateHint(view, title="暂无数据")
+        hint.set_empty(True)
+        hint.__dict__.clear()
+
+        assert hint.eventFilter(view, QEvent(QEvent.Type.Resize)) is False
+
+    def test_refresh_immune_after_teardown(self, view):
+        """销毁期属性表被清空后，model 信号触发的刷新不再抛异常"""
+        model = QStringListModel()
+        view.setModel(model)
+        hint = EmptyStateHint(view, title="暂无数据")
+        assert hint.isVisible()  # 空 model，构造时即判空
+        hint.__dict__.clear()
+
+        model.setStringList(["a"])  # 触发 rowsInserted → refresh
+        # 免疫意味着刷新被跳过，可见性保持拆解前的状态
+        assert hint.isVisible()
+
+    def test_slot_registered(self, view):
+        """refresh 是信号回调，须注册为 Qt 槽"""
+        hint = EmptyStateHint(view, title="暂无数据")
+        meta = hint.metaObject()
+        names = {meta.method(i).name().data().decode() for i in range(meta.methodCount())}
+        assert "refresh" in names

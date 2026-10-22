@@ -6,7 +6,7 @@
 
 from collections.abc import Callable
 
-from PySide6.QtCore import QEvent, QObject, Qt, SignalInstance
+from PySide6.QtCore import QEvent, QObject, Qt, SignalInstance, Slot
 from PySide6.QtWidgets import (
     QAbstractItemView,
     QHBoxLayout,
@@ -114,10 +114,13 @@ class EmptyStateHint(QWidget):
 
         self.refresh()
 
+    @Slot()
     def refresh(self) -> None:
         """按绑定的判定刷新显隐。"""
-        if self._is_empty is not None:
-            self.set_empty(self._is_empty())
+        # 同 eventFilter：销毁期属性表被清空后仍可能收到 model 信号
+        is_empty = self.__dict__.get("_is_empty")
+        if is_empty is not None:
+            self.set_empty(is_empty())
 
     def set_empty(self, empty: bool) -> None:
         """切换空状态显隐；显示时立即按当前可视区重新定位。
