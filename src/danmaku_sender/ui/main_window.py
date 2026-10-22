@@ -220,6 +220,9 @@ class MainWindow(QMainWindow):
         self.sidebar.currentRowChanged.connect(self.content_stack.setCurrentIndex)
         self.sidebar.setCurrentRow(1)
 
+        # 补设首屏强调色
+        self.page_sender.apply_theme(self.theme_service.current_palette)
+
         # 用户页眉点击打开账号管理弹窗
         self.user_widget.setCursor(Qt.CursorShape.PointingHandCursor)
         self.user_widget.mousePressEvent = lambda e: self._open_account_dialog()
@@ -488,6 +491,7 @@ class MainWindow(QMainWindow):
     @Slot(Palette)
     def _on_theme_applied(self, palette: Palette):
         """主题应用完成后，刷新需要重绘颜色的位图资源"""
+        self.page_sender.apply_theme(palette)
         self._refresh_icons()
 
     def _refresh_icons(self):
