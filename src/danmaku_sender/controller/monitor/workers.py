@@ -1,7 +1,6 @@
 import logging
 import random
 import threading
-import time
 from dataclasses import dataclass
 
 from PySide6.QtCore import Signal
@@ -56,8 +55,6 @@ class QueueMonitorWorker(WorkerThread):
         baseline: float = 0.0,
         poll_interval: float = 60.0,
         prevent_sleep: bool = True,
-        send_done: threading.Event | None = None,
-        post_send_watch_seconds: float = 300.0,
         parent=None,
     ):
         """初始化队列监视 Worker。
@@ -70,8 +67,6 @@ class QueueMonitorWorker(WorkerThread):
             baseline: 核销基线时间戳，0 表示全量历史。
             poll_interval: 轮询间隔（秒）。
             prevent_sleep: 监视期间是否阻止系统休眠。
-            send_done: 「发送+监视」时传入的发送结束标记；None 表示独立监视。
-            post_send_watch_seconds: 发送结束后的继续监视时长（秒）。
             parent: Qt 父对象。
         """
         super().__init__(parent)
@@ -82,10 +77,6 @@ class QueueMonitorWorker(WorkerThread):
         self.baseline = baseline
         self.poll_interval = max(1.0, poll_interval)
         self.prevent_sleep = prevent_sleep
-        # 「发送+监视」才传：发送结束后再盯 post_send_watch_seconds 自动停。
-        # 传 None 表示独立监视，跑到用户手动停为止。
-        self.send_done = send_done
-        self.post_send_watch_seconds = post_send_watch_seconds
 
     @property
     def targets(self) -> list[MonitorSample]:
@@ -97,23 +88,14 @@ class QueueMonitorWorker(WorkerThread):
         failed = False
         try:
             with KeepSystemAwake(self.prevent_sleep):
-                deadline: float | None = None
                 while not self.stop_event.is_set():
-                    deadline = self._arm_deadline(deadline)
-                    if self._expired(deadline):
-                        logger.info("发送后监视时限已到，队列监视终止。")
-                        break
-
-                    self._run_round(deadline)
-                    # 发送可能正好在本轮核销期间结束，返回后要再武装一次
-                    deadline = self._arm_deadline(deadline)
-
-                    if self._wait(self.poll_interval, deadline):
+                    self._run_round()
+                    if self._wait(self.poll_interval):
                         logger.info("收到停止信号，队列监视终止。")
                         break
         except Exception as e:
             failed = True
-            logger.error(f"队列监视发生未预期异常: {e}", exc_info=True)
+            logger.exception("队列监视发生未预期异常")
             self.statusUpdated.emit(f"监视器异常终止: {e}")
             self.monitorFailed.emit(str(e))
         finally:
@@ -122,23 +104,11 @@ class QueueMonitorWorker(WorkerThread):
             if failed:
                 logger.warning("队列监视已异常退出，需人工重新启动。")
 
-    def _arm_deadline(self, deadline: float | None) -> float | None:
-        """发送结束后给本轮监视记下截止时刻；已有截止则原样返回。"""
-        if deadline is None and self.send_done is not None and self.send_done.is_set():
-            return time.monotonic() + self.post_send_watch_seconds
-        return deadline
-
-    @staticmethod
-    def _expired(deadline: float | None) -> bool:
-        return deadline is not None and time.monotonic() >= deadline
-
-    def _wait(self, seconds: float, deadline: float | None) -> bool:
-        """等待 seconds，但不越过截止时间。返回 True = 收到停止信号。"""
-        if deadline is not None:
-            seconds = min(seconds, max(0.0, deadline - time.monotonic()))
+    def _wait(self, seconds: float) -> bool:
+        """等待 seconds。返回 True = 收到停止信号。"""
         return self.stop_event.wait(seconds)
 
-    def _run_round(self, deadline: float | None):
+    def _run_round(self):
         try:
             samples = self.targets
         except Exception as e:
@@ -158,7 +128,7 @@ class QueueMonitorWorker(WorkerThread):
             verifier = DanmakuVerifier(api_client=client, history_manager=self.history_manager)
 
             for i, sample in enumerate(samples):
-                if self.stop_event.is_set() or self._expired(deadline):
+                if self.stop_event.is_set():
                     return
 
                 try:
@@ -180,7 +150,7 @@ class QueueMonitorWorker(WorkerThread):
                 overall["pending"] += stats.get("pending", 0)
                 overall["lost"] += stats.get("lost", 0)
 
-                if i + 1 < len(samples) and self._wait(random.uniform(1.0, 3.0), deadline):
+                if i + 1 < len(samples) and self._wait(random.uniform(1.0, 3.0)):
                     return
 
         self.overallStatsUpdated.emit(overall)
