@@ -1,8 +1,9 @@
 """主次两半的分体按钮。
 
-左半执行主动作，右半弹出菜单。表面、立体描边、中缝与图文全部自绘。
-填充走控件填充阶梯，强调面按不透明度叠在画布色上；描边为竖向渐变，
-按下时仅该半边扁平化。配色取自应用级 QPalette，来源见 ThemeService 的 ROLE_SOURCES。
+左半执行主动作，右半弹出菜单。
+填充按静止、悬停、按压三档取色，强调色按不透明度叠在画布色上；
+描边平铺一圈，明暗只落在上、下横边，按下时仅该半边改用淡化实色。
+配色取自全局 QPalette，来源见 ThemeService 的 ROLE_SOURCES。
 """
 
 import math
@@ -23,6 +24,7 @@ from PySide6.QtCore import (
 from PySide6.QtGui import (
     QColor,
     QEnterEvent,
+    QFocusEvent,
     QFontMetrics,
     QHideEvent,
     QIcon,
@@ -36,10 +38,9 @@ from PySide6.QtGui import (
 from PySide6.QtWidgets import QApplication, QMenu, QWidget
 
 from .icons import SvgIcon, rerender
-from .keyboard_focus import KeyboardFocus
 
 
-class SplitButton(KeyboardFocus, QWidget):
+class SplitButton(QWidget):
     """主次两半的分体按钮。
 
     Attributes:
@@ -48,7 +49,7 @@ class SplitButton(KeyboardFocus, QWidget):
 
     clicked = Signal()
 
-    # 外框；FOCUS_MARGIN 是留给焦点框的透明余量，按钮表面画在余量内侧
+    # 外框；FOCUS_MARGIN 是留给焦点框的空白，按钮表面画在其内侧
     RADIUS = 4
     HEIGHT = 28
     BORDER_WIDTH = 1
@@ -71,26 +72,35 @@ class SplitButton(KeyboardFocus, QWidget):
     PRESS_SINK = 0.5
     PRESS_BOUNCE = 0.5
 
-    # 强调面的悬停与按压：填充换成强调色的半透明罩，底色透上来
+    # 强调色的悬停与按压：填充换成强调色的半透明罩，底色透上来
     ACCENT_HOVER_OPACITY = 0.9
     ACCENT_PRESS_OPACITY = 0.8
 
-    # 强调面描边与中缝（WinUI ControlStrokeColorOnAccent*）
+    # 强调色上的描边与中缝（WinUI ControlStrokeColorOnAccent*）
     ACCENT_STROKE_FAINT = QColor(255, 255, 255, 20)
     ACCENT_STROKE_STRONG = QColor(0, 0, 0, 55)
 
     # 按压时图文减淡的倍率
     SUNK_TEXT_ALPHA = 0.7
 
-    # 双层焦点框：外环为主、内环为辅，整体落在按钮表面之外的余量里
+    # 双层焦点框：外环为主、内环为辅，画在按钮表面之外
     FOCUS_OUTER_WIDTH = 2
     FOCUS_INNER_WIDTH = 1
     FOCUS_OUTER_OUTSET = 4.0
     FOCUS_INNER_OUTSET = 2.5
     FOCUS_INNER_ALPHA = 0.7
 
+    # 系统焦点视觉只在键盘导航时出现，鼠标点击不画（WinUI UseSystemFocusVisuals）
+    _KEYBOARD_REASONS = frozenset(
+        {
+            Qt.FocusReason.TabFocusReason,
+            Qt.FocusReason.BacktabFocusReason,
+            Qt.FocusReason.ShortcutFocusReason,
+        }
+    )
+
     class _Half(IntEnum):
-        """两个可按半边。
+        """分体按钮的两个可按半边。
 
         Attributes:
             PRIMARY: 左半，执行主动作。
@@ -112,10 +122,12 @@ class SplitButton(KeyboardFocus, QWidget):
         self.setFixedHeight(self.HEIGHT + 2 * self.FOCUS_MARGIN)
 
         self._text = ""
+        self._candidates: list[str] = []
         self._icon = QIcon()
         self._menu: QMenu | None = None
         self._accent: QColor | None = None
 
+        self._keyboard_focus = False
         self._hover: SplitButton._Half | None = None
         self._pressed: SplitButton._Half | None = None
         self._animated: SplitButton._Half | None = None
@@ -150,6 +162,26 @@ class SplitButton(KeyboardFocus, QWidget):
         """
         return self._text
 
+    def setCandidateTexts(self, texts: list[str]) -> None:
+        """声明主半边可能出现的文案。
+
+        控件按其中最长的一条量算宽度，更换文案时控件尺寸不变。
+
+        Args:
+            texts (list[str]): 主半边可能出现的文案。
+        """
+        self._candidates = list(texts)
+        self.updateGeometry()
+        self.update()
+
+    def candidateTexts(self) -> list[str]:
+        """返回主半边可能出现的文案。
+
+        Returns:
+            list[str]: 先前经 :meth:`setCandidateTexts` 声明的文案。
+        """
+        return list(self._candidates)
+
     def setIcon(self, icon: QIcon) -> None:
         """设置主半边图标。
 
@@ -168,27 +200,27 @@ class SplitButton(KeyboardFocus, QWidget):
         return self._icon
 
     def setAccent(self, color: QColor | None) -> None:
-        """设置强调面底色。
+        """设置强调色。
 
         Args:
-            color (QColor | None): 强调色；为 ``None`` 时用中性控件面。
+            color (QColor | None): 强调色；为 ``None`` 时不使用强调色。
                 alpha 忽略，一律按不透明处理。
         """
         self._accent = QColor(color) if color is not None else None
         self.update()
 
     def accent(self) -> QColor | None:
-        """返回强调面底色。
+        """返回强调色。
 
         Returns:
-            QColor | None: 强调色；中性面时为 ``None``。
+            QColor | None: 强调色；未设置时为 ``None``。
         """
         return QColor(self._accent) if self._accent is not None else None
 
     def setMenu(self, menu: QMenu | None) -> None:
         """设置右半边弹出的菜单。
 
-        菜单可见期间两半均呈按压态。
+        菜单弹出期间右半边呈按压态。
 
         Args:
             menu (QMenu | None): 右半边弹出的菜单；为 ``None`` 时右半边不响应。
@@ -220,7 +252,7 @@ class SplitButton(KeyboardFocus, QWidget):
         return self._menu
 
     def isOpen(self) -> bool:
-        """返回菜单是否正弹出。
+        """返回菜单是否弹出。
 
         Returns:
             bool: 菜单可见时为 ``True``。
@@ -258,29 +290,30 @@ class SplitButton(KeyboardFocus, QWidget):
             primary += self.ICON_SIZE
             if self._text:
                 primary += self.ICON_GAP
-        primary += self._text_width()
+        primary += max(self._text_width(t) for t in self._candidates or [self._text])
         primary = max(float(self.PRIMARY_MIN_WIDTH), primary)
         return primary + self.DIVIDER_WIDTH + self.SECONDARY_WIDTH + 2 * self.FOCUS_MARGIN
 
-    def _text_width(self) -> float:
-        """返回文字墨水所需宽度。
+    def _text_width(self, text: str) -> float:
+        """返回文字所需宽度。
 
-        墨水可能超出排版进宽，取三种度量的最大值以保证量算与绘制一致。
+        Args:
+            text (str): 待量算的文字。
 
         Returns:
-            float: 进宽、外接框与紧致外接框三者的最大值。
+            float: 排版进宽、外接框与紧致外接框三者的最大值。
         """
-        if not self._text:
+        if not text:
             return 0.0
         metrics = QFontMetrics(self.font())
         return max(
-            float(metrics.horizontalAdvance(self._text)),
-            float(metrics.boundingRect(self._text).width()),
-            float(metrics.tightBoundingRect(self._text).width()),
+            float(metrics.horizontalAdvance(text)),
+            float(metrics.boundingRect(text).width()),
+            float(metrics.tightBoundingRect(text).width()),
         )
 
     def _surface_rect(self) -> QRect:
-        """返回按钮表面矩形，四周留出焦点框余量。
+        """返回按钮表面矩形，四周留出焦点框的位置。
 
         Returns:
             QRect: 扣除 :attr:`FOCUS_MARGIN` 后的表面矩形。
@@ -322,7 +355,7 @@ class SplitButton(KeyboardFocus, QWidget):
         return None
 
     def _palette(self) -> QPalette:
-        """返回应用级调色板。
+        """返回全局调色板。
 
         Returns:
             QPalette: 主题调色板。
@@ -336,6 +369,26 @@ class SplitButton(KeyboardFocus, QWidget):
         """指针进入时按落点更新悬停半边。"""
         super().enterEvent(event)
         self._set_hover(self._hit(event.position().toPoint()))
+
+    def hasKeyboardFocus(self) -> bool:
+        """返回当前焦点是否来自键盘导航。
+
+        Returns:
+            bool: 由 Tab / 反向 Tab / 快捷键取得焦点时为 ``True``。
+        """
+        return self._keyboard_focus
+
+    def focusInEvent(self, event: QFocusEvent) -> None:
+        """记录焦点来源并重绘。"""
+        super().focusInEvent(event)
+        self._keyboard_focus = event.reason() in self._KEYBOARD_REASONS
+        self.update()
+
+    def focusOutEvent(self, event: QFocusEvent) -> None:
+        """清除键盘焦点标记并重绘。"""
+        super().focusOutEvent(event)
+        self._keyboard_focus = False
+        self.update()
 
     def leaveEvent(self, event: QEvent) -> None:
         """指针离开时清除悬停半边，按压半边保留到松开。"""
@@ -370,10 +423,7 @@ class SplitButton(KeyboardFocus, QWidget):
         self._set_hover(self._hit(event.position().toPoint()))
 
     def mousePressEvent(self, event: QMouseEvent) -> None:
-        """按下半边：记下按压半边并启动回弹。
-
-        两半都收下按压，避免事件上浮到父控件。
-        """
+        """按下半边：记下按压半边并启动回弹。"""
         if event.button() != Qt.MouseButton.LeftButton or not self.isEnabled():
             super().mousePressEvent(event)
             return
@@ -413,7 +463,7 @@ class SplitButton(KeyboardFocus, QWidget):
         super().keyPressEvent(event)
 
     def mouseReleaseEvent(self, event: QMouseEvent) -> None:
-        """松开：主半边在原地发出主动作，次半边在原地弹出菜单。"""
+        """松开时，主半边发出主动作信号，次半边弹出菜单。"""
         if event.button() == Qt.MouseButton.LeftButton and self.isEnabled():
             released = self._hit(event.position().toPoint())
             pressed = self._pressed
@@ -589,7 +639,7 @@ class SplitButton(KeyboardFocus, QWidget):
             sunk (bool): 是否处于按压外观。
 
         Returns:
-            QColor: 强调面取白色，中性面取主文字色；按压时减淡。
+            QColor: 带强调色时取白字，否则取主文字色；按压时减淡。
         """
         color = (
             QColor("#ffffff")
@@ -604,7 +654,7 @@ class SplitButton(KeyboardFocus, QWidget):
     def _chevron_color(self, palette: QPalette, sunk: bool) -> QColor:
         """返回右半边 chevron 色。
 
-        中性面的 chevron 本就比文字淡一档，按压再淡一档；强调面与文字同色。
+        不带强调色时 chevron 比文字淡一档，按压再淡一档；带强调色时与文字同色。
 
         Args:
             palette (QPalette): 主题调色板。
@@ -655,7 +705,7 @@ class SplitButton(KeyboardFocus, QWidget):
         primary: QRect,
         secondary: QRect,
     ) -> None:
-        """在悬停或按压的半边叠加填充阶梯色。"""
+        """在悬停或按压的半边叠加状态填充色。"""
         if not self.isEnabled():
             return
         _, hover, press = self._surface_colors(palette)
@@ -684,7 +734,7 @@ class SplitButton(KeyboardFocus, QWidget):
         primary: QRect,
         secondary: QRect,
     ) -> None:
-        """绘制立体描边；按压的那一半改用弱化实色，强调面在菜单弹出时描边消失。"""
+        """绘制描边；按压的半边改用淡化实色，强调色在菜单弹出时描边消失。"""
         if not self.isEnabled():
             return
 
@@ -710,10 +760,7 @@ class SplitButton(KeyboardFocus, QWidget):
             painter.restore()
 
     def _paint_elevation(self, painter: QPainter, palette: QPalette, full: QRectF) -> None:
-        """绘制平描一圈的描边，明暗只落在上/下横边。
-
-        渐变铺满描边环会把竖边底端一起拉暗，形成「竖边往上长几像素」的脏角；
-        竖边因此保持均匀，立体感只由两条横边的强弱差承担。
+        """绘制描边：平铺一圈，明暗只落在上、下横边。
 
         Args:
             painter (QPainter): 正在绘制的画笔。
@@ -723,7 +770,7 @@ class SplitButton(KeyboardFocus, QWidget):
         faint, strong = self._stroke_colors(palette)
         self._stroke_ring(painter, faint, full)
 
-        # 浅色主题强端在下缘、深色在上缘；只描横边，两端各让开圆角半径
+        # 浅色主题加强色在下缘、深色在上缘；只描横边，两端各让开圆角半径
         y = full.bottom() - 0.5 if self._flipped() else full.top() + 0.5
         pen = QPen(strong, self.BORDER_WIDTH)
         pen.setCapStyle(Qt.PenCapStyle.FlatCap)
@@ -734,13 +781,13 @@ class SplitButton(KeyboardFocus, QWidget):
         )
 
     def _stroke_colors(self, palette: QPalette) -> tuple[QColor, QColor]:
-        """返回描边两色：弱端与强端。
+        """返回描边两色：基础色与加强色。
 
         Args:
             palette (QPalette): 主题调色板。
 
         Returns:
-            tuple[QColor, ...]: 弱端描边色与强端描边色。
+            tuple[QColor, ...]: 基础描边色与加强描边色。
         """
         if self._accent is None:
             return (
@@ -753,12 +800,12 @@ class SplitButton(KeyboardFocus, QWidget):
         )
 
     def _flipped(self) -> bool:
-        """返回立体描边的强端是否在下缘。
+        """返回描边的加强色是否画在下缘。
 
-        浅色主题的强端在下缘，深色主题在上缘。
+        浅色主题画在下缘，深色主题画在上缘。
 
         Returns:
-            bool: 强端在下缘时为 ``True``。
+            bool: 加强色画在下缘时为 ``True``。
         """
         app = QApplication.instance()
         window = app.palette().color(QPalette.ColorRole.Window) if isinstance(app, QApplication) else QColor()
@@ -781,7 +828,7 @@ class SplitButton(KeyboardFocus, QWidget):
         )
 
     def _paint_divider(self, painter: QPainter, palette: QPalette, secondary: QRect) -> None:
-        """绘制通高的中缝发丝线。"""
+        """绘制通高的中缝。"""
         if not self.isEnabled():
             return
         # 中缝取强调面的强端描边色（WinUI SplitButtonBorderBrushCheckedDivider）
@@ -790,7 +837,7 @@ class SplitButton(KeyboardFocus, QWidget):
             if self._accent is not None
             else palette.color(QPalette.ColorRole.Shadow)
         )
-        # 整像素矩形填充，避免画笔走线在两列之间糊开；高度只到按钮表面
+        # 整像素矩形填充，高度只到按钮表面
         surface = self._surface_rect()
         painter.fillRect(
             QRect(secondary.left(), surface.top(), self.DIVIDER_WIDTH, surface.height()),
@@ -801,13 +848,12 @@ class SplitButton(KeyboardFocus, QWidget):
         self, painter: QPainter, palette: QPalette, primary: QRect, secondary: QRect
     ) -> None:
         """绘制主半边图标与文字、右半边 chevron。"""
+        label = self._label_color(palette, self._is_sunk(SplitButton._Half.PRIMARY))
+        chevron = self._chevron_color(palette, self._is_sunk(SplitButton._Half.SECONDARY))
         if not self.isEnabled():
-            label = QColor(self._chevron_color(palette, False))
+            label = QColor(label)
             label.setAlphaF(label.alphaF() * 0.4)
             chevron = label
-        else:
-            label = self._label_color(palette, self._is_sunk(SplitButton._Half.PRIMARY))
-            chevron = self._chevron_color(palette, self._is_sunk(SplitButton._Half.SECONDARY))
 
         primary_offset = self._content_offset(SplitButton._Half.PRIMARY)
         secondary_offset = self._content_offset(SplitButton._Half.SECONDARY)
@@ -872,8 +918,7 @@ class SplitButton(KeyboardFocus, QWidget):
     def _paint_focus(self, painter: QPainter, palette: QPalette, full: QRectF) -> None:
         """键盘导航时绘制双层焦点框。
 
-        落在按钮表面之外的透明余量里：与 WinUI 的焦点视觉同形，又不被 Qt
-        裁在控件矩形内切出角楔。鼠标点击不画，对应 ``UseSystemFocusVisuals``。
+        焦点框画在按钮表面之外的空白内；鼠标点击不绘制。
 
         Args:
             painter (QPainter): 正在绘制的画笔。

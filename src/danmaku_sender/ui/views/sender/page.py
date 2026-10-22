@@ -1,5 +1,7 @@
 import logging
+import threading
 from dataclasses import dataclass
+from enum import IntEnum
 from pathlib import Path
 
 from PySide6.QtCore import (
@@ -12,9 +14,13 @@ from PySide6.QtCore import (
     Slot,
 )
 from PySide6.QtGui import (
+    QAction,
+    QActionGroup,
+    QColor,
     QDragEnterEvent,
     QDragMoveEvent,
     QDropEvent,
+    QIcon,
     QKeySequence,
     QShortcut,
     QTextCursor,
@@ -38,6 +44,7 @@ from PySide6.QtWidgets import (
 )
 
 from danmaku_sender.config import Settings
+from danmaku_sender.controller.monitor import MonitorController
 from danmaku_sender.controller.sender import QueueReadiness, SenderController
 from danmaku_sender.infra.persistence.history_manager import HistoryManager
 from danmaku_sender.infra.platform import send_windows_notification
@@ -50,6 +57,8 @@ from danmaku_sender.ui.framework.drag_drop import DropOverlay, xml_files_from_dr
 from danmaku_sender.ui.framework.empty_state import EmptyStateHint
 from danmaku_sender.ui.framework.icons import SvgIcon
 from danmaku_sender.ui.framework.notification import Notification
+from danmaku_sender.ui.framework.split_button import SplitButton
+from danmaku_sender.ui.framework.theme import Palette
 from danmaku_sender.ui.views.editor import EditorDialog
 from danmaku_sender.utils.string_utils import safe_filename
 from danmaku_sender.utils.time_utils import format_duration
@@ -67,15 +76,50 @@ class TaskUnsent:
     records: list[UnsentDanmakusRecord]
 
 
+class RunAction(IntEnum):
+    """运行菜单里的候选动作，取值即菜单项的数据键。
+
+    发送与监视是两个运行体，此处只管发送；要不要顺带监视是设置项。
+
+    Attributes:
+        SEND: 启动队列发送。
+        PAUSE: 暂停队列发送。
+        RESUME: 继续队列发送。
+        STOP: 终止队列发送。
+    """
+
+    SEND = 0
+    PAUSE = 1
+    RESUME = 2
+    STOP = 3
+
+
 class SenderPage(QWidget):
     progressUpdated = Signal(int, int, float)
 
-    def __init__(self, state: AppState, settings: Settings, history_manager: HistoryManager):
+    def __init__(
+        self,
+        state: AppState,
+        settings: Settings,
+        history_manager: HistoryManager,
+        monitor_controller: MonitorController,
+    ):
+        """初始化发射器页。
+
+        Args:
+            state (AppState): 状态树聚合根。
+            settings (Settings): 配置容器。
+            history_manager (HistoryManager): 本地账本。
+            monitor_controller (MonitorController): 队列监视控制器，由装配处注入并与其他页共用。
+        """
         super().__init__()
         self.state = state
         self.settings = settings
         self.logger = logging.getLogger(__name__)
         self.sender_controller = SenderController(state, settings, history_manager, self)
+        self.monitor_controller = monitor_controller
+        # 交给监视器的发送结束标记；发送结束后按既定时限继续核销
+        self._send_done: threading.Event | None = None
 
         self._queue_total = 0
         self._queue_current = 0
@@ -211,23 +255,18 @@ class SenderPage(QWidget):
         self.progress_bar = QProgressBar()
         self.progress_bar.setValue(0)
 
-        self._btn_start_queue = QPushButton("启动队列")
-        self._btn_start_queue.setIcon(SvgIcon.START)
-        self._btn_start_queue.setFixedWidth(100)
-        self._btn_start_queue.setProperty("action", "true")
-        self._btn_start_queue.setProperty("state", "ready")
-
-        self._btn_stop_queue = QPushButton("停止队列")
-        self._btn_stop_queue.setIcon(SvgIcon.STOP)
-        self._btn_stop_queue.setFixedWidth(100)
-        self._btn_stop_queue.setProperty("action", "true")
-        self._btn_stop_queue.setProperty("state", "running")
-        self._btn_stop_queue.setVisible(False)
+        self._run_button = SplitButton()
+        self._run_button.clicked.connect(self._on_run_primary)
+        self._run_menu = QMenu(self._run_button)
+        self._run_button.setMenu(self._run_menu)
+        self._palette: Palette | None = None
+        self._run_choice = RunAction.SEND
+        self._build_run_menu()
+        self._sync_run_button(False)
 
         action_layout.addWidget(self.status_label)
         action_layout.addWidget(self.progress_bar, stretch=1)
-        action_layout.addWidget(self._btn_start_queue)
-        action_layout.addWidget(self._btn_stop_queue)
+        action_layout.addWidget(self._run_button)
 
         main_layout.addLayout(action_layout)
 
@@ -238,8 +277,6 @@ class SenderPage(QWidget):
         self._btn_reset_queue.clicked.connect(self._reset_queue)
         self._btn_clear_all.clicked.connect(self._clear_all_tasks)
         self._btn_export_unsent.clicked.connect(self._export_all_unsent)
-        self._btn_start_queue.clicked.connect(self._start_queue)
-        self._btn_stop_queue.clicked.connect(self._stop_queue)
 
         # SenderController (队列)
         self.sender_controller.queueTaskStarted.connect(self._on_queue_task_started)
@@ -247,6 +284,9 @@ class SenderPage(QWidget):
         self.sender_controller.queueTaskFailed.connect(self._on_queue_task_failed)
         self.sender_controller.queueFinished.connect(self._on_queue_finished)
         self.sender_controller.queueReady.connect(lambda: self._update_queue_ui(running=False))
+
+        # MonitorController：上一轮监视退场后，发送仍在跑就补起一次
+        self.monitor_controller.monitorReady.connect(self._on_monitor_ready)
         self.sender_controller.queueProgressUpdated.connect(self._on_queue_progress)
         # 任务进度由 Controller 落账 QueueState，页面只听 taskProgressChanged
 
@@ -481,14 +521,191 @@ class SenderPage(QWidget):
         if not self.sender_controller.start_queue():
             self.logger.warning("队列发送未能启动")
             return
+        self._start_monitor_if_needed()
         self._update_queue_ui(running=True)
 
+    # region 运行控制（分体按钮）
+
+    def _build_run_menu(self) -> None:
+        """装配运行菜单。
+
+        条目是候选动作：点选仅更新主半边，执行由主半边发出。
+        """
+        self._run_group = QActionGroup(self._run_menu)
+        self._run_group.setExclusive(True)
+        self._run_choices: dict[QAction, RunAction] = {}
+        self._add_run_choices(*RunAction)
+
+        # 暂停与继续尚未启用
+        for action, value in self._run_choices.items():
+            if value is not RunAction.SEND and value is not RunAction.STOP:
+                action.setEnabled(False)
+
+        self._run_button.setCandidateTexts(
+            [self._run_meta(value)[1] for value in RunAction]
+        )
+        self._run_group.triggered.connect(self._on_pick_run_action)
+
+    def _add_run_choices(self, *values: RunAction) -> None:
+        """往菜单里登记候选动作。
+
+        Args:
+            *values (RunAction): 待登记的动作。
+        """
+        for value in values:
+            menu_label, _, _ = self._run_meta(value)
+            action = self._run_menu.addAction(menu_label)
+            action.setCheckable(True)
+            self._run_group.addAction(action)
+            self._run_choices[action] = value
+
+    @staticmethod
+    def _run_meta(value: RunAction) -> tuple[str, str, QIcon]:
+        """返回候选动作的菜单文案、主半边文案与图标。
+
+        Args:
+            value (RunAction): 候选动作。
+
+        Returns:
+            tuple[str, str, QIcon]: 菜单文案、主半边文案与图标。
+        """
+        match value:
+            case RunAction.PAUSE:
+                return "暂停发送", "暂停", SvgIcon.PAUSE
+            case RunAction.RESUME:
+                return "继续发送", "继续", SvgIcon.START
+            case RunAction.STOP:
+                return "终止发送", "终止", SvgIcon.STOP
+            case _:
+                return "启动发送", "发送", SvgIcon.START
+
+    @Slot(object)
+    def _on_pick_run_action(self, action: QAction) -> None:
+        """把选中的动作落到主半边，不执行。
+
+        Args:
+            action (QAction): 被点选的菜单项。
+        """
+        self._run_choice = self._run_choices[action]
+        self._sync_run_button(self.sender_controller.is_queue_running())
+
     @Slot()
-    def _stop_queue(self):
-        """停止队列发送"""
+    def _on_run_primary(self) -> None:
+        """执行主半边当前选定的动作。"""
+        match self._run_choice:
+            case RunAction.SEND:
+                self._start_queue()
+            case RunAction.STOP:
+                self._stop_queue()
+            case _:
+                self.logger.warning("该动作尚未上线，已忽略。")
+
+    @Slot()
+    def _stop_queue(self) -> None:
+        """终止队列发送；监视器在发送真正结束后转入时限收尾。"""
         if self.sender_controller.is_queue_running():
             self.sender_controller.stop_queue()
             self.logger.info("队列: 正在请求中止...")
+
+    @Slot()
+    def _on_monitor_ready(self) -> None:
+        """监视器退场后，发送仍在跑则按设置补起一次。"""
+        if self.sender_controller.is_queue_running():
+            self._start_monitor_if_needed()
+
+    def _start_monitor_if_needed(self) -> None:
+        """按设置决定要不要随发送一并启动队列监视。"""
+        if not self.settings.monitor_config.auto_start_with_send:
+            return
+        self._send_done = threading.Event()
+        if self.monitor_controller.is_running():
+            # 上一轮的监视器还活着：换上新标记并撤掉旧的收尾时限，
+            # 否则它会带着已置位的旧标记在本轮发送中途自行退场
+            self.monitor_controller.restart_send_watch(self._send_done)
+            return
+        if not self.monitor_controller.start_queue_monitor(send_done=self._send_done):
+            self.logger.warning("队列监视未能随发送启动")
+            self._send_done = None
+            return
+        self.logger.info("已随发送启动队列监视")
+
+    def _sync_run_button(self, running: bool) -> None:
+        """按运行状态换主半边文案、图标与菜单可见项。
+
+        选定的动作只在当前状态仍合法时保留，否则回落到该状态的默认动作。
+
+        Args:
+            running (bool): 队列是否正在运行。
+        """
+        valid = self._run_valid(running)
+        if self._run_choice not in valid:
+            self._run_choice = self._run_default(running)
+
+        _, label, icon = self._run_meta(self._run_choice)
+        self._run_button.setText(label)
+        self._run_button.setIcon(icon)
+        if self._palette is not None:
+            self._run_button.setAccent(self._run_accent(self._palette, self._run_choice))
+
+        for action, value in self._run_choices.items():
+            action.setVisible(value in valid)
+            action.setChecked(value is self._run_choice)
+
+    @staticmethod
+    def _run_default(running: bool) -> RunAction:
+        """返回当前状态下的默认动作。
+
+        Args:
+            running (bool): 队列是否正在运行。
+
+        Returns:
+            RunAction: 该状态的默认动作。
+        """
+        return RunAction.STOP if running else RunAction.SEND
+
+    @staticmethod
+    def _run_valid(running: bool) -> tuple[RunAction, ...]:
+        """返回当前状态下合法的候选动作，首个为默认动作。
+
+        Args:
+            running (bool): 队列是否正在运行。
+
+        Returns:
+            tuple[RunAction, ...]: 合法动作，按菜单顺序排列。
+        """
+        if running:
+            return (RunAction.PAUSE, RunAction.STOP)
+        return (RunAction.SEND,)
+
+    @staticmethod
+    def _run_accent(palette: Palette, value: RunAction) -> QColor:
+        """返回候选动作对应的强调色。
+
+        Args:
+            palette (Palette): 当前生效的调色板。
+            value (RunAction): 候选动作。
+
+        Returns:
+            QColor: 启动用成功色、暂停与继续用警示色、终止用危险色。
+        """
+        match value:
+            case RunAction.PAUSE | RunAction.RESUME:
+                return QColor(palette.caution)
+            case RunAction.STOP:
+                return QColor(palette.danger)
+            case _:
+                return QColor(palette.success)
+
+    def apply_theme(self, palette: Palette) -> None:
+        """主题切换后按当前调色板重设强调色。
+
+        Args:
+            palette (Palette): 当前生效的调色板。
+        """
+        self._palette = palette
+        self._sync_run_button(self.sender_controller.is_queue_running())
+
+    # endregion
 
     @Slot()
     def _reset_queue(self):
@@ -814,6 +1031,9 @@ class SenderPage(QWidget):
     @Slot()
     def _on_queue_finished(self):
         self.logger.info("队列执行完毕。")
+        if self._send_done is not None:
+            # 交给监视器：发送已结束，转入时限收尾
+            self._send_done.set()
         self._send_queue_notification()
         self._prompt_export_unsent()
         # UI 解锁延迟到 _on_queue_cleanup，避免竞态
@@ -874,8 +1094,7 @@ class SenderPage(QWidget):
         self._queue_model.queue_running = running
 
         # 底部按钮切换
-        self._btn_start_queue.setVisible(not running)
-        self._btn_stop_queue.setVisible(running)
+        self._sync_run_button(running)
 
         if running:
             self.log_output.clear()
