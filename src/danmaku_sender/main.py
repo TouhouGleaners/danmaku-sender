@@ -35,10 +35,6 @@ def main(argv=None):
     log_dir = AppInfo.Paths.LOGS
     init_app_logging(log_dir)
 
-    # 硬崩时留下 C 级调用栈；句柄须存活到进程结束
-    crash_dump = open(log_dir / "faulthandler.log", "a", encoding="utf-8")
-    faulthandler.enable(file=crash_dump, all_threads=True)
-
     from .app.runtime import Runtime
     from .ui.main_window import MainWindow
 
