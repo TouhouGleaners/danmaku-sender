@@ -3,7 +3,6 @@
 import logging
 import threading
 from collections.abc import Callable
-from enum import Enum
 from pathlib import Path
 
 from PySide6.QtCore import QObject, Signal, Slot
@@ -14,20 +13,17 @@ from danmaku_sender.infra.persistence.history_manager import HistoryManager
 from danmaku_sender.service.danmaku_xml import DanmakuXml
 from danmaku_sender.service.sender.context import SendingContext
 from danmaku_sender.state import AppState
-from danmaku_sender.types.models.common import RelativePosition, UnsentDanmakusRecord
+from danmaku_sender.types.models.common import (
+    RelativePosition,
+    StartReadiness,
+    UnsentDanmakusRecord,
+)
 from danmaku_sender.types.models.danmaku import Danmaku
 from danmaku_sender.types.models.queue import TaskDraft, TaskStatus
 
 from .workers import QueueSendWorker
 
 logger = logging.getLogger(__name__)
-
-
-class QueueReadiness(Enum):
-    """队列能否启动；READY 表示可启动，其余成员是尚不满足的条件。"""
-    READY = "ready"
-    MISSING_CREDENTIALS = "missing_credentials"
-    NO_RUNNABLE_TASKS = "no_runnable_tasks"
 
 
 class SenderController(QObject):
@@ -37,6 +33,7 @@ class SenderController(QObject):
     后台 QueueSendWorker 仅 emit 事件。
     """
     # 队列信号
+    queueStarted = Signal()                             # 启动成功
     queueTaskStarted = Signal(str)                      # task_id
     queueTaskCompleted = Signal(str, object)            # (task_id, SendingContext)
     queueTaskFailed = Signal(str, str, object)          # (task_id, error_msg, SendingContext)
@@ -68,16 +65,19 @@ class SenderController(QObject):
         self._stop_event = threading.Event()
 
     @property
-    def queue_readiness(self) -> QueueReadiness:
+    def queue_readiness(self) -> StartReadiness:
         """队列能否启动。
 
         各未满足条件相互独立，调用方据此给出各自的提示。
         """
+        if self._queue_worker is not None:
+            # 运行中或上一个 Worker 尚在收尾
+            return StartReadiness.ALREADY_RUNNING
         if not self.state.session.sessdata or not self.state.session.bili_jct:
-            return QueueReadiness.MISSING_CREDENTIALS
+            return StartReadiness.MISSING_CREDENTIALS
         if not self.state.workspace.queue_state.has_startable_tasks:
-            return QueueReadiness.NO_RUNNABLE_TASKS
-        return QueueReadiness.READY
+            return StartReadiness.NO_RUNNABLE_TASKS
+        return StartReadiness.READY
 
     # region 队列结构命令（UI 只发命令，落账在本层）
 
@@ -165,20 +165,18 @@ class SenderController(QObject):
 
     # region Queue
 
-    def start_queue(self) -> bool:
+    def start_queue(self) -> None:
         """启动队列发送。
 
         始终使用 WorkspaceState.queue_state；Worker 事件也只落账到该队列。
-
-        Returns:
-            成功启动返回 True；拒绝启动返回 False。
+        启动成功发 ``queueStarted``，启动条件见 :attr:`queue_readiness`。
         """
-        if self.is_queue_running():
-            logger.warning("任务已在运行中，无法启动队列。")
-            return False
         if self._queue_worker is not None:
-            logger.warning("上一个发送 Worker 仍在清理中，稍后再试。")
-            return False
+            logger.warning("任务已在运行或清理中，无法启动队列。")
+            return
+        if not self.state.session.sessdata or not self.state.session.bili_jct:
+            logger.warning("凭证缺失，无法启动队列发送。")
+            return
 
         queue_state = self.state.workspace.queue_state
 
@@ -192,7 +190,7 @@ class SenderController(QObject):
 
         if queue_state.pending_count == 0:
             logger.warning("队列中没有待发送的任务。")
-            return False
+            return
 
         self._stop_event.clear()
 
@@ -200,7 +198,7 @@ class SenderController(QObject):
         snapshots = queue_state.snapshots({TaskStatus.PENDING, TaskStatus.UNCONFIGURED})
         if not snapshots:
             logger.warning("队列中没有可执行的任务快照。")
-            return False
+            return
 
         # 队列策略同样取启动时快照：运行期间改设置不影响本次运行，
         # 也避免设置页与 Worker 跨线程共享同一个可变对象。
@@ -234,7 +232,7 @@ class SenderController(QObject):
         self._queue_worker = worker
         self.state.workspace.sender_is_active = True
         worker.start()
-        return True
+        self.queueStarted.emit()
 
     def stop_queue(self):
         """停止队列发送"""

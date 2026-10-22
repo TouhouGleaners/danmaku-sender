@@ -23,6 +23,21 @@ class DanmakuStatus(IntEnum):
     LOST = 2      # 已丢失
 
 
+class StartReadiness(Enum):
+    """子系统能否启动；READY 表示可启动，其余成员是尚不满足的条件。
+
+    Attributes:
+        READY (str): 条件齐备，可启动。
+        ALREADY_RUNNING (str): 已在运行，或上一个 Worker 尚在收尾。
+        MISSING_CREDENTIALS (str): 身份凭据缺失。
+        NO_RUNNABLE_TASKS (str): 队列中没有可执行的任务。
+    """
+    READY = "ready"
+    ALREADY_RUNNING = "already_running"
+    MISSING_CREDENTIALS = "missing_credentials"
+    NO_RUNNABLE_TASKS = "no_runnable_tasks"
+
+
 @dataclass(frozen=True, kw_only=True)
 class VideoTarget:
     """发送/核销的目标：以 BVID+CID 定位的某个分P。未指定的项为 None。
