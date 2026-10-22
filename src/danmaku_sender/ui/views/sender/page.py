@@ -1,5 +1,4 @@
 import logging
-import threading
 from dataclasses import dataclass
 from enum import IntEnum
 from pathlib import Path
@@ -44,7 +43,6 @@ from PySide6.QtWidgets import (
 )
 
 from danmaku_sender.config import Settings
-from danmaku_sender.controller.monitor import MonitorController
 from danmaku_sender.controller.sender import QueueReadiness, SenderController
 from danmaku_sender.infra.persistence.history_manager import HistoryManager
 from danmaku_sender.infra.platform import send_windows_notification
@@ -102,7 +100,6 @@ class SenderPage(QWidget):
         state: AppState,
         settings: Settings,
         history_manager: HistoryManager,
-        monitor_controller: MonitorController,
     ):
         """初始化发射器页。
 
@@ -110,16 +107,12 @@ class SenderPage(QWidget):
             state (AppState): 状态树聚合根。
             settings (Settings): 配置容器。
             history_manager (HistoryManager): 本地账本。
-            monitor_controller (MonitorController): 队列监视控制器，由装配处注入并与其他页共用。
         """
         super().__init__()
         self.state = state
         self.settings = settings
         self.logger = logging.getLogger(__name__)
         self.sender_controller = SenderController(state, settings, history_manager, self)
-        self.monitor_controller = monitor_controller
-        # 交给监视器的发送结束标记；发送结束后按既定时限继续核销
-        self._send_done: threading.Event | None = None
 
         self._queue_total = 0
         self._queue_current = 0
@@ -285,8 +278,6 @@ class SenderPage(QWidget):
         self.sender_controller.queueFinished.connect(self._on_queue_finished)
         self.sender_controller.queueReady.connect(lambda: self._update_queue_ui(running=False))
 
-        # MonitorController：上一轮监视退场后，发送仍在跑就补起一次
-        self.monitor_controller.monitorReady.connect(self._on_monitor_ready)
         self.sender_controller.queueProgressUpdated.connect(self._on_queue_progress)
         # 任务进度由 Controller 落账 QueueState，页面只听 taskProgressChanged
 
@@ -521,7 +512,6 @@ class SenderPage(QWidget):
         if not self.sender_controller.start_queue():
             self.logger.warning("队列发送未能启动")
             return
-        self._start_monitor_if_needed()
         self._update_queue_ui(running=True)
 
     # region 运行控制（分体按钮）
@@ -602,32 +592,10 @@ class SenderPage(QWidget):
 
     @Slot()
     def _stop_queue(self) -> None:
-        """终止队列发送；监视器在发送真正结束后转入时限收尾。"""
+        """终止队列发送。"""
         if self.sender_controller.is_queue_running():
             self.sender_controller.stop_queue()
             self.logger.info("队列: 正在请求中止...")
-
-    @Slot()
-    def _on_monitor_ready(self) -> None:
-        """监视器退场后，发送仍在跑则按设置补起一次。"""
-        if self.sender_controller.is_queue_running():
-            self._start_monitor_if_needed()
-
-    def _start_monitor_if_needed(self) -> None:
-        """按设置决定要不要随发送一并启动队列监视。"""
-        if not self.settings.monitor_config.auto_start_with_send:
-            return
-        self._send_done = threading.Event()
-        if self.monitor_controller.is_running():
-            # 上一轮的监视器还活着：换上新标记并撤掉旧的收尾时限，
-            # 否则它会带着已置位的旧标记在本轮发送中途自行退场
-            self.monitor_controller.restart_send_watch(self._send_done)
-            return
-        if not self.monitor_controller.start_queue_monitor(send_done=self._send_done):
-            self.logger.warning("队列监视未能随发送启动")
-            self._send_done = None
-            return
-        self.logger.info("已随发送启动队列监视")
 
     def _sync_run_button(self, running: bool) -> None:
         """按运行状态换主半边文案、图标与菜单可见项。
@@ -1031,9 +999,6 @@ class SenderPage(QWidget):
     @Slot()
     def _on_queue_finished(self):
         self.logger.info("队列执行完毕。")
-        if self._send_done is not None:
-            # 交给监视器：发送已结束，转入时限收尾
-            self._send_done.set()
         self._send_queue_notification()
         self._prompt_export_unsent()
         # UI 解锁延迟到 _on_queue_cleanup，避免竞态
