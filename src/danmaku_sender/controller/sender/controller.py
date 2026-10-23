@@ -37,7 +37,8 @@ class SenderController(QObject):
     queueTaskStarted = Signal(str)                      # task_id
     queueTaskCompleted = Signal(str, object)            # (task_id, SendingContext)
     queueTaskFailed = Signal(str, str, object)          # (task_id, error_msg, SendingContext)
-    queueFinished = Signal()
+    queueCompleted = Signal()                           # 跑完全部任务
+    queueAborted = Signal()                             # 中途止住：人工终止或致命中断
     queueReady = Signal()                               # Worker 清理完毕，可重新启动
     queueProgressUpdated = Signal(int, int, float)      # (current_idx_0based, total, eta)
     taskProgressUpdated = Signal(str, int, int, float)  # (task_id, attempted, task_total, eta)
@@ -221,7 +222,8 @@ class SenderController(QObject):
         worker.taskCompleted.connect(self._on_task_completed)
         worker.taskFailed.connect(self._on_task_failed)
         worker.taskSkipped.connect(self._on_task_skipped)
-        worker.queueFinished.connect(self._on_queue_finished)
+        worker.queueCompleted.connect(self._on_queue_completed)
+        worker.queueAborted.connect(self._on_queue_aborted)
         worker.queueProgressUpdated.connect(self.queueProgressUpdated.emit)
         worker.taskProgressUpdated.connect(self._on_task_progress)
 
@@ -273,9 +275,14 @@ class SenderController(QObject):
         self.state.workspace.queue_state.update_task_status(task_id, TaskStatus.SKIPPED, reason)
 
     @Slot()
-    def _on_queue_finished(self):
+    def _on_queue_completed(self):
         self.state.workspace.queue_state.current_index = -1
-        self.queueFinished.emit()
+        self.queueCompleted.emit()
+
+    @Slot()
+    def _on_queue_aborted(self):
+        self.state.workspace.queue_state.current_index = -1
+        self.queueAborted.emit()
 
     @Slot(str, int, int, float)
     def _on_task_progress(self, task_id: str, attempted: int, task_total: int, eta: float):

@@ -51,6 +51,7 @@ from danmaku_sender.service.sender import SendingContext
 from danmaku_sender.state import AppState
 from danmaku_sender.types.models.common import (
     RelativePosition,
+    SendMode,
     StartReadiness,
     UnsentDanmakusRecord,
 )
@@ -81,23 +82,32 @@ class TaskUnsent:
 class RunAction(IntEnum):
     """运行菜单里的候选动作，取值即菜单项的数据键。
 
-    发送与监视是两个运行体，此处只管发送；要不要顺带监视是设置项。
-
     Attributes:
-        SEND: 启动队列发送。
+        SEND_AND_MONITOR: 发送并对账。
+        SEND_ONLY: 仅发送。
         PAUSE: 暂停队列发送。
         RESUME: 继续队列发送。
         STOP: 终止队列发送。
     """
 
-    SEND = 0
-    PAUSE = 1
-    RESUME = 2
-    STOP = 3
+    SEND_AND_MONITOR = 0
+    SEND_ONLY = 1
+    PAUSE = 2
+    RESUME = 3
+    STOP = 4
+
+
+_RUN_ACTION_OF: dict[SendMode, RunAction] = {
+    SendMode.SEND_AND_MONITOR: RunAction.SEND_AND_MONITOR,
+    SendMode.SEND_ONLY: RunAction.SEND_ONLY,
+}
 
 
 class SenderPage(QWidget):
     progressUpdated = Signal(int, int, float)
+    sendStarted = Signal()      # 启动成功
+    sendCompleted = Signal()    # 跑完全部任务
+    sendAborted = Signal()      # 中途止住：人工终止或致命中断
 
     def __init__(
         self,
@@ -257,7 +267,7 @@ class SenderPage(QWidget):
         self._run_menu = QMenu(self._run_button)
         self._run_button.setMenu(self._run_menu)
         self._palette: Palette | None = None
-        self._run_choice = RunAction.SEND
+        self._run_choice = self._run_default(False)
         self._build_run_menu()
         self._sync_run_button(False)
 
@@ -276,11 +286,12 @@ class SenderPage(QWidget):
         self._btn_export_unsent.clicked.connect(self._export_all_unsent)
 
         # SenderController (队列)
-        self.sender_controller.queueStarted.connect(lambda: self._update_queue_ui(running=True))
+        self.sender_controller.queueStarted.connect(self._on_queue_started)
         self.sender_controller.queueTaskStarted.connect(self._on_queue_task_started)
         self.sender_controller.queueTaskCompleted.connect(self._on_queue_task_completed)
         self.sender_controller.queueTaskFailed.connect(self._on_queue_task_failed)
-        self.sender_controller.queueFinished.connect(self._on_queue_finished)
+        self.sender_controller.queueCompleted.connect(self._on_queue_completed)
+        self.sender_controller.queueAborted.connect(self._on_queue_aborted)
         self.sender_controller.queueReady.connect(lambda: self._update_queue_ui(running=False))
 
         self.sender_controller.queueProgressUpdated.connect(self._on_queue_progress)
@@ -531,7 +542,7 @@ class SenderPage(QWidget):
 
         # 暂停与继续尚未启用
         for action, value in self._run_choices.items():
-            if value is not RunAction.SEND and value is not RunAction.STOP:
+            if value in (RunAction.PAUSE, RunAction.RESUME):
                 action.setEnabled(False)
 
         self._run_button.setCandidateTexts(
@@ -563,14 +574,16 @@ class SenderPage(QWidget):
             tuple[str, str, QIcon]: 菜单文案、主半边文案与图标。
         """
         match value:
+            case RunAction.SEND_AND_MONITOR:
+                return "发送并监视", "发送并监视", SvgIcon.START
+            case RunAction.SEND_ONLY:
+                return "开始发送", "开始发送", SvgIcon.START
             case RunAction.PAUSE:
-                return "暂停发送", "暂停", SvgIcon.PAUSE
+                return "暂停发送", "暂停发送", SvgIcon.PAUSE
             case RunAction.RESUME:
-                return "继续发送", "继续", SvgIcon.START
-            case RunAction.STOP:
-                return "终止发送", "终止", SvgIcon.STOP
+                return "继续发送", "继续发送", SvgIcon.START
             case _:
-                return "启动发送", "发送", SvgIcon.START
+                return "终止发送", "终止发送", SvgIcon.STOP
 
     @Slot(object)
     def _on_pick_run_action(self, action: QAction) -> None:
@@ -586,7 +599,7 @@ class SenderPage(QWidget):
     def _on_run_primary(self) -> None:
         """执行主半边当前选定的动作。"""
         match self._run_choice:
-            case RunAction.SEND:
+            case RunAction.SEND_AND_MONITOR | RunAction.SEND_ONLY:
                 self._start_queue()
             case RunAction.STOP:
                 self._stop_queue()
@@ -622,17 +635,18 @@ class SenderPage(QWidget):
             action.setVisible(value in valid)
             action.setChecked(value is self._run_choice)
 
-    @staticmethod
-    def _run_default(running: bool) -> RunAction:
+    def _run_default(self, running: bool) -> RunAction:
         """返回当前状态下的默认动作。
 
         Args:
             running (bool): 队列是否正在运行。
 
         Returns:
-            RunAction: 该状态的默认动作。
+            RunAction: 该状态的默认动作；未运行时取设置页记住的发送模式。
         """
-        return RunAction.STOP if running else RunAction.SEND
+        if running:
+            return RunAction.STOP
+        return _RUN_ACTION_OF[self.settings.send_policy.mode]
 
     @staticmethod
     def _run_valid(running: bool) -> tuple[RunAction, ...]:
@@ -646,7 +660,7 @@ class SenderPage(QWidget):
         """
         if running:
             return (RunAction.PAUSE, RunAction.STOP)
-        return (RunAction.SEND,)
+        return (RunAction.SEND_AND_MONITOR, RunAction.SEND_ONLY)
 
     @staticmethod
     def _run_accent(palette: Palette, value: RunAction) -> QColor:
@@ -1000,7 +1014,22 @@ class SenderPage(QWidget):
         return xml_path.stem if xml_path is not None else task.display_string
 
     @Slot()
-    def _on_queue_finished(self):
+    def _on_queue_started(self):
+        self._update_queue_ui(running=True)
+        self.sendStarted.emit()
+
+    @Slot()
+    def _on_queue_completed(self):
+        self._on_send_end()
+        self.sendCompleted.emit()
+
+    @Slot()
+    def _on_queue_aborted(self):
+        self._on_send_end()
+        self.sendAborted.emit()
+
+    def _on_send_end(self) -> None:
+        """发送结束后的共用收尾：通知与未发送导出提示。"""
         self.logger.info("队列执行完毕。")
         self._send_queue_notification()
         self._prompt_export_unsent()

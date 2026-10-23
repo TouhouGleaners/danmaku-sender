@@ -38,6 +38,17 @@ class StartReadiness(Enum):
     NO_RUNNABLE_TASKS = "no_runnable_tasks"
 
 
+class SendMode(Enum):
+    """发送工作流模式。
+
+    Attributes:
+        SEND_ONLY (str): 仅发送。
+        SEND_AND_MONITOR (str): 发送并监视：发送期间一并核销已发出的弹幕。
+    """
+    SEND_ONLY = "send_only"
+    SEND_AND_MONITOR = "send_and_monitor"
+
+
 @dataclass(frozen=True, kw_only=True)
 class VideoTarget:
     """发送/核销的目标：以 BVID+CID 定位的某个分P。未指定的项为 None。

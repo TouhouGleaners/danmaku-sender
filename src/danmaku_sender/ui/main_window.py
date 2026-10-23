@@ -27,6 +27,7 @@ from PySide6.QtWidgets import (
 from danmaku_sender.config import Settings
 from danmaku_sender.config.app_meta import UI, AppInfo, Links
 from danmaku_sender.controller.auth_controller import AuthController
+from danmaku_sender.controller.monitor import MonitorController
 from danmaku_sender.controller.system_controller import SystemController
 from danmaku_sender.infra.persistence.history_manager import HistoryManager
 from danmaku_sender.state import AppState
@@ -66,25 +67,13 @@ class MainWindow(QMainWindow):
         self.state = state
         self.settings = settings
         self.history_manager = history_manager
+        self.logger = logging.getLogger(__name__)
 
         self.setWindowTitle(UI.MAIN_WINDOW_TITLE)
         self.resize(900, 680)
 
-        # 主题服务（UI 层持有，订阅 theme_config 变更驱动）
-        self.theme_service = ThemeService(self)
+        self._init_infra()
 
-        # 字体服务（与主题服务平级，同为外观基础设施）
-        self.font_service = FontService(self)
-
-        # 首屏外观必须在创建任何 UI 控件前生效，否则 SvgIcon 会拿到错误的调色板颜色，
-        # 控件也会按旧字体测量
-        self.theme_service.apply_theme(self.settings.theme_config.theme_mode)
-        self.font_service.apply(self.settings.theme_config.font_name)
-
-        # 控制器
-        self.auth_controller = AuthController(self.state, self.settings, self)
-        self.system_controller = SystemController(self)
-        self.logger = logging.getLogger(__name__)
         self._log_signals_connected = False
         self._current_profile: UserProfile | None = None
 
@@ -131,6 +120,21 @@ class MainWindow(QMainWindow):
         super().closeEvent(event)
 
     # endregion
+
+    def _init_infra(self) -> None:
+        """建立外观服务与业务控制器。
+
+        外观须在创建任何 UI 控件前生效，否则 SvgIcon 会拿到错误的调色板颜色，控件也会按旧字体测量。
+        """
+        self.theme_service = ThemeService(self)
+        self.font_service = FontService(self)
+        self.theme_service.apply_theme(self.settings.theme_config.theme_mode)
+        self.font_service.apply(self.settings.theme_config.font_name)
+
+        self.auth_controller = AuthController(self.state, self.settings, self)
+        self.system_controller = SystemController(self)
+        self.monitor_controller = MonitorController(self.state, self.settings, self.history_manager, self)
+
     # region UI Setup
 
     def _create_ui(self):
@@ -201,7 +205,7 @@ class MainWindow(QMainWindow):
         """初始化页面并绑定导航"""
         self.page_settings = SettingsPage(self.state, self.settings)
         self.page_sender = SenderPage(self.state, self.settings, self.history_manager)
-        self.page_monitor = MonitorPage(self.state, self.settings, self.history_manager)
+        self.page_monitor = MonitorPage(self.state, self.settings, self.history_manager, self.monitor_controller)
         self.page_history = HistoryPage(self.state, self.settings, self.history_manager)
 
         # 侧边栏导航页面（图标在 _refresh_icons 中按需重新获取）
@@ -369,6 +373,11 @@ class MainWindow(QMainWindow):
 
         self.page_sender.progressUpdated.connect(self._on_sender_progress_sync)
         self.page_monitor.statsUpdated.connect(self._on_monitor_stats_sync)
+
+        # 发送生命周期 → 监视编排；模式与宽限由 MonitorController 决定
+        self.page_sender.sendStarted.connect(self.monitor_controller.on_send_started)
+        self.page_sender.sendCompleted.connect(self.monitor_controller.on_send_completed)
+        self.page_sender.sendAborted.connect(self.monitor_controller.on_send_aborted)
 
         # 触发首次用户信息请求
         QTimer.singleShot(500, self._refresh_user_info)

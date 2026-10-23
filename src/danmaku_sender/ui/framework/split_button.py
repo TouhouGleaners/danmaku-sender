@@ -883,9 +883,10 @@ class SplitButton(QWidget):
             painter.setFont(self.font())
             painter.save()
             painter.setClipRect(layout)
+            # 图标留在左端，文字在余下宽度内居中
             painter.drawText(
                 QRectF(cursor, primary.top() + primary_offset, layout.right() - cursor, primary.height()),
-                Qt.AlignmentFlag.AlignVCenter | Qt.AlignmentFlag.AlignLeft,
+                Qt.AlignmentFlag.AlignCenter,
                 self._text,
             )
             painter.restore()
