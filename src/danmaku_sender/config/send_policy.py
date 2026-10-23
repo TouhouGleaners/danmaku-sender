@@ -2,6 +2,8 @@
 
 from pydantic import Field
 
+from danmaku_sender.types.models.common import SendMode
+
 from .base import AtomicModel
 
 
@@ -13,7 +15,8 @@ class SendPolicy(AtomicModel):
     - ``allow_duplicates``: 允许重复发送
         ——发送前不再比对数据库，已发出的弹幕会再次发送到视频上；
     - ``delay_between_tasks``: 相邻两个任务之间的间隔；
-    - ``stop_after_count`` / ``stop_after_time``: 整个队列发到多少停。
+    - ``stop_after_count`` / ``stop_after_time``: 整个队列发到多少停；
+    - ``mode``: 仅发送，还是发送并监视。
 
     与 :class:`SenderConfig`（单个任务的发送节奏）分属不同层级。
     生命周期：**启动队列时取快照**，运行期间修改本对象不影响正在跑的
@@ -24,3 +27,4 @@ class SendPolicy(AtomicModel):
     delay_between_tasks: float = Field(default=30.0, ge=0.0)
     stop_after_count: int = Field(default=0, ge=0)
     stop_after_time: int = Field(default=0, ge=0)
+    mode: SendMode = SendMode.SEND_AND_MONITOR
