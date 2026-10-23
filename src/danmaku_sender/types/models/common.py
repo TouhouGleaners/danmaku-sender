@@ -30,7 +30,7 @@ class StartReadiness(Enum):
         READY (str): 条件齐备，可启动。
         ALREADY_RUNNING (str): 已在运行，或上一个 Worker 尚在收尾。
         MISSING_CREDENTIALS (str): 身份凭据缺失。
-        NO_RUNNABLE_TASKS (str): 队列中没有可执行的任务。
+        NO_RUNNABLE_TASKS (str): 队列中没有任务。
     """
     READY = "ready"
     ALREADY_RUNNING = "already_running"

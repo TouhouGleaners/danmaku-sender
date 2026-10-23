@@ -315,11 +315,6 @@ class MonitorPage(QWidget):
             self.logger.info("⏹ 队列监视停止请求已发送")
             return
 
-        # 行清单来自队列，账本只提供核销范围与存活统计
-        if not self.state.workspace.queue_state.tasks:
-            QMessageBox.information(self, "队列为空", "请先在「发射器」页面添加任务。")
-            return
-
         match self.monitor_controller.monitor_readiness:
             case StartReadiness.READY:
                 pass
@@ -329,6 +324,7 @@ class MonitorPage(QWidget):
                 QMessageBox.warning(self, "凭证缺失", "请先配置 Cookie。")
                 return
             case StartReadiness.NO_RUNNABLE_TASKS:
+                QMessageBox.information(self, "队列为空", "请先在「发射器」页面添加任务。")
                 return
 
         self.monitor_controller.start_queue_monitor()

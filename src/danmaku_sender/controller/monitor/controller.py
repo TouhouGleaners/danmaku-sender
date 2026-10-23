@@ -60,11 +60,14 @@ class MonitorController(QObject):
 
         各未满足条件相互独立，调用方据此给出各自的提示。
         """
+        # 运行中或上一个 Worker 尚在收尾
         if self._worker is not None:
-            # 运行中或上一个 Worker 尚在收尾
             return StartReadiness.ALREADY_RUNNING
         if not self.state.session.sessdata:
             return StartReadiness.MISSING_CREDENTIALS
+        # 行清单取自队列，队列为空则监视无内容可呈现
+        if not self.state.workspace.queue_state.tasks:
+            return StartReadiness.NO_RUNNABLE_TASKS
         return StartReadiness.READY
 
     def start_queue_monitor(self) -> None:
@@ -80,6 +83,9 @@ class MonitorController(QObject):
         auth = ApiAuthConfig(sessdata=session.sessdata, bili_jct=session.bili_jct)
         if not auth.sessdata:
             logger.warning("凭证缺失，无法启动队列监视。")
+            return
+        if not self.state.workspace.queue_state.tasks:
+            logger.warning("队列中没有可监视的任务。")
             return
 
         network = NetworkPolicy(use_system_proxy=self.settings.global_config.use_system_proxy)
