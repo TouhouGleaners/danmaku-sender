@@ -89,8 +89,8 @@ class QueueMonitorWorker(WorkerThread):
         try:
             with KeepSystemAwake(self.prevent_sleep):
                 while not self.stop_event.is_set():
-                    self._run_round()
-                    if self._wait(self.poll_interval):
+                    self._inspect_targets()
+                    if self._sleep(self.poll_interval):
                         logger.info("收到停止信号，队列监视终止。")
                         break
         except Exception as e:
@@ -104,53 +104,41 @@ class QueueMonitorWorker(WorkerThread):
             if failed:
                 logger.warning("队列监视已异常退出，需人工重新启动。")
 
-    def _wait(self, seconds: float) -> bool:
+    def _sleep(self, seconds: float) -> bool:
         """等待 seconds。返回 True = 收到停止信号。"""
         return self.stop_event.wait(seconds)
 
-    def _run_round(self):
+    def _inspect_targets(self):
         try:
-            samples = self.targets
+            targets = self.targets
         except Exception as e:
             # 查询失败跳过本轮；状态栏同步说明，免得看着像空转
             logger.warning(f"读取发送记录失败，本轮跳过: {e}", exc_info=True)
             self.statusUpdated.emit("监视中（读取发送记录失败，本轮跳过）")
             return
-        if not samples:
+        if not targets:
             # 开跑初期数据库可能是空的（还没发出存证），安静等下一轮
             logger.debug("本轮无存证目标，跳过核销。")
             return
 
         overall: MonitorStats = {"total": 0, "verified": 0, "pending": 0, "lost": 0}
 
-        logger.info(f"🔍 在线核销开始，共 {len(samples)} 个分P。")
+        logger.info(f"🔍 在线核销开始，共 {len(targets)} 个分P。")
         with BiliApiClient(self.auth, self.network) as client:
             verifier = DanmakuVerifier(api_client=client, history_manager=self.history_manager)
 
-            for i, sample in enumerate(samples):
+            for i, target in enumerate(targets):
                 if self.stop_event.is_set():
                     return
 
-                try:
-                    result = verifier.verify_cid(sample.cid, mark_lost=False)
-                    logger.info(
-                        f"[{sample.bvid} {sample.cid}] 对账完成: 核销 {result['verified']} 条，"
-                        f"在线共 {result['total_checked']} 条。"
-                    )
-                except Exception as e:
-                    # 本轮不发统计；通知 UI 丢弃该目标缓存，与 Worker 合计口径一致
-                    logger.warning(f"[{sample.bvid} {sample.cid}] 在线核销失败，跳过: {e}")
-                    self.targetVerifyFailed.emit(sample.bvid, sample.cid)
-                    continue
+                stats = self._inspect_target(verifier, target)
+                if stats is not None:
+                    overall["total"] += stats.get("total", 0)
+                    overall["verified"] += stats.get("verified", 0)
+                    overall["pending"] += stats.get("pending", 0)
+                    overall["lost"] += stats.get("lost", 0)
 
-                stats = self._stats_for(sample.target)
-                self.targetStatsUpdated.emit(sample.bvid, sample.cid, stats)
-                overall["total"] += stats.get("total", 0)
-                overall["verified"] += stats.get("verified", 0)
-                overall["pending"] += stats.get("pending", 0)
-                overall["lost"] += stats.get("lost", 0)
-
-                if i + 1 < len(samples) and self._wait(random.uniform(1.0, 3.0)):
+                if i + 1 < len(targets) and self._sleep(random.uniform(1.0, 3.0)):
                     return
 
         self.overallStatsUpdated.emit(overall)
@@ -162,6 +150,34 @@ class QueueMonitorWorker(WorkerThread):
             f" / 待验 {overall['pending']} / 疑似 {overall['lost']}"
         )
         logger.info("✅ 本轮在线核销结束。")
+
+    def _inspect_target(
+        self, verifier: DanmakuVerifier, target: MonitorSample
+    ) -> MonitorStats | None:
+        """核查单个目标分P的存活并上报；失败返回 None。
+
+        Args:
+            verifier: 在线核销器。
+            target: 待核查的目标分P。
+
+        Returns:
+            MonitorStats | None: 该目标的存活统计；核查失败返回 None。
+        """
+        try:
+            result = verifier.verify_cid(target.cid, mark_lost=False)
+            logger.info(
+                f"[{target.bvid} {target.cid}] 对账完成: 核销 {result['verified']} 条，"
+                f"在线共 {result['total_checked']} 条。"
+            )
+        except Exception as e:
+            # 单目标失败不中断整轮；本轮不发统计，通知 UI 丢弃该目标缓存
+            logger.warning(f"[{target.bvid} {target.cid}] 在线核销失败，跳过: {e}")
+            self.targetVerifyFailed.emit(target.bvid, target.cid)
+            return None
+
+        stats = self._stats_for(target.target)
+        self.targetStatsUpdated.emit(target.bvid, target.cid, stats)
+        return stats
 
     def _stats_for(self, target: VideoTarget) -> MonitorStats:
         stats = self.history_manager.get_stats_for_target(target=target, baseline=self.baseline)
