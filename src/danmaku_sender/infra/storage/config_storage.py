@@ -31,13 +31,14 @@ class ConfigStorage:
         Args:
             settings: 待落盘的配置容器。
         """
+        # 输出交给 json.dump，枚举须经 mode="json" 压成取值
         config_data = {
-            "global": settings.global_config.model_dump(),
-            "sender": settings.sender_config.model_dump(),
-            "send_policy": settings.send_policy.model_dump(),
-            "monitor": settings.monitor_config.model_dump(),
+            "global": settings.global_config.model_dump(mode="json"),
+            "sender": settings.sender_config.model_dump(mode="json"),
+            "send_policy": settings.send_policy.model_dump(mode="json"),
+            "monitor": settings.monitor_config.model_dump(mode="json"),
             "theme": settings.theme_config.model_dump(mode="json"),
-            "validation": settings.validation_config.model_dump()
+            "validation": settings.validation_config.model_dump(mode="json")
         }
 
         try:
