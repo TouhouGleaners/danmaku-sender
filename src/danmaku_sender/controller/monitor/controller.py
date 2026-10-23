@@ -8,6 +8,7 @@ from PySide6.QtCore import QObject, Signal, Slot
 from danmaku_sender.config import ApiAuthConfig, NetworkPolicy, Settings
 from danmaku_sender.infra.persistence.history_manager import HistoryManager
 from danmaku_sender.state import AppState
+from danmaku_sender.types.models.common import StartReadiness
 
 from .workers import QueueMonitorWorker
 
@@ -27,6 +28,7 @@ class MonitorController(QObject):
     overallStatsUpdated = Signal(object)           # MonitorStats
     statusUpdated = Signal(str)
     monitorFailed = Signal(str)                    # 异常终止
+    monitorStarted = Signal()                      # 启动成功
     monitorFinished = Signal()
     monitorReady = Signal()
 
@@ -52,25 +54,39 @@ class MonitorController(QObject):
         self._worker: QueueMonitorWorker | None = None
         self._stop_event = threading.Event()
 
-    def start_queue_monitor(self) -> bool:
+    @property
+    def monitor_readiness(self) -> StartReadiness:
+        """队列监视能否启动。
+
+        各未满足条件相互独立，调用方据此给出各自的提示。
+        """
+        # 运行中或上一个 Worker 尚在收尾
+        if self._worker is not None:
+            return StartReadiness.ALREADY_RUNNING
+        if not self.state.session.sessdata:
+            return StartReadiness.MISSING_CREDENTIALS
+        # 行清单取自队列，队列为空则监视无内容可呈现
+        if not self.state.workspace.queue_state.tasks:
+            return StartReadiness.NO_RUNNABLE_TASKS
+        return StartReadiness.READY
+
+    def start_queue_monitor(self) -> None:
         """启动队列监视 Worker。
 
-        Returns:
-            成功启动返回 True；拒绝启动返回 False。
+        启动成功发 ``monitorStarted``，启动条件见 :attr:`monitor_readiness`。
         """
-        if self.is_running():
-            logger.warning("队列监视已在运行中。")
-            return False
-
         if self._worker is not None:
-            logger.warning("上一个监视 Worker 仍在清理中，稍后再试。")
-            return False
+            logger.warning("队列监视已在运行或清理中。")
+            return
 
         session = self.state.session
         auth = ApiAuthConfig(sessdata=session.sessdata, bili_jct=session.bili_jct)
         if not auth.sessdata:
             logger.warning("凭证缺失，无法启动队列监视。")
-            return False
+            return
+        if not self.state.workspace.queue_state.tasks:
+            logger.warning("队列中没有可监视的任务。")
+            return
 
         network = NetworkPolicy(use_system_proxy=self.settings.global_config.use_system_proxy)
         baseline = float(self.state.workspace.stats_baseline)
@@ -103,7 +119,7 @@ class MonitorController(QObject):
             f"▶ 队列监视已启动：{len(self.state.workspace.queue_state.tasks)} 个任务，"
             f"轮询间隔 {self.settings.monitor_config.refresh_interval} 秒"
         )
-        return True
+        self.monitorStarted.emit()
 
     def stop_queue_monitor(self):
         """请求停止队列监视。"""

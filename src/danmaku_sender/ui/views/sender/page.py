@@ -43,13 +43,17 @@ from PySide6.QtWidgets import (
 )
 
 from danmaku_sender.config import Settings
-from danmaku_sender.controller.sender import QueueReadiness, SenderController
+from danmaku_sender.controller.sender import SenderController
 from danmaku_sender.infra.persistence.history_manager import HistoryManager
 from danmaku_sender.infra.platform import send_windows_notification
 from danmaku_sender.service.danmaku_xml import DanmakuXml
 from danmaku_sender.service.sender import SendingContext
 from danmaku_sender.state import AppState
-from danmaku_sender.types.models.common import RelativePosition, UnsentDanmakusRecord
+from danmaku_sender.types.models.common import (
+    RelativePosition,
+    StartReadiness,
+    UnsentDanmakusRecord,
+)
 from danmaku_sender.types.models.queue import TaskStatus, TaskView
 from danmaku_sender.ui.framework.drag_drop import DropOverlay, xml_files_from_drop
 from danmaku_sender.ui.framework.empty_state import EmptyStateHint
@@ -272,6 +276,7 @@ class SenderPage(QWidget):
         self._btn_export_unsent.clicked.connect(self._export_all_unsent)
 
         # SenderController (队列)
+        self.sender_controller.queueStarted.connect(lambda: self._update_queue_ui(running=True))
         self.sender_controller.queueTaskStarted.connect(self._on_queue_task_started)
         self.sender_controller.queueTaskCompleted.connect(self._on_queue_task_completed)
         self.sender_controller.queueTaskFailed.connect(self._on_queue_task_failed)
@@ -493,26 +498,24 @@ class SenderPage(QWidget):
         ).exec()
 
     @Slot()
-    def _start_queue(self):
+    def _start_queue(self) -> None:
         """启动队列发送"""
-        if self.sender_controller.is_queue_running():
-            return
-
         match self.sender_controller.queue_readiness:
-            case QueueReadiness.MISSING_CREDENTIALS:
+            case StartReadiness.READY:
+                pass
+            case StartReadiness.ALREADY_RUNNING:
+                return
+            case StartReadiness.MISSING_CREDENTIALS:
                 QMessageBox.warning(self, "凭证缺失", "请先登入账号。")
                 return
-            case QueueReadiness.NO_RUNNABLE_TASKS:
+            case StartReadiness.NO_RUNNABLE_TASKS:
                 QMessageBox.information(self, "无法启动", "队列里没有可执行的任务。")
                 return
 
         self._unsent_by_task.clear()
         self._btn_export_unsent.setEnabled(False)
         self._queue_total_dm = self.state.workspace.queue_state.sendable_danmaku_count
-        if not self.sender_controller.start_queue():
-            self.logger.warning("队列发送未能启动")
-            return
-        self._update_queue_ui(running=True)
+        self.sender_controller.start_queue()
 
     # region 运行控制（分体按钮）
 

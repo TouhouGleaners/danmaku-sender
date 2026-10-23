@@ -24,7 +24,7 @@ from danmaku_sender.config import Settings
 from danmaku_sender.controller.monitor import MonitorController
 from danmaku_sender.infra.persistence.history_manager import HistoryManager
 from danmaku_sender.state import AppState
-from danmaku_sender.types.models.common import MonitorStats
+from danmaku_sender.types.models.common import MonitorStats, StartReadiness
 from danmaku_sender.ui.framework.empty_state import EmptyStateHint
 from danmaku_sender.ui.framework.form_binder import LiveFormBinder
 from danmaku_sender.ui.framework.icons import SvgIcon
@@ -202,6 +202,7 @@ class MonitorPage(QWidget):
         self.monitor_controller.monitorFailed.connect(self._on_monitor_failed)
         self.monitor_controller.monitorFinished.connect(self._on_monitor_finished)
         self.monitor_controller.monitorReady.connect(self._on_monitor_ready)
+        self.monitor_controller.monitorStarted.connect(self._on_monitor_started)
 
         # QueueState
         self.state.workspace.queue_state.tasksChanged.connect(self._on_queue_changed)
@@ -314,23 +315,23 @@ class MonitorPage(QWidget):
             self.logger.info("⏹ 队列监视停止请求已发送")
             return
 
-        # 行清单来自队列，账本只提供核销范围与存活统计
-        if not self.state.workspace.queue_state.tasks:
-            QMessageBox.information(self, "队列为空", "请先在「发射器」页面添加任务。")
-            return
+        match self.monitor_controller.monitor_readiness:
+            case StartReadiness.READY:
+                pass
+            case StartReadiness.ALREADY_RUNNING:
+                return
+            case StartReadiness.MISSING_CREDENTIALS:
+                QMessageBox.warning(self, "凭证缺失", "请先配置 Cookie。")
+                return
+            case StartReadiness.NO_RUNNABLE_TASKS:
+                QMessageBox.information(self, "队列为空", "请先在「发射器」页面添加任务。")
+                return
 
+        self.monitor_controller.start_queue_monitor()
 
-        if not self.state.session.sessdata:
-            QMessageBox.warning(self, "凭证缺失", "请先配置 Cookie。")
-            return
-
-        if not self.monitor_controller.start_queue_monitor():
-            self._refresh_table()
-            self._sync_overall_stats()
-            self._set_ui_running(False)
-            self.logger.warning("队列监视未能启动")
-            return
-
+    @Slot()
+    def _on_monitor_started(self):
+        """监视启动后同步界面运行态与表格统计。"""
         self._queue_monitoring = True
         self._set_ui_running(True)
         self._refresh_table()
