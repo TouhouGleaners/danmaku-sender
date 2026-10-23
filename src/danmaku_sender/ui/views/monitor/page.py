@@ -38,14 +38,19 @@ class MonitorPage(QWidget):
 
     statsUpdated = Signal(dict)
 
-    def __init__(self, state: AppState, settings: Settings, history_manager: HistoryManager):
+    def __init__(
+        self,
+        state: AppState,
+        settings: Settings,
+        history_manager: HistoryManager,
+        monitor_controller: MonitorController,
+    ):
         super().__init__()
         self.state = state
         self.settings = settings
         self.logger = logging.getLogger(__name__)
         self.history_manager = history_manager
-
-        self.monitor_controller = MonitorController(state, settings, history_manager, self)
+        self.monitor_controller = monitor_controller
 
         self._queue_monitoring = False
         self._monitor_failed = False

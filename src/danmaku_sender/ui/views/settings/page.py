@@ -17,6 +17,7 @@ from PySide6.QtWidgets import (
 from danmaku_sender.config import Settings
 from danmaku_sender.config.theme_config import FontChoice, ThemeMode
 from danmaku_sender.state import AppState
+from danmaku_sender.types.models.common import SendMode
 from danmaku_sender.ui.framework.breadcrumb_bar import BreadcrumbBar
 from danmaku_sender.ui.framework.fonts import PROFILES
 from danmaku_sender.ui.framework.form_binder import LiveFormBinder
@@ -263,6 +264,20 @@ class SettingsPage(QWidget):
         """构建发送子页。"""
         page, body = self._subpage(["设置", "发送"])
 
+        self.send_mode_combo = QComboBox()
+        self.send_mode_combo.addItem("发送并监视", SendMode.SEND_AND_MONITOR)
+        self.send_mode_combo.addItem("仅发送", SendMode.SEND_ONLY)
+        self.send_mode_combo.setFixedWidth(160)
+        self.send_mode_combo.setAccessibleName("发送模式")
+        body.addWidget(
+            self._row(
+                "发送模式",
+                "发送期间是否一并核销已发出的弹幕",
+                SvgIcon.MONITOR,
+                self.send_mode_combo,
+            )
+        )
+
         self.min_delay = DoubleNumberBox()
         self.min_delay.setRange(0.1, 60.0)
         self.min_delay.setValue(8.0)
@@ -429,6 +444,7 @@ class SettingsPage(QWidget):
 
         # 队列运行策略（一次队列运行共享，不随单个任务走）
         policy = self.settings.send_policy
+        LiveFormBinder.bind(self.send_mode_combo, policy, "mode", after_write=self._on_config_written)
         LiveFormBinder.bind(self.delay_between, policy, "delay_between_tasks", after_write=self._on_config_written)
         LiveFormBinder.bind(self.stop_count, policy, "stop_after_count", after_write=self._on_config_written)
         LiveFormBinder.bind(self.stop_time, policy, "stop_after_time", after_write=self._on_config_written)
