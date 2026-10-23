@@ -577,13 +577,13 @@ class SenderPage(QWidget):
             case RunAction.SEND_AND_MONITOR:
                 return "发送并监视", "发送并监视", SvgIcon.START
             case RunAction.SEND_ONLY:
-                return "仅发送", "仅发送", SvgIcon.START
+                return "开始发送", "开始发送", SvgIcon.START
             case RunAction.PAUSE:
-                return "暂停发送", "暂停", SvgIcon.PAUSE
+                return "暂停发送", "暂停发送", SvgIcon.PAUSE
             case RunAction.RESUME:
-                return "继续发送", "继续", SvgIcon.START
+                return "继续发送", "继续发送", SvgIcon.START
             case _:
-                return "终止发送", "终止", SvgIcon.STOP
+                return "终止发送", "终止发送", SvgIcon.STOP
 
     @Slot(object)
     def _on_pick_run_action(self, action: QAction) -> None:
