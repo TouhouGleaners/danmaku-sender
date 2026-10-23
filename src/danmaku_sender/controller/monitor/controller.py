@@ -52,17 +52,8 @@ class MonitorController(QObject):
         self._worker: QueueMonitorWorker | None = None
         self._stop_event = threading.Event()
 
-    def start_queue_monitor(
-        self,
-        send_done: threading.Event | None = None,
-        post_send_watch_seconds: float = 300.0,
-    ) -> bool:
+    def start_queue_monitor(self) -> bool:
         """启动队列监视 Worker。
-
-        Args:
-            send_done: 「发送+监视」时传入的发送结束标记；发送结束后再监视
-                ``post_send_watch_seconds`` 自动停。传 None 表示独立监视，跑到手动停。
-            post_send_watch_seconds: 发送结束后的继续监视时长（秒）。
 
         Returns:
             成功启动返回 True；拒绝启动返回 False。
@@ -93,8 +84,6 @@ class MonitorController(QObject):
             baseline=baseline,
             poll_interval=float(self.settings.monitor_config.refresh_interval),
             prevent_sleep=self.settings.global_config.prevent_sleep,
-            send_done=send_done,
-            post_send_watch_seconds=post_send_watch_seconds,
         )
 
         worker.targetStatsUpdated.connect(self._on_target_stats)
