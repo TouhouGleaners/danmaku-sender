@@ -145,7 +145,8 @@ class MonitorController(QObject):
 
     @Slot()
     def on_send_started(self) -> None:
-        """发送启动：模式为「发送并监视」时随发启动监视。"""
+        """发送启动：撤销残留的收尾倒数，模式为「发送并监视」时随发启动监视。"""
+        self.cancel_grace_period()
         if self.settings.send_policy.mode is not SendMode.SEND_AND_MONITOR:
             return
 
