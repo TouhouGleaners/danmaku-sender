@@ -53,6 +53,8 @@ class MonitorController(QObject):
         self.history_manager = history_manager
         self._worker: QueueMonitorWorker | None = None
         self._stop_event = threading.Event()
+        # 本次发送是否拥有监视：发送生命周期只驱动自己拥有的监视
+        self._monitor_owned_by_send = False
         # 发送自然结束后的收尾宽限；到期即停监视
         self._grace_timer = QTimer(self)
         self._grace_timer.setSingleShot(True)
@@ -145,7 +147,8 @@ class MonitorController(QObject):
 
     @Slot()
     def on_send_started(self) -> None:
-        """发送启动：模式为「发送并监视」时随发启动监视。"""
+        """发送启动：撤销残留的收尾倒数，模式为「发送并监视」时随发启动监视。"""
+        self.cancel_grace_period()
         if self.settings.send_policy.mode is not SendMode.SEND_AND_MONITOR:
             return
 
