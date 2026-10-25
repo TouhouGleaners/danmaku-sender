@@ -3,12 +3,12 @@
 import logging
 import threading
 
-from PySide6.QtCore import QObject, Signal, Slot
+from PySide6.QtCore import QObject, QTimer, Signal, Slot
 
 from danmaku_sender.config import ApiAuthConfig, NetworkPolicy, Settings
 from danmaku_sender.infra.persistence.history_manager import HistoryManager
 from danmaku_sender.state import AppState
-from danmaku_sender.types.models.common import StartReadiness
+from danmaku_sender.types.models.common import SendMode, StartReadiness
 
 from .workers import QueueMonitorWorker
 
@@ -53,6 +53,10 @@ class MonitorController(QObject):
         self.history_manager = history_manager
         self._worker: QueueMonitorWorker | None = None
         self._stop_event = threading.Event()
+        # 发送自然结束后的收尾宽限；到期即停监视
+        self._grace_timer = QTimer(self)
+        self._grace_timer.setSingleShot(True)
+        self._grace_timer.timeout.connect(self.stop_queue_monitor)
 
     @property
     def monitor_readiness(self) -> StartReadiness:
@@ -75,6 +79,7 @@ class MonitorController(QObject):
 
         启动成功发 ``monitorStarted``，启动条件见 :attr:`monitor_readiness`。
         """
+        self._grace_timer.stop()
         if self._worker is not None:
             logger.warning("队列监视已在运行或清理中。")
             return
@@ -123,11 +128,43 @@ class MonitorController(QObject):
 
     def stop_queue_monitor(self):
         """请求停止队列监视。"""
+        self._grace_timer.stop()
         if self.is_running():
             self._stop_event.set()
 
     def is_running(self) -> bool:
         return self._worker is not None and self._worker.isRunning()
+
+    def start_grace_period(self) -> None:
+        """发送自然结束后进入收尾宽限，到期停止监视。"""
+        self._grace_timer.start(self.settings.monitor_config.grace_seconds * 1000)
+
+    def cancel_grace_period(self) -> None:
+        """撤销收尾宽限：再次发车或终止时不再倒数。"""
+        self._grace_timer.stop()
+
+    @Slot()
+    def on_send_started(self) -> None:
+        """发送启动：撤销残留的收尾倒数，模式为「发送并监视」时随发启动监视。"""
+        self.cancel_grace_period()
+        if self.settings.send_policy.mode is not SendMode.SEND_AND_MONITOR:
+            return
+
+        if self.monitor_readiness is not StartReadiness.READY:
+            return
+
+        self.start_queue_monitor()
+
+    @Slot()
+    def on_send_completed(self) -> None:
+        """发送跑完全部任务：监视继续，转入收尾宽限。"""
+        if self._worker is not None:
+            self.start_grace_period()
+
+    @Slot()
+    def on_send_aborted(self) -> None:
+        """发送中途止住：停止监视。"""
+        self.stop_queue_monitor()
 
     @Slot(str, object, object)
     def _on_target_stats(self, bvid: str, cid: int, stats):

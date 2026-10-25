@@ -2,8 +2,10 @@
 import json
 
 from danmaku_sender.config import Settings
+from danmaku_sender.config.theme_config import ThemeMode
 from danmaku_sender.infra.storage import config_storage as cs_module
 from danmaku_sender.infra.storage.config_storage import ConfigStorage
+from danmaku_sender.types.models.common import SendMode
 
 
 class TestConfigLoad:
@@ -44,3 +46,24 @@ class TestConfigLoad:
         assert settings.send_policy.allow_duplicates is True
         assert settings.send_policy.delay_between_tasks == 12.5
         assert settings.send_policy.stop_after_count == 7
+
+
+class TestConfigSave:
+    def test_save_roundtrips_enum_fields(self, tmp_path, monkeypatch):
+        """保存后重新加载，枚举字段须原样回来。
+
+        save 对序列化异常只记日志不抛出，落盘失败在重启前不可见。
+        """
+        path = tmp_path / "config.json"
+        monkeypatch.setattr(cs_module, "CONFIG_PATH", path)
+
+        settings = Settings()
+        settings.send_policy.mode = SendMode.SEND_ONLY
+        settings.theme_config.theme_mode = ThemeMode.DARK
+        ConfigStorage().save(settings)
+
+        restored = Settings()
+        ConfigStorage().load(restored)
+
+        assert restored.send_policy.mode is SendMode.SEND_ONLY
+        assert restored.theme_config.theme_mode is ThemeMode.DARK

@@ -27,7 +27,8 @@ class QueueSendWorker(WorkerThread):
     taskCompleted = Signal(str, object)                 # (task_id, SendingContext)
     taskFailed = Signal(str, str, object)               # (task_id, error_msg, SendingContext)
     taskSkipped = Signal(str, str)                      # (task_id, reason)
-    queueFinished = Signal()
+    queueCompleted = Signal()                           # 跑完全部任务
+    queueAborted = Signal()                             # 中途止住：人工终止或致命中断
     queueProgressUpdated = Signal(int, int, float)      # (current_idx_0based, total, eta)
     taskProgressUpdated = Signal(str, int, int, float)  # (task_id, attempted, task_total, eta)
     ending = Signal(object)                             # run() 退出时 emit(self)
@@ -107,10 +108,14 @@ class QueueSendWorker(WorkerThread):
                         self.taskSkipped.emit(snap.definition.task_id, "致命错误，队列中止")
 
         except Exception as e:
+            stopped_early = True
             logger.error(f"队列执行发生未预期异常: {e}", exc_info=True)
 
         finally:
-            self.queueFinished.emit()
+            if stopped_early or self.stop_event.is_set():
+                self.queueAborted.emit()
+            else:
+                self.queueCompleted.emit()
             self.ending.emit(self)
 
     def _execute_task(self, snap: TaskSnapshot, idx: int, total: int) -> bool:
