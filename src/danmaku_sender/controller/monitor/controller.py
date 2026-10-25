@@ -53,8 +53,6 @@ class MonitorController(QObject):
         self.history_manager = history_manager
         self._worker: QueueMonitorWorker | None = None
         self._stop_event = threading.Event()
-        # 本次发送是否拥有监视：发送生命周期只驱动自己拥有的监视
-        self._monitor_owned_by_send = False
         # 发送自然结束后的收尾宽限；到期即停监视
         self._grace_timer = QTimer(self)
         self._grace_timer.setSingleShot(True)
