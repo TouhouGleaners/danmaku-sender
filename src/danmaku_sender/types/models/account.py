@@ -11,8 +11,8 @@ def _mask(value: str) -> str:
     return f"{value[:4]}{'*' * stars}{value[-4:]}"
 
 
-class AccountCredential(BaseModel):
-    """已保存的账号凭证"""
+class Account(BaseModel):
+    """已保存的账号"""
     uid: int = 0
     name: str = ""
     sessdata: str = ""

@@ -1,4 +1,4 @@
 from .controller import MonitorController
-from .workers import MonitorSample, QueueMonitorWorker
+from .workers import MonitorTarget, QueueMonitorWorker
 
-__all__ = ["MonitorController", "MonitorSample", "QueueMonitorWorker"]
+__all__ = ["MonitorController", "MonitorTarget", "QueueMonitorWorker"]

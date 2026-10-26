@@ -17,7 +17,7 @@ from PySide6.QtWidgets import (
 from danmaku_sender.config import Settings
 from danmaku_sender.controller.account_controller import AccountController
 from danmaku_sender.state import AppState
-from danmaku_sender.types.models.account import AccountCredential
+from danmaku_sender.types.models.account import Account
 from danmaku_sender.ui.framework.icons import SvgIcon
 
 from .account_form import AccountFormDialog
@@ -56,7 +56,7 @@ class AccountDialog(QDialog):
 
         # 直接编辑已保存账号本身，不再保留克隆副本：
         # 弹窗没有取消语义，双份表示会让外部写入（如昵称登记）被整表替换冲掉。
-        self.accounts: list[AccountCredential] = state.session.saved_accounts
+        self.accounts: list[Account] = state.session.saved_accounts
 
         self._batch_total: int = 0
         self._batch_done: int = 0
@@ -147,7 +147,7 @@ class AccountDialog(QDialog):
         if not self._is_batching:
             self._btn_clear.setEnabled(any(a.is_valid is False for a in self.accounts))
 
-    def _use_account(self, account: AccountCredential):
+    def _use_account(self, account: Account):
         if account.sessdata == self.state.session.sessdata:
             return
         self.state.session.sessdata = account.sessdata
@@ -159,16 +159,16 @@ class AccountDialog(QDialog):
         dialog.saved.connect(self._on_account_saved)
         dialog.exec()
 
-    def _edit_account(self, account: AccountCredential):
+    def _edit_account(self, account: Account):
         dialog = AccountFormDialog(self.state, self.settings, edit_data=account, parent=self)
         dialog.saved.connect(lambda new, _old: self._on_edit_saved(new, account))
         dialog.exec()
 
-    def _is_duplicate(self, sessdata: str, exclude: AccountCredential | None = None) -> bool:
+    def _is_duplicate(self, sessdata: str, exclude: Account | None = None) -> bool:
         """检查 SESSDATA 是否已存在（可排除指定账号）"""
         return any(acc is not exclude and acc.sessdata == sessdata for acc in self.accounts)
 
-    def _on_edit_saved(self, new: AccountCredential, old: AccountCredential):
+    def _on_edit_saved(self, new: Account, old: Account):
         if self._is_duplicate(new.sessdata, exclude=old):
             QMessageBox.warning(self, "重复账号", "该 SESSDATA 已存在，不可重复添加。")
             return
@@ -177,7 +177,7 @@ class AccountDialog(QDialog):
         old.is_valid = None
         self._refresh()
 
-    def _delete_account(self, account: AccountCredential):
+    def _delete_account(self, account: Account):
         display_name = account.name or "未知用户"
         reply = QMessageBox.question(
             self, "删除账号",
@@ -189,10 +189,10 @@ class AccountDialog(QDialog):
             self.accounts.remove(account)
             self._refresh()
 
-    def _check_account(self, account: AccountCredential):
+    def _check_account(self, account: Account):
         self._controller.check_account(account)
 
-    def _on_check_finished(self, account: AccountCredential, is_valid: bool):
+    def _on_check_finished(self, account: Account, is_valid: bool):
         account.is_valid = is_valid
         if is_valid:
             self._controller.fetch_user_info(account)
@@ -243,7 +243,7 @@ class AccountDialog(QDialog):
             self.accounts[:] = [a for a in self.accounts if a.is_valid is not False]
             self._refresh()
 
-    def _on_account_saved(self, new: AccountCredential, _old: AccountCredential):
+    def _on_account_saved(self, new: Account, _old: Account):
         if self._is_duplicate(new.sessdata):
             QMessageBox.warning(self, "重复账号", "该 SESSDATA 已存在，不可重复添加。")
             return
@@ -252,7 +252,7 @@ class AccountDialog(QDialog):
 
         self._controller.fetch_user_info(new)
 
-    def _on_user_info_fetched(self, account: AccountCredential, info: dict | None):
+    def _on_user_info_fetched(self, account: Account, info: dict | None):
         if not info or not info.get('isLogin'):
             return
         account.uid = info.get('mid', 0)

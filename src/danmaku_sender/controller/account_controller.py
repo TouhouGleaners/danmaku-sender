@@ -4,7 +4,7 @@ from PySide6.QtCore import QObject, Signal
 from danmaku_sender.config import ApiAuthConfig, NetworkPolicy, Settings
 from danmaku_sender.infra.bilibili.bili_api_client import BiliApiClient
 from danmaku_sender.service.auth_service import AuthService
-from danmaku_sender.types.models.account import AccountCredential
+from danmaku_sender.types.models.account import Account
 
 from .concurrency import PoolTask
 
@@ -12,8 +12,8 @@ from .concurrency import PoolTask
 class AccountController(QObject):
     """账号管理控制器。"""
 
-    checkFinished = Signal(AccountCredential, bool)
-    userInfoFetched = Signal(AccountCredential, object)  # dict | None
+    checkFinished = Signal(Account, bool)
+    userInfoFetched = Signal(Account, object)  # dict | None
 
     def __init__(self, settings: Settings, parent=None):
         """初始化控制器。
@@ -25,7 +25,7 @@ class AccountController(QObject):
         super().__init__(parent)
         self.settings = settings
 
-    def check_account(self, account: AccountCredential) -> None:
+    def check_account(self, account: Account) -> None:
         """异步检测账号是否有效。
 
         Args:
@@ -40,7 +40,7 @@ class AccountController(QObject):
             auth, network,
         )
 
-    def fetch_user_info(self, account: AccountCredential) -> None:
+    def fetch_user_info(self, account: Account) -> None:
         """异步获取用户信息（昵称、uid）。
 
         Args:

@@ -6,7 +6,7 @@ import keyring
 from cryptography.fernet import Fernet, InvalidToken
 
 from danmaku_sender.config.app_meta import AppInfo
-from danmaku_sender.types.models.account import AccountCredential
+from danmaku_sender.types.models.account import Account
 from danmaku_sender.utils.file_utils import atomic_write_bytes, backup_corrupt_file
 
 KEYRING_SERVICE_NAME = f"{AppInfo.NAME_EN}-CredentialsKey"
@@ -46,7 +46,7 @@ class AccountStorage:
             logger.warning(f"密钥环写入失败: {e}，密钥仅在本次会话有效，跳过凭据持久化。")
             return new_key, False
 
-    def load_accounts(self) -> list[AccountCredential]:
+    def load_accounts(self) -> list[Account]:
         """
         从加密的 accounts.json 加载账号列表。
         如果文件不存在或解密失败，返回空列表。
@@ -74,7 +74,7 @@ class AccountStorage:
             accounts = []
             for i, item in enumerate(raw_list):
                 try:
-                    accounts.append(AccountCredential.model_validate(item))
+                    accounts.append(Account.model_validate(item))
                 except Exception as e:
                     logger.warning(f"跳过格式异常的账号条目 (index={i}): {e}")
 
@@ -94,7 +94,7 @@ class AccountStorage:
             logger.critical(f"加载账号数据时发生意外错误: {unexpected_e}", exc_info=True)
             raise
 
-    def save_accounts(self, accounts: list[AccountCredential]) -> None:
+    def save_accounts(self, accounts: list[Account]) -> None:
         """将账号列表加密后写入 accounts.json。
 
         Args:
