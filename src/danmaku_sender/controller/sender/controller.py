@@ -303,6 +303,9 @@ class SenderController(QObject):
         ——终态信号到达时队列可能已被清理，用实时数据会让存证失去归属。
         任务身份属元数据，落账失败只记日志、不阻断发送；弹幕存证另有独立入账路径。
 
+        SKIPPED 不落账：该状态的任务从未发包、无存证可对账，写入即是空行；
+        已有记录保持原状，不覆盖成 SKIPPED。
+
         Args:
             task_id (str): 任务标识。
             status (TaskStatus): 落账的任务状态。
