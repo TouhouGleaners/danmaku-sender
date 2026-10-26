@@ -50,6 +50,8 @@ class StubSendWorker(QObject):
 def env(tmp_path, monkeypatch):
     monkeypatch.setattr(sender_controller_mod, "QueueSendWorker", StubSendWorker)
     state = AppState()
+    state.session.sessdata = "sess"
+    state.session.bili_jct = "csrf"
     settings = Settings()
     hm = HistoryManager(tmp_path / "history.db")
     controller = SenderController(state, settings, hm)
@@ -68,6 +70,13 @@ def _enqueue(state: AppState, task_id: str) -> str:
     return task_id
 
 
+def _start_round(controller: SenderController) -> None:
+    """启动一轮发送；上一轮尚未收尾时先收尾，好让启动闸门放开。"""
+    if controller._queue_worker is not None:
+        controller._on_worker_discard(controller._queue_worker)
+    controller.start_queue()
+
+
 def _task_record(hm: HistoryManager, task_id: str) -> dict:
     """取任务记录；不存在则断言失败。"""
     record = hm.get_task(task_id)
@@ -79,6 +88,7 @@ class TestTaskRecordLifecycle:
     def test_start_writes_running(self, env):
         state, hm, controller = env
         _enqueue(state, "任务-A")
+        _start_round(controller)
 
         controller._on_task_started("任务-A", 0)
 
@@ -90,6 +100,7 @@ class TestTaskRecordLifecycle:
     def test_completed_updates_status(self, env):
         state, hm, controller = env
         task_id = _enqueue(state, "任务-A")
+        _start_round(controller)
         controller._on_task_started(task_id, 0)
 
         controller._on_task_completed(task_id, SendingContext(total=1, target=TARGET))
@@ -99,6 +110,7 @@ class TestTaskRecordLifecycle:
     def test_paused_when_manually_stopped(self, env):
         state, hm, controller = env
         task_id = _enqueue(state, "任务-A")
+        _start_round(controller)
         controller._on_task_started(task_id, 0)
 
         ctx = SendingContext(total=1, target=TARGET)
@@ -110,6 +122,7 @@ class TestTaskRecordLifecycle:
     def test_failed_writes_terminal_status(self, env):
         state, hm, controller = env
         task_id = _enqueue(state, "任务-失败")
+        _start_round(controller)
 
         controller._on_task_started(task_id, 0)
         controller._on_task_failed(task_id, "网络错误", SendingContext(total=1, target=TARGET))
@@ -129,6 +142,7 @@ class TestTaskRecordLifecycle:
         """跑过后来被跳过的任务，保留原终态，不覆盖成 SKIPPED"""
         state, hm, controller = env
         task_id = _enqueue(state, "任务-A")
+        _start_round(controller)
         controller._on_task_started(task_id, 0)
         controller._on_task_completed(task_id, SendingContext(total=1, target=TARGET))
 
@@ -140,6 +154,7 @@ class TestTaskRecordLifecycle:
         """失败后重置并改目标重跑：旧记录保持原目标，不被新目标覆盖"""
         state, hm, controller = env
         task_id = _enqueue(state, "任务-A")
+        _start_round(controller)
         controller._on_task_started(task_id, 0)
         controller._on_task_failed(task_id, "网络错误", SendingContext(total=1, target=TARGET))
         assert _task_record(hm, task_id)["cid"] == 1001
@@ -153,6 +168,7 @@ class TestTaskRecordLifecycle:
         new_id = state.workspace.queue_state.tasks[0].task_id
         assert new_id != task_id, "改目标应换发新 task_id"
 
+        _start_round(controller)
         controller._on_task_started(new_id, 0)
         controller._on_task_completed(new_id, SendingContext(total=1, target=draft.target))
 
@@ -160,7 +176,7 @@ class TestTaskRecordLifecycle:
         assert _task_record(hm, new_id)["cid"] == 2002
 
     def test_missing_task_skips_write(self, env):
-        """队列里已不存在的任务跳过落账，不抛异常"""
+        """没有工单快照的任务跳过落账，不抛异常"""
         _, hm, controller = env
         controller._persist_task_record("ghost", TaskStatus.RUNNING)
         assert hm.get_task("ghost") is None

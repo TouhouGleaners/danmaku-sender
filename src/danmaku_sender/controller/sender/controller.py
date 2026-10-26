@@ -19,7 +19,7 @@ from danmaku_sender.types.models.common import (
     UnsentDanmakusRecord,
 )
 from danmaku_sender.types.models.danmaku import Danmaku
-from danmaku_sender.types.models.queue import TaskDraft, TaskStatus
+from danmaku_sender.types.models.queue import TaskDefinition, TaskDraft, TaskStatus
 
 from .workers import QueueSendWorker
 
@@ -64,6 +64,7 @@ class SenderController(QObject):
         self.history_manager = history_manager
         self._queue_worker: QueueSendWorker | None = None
         self._stop_event = threading.Event()
+        self._task_definitions: dict[str, TaskDefinition] = {}  # 本轮队列的工单快照，落账取此而非实时队列
 
     @property
     def queue_readiness(self) -> StartReadiness:
@@ -200,6 +201,7 @@ class SenderController(QObject):
         if not snapshots:
             logger.warning("队列中没有可执行的任务快照。")
             return
+        self._task_definitions = {s.definition.task_id: s.definition for s in snapshots}
 
         # 队列策略同样取启动时快照：运行期间改设置不影响本次运行，
         # 也避免设置页与 Worker 跨线程共享同一个可变对象。
@@ -297,18 +299,20 @@ class SenderController(QObject):
     def _persist_task_record(self, task_id: str, status: TaskStatus) -> None:
         """把任务身份与当前状态写入账本，供任务级历史对账。
 
+        身份取启动时固化的工单快照，不回查实时队列
+        ——终态信号到达时队列可能已被清理，用实时数据会让存证失去归属。
         任务身份属元数据，落账失败只记日志、不阻断发送；弹幕存证另有独立入账路径。
 
         Args:
             task_id (str): 任务标识。
             status (TaskStatus): 落账的任务状态。
         """
-        task = self.state.workspace.queue_state.get_task_by_id(task_id)
-        if task is None:
-            logger.warning(f"任务记录落账跳过：队列中已无任务 {task_id}")
+        definition = self._task_definitions.get(task_id)
+        if definition is None:
+            logger.warning(f"任务记录落账跳过：没有任务 [{task_id}] 的工单快照")
             return
         try:
-            self.history_manager.upsert_task(task.definition, status)
+            self.history_manager.upsert_task(definition, status)
         except Exception:
             logger.exception(f"任务记录落账失败 [task_id={task_id}]")
 
@@ -320,6 +324,7 @@ class SenderController(QObject):
 
         logger.debug("QueueSendWorker 线程生命周期结束，正在清理控制器引用。")
         self._queue_worker = None
+        self._task_definitions.clear()
         self.state.workspace.sender_is_active = False
         self.queueReady.emit()
 
