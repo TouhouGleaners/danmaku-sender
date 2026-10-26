@@ -6,10 +6,12 @@ import sqlite3
 
 import pytest
 
+from danmaku_sender.config import SenderConfig
 from danmaku_sender.infra.persistence.history_manager import HistoryManager
 from danmaku_sender.infra.persistence.orm_models import SentDanmaku
-from danmaku_sender.types.models.common import DanmakuStatus, VideoTarget
+from danmaku_sender.types.models.common import DanmakuStatus, TaskMeta, VideoTarget
 from danmaku_sender.types.models.danmaku import Danmaku
+from danmaku_sender.types.models.queue import TaskDefinition, TaskStatus
 
 
 @pytest.fixture
@@ -155,6 +157,53 @@ class TestStatsAndDedup:
         assert hm.count_records(target, dm) == 2      # VERIFIED 计入
         hm.mark_as_lost(1001, ["dm1"])                # dm2 被标记丢失
         assert hm.count_records(target, dm) == 1      # LOST 不计入（只剩 VERIFIED 的 dm1）
+
+
+class TestTaskRecord:
+    """任务记录：身份与运行态落账，供任务级历史对账"""
+
+    @staticmethod
+    def _definition(task_id: str = "t1", bvid: str = "BV1xx", cid: int = 1001) -> TaskDefinition:
+        return TaskDefinition(
+            task_id=task_id,
+            target=VideoTarget(bvid=bvid, cid=cid),
+            meta=TaskMeta(video_title="标题", part_page=2, part_title="分P"),
+            danmakus=(Danmaku(msg="x", progress=0),),
+            config=SenderConfig(min_delay=0.1, max_delay=0.2).to_task_config(),
+        )
+
+    def test_upsert_inserts_then_updates(self, hm):
+        definition = self._definition()
+        hm.upsert_task(definition, TaskStatus.RUNNING)
+        row = hm.get_task("t1")
+        assert row is not None
+        assert row["bvid"] == "BV1xx"
+        assert row["cid"] == 1001
+        assert row["video_title"] == "标题"
+        assert row["part_page"] == 2
+        assert row["status"] == "RUNNING"
+
+        hm.upsert_task(definition, TaskStatus.COMPLETED)
+        row = hm.get_task("t1")
+        assert row is not None
+        assert row["status"] == "COMPLETED"
+        n = sqlite3.connect(hm.db_path).execute("SELECT COUNT(*) FROM task_record").fetchone()[0]
+        assert n == 1
+
+    def test_get_task_missing_returns_none(self, hm):
+        assert hm.get_task("nope") is None
+
+    def test_task_record_and_evidence_share_task_id(self, hm, target):
+        """同一条任务：弹幕存证与任务记录靠 task_id 对上"""
+        definition = self._definition(task_id="任务归属-8f3c")
+        hm.upsert_task(definition, TaskStatus.COMPLETED)
+        _record(hm, target, "dm1", task_id="任务归属-8f3c")
+
+        assert hm.get_task("任务归属-8f3c") is not None
+        rows = sqlite3.connect(hm.db_path).execute(
+            "SELECT task_id FROM sent_danmaku WHERE dmid='dm1'"
+        ).fetchall()
+        assert rows == [("任务归属-8f3c",)]
 
 
 class TestMigration:

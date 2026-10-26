@@ -19,7 +19,7 @@ from danmaku_sender.types.models.common import (
     UnsentDanmakusRecord,
 )
 from danmaku_sender.types.models.danmaku import Danmaku
-from danmaku_sender.types.models.queue import TaskDraft, TaskStatus
+from danmaku_sender.types.models.queue import TaskDefinition, TaskDraft, TaskStatus
 
 from .workers import QueueSendWorker
 
@@ -64,6 +64,7 @@ class SenderController(QObject):
         self.history_manager = history_manager
         self._queue_worker: QueueSendWorker | None = None
         self._stop_event = threading.Event()
+        self._task_definitions: dict[str, TaskDefinition] = {}  # 本轮队列的工单快照，落账取此而非实时队列
 
     @property
     def queue_readiness(self) -> StartReadiness:
@@ -200,6 +201,7 @@ class SenderController(QObject):
         if not snapshots:
             logger.warning("队列中没有可执行的任务快照。")
             return
+        self._task_definitions = {s.definition.task_id: s.definition for s in snapshots}
 
         # 队列策略同样取启动时快照：运行期间改设置不影响本次运行，
         # 也避免设置页与 Worker 跨线程共享同一个可变对象。
@@ -254,23 +256,28 @@ class SenderController(QObject):
         if task := self.state.workspace.queue_state.get_task_by_id(task_id):
             self.state.workspace.queue_state.update_task_progress(task_id, 0, task.total)
         self.state.workspace.queue_state.current_index = idx
+        self._persist_task_record(task_id, TaskStatus.RUNNING)
         self.queueTaskStarted.emit(task_id)
 
     @Slot(str, object)
     def _on_task_completed(self, task_id: str, ctx: SendingContext | None):
         if ctx is not None and ctx.is_manually_stopped:
             self.state.workspace.queue_state.update_task_status(task_id, TaskStatus.PAUSED, "用户手动暂停")
+            self._persist_task_record(task_id, TaskStatus.PAUSED)
         else:
             self.state.workspace.queue_state.update_task_status(task_id, TaskStatus.COMPLETED)
+            self._persist_task_record(task_id, TaskStatus.COMPLETED)
         self.queueTaskCompleted.emit(task_id, ctx)
 
     @Slot(str, str, object)
     def _on_task_failed(self, task_id: str, error_msg: str, ctx: SendingContext):
         self.state.workspace.queue_state.update_task_status(task_id, TaskStatus.FAILED, error_msg)
+        self._persist_task_record(task_id, TaskStatus.FAILED)
         self.queueTaskFailed.emit(task_id, error_msg, ctx)
 
     @Slot(str, str)
     def _on_task_skipped(self, task_id: str, reason: str):
+        # SKIPPED 的任务从未发包、无存证可对账，不写任务记录；已有记录保持原状
         self.state.workspace.queue_state.update_task_status(task_id, TaskStatus.SKIPPED, reason)
 
     @Slot()
@@ -288,6 +295,29 @@ class SenderController(QObject):
         self.state.workspace.queue_state.update_task_progress(task_id, attempted, task_total)
         self.taskProgressUpdated.emit(task_id, attempted, task_total, eta)
 
+    def _persist_task_record(self, task_id: str, status: TaskStatus) -> None:
+        """把任务身份与当前状态写入账本，供任务级历史对账。
+
+        身份取启动时固化的工单快照，不回查实时队列
+        ——终态信号到达时队列可能已被清理，用实时数据会让存证失去归属。
+        任务身份属元数据，落账失败只记日志、不阻断发送；弹幕存证另有独立入账路径。
+
+        SKIPPED 不落账：该状态的任务从未发包、无存证可对账，写入即是空行；
+        已有记录保持原状，不覆盖成 SKIPPED。
+
+        Args:
+            task_id (str): 任务标识。
+            status (TaskStatus): 落账的任务状态。
+        """
+        definition = self._task_definitions.get(task_id)
+        if definition is None:
+            logger.warning(f"任务记录落账跳过：没有任务 [{task_id}] 的工单快照")
+            return
+        try:
+            self.history_manager.upsert_task(definition, status)
+        except Exception:
+            logger.exception(f"任务记录落账失败 [task_id={task_id}]")
+
     @Slot(object)
     def _on_worker_discard(self, worker: QueueSendWorker):
         """主线程清理：仅当仍是当前 _queue_worker 时释放引用。"""
@@ -296,6 +326,7 @@ class SenderController(QObject):
 
         logger.debug("QueueSendWorker 线程生命周期结束，正在清理控制器引用。")
         self._queue_worker = None
+        self._task_definitions.clear()
         self.state.workspace.sender_is_active = False
         self.queueReady.emit()
 
