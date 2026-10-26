@@ -387,6 +387,7 @@ class TestQueueState:
         t = make_task(1)
         qs.add_task(t)
         view = qs.get_task_by_id(t.task_id)
+        assert view is not None
         draft = view.to_draft()
         draft.target = VideoTarget(bvid="BV002", cid=2)
 

@@ -68,6 +68,13 @@ def _enqueue(state: AppState, task_id: str) -> str:
     return task_id
 
 
+def _task_record(hm: HistoryManager, task_id: str) -> dict:
+    """取任务记录；不存在则断言失败。"""
+    record = hm.get_task(task_id)
+    assert record is not None, f"任务 [{task_id}] 应有任务记录"
+    return record
+
+
 class TestTaskRecordLifecycle:
     def test_start_writes_running(self, env):
         state, hm, controller = env
@@ -87,7 +94,7 @@ class TestTaskRecordLifecycle:
 
         controller._on_task_completed(task_id, SendingContext(total=1, target=TARGET))
 
-        assert hm.get_task(task_id)["status"] == "COMPLETED"
+        assert _task_record(hm, task_id)["status"] == "COMPLETED"
 
     def test_paused_when_manually_stopped(self, env):
         state, hm, controller = env
@@ -98,7 +105,7 @@ class TestTaskRecordLifecycle:
         ctx.is_manually_stopped = True
         controller._on_task_completed(task_id, ctx)
 
-        assert hm.get_task(task_id)["status"] == "PAUSED"
+        assert _task_record(hm, task_id)["status"] == "PAUSED"
 
     def test_failed_writes_terminal_status(self, env):
         state, hm, controller = env
@@ -107,7 +114,7 @@ class TestTaskRecordLifecycle:
         controller._on_task_started(task_id, 0)
         controller._on_task_failed(task_id, "网络错误", SendingContext(total=1, target=TARGET))
 
-        assert hm.get_task(task_id)["status"] == "FAILED"
+        assert _task_record(hm, task_id)["status"] == "FAILED"
 
     def test_skipped_writes_no_record(self, env):
         """SKIPPED 从未发包、无存证可对账，不写任务记录"""
@@ -127,7 +134,7 @@ class TestTaskRecordLifecycle:
 
         controller._on_task_skipped(task_id, "未指定视频目标")
 
-        assert hm.get_task(task_id)["status"] == "COMPLETED"
+        assert _task_record(hm, task_id)["status"] == "COMPLETED"
 
     def test_retarget_leaves_prior_record_intact(self, env):
         """失败后重置并改目标重跑：旧记录保持原目标，不被新目标覆盖"""
@@ -135,10 +142,11 @@ class TestTaskRecordLifecycle:
         task_id = _enqueue(state, "任务-A")
         controller._on_task_started(task_id, 0)
         controller._on_task_failed(task_id, "网络错误", SendingContext(total=1, target=TARGET))
-        assert hm.get_task(task_id)["cid"] == 1001
+        assert _task_record(hm, task_id)["cid"] == 1001
 
         state.workspace.queue_state.reset_queue()
         view = state.workspace.queue_state.get_task_by_id(task_id)
+        assert view is not None
         draft = view.to_draft()
         draft.target = VideoTarget(bvid="BV2xx", cid=2002)
         state.workspace.queue_state.apply_edit(task_id, draft)
@@ -148,8 +156,8 @@ class TestTaskRecordLifecycle:
         controller._on_task_started(new_id, 0)
         controller._on_task_completed(new_id, SendingContext(total=1, target=draft.target))
 
-        assert hm.get_task(task_id)["cid"] == 1001
-        assert hm.get_task(new_id)["cid"] == 2002
+        assert _task_record(hm, task_id)["cid"] == 1001
+        assert _task_record(hm, new_id)["cid"] == 2002
 
     def test_missing_task_skips_write(self, env):
         """队列里已不存在的任务跳过落账，不抛异常"""

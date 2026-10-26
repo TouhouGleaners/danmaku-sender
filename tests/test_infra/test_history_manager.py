@@ -176,6 +176,7 @@ class TestTaskRecord:
         definition = self._definition()
         hm.upsert_task(definition, TaskStatus.RUNNING)
         row = hm.get_task("t1")
+        assert row is not None
         assert row["bvid"] == "BV1xx"
         assert row["cid"] == 1001
         assert row["video_title"] == "标题"
@@ -184,6 +185,7 @@ class TestTaskRecord:
 
         hm.upsert_task(definition, TaskStatus.COMPLETED)
         row = hm.get_task("t1")
+        assert row is not None
         assert row["status"] == "COMPLETED"
         n = sqlite3.connect(hm.db_path).execute("SELECT COUNT(*) FROM task_record").fetchone()[0]
         assert n == 1
