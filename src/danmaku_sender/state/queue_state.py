@@ -1,6 +1,7 @@
 """发送任务队列状态管理"""
 
 import logging
+import uuid
 from collections import Counter
 from collections.abc import Collection
 from dataclasses import replace
@@ -360,6 +361,8 @@ class QueueState(QObject):
         """全量应用来自详情弹窗沙盒的修改结果（换新 Spec）。
 
         发送中等非可编辑状态拒绝并记警告，队列保持原样。
+        已指定的目标被改动视为换一份工单，换发新 task_id：同一 task_id 不得跨目标，
+        否则先发出的存证会被后写的任务记录归到错误的视频上。
         """
         record = self._find(task_id)
         if record is None:
@@ -369,15 +372,18 @@ class QueueState(QObject):
             return
 
         old_status = record.execution.status
-        # 以队列中的 task_id 为准，防止沙盒误带其它 id
-        record.definition = replace(source.to_definition(), task_id=task_id)
+        old_target = record.definition.target
+        # 未指定目标时填上是补配置，不换工单；其余情况以队列中的 task_id 为准
+        reissued = old_target.is_assigned and source.target != old_target
+        new_id = uuid.uuid4().hex if reissued else task_id
+        record.definition = replace(source.to_definition(), task_id=new_id)
         record.execution.status = source.status
         record.execution.error_msg = source.error_msg
         self._reconcile_config_status(record)
 
         if record.execution.status != old_status:
-            self.taskStatusChanged.emit(task_id, record.execution.status)
-        self.taskDataChanged.emit(task_id)
+            self.taskStatusChanged.emit(new_id, record.execution.status)
+        self.taskDataChanged.emit(new_id)
 
     def _reconcile_config_status(self, record: Task) -> bool:
         """按配置完整性对齐预运行状态；返回状态是否变化。

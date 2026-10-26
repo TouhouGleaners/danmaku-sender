@@ -381,6 +381,22 @@ class TestQueueState:
         assert view.total == 1
         assert view.task_id == t.task_id  # id 不被沙盒覆盖
 
+    def test_apply_edit_reassigning_target_renews_id(self):
+        """改目标即换工单：换发新 id，旧 id 不再代表改过目标的任务"""
+        qs = QueueState()
+        t = make_task(1)
+        qs.add_task(t)
+        view = qs.get_task_by_id(t.task_id)
+        draft = view.to_draft()
+        draft.target = VideoTarget(bvid="BV002", cid=2)
+
+        qs.apply_edit(t.task_id, draft)
+
+        assert qs.get_task_by_id(t.task_id) is None
+        reissued = qs.tasks[0]
+        assert reissued.task_id != t.task_id
+        assert reissued.target.cid == 2
+
     def test_reorder_tasks_by_ids(self):
         qs = QueueState()
         t1, t2, t3 = make_task(1), make_task(2), make_task(3)
@@ -504,8 +520,8 @@ class TestQueueState:
         draft = view.to_draft()
         draft.target = VideoTarget()
         qs.apply_edit(t.task_id, draft)
-        view = qs.get_task_by_id(t.task_id)
-        assert view is not None
+        # 拆掉已指定的目标也算换工单，task_id 已换发
+        view = qs.tasks[0]
         assert view.status is TaskStatus.UNCONFIGURED
 
     def test_apply_edit_completes_skipped_task(self):
