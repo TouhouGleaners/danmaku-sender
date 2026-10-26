@@ -10,9 +10,8 @@ from .base import AtomicModel
 class SenderConfig(AtomicModel):
     """发送节奏参数（全局设置，可变）。
 
-    描述**单个任务**内弹幕的发送方式（延迟、爆发、休息），入队时派生成
-    :class:`TaskConfig` 快照。队列级策略（跳过已发送、任务间隔）
-    见 :class:`SendPolicy`。
+    描述**单个任务**内弹幕的发送方式（延迟、爆发、休息），入队时派生成 :class:`TaskConfig` 快照。
+    队列级策略（跳过已发送、任务间隔）见 :class:`danmaku_sender.config.SendPolicy`。
 
     Attributes:
         min_delay (float): 相邻两条弹幕的最小间隔（秒）。
