@@ -255,24 +255,29 @@ class SenderController(QObject):
         if task:
             self.state.workspace.queue_state.update_task_progress(task_id, 0, task.total)
         self.state.workspace.queue_state.current_index = idx
+        self._persist_task_record(task_id, TaskStatus.RUNNING)
         self.queueTaskStarted.emit(task_id)
 
     @Slot(str, object)
     def _on_task_completed(self, task_id: str, ctx: SendingContext | None):
         if ctx is not None and ctx.is_manually_stopped and not ctx.auto_stop_reason:
             self.state.workspace.queue_state.update_task_status(task_id, TaskStatus.PAUSED, "用户手动暂停")
+            self._persist_task_record(task_id, TaskStatus.PAUSED)
         else:
             self.state.workspace.queue_state.update_task_status(task_id, TaskStatus.COMPLETED)
+            self._persist_task_record(task_id, TaskStatus.COMPLETED)
         self.queueTaskCompleted.emit(task_id, ctx)
 
     @Slot(str, str, object)
     def _on_task_failed(self, task_id: str, error_msg: str, ctx: SendingContext):
         self.state.workspace.queue_state.update_task_status(task_id, TaskStatus.FAILED, error_msg)
+        self._persist_task_record(task_id, TaskStatus.FAILED)
         self.queueTaskFailed.emit(task_id, error_msg, ctx)
 
     @Slot(str, str)
     def _on_task_skipped(self, task_id: str, reason: str):
         self.state.workspace.queue_state.update_task_status(task_id, TaskStatus.SKIPPED, reason)
+        self._persist_task_record(task_id, TaskStatus.SKIPPED)
 
     @Slot()
     def _on_queue_completed(self):
@@ -288,6 +293,24 @@ class SenderController(QObject):
     def _on_task_progress(self, task_id: str, attempted: int, task_total: int, eta: float):
         self.state.workspace.queue_state.update_task_progress(task_id, attempted, task_total)
         self.taskProgressUpdated.emit(task_id, attempted, task_total, eta)
+
+    def _persist_task_record(self, task_id: str, status: TaskStatus) -> None:
+        """把任务身份与当前状态写入账本，供任务级历史对账。
+
+        任务身份属元数据，落账失败只记日志、不阻断发送；弹幕存证另有独立入账路径。
+
+        Args:
+            task_id (str): 任务标识。
+            status (TaskStatus): 落账的任务状态。
+        """
+        task = self.state.workspace.queue_state.get_task_by_id(task_id)
+        if task is None:
+            logger.warning(f"任务记录落账跳过：队列中已无任务 {task_id}")
+            return
+        try:
+            self.history_manager.upsert_task(task.definition, status)
+        except Exception:
+            logger.exception(f"任务记录落账失败 [task_id={task_id}]")
 
     @Slot(object)
     def _on_worker_discard(self, worker: QueueSendWorker):
