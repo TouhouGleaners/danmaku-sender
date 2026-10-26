@@ -1,4 +1,4 @@
-"""发送流水线：组装客户端与调度器，跑完一条发送任务并返回运行记录。"""
+"""发送流水线：组装客户端与调度器，执行一条发送任务并返回运行记录。"""
 
 import logging
 from collections.abc import Callable
@@ -78,7 +78,7 @@ class SendPipeline:
                 scheduler.run_pipeline(wrapped_job, ctx)
 
         except Exception as e:
-            logger.error(f"发送流水线异常中止: {e}", exc_info=True)
+            logger.exception("发送流水线异常中止")
             ctx.fatal_error_occurred = True
             ctx.fatal_error_msg = str(e)
             # 调度器尚未处理任何弹幕时，整批按未发出登记
@@ -90,7 +90,7 @@ class SendPipeline:
         try:
             self._log_summary(ctx)
         except Exception:
-            logger.error("发送摘要输出失败", exc_info=True)
+            logger.exception("发送摘要输出失败")
         return ctx
 
     def _calc_eta(self, attempted: int, total: int, config: TaskConfig) -> float:
@@ -124,9 +124,7 @@ class SendPipeline:
             ctx (SendingContext): 运行记录。
         """
         logger.info("--- 发送任务结束 ---")
-        if ctx.auto_stop_reason:
-            logger.info(f"原因：{ctx.auto_stop_reason}")
-        elif ctx.is_manually_stopped:
+        if ctx.is_manually_stopped:
             logger.info("原因：任务被用户手动停止。")
         elif ctx.fatal_error_occurred:
             logger.critical("原因：任务因致命错误中断。请检查配置或网络！")

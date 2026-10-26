@@ -37,8 +37,8 @@ class SenderController(QObject):
     queueTaskStarted = Signal(str)                      # task_id
     queueTaskCompleted = Signal(str, object)            # (task_id, SendingContext)
     queueTaskFailed = Signal(str, str, object)          # (task_id, error_msg, SendingContext)
-    queueCompleted = Signal()                           # 跑完全部任务
-    queueAborted = Signal()                             # 中途止住：人工终止或致命中断
+    queueCompleted = Signal()                           # 全部任务执行完毕
+    queueAborted = Signal()                             # 中途终止：人工停止或致命中断
     queueReady = Signal()                               # Worker 清理完毕，可重新启动
     queueProgressUpdated = Signal(int, int, float)      # (current_idx_0based, total, eta)
     taskProgressUpdated = Signal(str, int, int, float)  # (task_id, attempted, task_total, eta)
@@ -251,15 +251,14 @@ class SenderController(QObject):
     @Slot(str, int)
     def _on_task_started(self, task_id: str, idx: int):
         self.state.workspace.queue_state.update_task_status(task_id, TaskStatus.RUNNING)
-        task = self.state.workspace.queue_state.get_task_by_id(task_id)
-        if task:
+        if task := self.state.workspace.queue_state.get_task_by_id(task_id):
             self.state.workspace.queue_state.update_task_progress(task_id, 0, task.total)
         self.state.workspace.queue_state.current_index = idx
         self.queueTaskStarted.emit(task_id)
 
     @Slot(str, object)
     def _on_task_completed(self, task_id: str, ctx: SendingContext | None):
-        if ctx is not None and ctx.is_manually_stopped and not ctx.auto_stop_reason:
+        if ctx is not None and ctx.is_manually_stopped:
             self.state.workspace.queue_state.update_task_status(task_id, TaskStatus.PAUSED, "用户手动暂停")
         else:
             self.state.workspace.queue_state.update_task_status(task_id, TaskStatus.COMPLETED)

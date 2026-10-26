@@ -160,16 +160,6 @@ class TestAccounting:
         assert [r['dm'].msg for r in ctx.unsent_records] == ["a", "b", "c"]
         assert ctx.unsent_records[0]['reason'] == "任务手动停止"
 
-    def test_auto_stop_keeps_remaining(self, hm):
-        """触发数量上限自动停止后，剩余弹幕记入未发出清单"""
-        policy = SendPolicy(stop_after_count=1)
-        executor = StubExecutor([ok_response("d1"), ok_response("d2"), ok_response("d3")])
-        ctx = run(make_scheduler(hm, executor), build_job(make_dms("a", "b", "c"), policy=policy))
-
-        assert ctx.success_count == 1
-        assert ctx.auto_stop_reason != ""
-        assert [r['dm'].msg for r in ctx.unsent_records] == ["b", "c"]
-
     def test_empty_job_is_noop(self, hm):
         """空任务不发包、不记账"""
         executor = StubExecutor([ok_response()])

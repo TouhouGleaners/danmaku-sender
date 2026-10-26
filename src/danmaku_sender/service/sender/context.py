@@ -49,7 +49,6 @@ class SendingContext:
         success_count (int): 已发出的数量。
         skipped_count (int): 查重跳过的数量。
         start_time (float): 开始时刻。
-        auto_stop_reason (str): 触发自动停止的原因。
         fatal_error_occurred (bool): 是否因致命错误中止。
         fatal_error_msg (str): 中止原因。
         is_manually_stopped (bool): 是否被用户手动停止。
@@ -66,7 +65,6 @@ class SendingContext:
     skipped_count: int = 0
 
     start_time: float = field(default_factory=time.time)
-    auto_stop_reason: str = ""
     fatal_error_occurred: bool = False
     fatal_error_msg: str = ""
     is_manually_stopped: bool = False
