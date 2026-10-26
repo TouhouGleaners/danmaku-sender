@@ -124,9 +124,7 @@ class SendPipeline:
             ctx (SendingContext): 运行记录。
         """
         logger.info("--- 发送任务结束 ---")
-        if ctx.auto_stop_reason:
-            logger.info(f"原因：{ctx.auto_stop_reason}")
-        elif ctx.is_manually_stopped:
+        if ctx.is_manually_stopped:
             logger.info("原因：任务被用户手动停止。")
         elif ctx.fatal_error_occurred:
             logger.critical("原因：任务因致命错误中断。请检查配置或网络！")

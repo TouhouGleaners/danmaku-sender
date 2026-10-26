@@ -23,7 +23,6 @@ class TestSendingContext:
         assert sending_context.attempted_count == 0
         assert sending_context.success_count == 0
         assert sending_context.skipped_count == 0
-        assert sending_context.auto_stop_reason == ""
         assert sending_context.fatal_error_occurred is False
         assert sending_context.unsent_records == []
 

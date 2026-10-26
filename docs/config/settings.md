@@ -37,8 +37,6 @@
 | 配置项 | 类型 | 默认值 | UI 控件 | 说明 |
 |:-------|:-----|:-------|:--------|:-----|
 | `delay_between_tasks` | float | 30 | QDoubleSpinBox | 两个任务之间的等待时间（秒） |
-| `stop_after_count` | int | 0 | QSpinBox | 发送 N 条后自动停止（0=不限） |
-| `stop_after_time` | int | 0 | QSpinBox | 运行 N 分钟后自动停止（0=不限） |
 | `allow_duplicates` | bool | false | QCheckBox | 允许重复发送（危险区，见下） |
 
 详细说明见 [频率控制与并发策略](../features/sender/delay-control.md) 和 [断点续传与智能去重](../features/sender/resume.md)。
@@ -57,8 +55,6 @@
   },
   "send_policy": {
     "delay_between_tasks": 30.0,
-    "stop_after_count": 0,
-    "stop_after_time": 0,
     "allow_duplicates": false
   }
 }

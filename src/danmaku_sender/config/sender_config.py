@@ -11,8 +11,8 @@ class SenderConfig(AtomicModel):
     """发送节奏参数（全局设置，可变）。
 
     描述**单个任务**里弹幕怎么发（延迟、爆发、休息），入队时派生成
-    :class:`TaskConfig` 快照。队列级策略（跳过已发送、任务间隔、
-    自动终止）见 :class:`SendPolicy`。
+    :class:`TaskConfig` 快照。队列级策略（跳过已发送、任务间隔）
+    见 :class:`SendPolicy`。
     """
 
     # 延迟设置

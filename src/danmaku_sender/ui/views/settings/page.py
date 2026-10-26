@@ -349,30 +349,6 @@ class SettingsPage(QWidget):
             )
         )
 
-        self.stop_count = NumberBox()
-        self.stop_count.setRange(0, 99999)
-        self.stop_count.setAccessibleName("已发送达到")
-        body.addWidget(
-            self._row(
-                "已发送达到",
-                "累计发送量到达该值后停止队列，0 为不限制",
-                SvgIcon.DONE_ALL,
-                self._spin_with_unit(self.stop_count, "条"),
-            )
-        )
-
-        self.stop_time = NumberBox()
-        self.stop_time.setRange(0, 99999)
-        self.stop_time.setAccessibleName("已用时达到")
-        body.addWidget(
-            self._row(
-                "已用时达到",
-                "队列运行时长到达该值后停止，0 为不限制",
-                SvgIcon.HISTORY,
-                self._spin_with_unit(self.stop_time, "分钟"),
-            )
-        )
-
         body.addSpacing(6)
         danger_heading = QLabel("危险区")
         danger_heading.setObjectName("settingsSectionTitle")
@@ -446,8 +422,6 @@ class SettingsPage(QWidget):
         policy = self.settings.send_policy
         LiveFormBinder.bind(self.send_mode_combo, policy, "mode", after_write=self._on_config_written)
         LiveFormBinder.bind(self.delay_between, policy, "delay_between_tasks", after_write=self._on_config_written)
-        LiveFormBinder.bind(self.stop_count, policy, "stop_after_count", after_write=self._on_config_written)
-        LiveFormBinder.bind(self.stop_time, policy, "stop_after_time", after_write=self._on_config_written)
         LiveFormBinder.bind(self.allow_duplicates, policy, "allow_duplicates", after_write=self._on_config_written)
 
     def showEvent(self, event):

@@ -32,8 +32,6 @@ class TestConfigLoad:
             "send_policy": {
                 "allow_duplicates": True,
                 "delay_between_tasks": 12.5,
-                "stop_after_count": 7,
-                "stop_after_time": 0,
             },
         }
         path = tmp_path / "config.json"
@@ -45,7 +43,6 @@ class TestConfigLoad:
 
         assert settings.send_policy.allow_duplicates is True
         assert settings.send_policy.delay_between_tasks == 12.5
-        assert settings.send_policy.stop_after_count == 7
 
 
 class TestConfigSave:

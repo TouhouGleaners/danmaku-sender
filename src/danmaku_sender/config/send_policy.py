@@ -13,13 +13,9 @@ class SendPolicy(AtomicModel):
     Attributes:
         allow_duplicates (bool): 允许重复发送；为 True 时发送前不比对账本。
         delay_between_tasks (float): 相邻两个任务之间的间隔（秒）。
-        stop_after_count (int): 整个队列发到多少条后停止；0 表示不限。
-        stop_after_time (int): 整个队列发到多少秒后停止；0 表示不限。
         mode (SendMode): 仅发送，还是发送并监视。
     """
 
     allow_duplicates: bool = False
     delay_between_tasks: float = Field(default=30.0, ge=0.0)
-    stop_after_count: int = Field(default=0, ge=0)
-    stop_after_time: int = Field(default=0, ge=0)
     mode: SendMode = SendMode.SEND_AND_MONITOR

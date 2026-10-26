@@ -21,7 +21,7 @@ from .executor import DanmakuExecutor
 class DanmakuScheduler:
     """发送控制循环。
 
-    遍历弹幕、查重跳过、控制节奏与自动停止，并把每条的发送与入账结果记入 SendingContext。
+    遍历弹幕、查重跳过、控制节奏，并把每条的发送与入账结果记入 SendingContext。
     发包委托 DanmakuExecutor，入账委托 HistoryManager。
     """
 
@@ -124,20 +124,6 @@ class DanmakuScheduler:
             return True
         return False
 
-    def _check_auto_stop(self, ctx: SendingContext, stop_event: Event, policy: SendPolicy) -> bool:
-        """检查是否满足用户配置的自动终止条件（发满 N 条或运行满 M 分钟）"""
-        if policy.stop_after_count > 0 and ctx.success_count >= policy.stop_after_count:
-            ctx.auto_stop_reason = f"达到数量限制 ({policy.stop_after_count}条)"
-            stop_event.set()
-            return True
-
-        if policy.stop_after_time > 0 and ctx.elapsed_minutes >= policy.stop_after_time:
-            ctx.auto_stop_reason = f"达到时间限制 ({policy.stop_after_time}分钟)"
-            stop_event.set()
-            return True
-
-        return False
-
     def run_pipeline(self, job: SendJob, ctx: SendingContext) -> None:
         """执行发送控制循环，结果填入 ctx。
 
@@ -206,13 +192,6 @@ class DanmakuScheduler:
                     ctx.fatal_error_occurred = True
                     ctx.fatal_error_msg = result.response.hint
                     ctx.add_unsent(job.danmakus[i + 1:], f"致命错误: {result.response.hint}")
-                    break
-
-                # --- 检查用户设置的自动终止阀值 ---
-                if self._check_auto_stop(ctx, job.stop_event, job.policy):
-                    reason = ctx.auto_stop_reason if ctx.auto_stop_reason else "达到自动停止条件"
-                    if i + 1 < ctx.total:
-                        ctx.add_unsent(job.danmakus[i+1:], f"自动停止: {reason}")
                     break
 
                 # --- 正常节奏控制 ---

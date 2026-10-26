@@ -259,7 +259,7 @@ class SenderController(QObject):
 
     @Slot(str, object)
     def _on_task_completed(self, task_id: str, ctx: SendingContext | None):
-        if ctx is not None and ctx.is_manually_stopped and not ctx.auto_stop_reason:
+        if ctx is not None and ctx.is_manually_stopped:
             self.state.workspace.queue_state.update_task_status(task_id, TaskStatus.PAUSED, "用户手动暂停")
         else:
             self.state.workspace.queue_state.update_task_status(task_id, TaskStatus.COMPLETED)

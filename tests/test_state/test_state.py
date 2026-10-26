@@ -160,8 +160,6 @@ class TestSendPolicy:
     def test_default_values(self):
         policy = SendPolicy()
         assert policy.delay_between_tasks == 30.0
-        assert policy.stop_after_count == 0
-        assert policy.stop_after_time == 0
         assert policy.allow_duplicates is False
 
 

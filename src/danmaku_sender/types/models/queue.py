@@ -30,7 +30,7 @@ class TaskConfig:
     """任务工单的发送节奏参数（入队后不可变）。
 
     描述**单个任务**（一个视频）里弹幕怎么发：延迟、爆发、休息。
-    队列级策略（跳过已发送、任务间隔、自动终止）作用于**整个任务队列**，
+    队列级策略（跳过已发送、任务间隔）作用于**整个任务队列**，
     见 :class:`danmaku_sender.config.SendPolicy`。
 
     由 ``SenderConfig.to_task_config()`` 派生，字段一一对应；
