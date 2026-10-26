@@ -100,17 +100,34 @@ class TestTaskRecordLifecycle:
 
         assert hm.get_task(task_id)["status"] == "PAUSED"
 
-    def test_failed_and_skipped_write_terminal_status(self, env):
+    def test_failed_writes_terminal_status(self, env):
         state, hm, controller = env
-        failed_id = _enqueue(state, "任务-失败")
-        skipped_id = _enqueue(state, "任务-跳过")
+        task_id = _enqueue(state, "任务-失败")
 
-        controller._on_task_started(failed_id, 0)
-        controller._on_task_failed(failed_id, "网络错误", SendingContext(total=1, target=TARGET))
-        controller._on_task_skipped(skipped_id, "未指定视频目标")
+        controller._on_task_started(task_id, 0)
+        controller._on_task_failed(task_id, "网络错误", SendingContext(total=1, target=TARGET))
 
-        assert hm.get_task(failed_id)["status"] == "FAILED"
-        assert hm.get_task(skipped_id)["status"] == "SKIPPED"
+        assert hm.get_task(task_id)["status"] == "FAILED"
+
+    def test_skipped_writes_no_record(self, env):
+        """SKIPPED 从未发包、无存证可对账，不写任务记录"""
+        state, hm, controller = env
+        task_id = _enqueue(state, "任务-跳过")
+
+        controller._on_task_skipped(task_id, "未指定视频目标")
+
+        assert hm.get_task(task_id) is None
+
+    def test_skipped_keeps_existing_record(self, env):
+        """跑过后来被跳过的任务，保留原终态，不覆盖成 SKIPPED"""
+        state, hm, controller = env
+        task_id = _enqueue(state, "任务-A")
+        controller._on_task_started(task_id, 0)
+        controller._on_task_completed(task_id, SendingContext(total=1, target=TARGET))
+
+        controller._on_task_skipped(task_id, "未指定视频目标")
+
+        assert hm.get_task(task_id)["status"] == "COMPLETED"
 
     def test_missing_task_skips_write(self, env):
         """队列里已不存在的任务跳过落账，不抛异常"""

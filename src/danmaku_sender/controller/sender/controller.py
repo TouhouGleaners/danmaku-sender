@@ -276,8 +276,8 @@ class SenderController(QObject):
 
     @Slot(str, str)
     def _on_task_skipped(self, task_id: str, reason: str):
+        # SKIPPED 的任务从未发包、无存证可对账，不写任务记录；已有记录保持原状
         self.state.workspace.queue_state.update_task_status(task_id, TaskStatus.SKIPPED, reason)
-        self._persist_task_record(task_id, TaskStatus.SKIPPED)
 
     @Slot()
     def _on_queue_completed(self):
