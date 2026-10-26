@@ -29,12 +29,20 @@ class TaskStatus(Enum):
 class TaskConfig:
     """任务工单的发送节奏参数（入队后不可变）。
 
-    描述**单个任务**（一个视频）里弹幕怎么发：延迟、爆发、休息。
+    描述**单个任务**（一个视频）内弹幕的发送方式：延迟、爆发、休息。
     队列级策略（跳过已发送、任务间隔）作用于**整个任务队列**，
     见 :class:`danmaku_sender.config.SendPolicy`。
 
     由 ``SenderConfig.to_task_config()`` 派生，字段一一对应；
     反向转换见 ``SenderConfig.from_task_config()``。
+
+    Attributes:
+        min_delay (float): 相邻两条弹幕的最小间隔（秒）。
+        max_delay (float): 相邻两条弹幕的最大间隔（秒）。
+        burst_enabled (bool): 是否启用爆发模式。
+        burst_size (int): 爆发模式每轮连续发送的条数。
+        rest_min (float): 爆发模式每轮之间的最短休息（秒）。
+        rest_max (float): 爆发模式每轮之间的最长休息（秒）。
     """
     min_delay: float
     max_delay: float
@@ -51,8 +59,8 @@ class TaskConfig:
 class TaskDefinition:
     """不可变任务工单。
 
-    Worker 只持有 TaskDefinition / TaskSnapshot，摸不到 TaskExecution。
-    config 是入队那一刻定死的发送节奏，冻结类型，无需防御性拷贝。
+    Worker 只持有 TaskDefinition / TaskSnapshot，不持有 TaskExecution。
+    config 是入队时固定的发送节奏，冻结类型，无需防御性拷贝。
     danmakus 为 tuple，结构上不可替换；发送管线须持有自己的 Danmaku 副本
     （见 SendJob 构造处的 clone），不得回填 dmid 写穿本工单。
     """
@@ -108,7 +116,7 @@ class Task:
 
 @dataclass(frozen=True)
 class TaskSnapshot:
-    """Worker 启动时的一次性采样：status 在采样时定死，与后续主线程落账隔离。"""
+    """Worker 启动时的一次性采样：status 在采样时固定，与后续主线程落账隔离。"""
     definition: TaskDefinition
     status: TaskStatus
 
@@ -196,7 +204,7 @@ class TaskView:
         )
 
     def snapshot(self) -> TaskSnapshot:
-        """定死当前 status 的不可变采样（Worker / 跨线程读取用）"""
+        """固定当前 status 的不可变采样（供 Worker / 跨线程读取）"""
         return TaskSnapshot(definition=self._task.definition, status=self._task.execution.status)
 
 

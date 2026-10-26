@@ -98,10 +98,17 @@ class DanmakuScheduler:
         )
 
     def _should_skip(self, dm: Danmaku, ctx: SendingContext, policy: SendPolicy) -> bool:
-        """
-        断点续传：智能去重逻辑
+        """判断该弹幕是否因已发送而跳过。
 
-        对每个指纹计数，若当前发送序列中该指纹的出现次数 <= 数据库中已成功发送的次数，则跳过。
+        按弹幕指纹计数：本次发送中该指纹的出现序号不大于账本中已成功发送的次数时跳过。
+
+        Args:
+            dm (Danmaku): 待判断的弹幕。
+            ctx (SendingContext): 运行记录，持有指纹计数缓存。
+            policy (SendPolicy): 发送策略；allow_duplicates 为真时不做查重。
+
+        Returns:
+            bool: 需要跳过返回 True。
         """
         if policy.allow_duplicates or not self.history_manager:
             return False
@@ -113,9 +120,7 @@ class DanmakuScheduler:
         current_occurrence = ctx.local_counter[dm_fingerprint]
 
         # 查询该指纹在历史记录中的成功次数
-        if dm_fingerprint in ctx.db_count_cache:
-            db_count = ctx.db_count_cache[dm_fingerprint]
-        else:
+        if (db_count := ctx.db_count_cache.get(dm_fingerprint)) is None:
             db_count = self.history_manager.count_records(ctx.target, dm)
             ctx.db_count_cache[dm_fingerprint] = db_count
 
@@ -205,4 +210,4 @@ class DanmakuScheduler:
             ctx.fatal_error_occurred = True
             ctx.fatal_error_msg = str(e)
             ctx.add_unsent(job.danmakus[pending_from:], f"异常中断: {e}")
-            self.logger.error(f"发送循环异常中止: {e}", exc_info=True)
+            self.logger.exception("发送循环异常中止")
