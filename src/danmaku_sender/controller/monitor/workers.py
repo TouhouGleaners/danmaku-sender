@@ -17,7 +17,7 @@ logger = logging.getLogger(__name__)
 
 
 @dataclass(frozen=True)
-class MonitorSample:
+class MonitorTarget:
     """一个核销目标 (bvid, cid)，来自数据库。
 
     标题/分P 由 UI 从队列反查补齐，核销本身不需要。
@@ -25,10 +25,6 @@ class MonitorSample:
 
     bvid: str
     cid: int
-
-    @property
-    def target(self) -> VideoTarget:
-        return VideoTarget(bvid=self.bvid, cid=self.cid)
 
 
 class QueueMonitorWorker(WorkerThread):
@@ -40,11 +36,11 @@ class QueueMonitorWorker(WorkerThread):
     # cid 用 object 传：Qt 信号的 int 是 32 位，B 站新视频的 cid 会溢出绕回
     targetStatsUpdated = Signal(str, object, object)  # (bvid, cid, MonitorStats)
     targetVerifyFailed = Signal(str, object)          # (bvid, cid)：本轮核销失败
-    overallStatsUpdated = Signal(object)           # MonitorStats 合计
+    overallStatsUpdated = Signal(object)              # MonitorStats 合计
     statusUpdated = Signal(str)
-    monitorFailed = Signal(str)                    # 异常终止原因（非用户停止）
+    monitorFailed = Signal(str)                       # 异常终止原因（非用户停止）
     monitorFinished = Signal()
-    ending = Signal(object)                        # run() 退出时 emit(self)，供主线程清理
+    ending = Signal(object)                           # run() 退出时 emit(self)，供主线程清理
 
     def __init__(
         self,
@@ -79,10 +75,10 @@ class QueueMonitorWorker(WorkerThread):
         self.prevent_sleep = prevent_sleep
 
     @property
-    def targets(self) -> list[MonitorSample]:
+    def targets(self) -> list[MonitorTarget]:
         """本轮核销范围：数据库里 baseline 后有记录的目标。"""
         rows = self.history_manager.get_recorded_targets(self.baseline)
-        return [MonitorSample(bvid=bvid, cid=cid) for bvid, cid in rows]
+        return [MonitorTarget(bvid=bvid, cid=cid) for bvid, cid in rows]
 
     def run(self):
         failed = False
@@ -152,7 +148,7 @@ class QueueMonitorWorker(WorkerThread):
         logger.info("✅ 本轮在线核销结束。")
 
     def _inspect_target(
-        self, verifier: DanmakuVerifier, target: MonitorSample
+        self, verifier: DanmakuVerifier, target: MonitorTarget
     ) -> MonitorStats | None:
         """核查单个目标分P的存活并上报；失败返回 None。
 
@@ -175,7 +171,7 @@ class QueueMonitorWorker(WorkerThread):
             self.targetVerifyFailed.emit(target.bvid, target.cid)
             return None
 
-        stats = self._stats_for(target.target)
+        stats = self._stats_for(VideoTarget(bvid=target.bvid, cid=target.cid))
         self.targetStatsUpdated.emit(target.bvid, target.cid, stats)
         return stats
 

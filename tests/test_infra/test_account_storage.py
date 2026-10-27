@@ -6,7 +6,7 @@ from cryptography.fernet import Fernet
 
 from danmaku_sender.infra.storage import account_storage
 from danmaku_sender.infra.storage.account_storage import AccountStorage
-from danmaku_sender.types.models.account import AccountCredential
+from danmaku_sender.types.models.account import Account
 
 
 @pytest.fixture
@@ -48,25 +48,25 @@ def storage():
     return AccountStorage()
 
 
-class TestAccountCredential:
-    """AccountCredential 模型"""
+class TestAccount:
+    """Account 模型"""
 
     def test_create_minimal(self):
-        acc = AccountCredential(sessdata="abc", bili_jct="def")
+        acc = Account(sessdata="abc", bili_jct="def")
         assert acc.sessdata == "abc"
         assert acc.bili_jct == "def"
         assert acc.uid == 0
         assert acc.name == ""
 
     def test_create_full(self):
-        acc = AccountCredential(uid=123, name="测试用户", sessdata="a", bili_jct="b")
+        acc = Account(uid=123, name="测试用户", sessdata="a", bili_jct="b")
         assert acc.uid == 123
         assert acc.name == "测试用户"
 
     def test_model_dump_roundtrip(self):
-        acc = AccountCredential(uid=456, name="用户B", sessdata="s", bili_jct="j")
+        acc = Account(uid=456, name="用户B", sessdata="s", bili_jct="j")
         d = acc.model_dump()
-        restored = AccountCredential.model_validate(d)
+        restored = Account.model_validate(d)
         assert restored == acc
 
 
@@ -78,8 +78,8 @@ class TestLoadAccounts:
 
     def test_save_then_load_roundtrip(self, accounts_path, keyring_fake, storage):
         original = [
-            AccountCredential(uid=1, name="A", sessdata="s1", bili_jct="j1"),
-            AccountCredential(uid=2, name="B", sessdata="s2", bili_jct="j2"),
+            Account(uid=1, name="A", sessdata="s1", bili_jct="j1"),
+            Account(uid=2, name="B", sessdata="s2", bili_jct="j2"),
         ]
         storage.save_accounts(original)
         assert storage.load_accounts() == original
@@ -87,12 +87,12 @@ class TestLoadAccounts:
     def test_key_not_persisted_save_skips_write(self, accounts_path, keyring_fake, storage):
         """密钥环写入失败（persisted=False）时，跳过写盘以避免产生无法解密的文件"""
         keyring_fake.fail_set = True
-        storage.save_accounts([AccountCredential(sessdata="s", bili_jct="j")])
+        storage.save_accounts([Account(sessdata="s", bili_jct="j")])
         assert not accounts_path.exists()
 
     def test_wrong_key_keeps_file(self, accounts_path, keyring_fake, storage):
         """InvalidToken 路径：密钥不匹配时文件保留，修复密钥环后可恢复"""
-        storage.save_accounts([AccountCredential(sessdata="s", bili_jct="j")])
+        storage.save_accounts([Account(sessdata="s", bili_jct="j")])
         keyring_fake.store["default_user"] = Fernet.generate_key().decode()  # 换掉密钥
         assert storage.load_accounts() == []
         assert accounts_path.exists()  # 文件不删除
@@ -101,7 +101,7 @@ class TestLoadAccounts:
         """密钥环完全不可用时：密钥仅会话内有效，跳过写盘以避免产生无法解密的文件"""
         keyring_fake.fail_get = True
         keyring_fake.fail_set = True
-        storage.save_accounts([AccountCredential(sessdata="s", bili_jct="j")])
+        storage.save_accounts([Account(sessdata="s", bili_jct="j")])
         assert not accounts_path.exists()
 
     def test_corrupted_json_backed_up(self, accounts_path, keyring_fake, storage):
@@ -144,7 +144,7 @@ class TestSaveAccounts:
         storage.save_accounts([])
 
     def test_save_creates_encrypted_file(self, accounts_path, keyring_fake, storage):
-        accounts = [AccountCredential(sessdata="s", bili_jct="j")]
+        accounts = [Account(sessdata="s", bili_jct="j")]
         storage.save_accounts(accounts)
         assert accounts_path.exists()
         # 文件内容不应是明文

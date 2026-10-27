@@ -13,7 +13,7 @@ from PySide6.QtWidgets import (
 )
 
 from danmaku_sender.config.app_meta import AppInfo
-from danmaku_sender.types.models.account import AccountCredential
+from danmaku_sender.types.models.account import Account
 from danmaku_sender.ui.framework.icons import SvgIcon
 from danmaku_sender.ui.framework.image_processor import QtImageProcessor
 
@@ -24,12 +24,12 @@ _level_icon_cache: dict[tuple[str, float], QPixmap] = {}
 class AccountRow(QFrame):
     """单个账号的展示卡片"""
 
-    use_clicked = Signal(AccountCredential)
-    edit_clicked = Signal(AccountCredential)
-    delete_clicked = Signal(AccountCredential)
-    check_clicked = Signal(AccountCredential)
+    use_clicked = Signal(Account)
+    edit_clicked = Signal(Account)
+    delete_clicked = Signal(Account)
+    check_clicked = Signal(Account)
 
-    def __init__(self, account: AccountCredential, is_active: bool = False, parent=None):
+    def __init__(self, account: Account, is_active: bool = False, parent=None):
         super().__init__(parent)
         self.account = account
         self._check_btn: QPushButton | None = None

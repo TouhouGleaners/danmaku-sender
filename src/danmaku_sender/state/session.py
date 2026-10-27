@@ -1,7 +1,7 @@
 """登录身份与账号列表。"""
 from PySide6.QtCore import QObject, Signal
 
-from danmaku_sender.types.models.account import AccountCredential
+from danmaku_sender.types.models.account import Account
 
 
 class SessionState(QObject):
@@ -18,7 +18,7 @@ class SessionState(QObject):
         super().__init__()
         self._sessdata: str = ""
         self._bili_jct: str = ""
-        self.saved_accounts: list[AccountCredential] = []
+        self.saved_accounts: list[Account] = []
 
     @property
     def sessdata(self) -> str:
@@ -59,7 +59,7 @@ class SessionState(QObject):
         if acc:
             acc.bili_jct = bili_jct
         else:
-            acc = AccountCredential(sessdata=sessdata, bili_jct=bili_jct)
+            acc = Account(sessdata=sessdata, bili_jct=bili_jct)
             self.saved_accounts.append(acc)
 
         if name:

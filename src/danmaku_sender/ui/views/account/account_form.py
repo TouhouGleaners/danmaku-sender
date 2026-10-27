@@ -15,7 +15,7 @@ from PySide6.QtWidgets import (
 
 from danmaku_sender.config import Settings
 from danmaku_sender.state import AppState
-from danmaku_sender.types.models.account import AccountCredential
+from danmaku_sender.types.models.account import Account
 from danmaku_sender.ui.dialogs import QRLoginDialog
 from danmaku_sender.ui.framework.icons import SvgIcon
 
@@ -23,13 +23,13 @@ from danmaku_sender.ui.framework.icons import SvgIcon
 class AccountFormDialog(QDialog):
     """添加/编辑账号弹窗"""
 
-    saved = Signal(AccountCredential, AccountCredential)  # (new, old)
+    saved = Signal(Account, Account)  # (new, old)
 
     def __init__(
         self,
         state: AppState,
         settings: Settings,
-        edit_data: AccountCredential | None = None,
+        edit_data: Account | None = None,
         parent=None,
     ):
         """初始化账号表单弹窗。
@@ -112,7 +112,7 @@ class AccountFormDialog(QDialog):
         layout.addStretch()
         return page
 
-    def _build_manual_page(self, edit_data: AccountCredential | None) -> QWidget:
+    def _build_manual_page(self, edit_data: Account | None) -> QWidget:
         page = QWidget()
         layout = QVBoxLayout(page)
         layout.setContentsMargins(0, 10, 0, 0)
@@ -149,8 +149,8 @@ class AccountFormDialog(QDialog):
             se = cookies.get('SESSDATA', '')
             jct = cookies.get('bili_jct', '')
             if se and jct:
-                new = AccountCredential(sessdata=se, bili_jct=jct)
-                old = self._edit_data or AccountCredential()
+                new = Account(sessdata=se, bili_jct=jct)
+                old = self._edit_data or Account()
                 self.saved.emit(new, old)
                 self.accept()
 
@@ -163,7 +163,7 @@ class AccountFormDialog(QDialog):
             self._tab_bar.setCurrentIndex(1)
             return
 
-        new = AccountCredential(sessdata=se, bili_jct=jct)
-        old = self._edit_data or AccountCredential()
+        new = Account(sessdata=se, bili_jct=jct)
+        old = self._edit_data or Account()
         self.saved.emit(new, old)
         self.accept()
