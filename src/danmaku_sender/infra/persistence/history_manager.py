@@ -77,7 +77,8 @@ class HistoryManager:
         """按数据库结构版本逐步升级到 :data:`SCHEMA_VERSION`。
 
         新库不走这里，由 :meth:`_init_db` 直接落成当前结构并打上最新版本。
-        每步写完结构后再抬高版本；步骤内保留形状判断，中断后重跑不会重复执行。
+        每步完成结构变更后抬高版本；中断后重跑不会重复变更。
+        无法识别的版本抛 RuntimeError：高于 :data:`SCHEMA_VERSION` 时提示升级应用。
 
         Args:
             sqlite_db (SqliteDatabase): 已连接的数据库。
@@ -92,9 +93,7 @@ class HistoryManager:
                     self._set_user_version(sqlite_db, 1)
                 case _:
                     if version > SCHEMA_VERSION:
-                        raise RuntimeError(
-                            f"数据库结构版本 {version} 新于本应用支持的 {SCHEMA_VERSION}，请升级应用"
-                        )
+                        raise RuntimeError(f"数据库结构版本 {version} 新于本应用支持的 {SCHEMA_VERSION}，请升级应用")
                     raise RuntimeError(f"未知的数据库结构版本 {version}，本应用支持到 {SCHEMA_VERSION}")
 
     @staticmethod
@@ -105,7 +104,7 @@ class HistoryManager:
             sqlite_db (SqliteDatabase): 已连接的数据库。
 
         Returns:
-            int: 数据库结构版本，未写入过时为 0。
+            int: 数据库结构版本，从未写入时为 0。
         """
         return int(sqlite_db.execute_sql("PRAGMA user_version").fetchone()[0])
 
@@ -113,7 +112,7 @@ class HistoryManager:
     def _set_user_version(sqlite_db: SqliteDatabase, version: int) -> None:
         """写入数据库结构版本（SQLite 的 user_version）。
 
-        PRAGMA 不支持参数绑定，这里只接受整数再拼接。
+        PRAGMA 不支持参数绑定，version 以整数形式拼入语句。
 
         Args:
             sqlite_db (SqliteDatabase): 已连接的数据库。
