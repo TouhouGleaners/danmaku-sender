@@ -248,7 +248,7 @@ class TestMigration:
         assert new_row.task_id == '任务归属-8f3c'
 
     def test_migration_stamps_schema_version(self, tmp_path):
-        """老库升级后打上当前表结构代数。"""
+        """老库升级后打上当前数据库结构版本。"""
         db_path = tmp_path / "legacy.db"
         conn = sqlite3.connect(db_path)
         conn.execute(
@@ -265,7 +265,7 @@ class TestMigration:
         assert version == SCHEMA_VERSION
 
     def test_fresh_db_stamped_without_running_migrations(self, tmp_path):
-        """新库直接落成当前结构并打上最新代数，不走迁移。"""
+        """新库直接落成当前结构并打上最新版本，不走迁移。"""
         db_path = tmp_path / "fresh.db"
 
         HistoryManager(db_path)
@@ -274,7 +274,7 @@ class TestMigration:
         assert version == SCHEMA_VERSION
 
     def test_reinit_keeps_schema_version(self, tmp_path):
-        """重复初始化不改写表结构代数。"""
+        """重复初始化不改写数据库结构版本。"""
         db_path = tmp_path / "fresh.db"
         HistoryManager(db_path)
 
@@ -282,3 +282,15 @@ class TestMigration:
 
         version = sqlite3.connect(db_path).execute("PRAGMA user_version").fetchone()[0]
         assert version == SCHEMA_VERSION
+
+    def test_future_schema_version_is_rejected(self, tmp_path):
+        """数据库结构版本高于本应用支持值时报错并提示升级应用。"""
+        db_path = tmp_path / "future.db"
+        HistoryManager(db_path)
+        conn = sqlite3.connect(db_path)
+        conn.execute("PRAGMA user_version = 99")
+        conn.commit()
+        conn.close()
+
+        with pytest.raises(RuntimeError, match="新于本应用支持的"):
+            HistoryManager(db_path)

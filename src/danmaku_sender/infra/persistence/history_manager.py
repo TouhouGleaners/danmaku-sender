@@ -20,7 +20,7 @@ from .orm_models import SentDanmaku, TaskRecord, db
 
 logger = logging.getLogger(__name__)
 
-SCHEMA_VERSION = 1  # 当前表版本；0 表示 2.6.1 及更早的库
+SCHEMA_VERSION = 1  # 数据库结构版本；0 表示 2.6.1 及更早的库
 
 
 class HistoryManager:
@@ -29,8 +29,7 @@ class HistoryManager:
     负责实现"发送 -> 存证 -> 核销"的数据层逻辑。
 
     线程安全契约:
-    - Peewee 的 SqliteDatabase 内部使用 threading.local() 为每个线程维护
-      独立的 SQLite 连接，不存在跨线程共享连接的问题。
+    - Peewee 的 SqliteDatabase 内部使用 threading.local() 为每个线程维护独立的 SQLite 连接，不存在跨线程共享连接的问题。
     - WAL 模式允许并发读 + 单写，配合 Peewee 的线程本地连接机制，
       在"短事务 + 适度写入并发"的前提下，多线程并发调用通常是安全的；
       高写入并发或长事务仍可能触发 ``database is locked`` 错误。
@@ -75,44 +74,50 @@ class HistoryManager:
             raise RuntimeError(f"HistoryManager 数据库初始化失败: {e}") from e
 
     def _run_migrations(self, sqlite_db: SqliteDatabase) -> None:
-        """按 user_version 逐步升级表结构。
+        """按数据库结构版本逐步升级到 :data:`SCHEMA_VERSION`。
 
-        新库不走这里，由 :meth:`_init_db` 直接落成当前结构并打上最新版本号。
-        每步写完结构后再抬高版本号；步骤内保留形状判断，中断后重跑不会重复执行。
+        新库不走这里，由 :meth:`_init_db` 直接落成当前结构并打上最新版本。
+        每步写完结构后再抬高版本；步骤内保留形状判断，中断后重跑不会重复执行。
 
         Args:
             sqlite_db (SqliteDatabase): 已连接的数据库。
         """
         migrator = SqliteMigrator(sqlite_db)
-        version = self._user_version(sqlite_db)
-
-        if version < 1:
-            columns = {col.name for col in sqlite_db.get_columns('sent_danmaku')}
-            if 'task_id' not in columns:
-                migrate(migrator.add_column('sent_danmaku', 'task_id', CharField(null=True)))
-            self._set_user_version(sqlite_db, 1)
+        while (version := self._user_version(sqlite_db)) != SCHEMA_VERSION:
+            match version:
+                case 0:
+                    columns = {col.name for col in sqlite_db.get_columns('sent_danmaku')}
+                    if 'task_id' not in columns:
+                        migrate(migrator.add_column('sent_danmaku', 'task_id', CharField(null=True)))
+                    self._set_user_version(sqlite_db, 1)
+                case _:
+                    if version > SCHEMA_VERSION:
+                        raise RuntimeError(
+                            f"数据库结构版本 {version} 新于本应用支持的 {SCHEMA_VERSION}，请升级应用"
+                        )
+                    raise RuntimeError(f"未知的数据库结构版本 {version}，本应用支持到 {SCHEMA_VERSION}")
 
     @staticmethod
     def _user_version(sqlite_db: SqliteDatabase) -> int:
-        """读取表结构代数（SQLite 的 user_version）。
+        """读取数据库结构版本（SQLite 的 user_version）。
 
         Args:
             sqlite_db (SqliteDatabase): 已连接的数据库。
 
         Returns:
-            int: 表结构代数，无记录时为 0。
+            int: 数据库结构版本，未写入过时为 0。
         """
         return int(sqlite_db.execute_sql("PRAGMA user_version").fetchone()[0])
 
     @staticmethod
     def _set_user_version(sqlite_db: SqliteDatabase, version: int) -> None:
-        """写入表结构代数（SQLite 的 user_version）。
+        """写入数据库结构版本（SQLite 的 user_version）。
 
         PRAGMA 不支持参数绑定，这里只接受整数再拼接。
 
         Args:
             sqlite_db (SqliteDatabase): 已连接的数据库。
-            version (int): 要写入的表结构代数。
+            version (int): 要写入的数据库结构版本。
         """
         sqlite_db.execute_sql(f"PRAGMA user_version = {int(version)}")
 
