@@ -1309,21 +1309,49 @@
   <a href="#senderconfig" class="md-nav__link">
     <span class="md-ellipsis">
       
-        发送节奏 (SenderConfig)
+        发送配置 (SenderConfig)
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="发送配置 (SenderConfig)">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#pacing" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        单任务发送节奏 (pacing)
       
     </span>
   </a>
   
 </li>
-      
-        <li class="md-nav__item">
-  <a href="#sendpolicy" class="md-nav__link">
+        
+          <li class="md-nav__item">
+  <a href="#queue" class="md-nav__link">
     <span class="md-ellipsis">
       
-        队列发送策略 (SendPolicy)
+        整队规则 (queue)
       
     </span>
   </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#mode" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        运行模式 (mode)
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
   
 </li>
       
@@ -1613,21 +1641,49 @@
   <a href="#senderconfig" class="md-nav__link">
     <span class="md-ellipsis">
       
-        发送节奏 (SenderConfig)
+        发送配置 (SenderConfig)
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="发送配置 (SenderConfig)">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#pacing" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        单任务发送节奏 (pacing)
       
     </span>
   </a>
   
 </li>
-      
-        <li class="md-nav__item">
-  <a href="#sendpolicy" class="md-nav__link">
+        
+          <li class="md-nav__item">
+  <a href="#queue" class="md-nav__link">
     <span class="md-ellipsis">
       
-        队列发送策略 (SendPolicy)
+        整队规则 (queue)
       
     </span>
   </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#mode" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        运行模式 (mode)
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
   
 </li>
       
@@ -1722,7 +1778,9 @@
 </tbody>
 </table>
 <hr />
-<h2 id="senderconfig">发送节奏 (SenderConfig)</h2>
+<h2 id="senderconfig">发送配置 (SenderConfig)</h2>
+<p>发送相关配置收在一个模型下，分运行模式、单任务节奏与整队规则三部分，分别位于 <code>mode</code>、<code>pacing</code>、<code>queue</code>。</p>
+<h3 id="pacing">单任务发送节奏 (pacing)</h3>
 <p>描述<strong>单个任务</strong>里弹幕怎么发。入队时会派生成不可变的工单参数快照，因此修改这些设置只对<strong>新建</strong>的任务生效，已入队任务保持入队那一刻的节奏。</p>
 <table>
 <thead>
@@ -1738,49 +1796,48 @@
 <tr>
 <td style="text-align: left;"><code>min_delay</code></td>
 <td style="text-align: left;">float</td>
-<td style="text-align: left;">8.0</td>
+<td style="text-align: left;">9.5</td>
 <td style="text-align: left;">QDoubleSpinBox</td>
 <td style="text-align: left;">两条弹幕之间的最小随机间隔（秒）</td>
 </tr>
 <tr>
 <td style="text-align: left;"><code>max_delay</code></td>
 <td style="text-align: left;">float</td>
-<td style="text-align: left;">8.5</td>
+<td style="text-align: left;">10.5</td>
 <td style="text-align: left;">QDoubleSpinBox</td>
 <td style="text-align: left;">两条弹幕之间的最大随机间隔（秒）</td>
 </tr>
 <tr>
 <td style="text-align: left;"><code>burst_enabled</code></td>
 <td style="text-align: left;">bool</td>
-<td style="text-align: left;">false</td>
+<td style="text-align: left;">true</td>
 <td style="text-align: left;">QCheckBox</td>
 <td style="text-align: left;">是否启用突发模式</td>
 </tr>
 <tr>
 <td style="text-align: left;"><code>burst_size</code></td>
 <td style="text-align: left;">int</td>
-<td style="text-align: left;">3</td>
+<td style="text-align: left;">5</td>
 <td style="text-align: left;">QSpinBox</td>
 <td style="text-align: left;">突发模式下每轮连发条数</td>
 </tr>
 <tr>
 <td style="text-align: left;"><code>rest_min</code></td>
 <td style="text-align: left;">float</td>
-<td style="text-align: left;">40.0</td>
+<td style="text-align: left;">30.0</td>
 <td style="text-align: left;">QDoubleSpinBox</td>
 <td style="text-align: left;">突发模式休息期最小时间（秒）</td>
 </tr>
 <tr>
 <td style="text-align: left;"><code>rest_max</code></td>
 <td style="text-align: left;">float</td>
-<td style="text-align: left;">45.0</td>
+<td style="text-align: left;">35.0</td>
 <td style="text-align: left;">QDoubleSpinBox</td>
 <td style="text-align: left;">突发模式休息期最大时间（秒）</td>
 </tr>
 </tbody>
 </table>
-<hr />
-<h2 id="sendpolicy">队列发送策略 (SendPolicy)</h2>
+<h3 id="queue">整队规则 (queue)</h3>
 <p>描述<strong>整个任务队列</strong>怎么跑。启动队列时取一次快照，运行期间修改这些设置不影响正在跑的队列（下次运行生效）。</p>
 <table>
 <thead>
@@ -1809,20 +1866,44 @@
 </tr>
 </tbody>
 </table>
+<h3 id="mode">运行模式 (mode)</h3>
+<table>
+<thead>
+<tr>
+<th style="text-align: left;">配置项</th>
+<th style="text-align: left;">类型</th>
+<th style="text-align: left;">默认值</th>
+<th style="text-align: left;">UI 控件</th>
+<th style="text-align: left;">说明</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td style="text-align: left;"><code>mode</code></td>
+<td style="text-align: left;">SendMode</td>
+<td style="text-align: left;"><code>send_and_monitor</code></td>
+<td style="text-align: left;">QComboBox</td>
+<td style="text-align: left;">整轮运行做什么：仅发送，还是发送并监视</td>
+</tr>
+</tbody>
+</table>
 <p>详细说明见 <a href="../../features/sender/delay-control/">频率控制与并发策略</a> 和 <a href="../../features/sender/resume/">断点续传与智能去重</a>。</p>
-<p>两者在 <code>config.json</code> 中分属不同的段：</p>
+<p>在 <code>config.json</code> 中三者同属 <code>sender</code> 段：</p>
 <div class="highlight"><pre><span></span><code><span class="p">{</span>
 <span class="w">  </span><span class="nt">"sender"</span><span class="p">:</span><span class="w"> </span><span class="p">{</span>
-<span class="w">    </span><span class="nt">"min_delay"</span><span class="p">:</span><span class="w"> </span><span class="mf">8.0</span><span class="p">,</span>
-<span class="w">    </span><span class="nt">"max_delay"</span><span class="p">:</span><span class="w"> </span><span class="mf">8.5</span><span class="p">,</span>
-<span class="w">    </span><span class="nt">"burst_enabled"</span><span class="p">:</span><span class="w"> </span><span class="kc">false</span><span class="p">,</span>
-<span class="w">    </span><span class="nt">"burst_size"</span><span class="p">:</span><span class="w"> </span><span class="mi">3</span><span class="p">,</span>
-<span class="w">    </span><span class="nt">"rest_min"</span><span class="p">:</span><span class="w"> </span><span class="mf">40.0</span><span class="p">,</span>
-<span class="w">    </span><span class="nt">"rest_max"</span><span class="p">:</span><span class="w"> </span><span class="mf">45.0</span>
-<span class="w">  </span><span class="p">},</span>
-<span class="w">  </span><span class="nt">"send_policy"</span><span class="p">:</span><span class="w"> </span><span class="p">{</span>
-<span class="w">    </span><span class="nt">"delay_between_tasks"</span><span class="p">:</span><span class="w"> </span><span class="mf">30.0</span><span class="p">,</span>
-<span class="w">    </span><span class="nt">"allow_duplicates"</span><span class="p">:</span><span class="w"> </span><span class="kc">false</span>
+<span class="w">    </span><span class="nt">"mode"</span><span class="p">:</span><span class="w"> </span><span class="s2">"send_and_monitor"</span><span class="p">,</span>
+<span class="w">    </span><span class="nt">"pacing"</span><span class="p">:</span><span class="w"> </span><span class="p">{</span>
+<span class="w">      </span><span class="nt">"min_delay"</span><span class="p">:</span><span class="w"> </span><span class="mf">9.5</span><span class="p">,</span>
+<span class="w">      </span><span class="nt">"max_delay"</span><span class="p">:</span><span class="w"> </span><span class="mf">10.5</span><span class="p">,</span>
+<span class="w">      </span><span class="nt">"burst_enabled"</span><span class="p">:</span><span class="w"> </span><span class="kc">true</span><span class="p">,</span>
+<span class="w">      </span><span class="nt">"burst_size"</span><span class="p">:</span><span class="w"> </span><span class="mi">5</span><span class="p">,</span>
+<span class="w">      </span><span class="nt">"rest_min"</span><span class="p">:</span><span class="w"> </span><span class="mf">30.0</span><span class="p">,</span>
+<span class="w">      </span><span class="nt">"rest_max"</span><span class="p">:</span><span class="w"> </span><span class="mf">35.0</span>
+<span class="w">    </span><span class="p">},</span>
+<span class="w">    </span><span class="nt">"queue"</span><span class="p">:</span><span class="w"> </span><span class="p">{</span>
+<span class="w">      </span><span class="nt">"delay_between_tasks"</span><span class="p">:</span><span class="w"> </span><span class="mf">30.0</span><span class="p">,</span>
+<span class="w">      </span><span class="nt">"allow_duplicates"</span><span class="p">:</span><span class="w"> </span><span class="kc">false</span>
+<span class="w">    </span><span class="p">}</span>
 <span class="w">  </span><span class="p">}</span>
 <span class="p">}</span>
 </code></pre></div>
@@ -1832,7 +1913,7 @@
 </div>
 <div class="admonition note">
 <p class="admonition-title">旧配置不做迁移</p>
-<p>缺少 <code>send_policy</code> 段时这些策略项回退为默认值，不会从旧 <code>sender</code> 段迁移。更早版本的 <code>skip_sent</code> 已废弃移除，写入配置将被忽略；其默认行为（跳过已发送弹幕）等同于 <code>allow_duplicates</code> 关闭时的行为。</p>
+<p>旧版 <code>sender</code> 段的平铺字段与 <code>send_policy</code> 段一律不迁移，整块回退为默认值。默认节奏即长期实测稳定值（9.5 / 10.5 秒、突发每轮 5 条、休息 30~35 秒），回退落在安全一侧；需要保留的取值在设置页改回即可。更早版本的 <code>skip_sent</code> 已废弃移除，写入配置将被忽略；其默认行为（跳过已发送弹幕）等同于 <code>allow_duplicates</code> 关闭时的行为。</p>
 </div>
 <hr />
 <h2 id="monitorconfig">监视器配置 (MonitorConfig)</h2>
@@ -1924,7 +2005,7 @@
     <span class="md-icon" title="最后更新">
       <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M21 13.1c-.1 0-.3.1-.4.2l-1 1 2.1 2.1 1-1c.2-.2.2-.6 0-.8l-1.3-1.3c-.1-.1-.2-.2-.4-.2m-1.9 1.8-6.1 6V23h2.1l6.1-6.1zM12.5 7v5.2l4 2.4-1 1L11 13V7zM11 21.9c-5.1-.5-9-4.8-9-9.9C2 6.5 6.5 2 12 2c5.3 0 9.6 4.1 10 9.3-.3-.1-.6-.2-1-.2s-.7.1-1 .2C19.6 7.2 16.2 4 12 4c-4.4 0-8 3.6-8 8 0 4.1 3.1 7.5 7.1 7.9l-.1.2z"/></svg>
     </span>
-    <span class="git-revision-date-localized-plugin git-revision-date-localized-plugin-date" title="2026年10月26日 18:52:42 CST">2026年10月26日</span>
+    <span class="git-revision-date-localized-plugin git-revision-date-localized-plugin-date" title="2026年10月27日 23:07:14 CST">2026年10月27日</span>
   </span>
 
     
