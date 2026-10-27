@@ -20,6 +20,8 @@ from .orm_models import SentDanmaku, TaskRecord, db
 
 logger = logging.getLogger(__name__)
 
+SCHEMA_VERSION = 1  # 当前表版本；0 表示 2.6.1 及更早的库
+
 
 class HistoryManager:
     """
@@ -60,24 +62,59 @@ class HistoryManager:
             db.initialize(sqlite_db)
             sqlite_db.connect(reuse_if_open=True)
 
-            # 建表（含索引，已存在则跳过）→ 迁移补列
+            # 新库直接落成当前结构并打上最新版本号；已有库按版本号逐级升级
+            is_fresh = not sqlite_db.get_tables()
             sqlite_db.create_tables([SentDanmaku, TaskRecord], safe=True)
-            self._run_migrations(sqlite_db)
+            if is_fresh:
+                self._set_user_version(sqlite_db, SCHEMA_VERSION)
+            else:
+                self._run_migrations(sqlite_db)
 
         except Exception as e:
             logger.critical(f"数据库初始化/迁移致命错误: {e}", exc_info=True)
             raise RuntimeError(f"HistoryManager 数据库初始化失败: {e}") from e
 
     def _run_migrations(self, sqlite_db: SqliteDatabase) -> None:
-        """幂等迁移：补齐历史版本缺失的列与索引。
+        """按 user_version 逐步升级表结构。
+
+        新库不走这里，由 :meth:`_init_db` 直接落成当前结构并打上最新版本号。
+        每步写完结构后再抬高版本号；步骤内保留形状判断，中断后重跑不会重复执行。
 
         Args:
             sqlite_db (SqliteDatabase): 已连接的数据库。
         """
         migrator = SqliteMigrator(sqlite_db)
-        columns = {col.name for col in sqlite_db.get_columns('sent_danmaku')}
-        if 'task_id' not in columns:
-            migrate(migrator.add_column('sent_danmaku', 'task_id', CharField(null=True)))
+        version = self._user_version(sqlite_db)
+
+        if version < 1:
+            columns = {col.name for col in sqlite_db.get_columns('sent_danmaku')}
+            if 'task_id' not in columns:
+                migrate(migrator.add_column('sent_danmaku', 'task_id', CharField(null=True)))
+            self._set_user_version(sqlite_db, 1)
+
+    @staticmethod
+    def _user_version(sqlite_db: SqliteDatabase) -> int:
+        """读取表结构代数（SQLite 的 user_version）。
+
+        Args:
+            sqlite_db (SqliteDatabase): 已连接的数据库。
+
+        Returns:
+            int: 表结构代数，无记录时为 0。
+        """
+        return int(sqlite_db.execute_sql("PRAGMA user_version").fetchone()[0])
+
+    @staticmethod
+    def _set_user_version(sqlite_db: SqliteDatabase, version: int) -> None:
+        """写入表结构代数（SQLite 的 user_version）。
+
+        PRAGMA 不支持参数绑定，这里只接受整数再拼接。
+
+        Args:
+            sqlite_db (SqliteDatabase): 已连接的数据库。
+            version (int): 要写入的表结构代数。
+        """
+        sqlite_db.execute_sql(f"PRAGMA user_version = {int(version)}")
 
     def record_danmaku(
         self,

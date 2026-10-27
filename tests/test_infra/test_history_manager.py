@@ -7,7 +7,10 @@ import sqlite3
 import pytest
 
 from danmaku_sender.config import SenderConfig
-from danmaku_sender.infra.persistence.history_manager import HistoryManager
+from danmaku_sender.infra.persistence.history_manager import (
+    SCHEMA_VERSION,
+    HistoryManager,
+)
 from danmaku_sender.infra.persistence.orm_models import SentDanmaku
 from danmaku_sender.types.models.common import DanmakuStatus, TaskMeta, VideoTarget
 from danmaku_sender.types.models.danmaku import Danmaku
@@ -243,3 +246,39 @@ class TestMigration:
         hm.record_danmaku('任务归属-8f3c', target, Danmaku(msg='y', progress=0), 'dm2')
         new_row = SentDanmaku.get(SentDanmaku.dmid == 'dm2')
         assert new_row.task_id == '任务归属-8f3c'
+
+    def test_migration_stamps_schema_version(self, tmp_path):
+        """老库升级后打上当前表结构代数。"""
+        db_path = tmp_path / "legacy.db"
+        conn = sqlite3.connect(db_path)
+        conn.execute(
+            "CREATE TABLE sent_danmaku (dmid VARCHAR PRIMARY KEY, cid INTEGER, bvid VARCHAR, "
+            "msg TEXT, progress INTEGER, mode INTEGER, fontsize INTEGER, color INTEGER, "
+            "ctime REAL, is_visible INTEGER, status INTEGER)"
+        )
+        conn.commit()
+        conn.close()
+
+        HistoryManager(db_path)
+
+        version = sqlite3.connect(db_path).execute("PRAGMA user_version").fetchone()[0]
+        assert version == SCHEMA_VERSION
+
+    def test_fresh_db_stamped_without_running_migrations(self, tmp_path):
+        """新库直接落成当前结构并打上最新代数，不走迁移。"""
+        db_path = tmp_path / "fresh.db"
+
+        HistoryManager(db_path)
+
+        version = sqlite3.connect(db_path).execute("PRAGMA user_version").fetchone()[0]
+        assert version == SCHEMA_VERSION
+
+    def test_reinit_keeps_schema_version(self, tmp_path):
+        """重复初始化不改写表结构代数。"""
+        db_path = tmp_path / "fresh.db"
+        HistoryManager(db_path)
+
+        HistoryManager(db_path)
+
+        version = sqlite3.connect(db_path).execute("PRAGMA user_version").fetchone()[0]
+        assert version == SCHEMA_VERSION
