@@ -20,6 +20,8 @@ from .orm_models import SentDanmaku, TaskRecord, db
 
 logger = logging.getLogger(__name__)
 
+SCHEMA_VERSION = 1  # 数据库结构版本；0 表示 2.6.1 及更早的库
+
 
 class HistoryManager:
     """
@@ -27,8 +29,7 @@ class HistoryManager:
     负责实现"发送 -> 存证 -> 核销"的数据层逻辑。
 
     线程安全契约:
-    - Peewee 的 SqliteDatabase 内部使用 threading.local() 为每个线程维护
-      独立的 SQLite 连接，不存在跨线程共享连接的问题。
+    - Peewee 的 SqliteDatabase 内部使用 threading.local() 为每个线程维护独立的 SQLite 连接，不存在跨线程共享连接的问题。
     - WAL 模式允许并发读 + 单写，配合 Peewee 的线程本地连接机制，
       在"短事务 + 适度写入并发"的前提下，多线程并发调用通常是安全的；
       高写入并发或长事务仍可能触发 ``database is locked`` 错误。
@@ -60,24 +61,64 @@ class HistoryManager:
             db.initialize(sqlite_db)
             sqlite_db.connect(reuse_if_open=True)
 
-            # 建表（含索引，已存在则跳过）→ 迁移补列
+            # 新库直接落成当前结构并打上最新版本号；已有库按版本号逐级升级
+            is_fresh = not sqlite_db.get_tables()
             sqlite_db.create_tables([SentDanmaku, TaskRecord], safe=True)
-            self._run_migrations(sqlite_db)
+            if is_fresh:
+                self._set_user_version(sqlite_db, SCHEMA_VERSION)
+            else:
+                self._run_migrations(sqlite_db)
 
         except Exception as e:
             logger.critical(f"数据库初始化/迁移致命错误: {e}", exc_info=True)
             raise RuntimeError(f"HistoryManager 数据库初始化失败: {e}") from e
 
     def _run_migrations(self, sqlite_db: SqliteDatabase) -> None:
-        """幂等迁移：补齐历史版本缺失的列与索引。
+        """按数据库结构版本逐步升级到 :data:`SCHEMA_VERSION`。
+
+        新库不走这里，由 :meth:`_init_db` 直接落成当前结构并打上最新版本。
+        每步完成结构变更后抬高版本；中断后重跑不会重复变更。
+        无法识别的版本抛 RuntimeError：高于 :data:`SCHEMA_VERSION` 时提示升级应用。
 
         Args:
             sqlite_db (SqliteDatabase): 已连接的数据库。
         """
         migrator = SqliteMigrator(sqlite_db)
-        columns = {col.name for col in sqlite_db.get_columns('sent_danmaku')}
-        if 'task_id' not in columns:
-            migrate(migrator.add_column('sent_danmaku', 'task_id', CharField(null=True)))
+        while (version := self._user_version(sqlite_db)) != SCHEMA_VERSION:
+            match version:
+                case 0:
+                    columns = {col.name for col in sqlite_db.get_columns('sent_danmaku')}
+                    if 'task_id' not in columns:
+                        migrate(migrator.add_column('sent_danmaku', 'task_id', CharField(null=True)))
+                    self._set_user_version(sqlite_db, 1)
+                case _:
+                    if version > SCHEMA_VERSION:
+                        raise RuntimeError(f"数据库结构版本 {version} 新于本应用支持的 {SCHEMA_VERSION}，请升级应用")
+                    raise RuntimeError(f"未知的数据库结构版本 {version}，本应用支持到 {SCHEMA_VERSION}")
+
+    @staticmethod
+    def _user_version(sqlite_db: SqliteDatabase) -> int:
+        """读取数据库结构版本（SQLite 的 user_version）。
+
+        Args:
+            sqlite_db (SqliteDatabase): 已连接的数据库。
+
+        Returns:
+            int: 数据库结构版本，从未写入时为 0。
+        """
+        return int(sqlite_db.execute_sql("PRAGMA user_version").fetchone()[0])
+
+    @staticmethod
+    def _set_user_version(sqlite_db: SqliteDatabase, version: int) -> None:
+        """写入数据库结构版本（SQLite 的 user_version）。
+
+        PRAGMA 不支持参数绑定，version 以整数形式拼入语句。
+
+        Args:
+            sqlite_db (SqliteDatabase): 已连接的数据库。
+            version (int): 要写入的数据库结构版本。
+        """
+        sqlite_db.execute_sql(f"PRAGMA user_version = {int(version)}")
 
     def record_danmaku(
         self,
@@ -129,7 +170,7 @@ class HistoryManager:
                     .execute()
             )
         except Exception as e:
-            logger.error(f"存证落库失败 [dmid={dmid}]: {e}", exc_info=True)
+            logger.exception(f"存证落库失败 [dmid={dmid}]")
             raise HistoryStorageError(f"弹幕存证写入失败 [dmid={dmid}]: {e}", original_error=e) from e
 
     def upsert_task(self, definition: TaskDefinition, status: TaskStatus) -> None:
@@ -170,8 +211,8 @@ class HistoryManager:
                     )
                     .execute()
             )
-        except Exception as e:
-            logger.error(f"任务记录写入失败: {e}", exc_info=True)
+        except Exception:
+            logger.exception("任务记录写入失败")
             raise
 
     def get_task(self, task_id: str) -> dict | None:
@@ -249,8 +290,8 @@ class HistoryManager:
             )
             return query.execute()
 
-        except Exception as e:
-            logger.error(f"批量验证状态失败: {e}", exc_info=True)
+        except Exception:
+            logger.exception("批量验证状态失败")
             return 0
 
     def mark_as_lost(self, cid: int, verified_dmids: list[str]) -> int:
@@ -281,8 +322,8 @@ class HistoryManager:
 
             return rows_updated
 
-        except Exception as e:
-            logger.error(f"标记丢失状态失败: {e}", exc_info=True)
+        except Exception:
+            logger.exception("标记丢失状态失败")
             return 0
 
     def get_pending_cids(self) -> list[PendingCidRecord]:
@@ -299,8 +340,8 @@ class HistoryManager:
                     .group_by(SentDanmaku.bvid, SentDanmaku.cid)
                     .dicts()
             )  # type: ignore[return-value]
-        except Exception as e:
-            logger.error(f"查询待验证 CID 列表失败: {e}", exc_info=True)
+        except Exception:
+            logger.exception("查询待验证 CID 列表失败")
             return []
 
     def get_pending_records(self, cid: int) -> list[PendingDanmakuRecord]:
@@ -323,8 +364,8 @@ class HistoryManager:
                     .dicts()
             )  # type: ignore[return-value]
 
-        except Exception as e:
-            logger.error(f"查询 Pending 记录失败: {e}", exc_info=True)
+        except Exception:
+            logger.exception("查询 Pending 记录失败")
             return []
 
     def get_stats(self, cid: int, stats_baseline: float = 0.0) -> tuple[int, int, int]:
@@ -357,8 +398,8 @@ class HistoryManager:
                 total, verified, lost = stats
                 return (total or 0, int(verified or 0), int(lost or 0))
 
-        except Exception as e:
-            logger.error(f"获取统计失败: {e}", exc_info=True)
+        except Exception:
+            logger.exception("获取统计失败")
 
         return 0, 0, 0
 
@@ -415,7 +456,7 @@ class HistoryManager:
             )
 
         except Exception as e:
-            logger.error(f"查重失败: {e}", exc_info=True)
+            logger.exception("查重失败")
             raise HistoryStorageError(f"查重查询失败，无法判断弹幕是否已发送: {e}", original_error=e) from e
 
     def query_history(self, keyword: str = "", status: int = -1, limit: int = 500) -> list[dict]:
@@ -445,6 +486,6 @@ class HistoryManager:
 
             return list(query.dicts())  # type: ignore[return-value]
 
-        except Exception as e:
-            logger.error(f"查询历史记录失败: {e}", exc_info=True)
+        except Exception:
+            logger.exception("查询历史记录失败")
             return []

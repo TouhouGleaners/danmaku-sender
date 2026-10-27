@@ -17,7 +17,7 @@ class SenderConfig(AtomicModel):
     / ``SenderConfig.QueueConfig`` 取类型，不得从别处单独引进来用。
 
     Attributes:
-        mode (SendMode): 整轮运行做什么——仅发送，还是发送并监视。
+        mode (SendMode): 整轮运行的方式——仅发送，还是发送并监视。
         pacing (PacingConfig): 单个任务内的发送节奏。
         queue (QueueConfig): 整队的调度与查重规则。
     """

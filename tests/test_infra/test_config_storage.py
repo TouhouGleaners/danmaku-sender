@@ -84,7 +84,7 @@ class TestConfigSave:
         assert restored.theme_config.theme_mode is ThemeMode.DARK
 
     def test_save_writes_nested_shape(self, tmp_path, monkeypatch):
-        """落盘写的是 sender 下的 pacing / queue，不再有 send_policy 段。"""
+        """落盘写的是 sender 下的 mode / pacing / queue 三层，不产生 send_policy 段。"""
         path = tmp_path / "config.json"
         monkeypatch.setattr(cs_module, "CONFIG_PATH", path)
 
