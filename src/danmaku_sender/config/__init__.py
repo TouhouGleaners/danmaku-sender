@@ -3,7 +3,6 @@ from .base import AtomicModel
 from .global_config import GlobalConfig
 from .monitor_config import MonitorConfig
 from .network_policy import NetworkPolicy
-from .send_policy import SendPolicy
 from .sender_config import SenderConfig
 from .settings import Settings
 from .theme_config import FontChoice, ThemeConfig, ThemeMode
@@ -16,7 +15,6 @@ __all__ = [
     "GlobalConfig",
     "MonitorConfig",
     "NetworkPolicy",
-    "SendPolicy",
     "SenderConfig",
     "Settings",
     "ThemeConfig",

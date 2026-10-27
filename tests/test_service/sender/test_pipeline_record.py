@@ -7,7 +7,7 @@ import threading
 
 import pytest
 
-from danmaku_sender.config import ApiAuthConfig, NetworkPolicy, SenderConfig, SendPolicy
+from danmaku_sender.config import ApiAuthConfig, NetworkPolicy, SenderConfig
 from danmaku_sender.infra.persistence.history_manager import HistoryManager
 from danmaku_sender.service.sender import SendJob, SendPipeline
 from danmaku_sender.service.sender import pipeline as pipeline_mod
@@ -53,8 +53,8 @@ def _run_pipeline(hm: HistoryManager, target: VideoTarget, danmakus: list[Danmak
         task_id=task_id,
         target=target,
         danmakus=danmakus,
-        config=SenderConfig(min_delay=0.1, max_delay=0.2).to_task_config(),
-        policy=SendPolicy(),
+        config=SenderConfig.PacingConfig(min_delay=0.1, max_delay=0.2).to_task_config(),
+        queue_config=SenderConfig.QueueConfig(),
         stop_event=threading.Event(),
     )
     errors: list[Exception] = []

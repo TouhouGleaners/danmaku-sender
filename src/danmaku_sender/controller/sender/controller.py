@@ -203,9 +203,9 @@ class SenderController(QObject):
             return
         self._task_definitions = {s.definition.task_id: s.definition for s in snapshots}
 
-        # 队列策略同样取启动时快照：运行期间改设置不影响本次运行，
+        # 整队规则同样取启动时快照：运行期间改设置不影响本次运行，
         # 也避免设置页与 Worker 跨线程共享同一个可变对象。
-        send_policy = self.settings.send_policy.model_copy(deep=True)
+        queue_config = self.settings.sender_config.queue.model_copy(deep=True)
         session = self.state.session
         auth = ApiAuthConfig(sessdata=session.sessdata, bili_jct=session.bili_jct)
         network = NetworkPolicy(use_system_proxy=self.settings.global_config.use_system_proxy)
@@ -214,7 +214,7 @@ class SenderController(QObject):
             tasks=snapshots,
             auth=auth,
             network=network,
-            send_policy=send_policy,
+            queue_config=queue_config,
             history_manager=self.history_manager,
             stop_event=self._stop_event,
             prevent_sleep=self.settings.global_config.prevent_sleep,

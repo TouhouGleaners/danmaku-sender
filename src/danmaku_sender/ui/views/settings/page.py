@@ -409,20 +409,23 @@ class SettingsPage(QWidget):
         LiveFormBinder.bind(self.prevent_sleep_checkbox, self.settings.global_config, "prevent_sleep", after_write=self._on_config_written)
         LiveFormBinder.bind(self.proxy_checkbox, self.settings.global_config, "use_system_proxy", after_write=self._on_config_written)
 
-        # 发送延迟策略
-        config = self.settings.sender_config
-        LiveFormBinder.bind(self.min_delay, config, "min_delay", after_write=self._on_config_written)
-        LiveFormBinder.bind(self.max_delay, config, "max_delay", after_write=self._on_config_written)
-        LiveFormBinder.bind(self.burst_enabled_cb, config, "burst_enabled", after_write=self._on_config_written)
-        LiveFormBinder.bind(self.burst_size, config, "burst_size", after_write=self._on_config_written)
-        LiveFormBinder.bind(self.burst_rest_min, config, "rest_min", after_write=self._on_config_written)
-        LiveFormBinder.bind(self.burst_rest_max, config, "rest_max", after_write=self._on_config_written)
+        # 发送节奏（单个任务内）
+        pacing = self.settings.sender_config.pacing
+        LiveFormBinder.bind(self.min_delay, pacing, "min_delay", after_write=self._on_config_written)
+        LiveFormBinder.bind(self.max_delay, pacing, "max_delay", after_write=self._on_config_written)
+        LiveFormBinder.bind(self.burst_enabled_cb, pacing, "burst_enabled", after_write=self._on_config_written)
+        LiveFormBinder.bind(self.burst_size, pacing, "burst_size", after_write=self._on_config_written)
+        LiveFormBinder.bind(self.burst_rest_min, pacing, "rest_min", after_write=self._on_config_written)
+        LiveFormBinder.bind(self.burst_rest_max, pacing, "rest_max", after_write=self._on_config_written)
 
-        # 队列运行策略（一次队列运行共享，不随单个任务走）
-        policy = self.settings.send_policy
-        LiveFormBinder.bind(self.send_mode_combo, policy, "mode", after_write=self._on_config_written)
-        LiveFormBinder.bind(self.delay_between, policy, "delay_between_tasks", after_write=self._on_config_written)
-        LiveFormBinder.bind(self.allow_duplicates, policy, "allow_duplicates", after_write=self._on_config_written)
+        # 整轮运行模式
+        sender = self.settings.sender_config
+        LiveFormBinder.bind(self.send_mode_combo, sender, "mode", after_write=self._on_config_written)
+
+        # 整队规则（一次队列运行共享，不随单个任务走）
+        queue = self.settings.sender_config.queue
+        LiveFormBinder.bind(self.delay_between, queue, "delay_between_tasks", after_write=self._on_config_written)
+        LiveFormBinder.bind(self.allow_duplicates, queue, "allow_duplicates", after_write=self._on_config_written)
 
     def showEvent(self, event):
         """打开页面时从状态重读控件值（无隐式同步）"""

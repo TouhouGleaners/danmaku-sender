@@ -80,8 +80,8 @@ class TaskDetailDialog(QDialog):
         self._create_ui()
         self._connect_signals()
         self._load_task_info()
-        # 配置区填充初始值（表单用可编辑的 SenderConfig，保存时再转回 TaskConfig）
-        DraftFormBinder.fill(self, SenderConfig.from_task_config(self.editing.config))
+        # 配置区填充初始值（表单用可编辑的 PacingConfig，保存时再转回 TaskConfig）
+        DraftFormBinder.fill(self, SenderConfig.PacingConfig.from_task_config(self.editing.config))
 
         # 非可编辑状态时禁用所有编辑控件
         if not self._is_editable:
@@ -336,10 +336,10 @@ class TaskDetailDialog(QDialog):
         self._apply_target_changes()
         self._apply_danmaku_changes()
 
-        # 读取控件值并构造 SenderConfig（pydantic 校验，含跨字段规则），
+        # 读取控件值并构造 PacingConfig（pydantic 校验，含跨字段规则），
         # 再冻结成工单参数快照
         try:
-            collected = DraftFormBinder.collect(self, SenderConfig)
+            collected = DraftFormBinder.collect(self, SenderConfig.PacingConfig)
             self.editing.config = collected.to_task_config()
         except ValidationError as e:
             rest = DraftFormBinder.show_errors(self, e)
@@ -469,7 +469,7 @@ class TaskDetailDialog(QDialog):
         self._part_combo.setEnabled(False)
         self._file_btn.setEnabled(False)
 
-        # 禁用配置编辑（队列级策略不在任务里，见 SendPolicy）
+        # 禁用配置编辑（整队规则不在任务里，见 SenderConfig.QueueConfig）
         config_widgets: list[QWidget] = [
             self._min_delay, self._max_delay,
             self._burst_cb, self._burst_size,

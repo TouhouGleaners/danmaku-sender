@@ -31,10 +31,10 @@ class TaskConfig:
 
     描述**单个任务**（一个视频）内弹幕的发送方式：延迟、爆发、休息。
     队列级策略（跳过已发送、任务间隔）作用于**整个任务队列**，
-    见 :class:`danmaku_sender.config.SendPolicy`。
+    见 :class:`danmaku_sender.config.SenderConfig.QueueConfig`。
 
-    由 ``SenderConfig.to_task_config()`` 派生，字段一一对应；
-    反向转换见 ``SenderConfig.from_task_config()``。
+    由 ``SenderConfig.PacingConfig.to_task_config()`` 派生，字段一一对应；
+    反向转换见 ``SenderConfig.PacingConfig.from_task_config()``。
 
     Attributes:
         min_delay (float): 相邻两条弹幕的最小间隔（秒）。

@@ -3,7 +3,7 @@ from threading import Event
 
 import pytest
 
-from danmaku_sender.config import SenderConfig, SendPolicy
+from danmaku_sender.config import SenderConfig
 from danmaku_sender.service.sender.context import SendingContext, SendJob
 from danmaku_sender.types.models.common import VideoTarget
 from danmaku_sender.types.models.danmaku import Danmaku
@@ -59,8 +59,8 @@ class TestSendJob:
             task_id="t1",
             target=VideoTarget(bvid="BV1test", cid=1),
             danmakus=[Danmaku(msg="t", progress=0)],
-            config=SenderConfig().to_task_config(),
-            policy=SendPolicy(),
+            config=SenderConfig.PacingConfig().to_task_config(),
+            queue_config=SenderConfig.QueueConfig(),
             stop_event=Event()
         )
         assert job.target.bvid == "BV1test"

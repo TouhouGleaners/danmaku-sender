@@ -13,7 +13,7 @@ from danmaku_sender.types.models.common import SendMode
 
 def test_new_send_cancels_pending_grace(tmp_path, qapp):
     controller = MonitorController(AppState(), Settings(), HistoryManager(tmp_path / "history.db"))
-    controller.settings.send_policy.mode = SendMode.SEND_AND_MONITOR
+    controller.settings.sender_config.mode = SendMode.SEND_AND_MONITOR
     controller.start_grace_period()
     assert controller._grace_timer.isActive()
 

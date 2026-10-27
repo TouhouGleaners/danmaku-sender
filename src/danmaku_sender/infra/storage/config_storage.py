@@ -9,7 +9,6 @@ from danmaku_sender.config import (
     GlobalConfig,
     MonitorConfig,
     SenderConfig,
-    SendPolicy,
     Settings,
     ThemeConfig,
     ValidationConfig,
@@ -35,7 +34,6 @@ class ConfigStorage:
         config_data = {
             "global": settings.global_config.model_dump(mode="json"),
             "sender": settings.sender_config.model_dump(mode="json"),
-            "send_policy": settings.send_policy.model_dump(mode="json"),
             "monitor": settings.monitor_config.model_dump(mode="json"),
             "theme": settings.theme_config.model_dump(mode="json"),
             "validation": settings.validation_config.model_dump(mode="json")
@@ -85,7 +83,6 @@ class ConfigStorage:
 
         _apply_section("global", GlobalConfig, settings.global_config)
         _apply_section("sender", SenderConfig, settings.sender_config)
-        _apply_section("send_policy", SendPolicy, settings.send_policy)
         _apply_section("monitor", MonitorConfig, settings.monitor_config)
         _apply_section("theme", ThemeConfig, settings.theme_config)
         _apply_section("validation", ValidationConfig, settings.validation_config)

@@ -169,7 +169,7 @@ class TestTaskRecord:
             target=VideoTarget(bvid=bvid, cid=cid),
             meta=TaskMeta(video_title="标题", part_page=2, part_title="分P"),
             danmakus=(Danmaku(msg="x", progress=0),),
-            config=SenderConfig(min_delay=0.1, max_delay=0.2).to_task_config(),
+            config=SenderConfig.PacingConfig(min_delay=0.1, max_delay=0.2).to_task_config(),
         )
 
     def test_upsert_inserts_then_updates(self, hm):

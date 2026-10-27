@@ -12,7 +12,7 @@ def make_definition(danmaku_count: int, target: VideoTarget) -> TaskDefinition:
         task_id="t1",
         target=target,
         danmakus=tuple(Danmaku(msg=f"m{i}", progress=i) for i in range(danmaku_count)),
-        config=SenderConfig().to_task_config(),
+        config=SenderConfig.PacingConfig().to_task_config(),
     )
 
 
@@ -20,7 +20,7 @@ def make_draft(danmaku_count: int, target: VideoTarget) -> TaskDraft:
     return TaskDraft(
         target=target,
         danmakus=[Danmaku(msg=f"m{i}", progress=i) for i in range(danmaku_count)],
-        config=SenderConfig().to_task_config(),
+        config=SenderConfig.PacingConfig().to_task_config(),
     )
 
 

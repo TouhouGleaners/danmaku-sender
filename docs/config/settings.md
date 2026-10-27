@@ -15,22 +15,24 @@
 
 ---
 
-## 发送节奏 (SenderConfig)
+## 发送配置 (SenderConfig)
+
+发送相关配置收在一个模型下，分运行模式、单任务节奏与整队规则三部分，分别位于 `mode`、`pacing`、`queue`。
+
+### 单任务发送节奏 (pacing)
 
 描述**单个任务**里弹幕怎么发。入队时会派生成不可变的工单参数快照，因此修改这些设置只对**新建**的任务生效，已入队任务保持入队那一刻的节奏。
 
 | 配置项 | 类型 | 默认值 | UI 控件 | 说明 |
 |:-------|:-----|:-------|:--------|:-----|
-| `min_delay` | float | 8.0 | QDoubleSpinBox | 两条弹幕之间的最小随机间隔（秒） |
-| `max_delay` | float | 8.5 | QDoubleSpinBox | 两条弹幕之间的最大随机间隔（秒） |
-| `burst_enabled` | bool | false | QCheckBox | 是否启用突发模式 |
-| `burst_size` | int | 3 | QSpinBox | 突发模式下每轮连发条数 |
-| `rest_min` | float | 40.0 | QDoubleSpinBox | 突发模式休息期最小时间（秒） |
-| `rest_max` | float | 45.0 | QDoubleSpinBox | 突发模式休息期最大时间（秒） |
+| `min_delay` | float | 9.5 | QDoubleSpinBox | 两条弹幕之间的最小随机间隔（秒） |
+| `max_delay` | float | 10.5 | QDoubleSpinBox | 两条弹幕之间的最大随机间隔（秒） |
+| `burst_enabled` | bool | true | QCheckBox | 是否启用突发模式 |
+| `burst_size` | int | 5 | QSpinBox | 突发模式下每轮连发条数 |
+| `rest_min` | float | 30.0 | QDoubleSpinBox | 突发模式休息期最小时间（秒） |
+| `rest_max` | float | 35.0 | QDoubleSpinBox | 突发模式休息期最大时间（秒） |
 
----
-
-## 队列发送策略 (SendPolicy)
+### 整队规则 (queue)
 
 描述**整个任务队列**怎么跑。启动队列时取一次快照，运行期间修改这些设置不影响正在跑的队列（下次运行生效）。
 
@@ -39,23 +41,32 @@
 | `delay_between_tasks` | float | 30 | QDoubleSpinBox | 两个任务之间的等待时间（秒） |
 | `allow_duplicates` | bool | false | QCheckBox | 允许重复发送（危险区，见下） |
 
+### 运行模式 (mode)
+
+| 配置项 | 类型 | 默认值 | UI 控件 | 说明 |
+|:-------|:-----|:-------|:--------|:-----|
+| `mode` | SendMode | `send_and_monitor` | QComboBox | 整轮运行做什么：仅发送，还是发送并监视 |
+
 详细说明见 [频率控制与并发策略](../features/sender/delay-control.md) 和 [断点续传与智能去重](../features/sender/resume.md)。
 
-两者在 `config.json` 中分属不同的段：
+在 `config.json` 中三者同属 `sender` 段：
 
 ```json
 {
   "sender": {
-    "min_delay": 8.0,
-    "max_delay": 8.5,
-    "burst_enabled": false,
-    "burst_size": 3,
-    "rest_min": 40.0,
-    "rest_max": 45.0
-  },
-  "send_policy": {
-    "delay_between_tasks": 30.0,
-    "allow_duplicates": false
+    "mode": "send_and_monitor",
+    "pacing": {
+      "min_delay": 9.5,
+      "max_delay": 10.5,
+      "burst_enabled": true,
+      "burst_size": 5,
+      "rest_min": 30.0,
+      "rest_max": 35.0
+    },
+    "queue": {
+      "delay_between_tasks": 30.0,
+      "allow_duplicates": false
+    }
   }
 }
 ```
@@ -64,7 +75,7 @@
     该项位于设置页的「危险区」，**默认关闭**。启用后发送前不再比对数据库，已发送的弹幕会被再次发送到同一视频，视频中会出现重复弹幕。仅在确需重复发送同一批弹幕时启用，用毕请关闭。
 
 !!! note "旧配置不做迁移"
-    缺少 `send_policy` 段时这些策略项回退为默认值，不会从旧 `sender` 段迁移。更早版本的 `skip_sent` 已废弃移除，写入配置将被忽略；其默认行为（跳过已发送弹幕）等同于 `allow_duplicates` 关闭时的行为。
+    旧版 `sender` 段的平铺字段与 `send_policy` 段一律不迁移，整块回退为默认值。默认节奏即长期实测稳定值（9.5 / 10.5 秒、突发每轮 5 条、休息 30~35 秒），回退落在安全一侧；需要保留的取值在设置页改回即可。更早版本的 `skip_sent` 已废弃移除，写入配置将被忽略；其默认行为（跳过已发送弹幕）等同于 `allow_duplicates` 关闭时的行为。
 
 ---
 

@@ -3,7 +3,7 @@ from collections.abc import Callable
 from dataclasses import dataclass, field
 from threading import Event
 
-from danmaku_sender.config import SendPolicy
+from danmaku_sender.config import SenderConfig
 from danmaku_sender.types.models.common import UnsentDanmakusRecord, VideoTarget
 from danmaku_sender.types.models.danmaku import Danmaku
 from danmaku_sender.types.models.queue import TaskConfig
@@ -22,7 +22,7 @@ class SendJob:
         target (VideoTarget): 发送目标。
         danmakus (list[Danmaku]): 待发弹幕。
         config (TaskConfig): 本任务的发送节奏。
-        policy (SendPolicy): 整队的发送策略。
+        queue_config (SenderConfig.QueueConfig): 整队的调度与查重规则。
         stop_event (Event): 中止信号。
         progress_callback (Callable[[int, int], None] | None): 进度回调，收已发数与总数。
         result_callback (Callable[[Danmaku, DanmakuSendResult], None] | None): 单条结果回调。
@@ -31,7 +31,7 @@ class SendJob:
     target: VideoTarget
     danmakus: list[Danmaku]
     config: TaskConfig
-    policy: SendPolicy
+    queue_config: SenderConfig.QueueConfig
     stop_event: Event
 
     progress_callback: Callable[[int, int], None] | None = None

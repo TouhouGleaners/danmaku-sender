@@ -8,7 +8,7 @@ from threading import Event
 
 import pytest
 
-from danmaku_sender.config import SenderConfig, SendPolicy
+from danmaku_sender.config import SenderConfig
 from danmaku_sender.infra.persistence.history_manager import HistoryManager
 from danmaku_sender.service.sender.context import SendingContext, SendJob
 from danmaku_sender.service.sender.scheduler import DanmakuScheduler
@@ -72,8 +72,8 @@ def build_job(dms: list[Danmaku], **overrides) -> SendJob:
         "task_id": "t1",
         "target": TARGET,
         "danmakus": dms,
-        "config": SenderConfig(min_delay=0.1, max_delay=0.1).to_task_config(),
-        "policy": SendPolicy(),
+        "config": SenderConfig.PacingConfig(min_delay=0.1, max_delay=0.1).to_task_config(),
+        "queue_config": SenderConfig.QueueConfig(),
         "stop_event": Event(),
     }
     defaults.update(overrides)

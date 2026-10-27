@@ -6,7 +6,7 @@
 import sqlite3
 import threading
 
-from danmaku_sender.config import ApiAuthConfig, NetworkPolicy, SenderConfig, SendPolicy
+from danmaku_sender.config import ApiAuthConfig, NetworkPolicy, SenderConfig
 from danmaku_sender.infra.persistence.history_manager import HistoryManager
 from danmaku_sender.service.sender import SendJob, SendPipeline
 from danmaku_sender.service.sender import pipeline as pipeline_mod
@@ -45,7 +45,7 @@ def test_send_record_verify_share_task_id(tmp_path, monkeypatch):
         target=TARGET,
         meta=TaskMeta(video_title="冒烟视频"),
         danmakus=(Danmaku(msg="a", progress=1000), Danmaku(msg="b", progress=2000)),
-        config=SenderConfig(min_delay=0.1, max_delay=0.2).to_task_config(),
+        config=SenderConfig.PacingConfig(min_delay=0.1, max_delay=0.2).to_task_config(),
     )
 
     # 1) 任务开始：写任务记录
@@ -62,7 +62,7 @@ def test_send_record_verify_share_task_id(tmp_path, monkeypatch):
         target=TARGET,
         danmakus=list(definition.danmakus),
         config=definition.config,
-        policy=SendPolicy(),
+        queue_config=SenderConfig.QueueConfig(),
         stop_event=threading.Event(),
     )
     pipeline.execute(job)

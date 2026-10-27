@@ -471,13 +471,13 @@ def test_show_errors_returns_unmapped_messages(qapp):
     hi.setRange(0, 99)
     DraftFormBinder.map(lo, "min_delay")
     DraftFormBinder.map(hi, "max_delay")
-    DraftFormBinder.fill(parent, SenderConfig())
-    # min_delay > max_delay 触发 SenderConfig.check_logic（模型级校验）
+    DraftFormBinder.fill(parent, SenderConfig.PacingConfig())
+    # min_delay > max_delay 触发 PacingConfig.check_logic（模型级校验）
     lo.setValue(20)
     hi.setValue(5)
 
     with pytest.raises(ValidationError) as exc:
-        DraftFormBinder.collect(parent, SenderConfig)
+        DraftFormBinder.collect(parent, SenderConfig.PacingConfig)
     rest = DraftFormBinder.show_errors(parent, exc.value)
     assert rest, "模型级错误应作为未映射消息返回"
     assert any("延迟" in msg for msg in rest)
@@ -499,29 +499,29 @@ def test_cross_field_assignment_keeps_model_clean(qapp):
 
     回归：validate_assignment 的赋值不原子——字段级校验失败会拒绝写入，
     但 model_validator(mode='after') 在赋值后运行、失败不回滚。
-    SenderConfig.__setattr__ 先整模型试算来堵住这个洞。
+    AtomicModel.__setattr__ 先整模型试算来堵住这个洞。
     """
-    cfg = SenderConfig()  # min=8.0, max=8.5
+    cfg = SenderConfig.PacingConfig()  # min=9.5, max=10.5
     with pytest.raises(ValidationError):
-        cfg.min_delay = 10.0
-    assert cfg.min_delay == 8.0, "校验失败不得留下脏值"
-    assert cfg.max_delay == 8.5
+        cfg.min_delay = 11.0
+    assert cfg.min_delay == 9.5, "校验失败不得留下脏值"
+    assert cfg.max_delay == 10.5
     # 写脏后落盘会让下次启动整段校验失败、回退默认值
-    assert SenderConfig.model_validate(cfg.model_dump()) is not None
+    assert SenderConfig.PacingConfig.model_validate(cfg.model_dump()) is not None
 
 
 def test_cross_field_assignment_via_binder_keeps_model_clean(qapp):
     """经 LiveFormBinder 写回同样不得写脏模型。"""
-    cfg = SenderConfig()
+    cfg = SenderConfig.PacingConfig()
     parent = QWidget()
     lo = QDoubleSpinBox(parent)
     lo.setRange(0.1, 60.0)
     LiveFormBinder.bind(lo, cfg, "min_delay")
 
-    lo.setValue(10.0)  # > max_delay=8.5
+    lo.setValue(11.0)  # > max_delay=10.5
     assert lo.property("invalid") is True
-    assert cfg.min_delay == 8.0
-    assert cfg.max_delay == 8.5
+    assert cfg.min_delay == 9.5
+    assert cfg.max_delay == 10.5
 
 
 def test_fill_rounding_to_same_value_still_emits_linkage(qapp):
@@ -555,9 +555,9 @@ def test_sibling_pending_input_not_lost_on_later_valid_write(qapp):
     """一个控件写入被拒后，兄弟控件改对时不得丢掉前者的待定输入。
 
     回归：单字段写回只提交当前字段，min 先因 max 限制被拒、max 改对后，
-    min 的输入就找不回来了——控件显示 10、模型却是 8.0，存盘即丢。
+    min 的输入就找不回来了——控件显示 11、模型却是 9.5，存盘即丢。
     """
-    cfg = SenderConfig()  # 8.0 / 8.5
+    cfg = SenderConfig.PacingConfig()  # 9.5 / 10.5
     parent = QWidget()
     lo = QDoubleSpinBox(parent)
     hi = QDoubleSpinBox(parent)
@@ -566,13 +566,13 @@ def test_sibling_pending_input_not_lost_on_later_valid_write(qapp):
     LiveFormBinder.bind(lo, cfg, "min_delay")
     LiveFormBinder.bind(hi, cfg, "max_delay")
 
-    lo.setValue(10.0)  # > max_delay=8.5，本次写入被拒
-    assert cfg.min_delay == 8.0
-    assert cfg.max_delay == 8.5
+    lo.setValue(11.0)  # > max_delay=10.5，本次写入被拒
+    assert cfg.min_delay == 9.5
+    assert cfg.max_delay == 10.5
     assert lo.property("invalid") is True
 
-    hi.setValue(12.0)  # 10/12 整体合法了
-    assert cfg.min_delay == 10.0, "兄弟控件的待定输入不得被丢掉"
+    hi.setValue(12.0)  # 11/12 整体合法了
+    assert cfg.min_delay == 11.0, "兄弟控件的待定输入不得被丢掉"
     assert cfg.max_delay == 12.0
     assert not lo.property("invalid"), "整表合法后应清掉红框"
     assert not hi.property("invalid")
