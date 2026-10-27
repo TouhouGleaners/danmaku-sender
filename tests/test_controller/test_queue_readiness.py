@@ -15,7 +15,7 @@ def _task(status: TaskStatus) -> TaskDraft:
     return TaskDraft(
         target=VideoTarget(bvid="BV1", cid=1),
         danmakus=[],
-        config=Settings().sender_config.to_task_config(),
+        config=Settings().sender_config.pacing.to_task_config(),
         status=status,
     )
 

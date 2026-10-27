@@ -2,7 +2,7 @@ import logging
 import time
 from threading import Event
 
-from danmaku_sender.config import SendPolicy
+from danmaku_sender.config import SenderConfig
 from danmaku_sender.infra.persistence.history_manager import HistoryManager
 from danmaku_sender.types.exceptions.exceptions import HistoryStorageError
 from danmaku_sender.types.models.common import VideoTarget
@@ -97,7 +97,7 @@ class DanmakuScheduler:
             storage_error=last_error,
         )
 
-    def _should_skip(self, dm: Danmaku, ctx: SendingContext, policy: SendPolicy) -> bool:
+    def _should_skip(self, dm: Danmaku, ctx: SendingContext, queue_config: SenderConfig.QueueConfig) -> bool:
         """判断该弹幕是否因已发送而跳过。
 
         按弹幕指纹计数：本次发送中该指纹的出现序号不大于账本中已成功发送的次数时跳过。
@@ -105,12 +105,12 @@ class DanmakuScheduler:
         Args:
             dm (Danmaku): 待判断的弹幕。
             ctx (SendingContext): 运行记录，持有指纹计数缓存。
-            policy (SendPolicy): 发送策略；allow_duplicates 为真时不做查重。
+            queue_config (SenderConfig.QueueConfig): 整队规则；allow_duplicates 为真时不做查重。
 
         Returns:
             bool: 需要跳过返回 True。
         """
-        if policy.allow_duplicates or not self.history_manager:
+        if queue_config.allow_duplicates or not self.history_manager:
             return False
 
         dm_fingerprint = self._get_fingerprint(dm)
@@ -165,7 +165,7 @@ class DanmakuScheduler:
                     job.progress_callback(i + 1, ctx.total)
 
                 # --- 查重断点续传 ---
-                if self._should_skip(dm, ctx, job.policy):
+                if self._should_skip(dm, ctx, job.queue_config):
                     ctx.skipped_count += 1
                     pending_from = i + 1
                     continue

@@ -38,7 +38,7 @@ def enqueue_task(state: AppState, dms: list[Danmaku]) -> str:
     draft = TaskDraft(
         target=TARGET,
         danmakus=dms,
-        config=SenderConfig(min_delay=0.1, max_delay=0.1).to_task_config(),
+        config=SenderConfig.PacingConfig(min_delay=0.1, max_delay=0.1).to_task_config(),
     )
     state.workspace.queue_state.add_task(draft)
     return draft.task_id

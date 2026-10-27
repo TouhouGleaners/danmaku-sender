@@ -5,7 +5,7 @@ import threading
 
 from PySide6.QtCore import Signal
 
-from danmaku_sender.config import ApiAuthConfig, NetworkPolicy, SendPolicy
+from danmaku_sender.config import ApiAuthConfig, NetworkPolicy, SenderConfig
 from danmaku_sender.controller.concurrency import WorkerThread
 from danmaku_sender.infra.persistence.history_manager import HistoryManager
 from danmaku_sender.infra.platform import KeepSystemAwake
@@ -38,7 +38,7 @@ class QueueSendWorker(WorkerThread):
         tasks: tuple[TaskSnapshot, ...],
         auth: ApiAuthConfig,
         network: NetworkPolicy,
-        send_policy: SendPolicy,
+        queue_config: SenderConfig.QueueConfig,
         history_manager: HistoryManager,
         stop_event: threading.Event,
         prevent_sleep: bool = True,
@@ -50,7 +50,7 @@ class QueueSendWorker(WorkerThread):
             tasks: 启动时的任务快照，运行期间不再追加。
             auth: 身份凭据。
             network: 传输策略。
-            send_policy: 发送策略快照。
+            queue_config: 整队规则快照。
             history_manager: 本地账本，供存证与查重。
             stop_event: 中止标记。
             prevent_sleep: 任务运行期间是否阻止系统休眠。
@@ -60,7 +60,7 @@ class QueueSendWorker(WorkerThread):
         self.tasks = tasks
         self.auth = auth
         self.network = network
-        self.send_policy = send_policy
+        self.queue_config = queue_config
         self.history_manager = history_manager
         self.stop_event = stop_event
         self.prevent_sleep = prevent_sleep
@@ -96,7 +96,7 @@ class QueueSendWorker(WorkerThread):
                         break
 
                     if not self.stop_event.is_set() and idx < total - 1:
-                        delay = self.send_policy.delay_between_tasks
+                        delay = self.queue_config.delay_between_tasks
                         if delay > 0:
                             self.stop_event.wait(delay)
 
@@ -107,9 +107,9 @@ class QueueSendWorker(WorkerThread):
                     if snap.status == TaskStatus.PENDING:
                         self.taskSkipped.emit(snap.definition.task_id, "致命错误，队列中止")
 
-        except Exception as e:
+        except Exception:
             stopped_early = True
-            logger.error(f"队列执行发生未预期异常: {e}", exc_info=True)
+            logger.exception("队列执行发生未预期异常")
 
         finally:
             if stopped_early or self.stop_event.is_set():
@@ -137,7 +137,7 @@ class QueueSendWorker(WorkerThread):
         future_tasks = self.tasks[idx + 1:]
 
         def progress_emitter(attempted: int, task_total: int, eta: float):
-            queue_eta = self._calc_queue_eta(attempted, task_total, definition.config, future_tasks, self.send_policy)
+            queue_eta = self._calc_queue_eta(attempted, task_total, definition.config, future_tasks, self.queue_config)
             self.queueProgressUpdated.emit(idx, total, queue_eta)
             self.taskProgressUpdated.emit(task_id, attempted, task_total, eta)
 
@@ -149,7 +149,7 @@ class QueueSendWorker(WorkerThread):
                 target=definition.target,
                 danmakus=list(definition.danmakus),  # Danmaku 不可变，无需克隆
                 config=definition.config,
-                policy=self.send_policy,
+                queue_config=self.queue_config,
                 stop_event=self.stop_event,
             )
             ctx = pipeline.execute(job, progress_emitter=progress_emitter)
@@ -175,7 +175,7 @@ class QueueSendWorker(WorkerThread):
         current_total: int,
         current_config: TaskConfig,
         future_tasks: tuple[TaskSnapshot, ...],
-        policy: SendPolicy,
+        queue_config: SenderConfig.QueueConfig,
     ) -> float:
         """计算整个队列的剩余 ETA（秒）。
 
@@ -186,7 +186,7 @@ class QueueSendWorker(WorkerThread):
             current_total (int): 当前任务的弹幕总数。
             current_config (TaskConfig): 当前任务的发送节奏。
             future_tasks (tuple[TaskSnapshot, ...]): 后续任务快照。
-            policy (SendPolicy): 整队的发送策略。
+            queue_config (SenderConfig.QueueConfig): 整队的调度与查重规则。
 
         Returns:
             float: 剩余秒数。
@@ -208,7 +208,7 @@ class QueueSendWorker(WorkerThread):
 
         for s in pending_future:
             # 与上一个任务之间的间隔
-            queue_eta += policy.delay_between_tasks
+            queue_eta += queue_config.delay_between_tasks
             queue_eta += _task_eta(0, s.definition.total, s.definition.config)
 
         return queue_eta

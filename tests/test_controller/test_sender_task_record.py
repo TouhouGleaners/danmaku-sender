@@ -63,7 +63,7 @@ def _enqueue(state: AppState, task_id: str) -> str:
         target=TARGET,
         meta=TaskMeta(video_title="标题"),
         danmakus=[Danmaku(msg="a", progress=1000)],
-        config=SenderConfig(min_delay=0.1, max_delay=0.1).to_task_config(),
+        config=SenderConfig.PacingConfig(min_delay=0.1, max_delay=0.1).to_task_config(),
         task_id=task_id,
     )
     state.workspace.queue_state.add_task(draft)

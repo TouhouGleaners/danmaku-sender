@@ -246,7 +246,7 @@ class TaskBuilderDialog(QDialog):
                 xml_path=xml_path,
             ),
             danmakus=danmakus,
-            config=self.settings.sender_config.to_task_config(),
+            config=self.settings.sender_config.pacing.to_task_config(),
         )
         task.status = task.initial_status
 

@@ -646,7 +646,7 @@ class SenderPage(QWidget):
         """
         if running:
             return RunAction.STOP
-        return _RUN_ACTION_OF[self.settings.send_policy.mode]
+        return _RUN_ACTION_OF[self.settings.sender_config.mode]
 
     @staticmethod
     def _run_valid(running: bool) -> tuple[RunAction, ...]:
@@ -891,7 +891,7 @@ class SenderPage(QWidget):
         解析失败或文件中没有弹幕的不建任务，原因在右下角列出。
         返回建出的任务数。
         """
-        config = self.settings.sender_config.to_task_config()
+        config = self.settings.sender_config.pacing.to_task_config()
         created = 0
         problems: list[str] = []
         for file_path in file_paths:
@@ -920,7 +920,7 @@ class SenderPage(QWidget):
             str | None: 失败原因；成功时为 None。
         """
         try:
-            loaded = DanmakuXml.load_task(file_path, self.settings.sender_config.to_task_config())
+            loaded = DanmakuXml.load_task(file_path, self.settings.sender_config.pacing.to_task_config())
         except Exception as e:
             problem = f"导入 {file_path} 失败：{e}"
             self.logger.error(problem)

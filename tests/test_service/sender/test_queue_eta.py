@@ -1,7 +1,7 @@
 """QueueSendWorker 队列 ETA 计算的边界行为"""
 import pytest
 
-from danmaku_sender.config import SendPolicy
+from danmaku_sender.config import SenderConfig
 from danmaku_sender.controller.sender.workers import QueueSendWorker
 from danmaku_sender.types.models.common import VideoTarget
 from danmaku_sender.types.models.danmaku import Danmaku
@@ -32,8 +32,8 @@ def _definition(task_id: str, total: int = 2) -> TaskDefinition:
     )
 
 
-def _eta(future: tuple[TaskSnapshot, ...], policy: SendPolicy) -> float:
-    return QueueSendWorker._calc_queue_eta(0, 1, _definition("t1").config, future, policy)
+def _eta(future: tuple[TaskSnapshot, ...], queue_config: SenderConfig.QueueConfig) -> float:
+    return QueueSendWorker._calc_queue_eta(0, 1, _definition("t1").config, future, queue_config)
 
 
 class TestCalcQueueEta:
@@ -42,37 +42,37 @@ class TestCalcQueueEta:
 
         回归：原实现按 future_tasks 判断是否加间隔，即使它们都不会被发送。
         """
-        policy = SendPolicy(delay_between_tasks=100.0)
+        queue_config = SenderConfig.QueueConfig(delay_between_tasks=100.0)
         future = (
             TaskSnapshot(definition=_definition("t2"), status=TaskStatus.COMPLETED),
             TaskSnapshot(definition=_definition("t3"), status=TaskStatus.FAILED),
             TaskSnapshot(definition=_definition("t4"), status=TaskStatus.SKIPPED),
         )
-        assert _eta(future, policy) == _eta((), policy)
+        assert _eta(future, queue_config) == _eta((), queue_config)
 
     def test_trailing_non_pending_adds_no_gap(self):
         """末尾是非 PENDING 任务时，不应在最后一个待发任务后再加间隔。
 
         回归：原实现用 future_tasks[-1] 判断边界，末尾有非 PENDING 就会多算。
         """
-        policy = SendPolicy(delay_between_tasks=100.0)
+        queue_config = SenderConfig.QueueConfig(delay_between_tasks=100.0)
         trailing_done = (
             TaskSnapshot(definition=_definition("t2"), status=TaskStatus.PENDING),
             TaskSnapshot(definition=_definition("t3"), status=TaskStatus.COMPLETED),
         )
         only_pending = (TaskSnapshot(definition=_definition("t2"), status=TaskStatus.PENDING),)
-        assert _eta(trailing_done, policy) == _eta(only_pending, policy)
+        assert _eta(trailing_done, queue_config) == _eta(only_pending, queue_config)
 
     def test_one_gap_per_pending_task(self):
         """每个待发任务前算一次间隔：每多一个待发任务，增量相同。"""
-        policy = SendPolicy(delay_between_tasks=100.0)
+        queue_config = SenderConfig.QueueConfig(delay_between_tasks=100.0)
         first = TaskSnapshot(definition=_definition("t2"), status=TaskStatus.PENDING)
         second = TaskSnapshot(definition=_definition("t3"), status=TaskStatus.PENDING)
 
-        base = _eta((), policy)
-        one = _eta((first,), policy)
-        two = _eta((first, second), policy)
+        base = _eta((), queue_config)
+        one = _eta((first,), queue_config)
+        two = _eta((first, second), queue_config)
 
         # 两个任务的 config/弹幕数相同，故每个增量 = 一个间隔 + 一个任务 ETA
-        assert one - base > policy.delay_between_tasks, "应含至少一个任务间隔"
+        assert one - base > queue_config.delay_between_tasks, "应含至少一个任务间隔"
         assert two - one == pytest.approx(one - base)

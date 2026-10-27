@@ -1,4 +1,4 @@
-"""状态与配置模型单元测试 — GlobalConfig, SenderConfig, SendPolicy, MonitorConfig, ValidationConfig, QueueState"""
+"""状态与配置模型单元测试 — GlobalConfig, SenderConfig, MonitorConfig, ValidationConfig, QueueState"""
 from dataclasses import FrozenInstanceError, replace
 from pathlib import Path
 
@@ -9,7 +9,6 @@ from danmaku_sender.config import (
     GlobalConfig,
     MonitorConfig,
     SenderConfig,
-    SendPolicy,
     ValidationConfig,
 )
 from danmaku_sender.state import QueueState
@@ -32,28 +31,29 @@ class TestGlobalConfig:
         assert cfg.use_system_proxy is False
 
 
-class TestSenderConfig:
-    """SenderConfig Pydantic 模型"""
+class TestPacingConfig:
+    """SenderConfig.PacingConfig 单任务发送节奏"""
 
     def test_default_values(self):
-        cfg = SenderConfig()
-        assert cfg.min_delay == 8.0
-        assert cfg.max_delay == 8.5
-        assert cfg.burst_size == 3
-        assert cfg.rest_min == 40.0
-        assert cfg.rest_max == 45.0
+        cfg = SenderConfig.PacingConfig()
+        assert cfg.min_delay == 9.5
+        assert cfg.max_delay == 10.5
+        assert cfg.burst_enabled is True
+        assert cfg.burst_size == 5
+        assert cfg.rest_min == 30.0
+        assert cfg.rest_max == 35.0
 
     def test_valid_custom_values(self):
-        cfg = SenderConfig(min_delay=5.0, max_delay=10.0)
+        cfg = SenderConfig.PacingConfig(min_delay=5.0, max_delay=10.0)
         assert cfg.min_delay == 5.0
         assert cfg.max_delay == 10.0
 
     def test_to_task_config_is_snapshot(self):
-        """入队后修改 SenderConfig 不得影响已派生的工单参数。
+        """入队后修改节奏配置不得影响已派生的工单参数。
 
         工单参数在入队时定死；改全局发送节奏只对新建任务生效。
         """
-        cfg = SenderConfig(min_delay=8.0, max_delay=8.5)
+        cfg = SenderConfig.PacingConfig(min_delay=8.0, max_delay=8.5)
         snapshot = cfg.to_task_config()
 
         cfg.max_delay = 10.5
@@ -64,34 +64,34 @@ class TestSenderConfig:
 
     def test_min_delay_too_small(self):
         with pytest.raises(ValidationError):
-            SenderConfig(min_delay=0.0)
+            SenderConfig.PacingConfig(min_delay=0.0)
 
     def test_max_delay_too_small(self):
         with pytest.raises(ValidationError):
-            SenderConfig(max_delay=0.0)
+            SenderConfig.PacingConfig(max_delay=0.0)
 
     def test_burst_size_negative(self):
         with pytest.raises(ValidationError):
-            SenderConfig(burst_size=-1)
+            SenderConfig.PacingConfig(burst_size=-1)
 
     def test_min_greater_than_max_raises(self):
         with pytest.raises(ValidationError, match="最小延迟不能大于最大延迟"):
-            SenderConfig(min_delay=10.0, max_delay=5.0)
+            SenderConfig.PacingConfig(min_delay=10.0, max_delay=5.0)
 
     def test_rest_min_greater_than_rest_max_raises(self):
         with pytest.raises(ValidationError, match="爆发休息的最小值不能大于最大值"):
-            SenderConfig(burst_enabled=True, burst_size=3, rest_min=50.0, rest_max=30.0)
+            SenderConfig.PacingConfig(burst_enabled=True, burst_size=3, rest_min=50.0, rest_max=30.0)
 
     def test_rest_range_ignored_when_burst_disabled(self):
         """burst_enabled=False 时不校验 rest_min/rest_max"""
-        cfg = SenderConfig(burst_size=3, rest_min=50.0, rest_max=30.0)
+        cfg = SenderConfig.PacingConfig(burst_enabled=False, burst_size=3, rest_min=50.0, rest_max=30.0)
         assert cfg.rest_min == 50.0
 
     def test_validate_assignment(self):
         """赋值时也应触发校验"""
-        cfg = SenderConfig()
+        cfg = SenderConfig.PacingConfig()
         with pytest.raises(ValidationError):
-            cfg.min_delay = 999.0  # > max_delay=8.5
+            cfg.min_delay = 999.0  # > max_delay=10.5
 
 
 class TestMonitorConfig:
@@ -136,7 +136,7 @@ def make_task(
     return TaskDraft(
         target=VideoTarget(bvid=f"BV{cid:03d}", cid=cid),
         danmakus=[Danmaku(msg=f"m{i}", progress=i) for i in range(danmaku_count)],
-        config=SenderConfig().to_task_config(),
+        config=SenderConfig.PacingConfig().to_task_config(),
         status=status,
     )
 
@@ -149,18 +149,28 @@ def make_incomplete_task(
     return TaskDraft(
         target=VideoTarget(),
         danmakus=[Danmaku(msg=f"m{i}", progress=i) for i in range(danmaku_count)],
-        config=SenderConfig().to_task_config(),
+        config=SenderConfig.PacingConfig().to_task_config(),
         status=status,
     )
 
 
-class TestSendPolicy:
-    """SendPolicy 队列发送策略"""
+class TestSenderConfig:
+    """SenderConfig 运行模式与整队规则"""
 
     def test_default_values(self):
-        policy = SendPolicy()
-        assert policy.delay_between_tasks == 30.0
-        assert policy.allow_duplicates is False
+        cfg = SenderConfig()
+        assert cfg.mode is not None
+        assert cfg.queue.delay_between_tasks == 30.0
+        assert cfg.queue.allow_duplicates is False
+
+    def test_pacing_and_queue_are_separate(self):
+        """节奏与整队规则各归各的字段，互不覆盖"""
+        cfg = SenderConfig()
+        cfg.pacing.max_delay = 13.0
+        cfg.pacing.min_delay = 12.0
+        cfg.queue.delay_between_tasks = 45.0
+        assert (cfg.pacing.min_delay, cfg.pacing.max_delay) == (12.0, 13.0)
+        assert cfg.queue.delay_between_tasks == 45.0
 
 
 class TestQueueState:
@@ -418,7 +428,7 @@ class TestQueueState:
         qs.add_task(t)
         view = qs.get_task_by_id(t.task_id)
         assert view is not None
-        assert view.config.min_delay == 8.0
+        assert view.config.min_delay == 9.5
         with pytest.raises(FrozenInstanceError):
             view.config.min_delay = 99.0  # type: ignore[misc]
 
