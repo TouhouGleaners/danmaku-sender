@@ -166,7 +166,7 @@ class HistoryManager:
                     .execute()
             )
         except Exception as e:
-            logger.error(f"存证落库失败 [dmid={dmid}]: {e}", exc_info=True)
+            logger.exception(f"存证落库失败 [dmid={dmid}]")
             raise HistoryStorageError(f"弹幕存证写入失败 [dmid={dmid}]: {e}", original_error=e) from e
 
     def upsert_task(self, definition: TaskDefinition, status: TaskStatus) -> None:
@@ -207,8 +207,8 @@ class HistoryManager:
                     )
                     .execute()
             )
-        except Exception as e:
-            logger.error(f"任务记录写入失败: {e}", exc_info=True)
+        except Exception:
+            logger.exception("任务记录写入失败")
             raise
 
     def get_task(self, task_id: str) -> dict | None:
@@ -286,8 +286,8 @@ class HistoryManager:
             )
             return query.execute()
 
-        except Exception as e:
-            logger.error(f"批量验证状态失败: {e}", exc_info=True)
+        except Exception:
+            logger.exception("批量验证状态失败")
             return 0
 
     def mark_as_lost(self, cid: int, verified_dmids: list[str]) -> int:
@@ -318,8 +318,8 @@ class HistoryManager:
 
             return rows_updated
 
-        except Exception as e:
-            logger.error(f"标记丢失状态失败: {e}", exc_info=True)
+        except Exception:
+            logger.exception("标记丢失状态失败")
             return 0
 
     def get_pending_cids(self) -> list[PendingCidRecord]:
@@ -336,8 +336,8 @@ class HistoryManager:
                     .group_by(SentDanmaku.bvid, SentDanmaku.cid)
                     .dicts()
             )  # type: ignore[return-value]
-        except Exception as e:
-            logger.error(f"查询待验证 CID 列表失败: {e}", exc_info=True)
+        except Exception:
+            logger.exception("查询待验证 CID 列表失败")
             return []
 
     def get_pending_records(self, cid: int) -> list[PendingDanmakuRecord]:
@@ -360,8 +360,8 @@ class HistoryManager:
                     .dicts()
             )  # type: ignore[return-value]
 
-        except Exception as e:
-            logger.error(f"查询 Pending 记录失败: {e}", exc_info=True)
+        except Exception:
+            logger.exception("查询 Pending 记录失败")
             return []
 
     def get_stats(self, cid: int, stats_baseline: float = 0.0) -> tuple[int, int, int]:
@@ -394,8 +394,8 @@ class HistoryManager:
                 total, verified, lost = stats
                 return (total or 0, int(verified or 0), int(lost or 0))
 
-        except Exception as e:
-            logger.error(f"获取统计失败: {e}", exc_info=True)
+        except Exception:
+            logger.exception("获取统计失败")
 
         return 0, 0, 0
 
@@ -452,7 +452,7 @@ class HistoryManager:
             )
 
         except Exception as e:
-            logger.error(f"查重失败: {e}", exc_info=True)
+            logger.exception("查重失败")
             raise HistoryStorageError(f"查重查询失败，无法判断弹幕是否已发送: {e}", original_error=e) from e
 
     def query_history(self, keyword: str = "", status: int = -1, limit: int = 500) -> list[dict]:
@@ -482,6 +482,6 @@ class HistoryManager:
 
             return list(query.dicts())  # type: ignore[return-value]
 
-        except Exception as e:
-            logger.error(f"查询历史记录失败: {e}", exc_info=True)
+        except Exception:
+            logger.exception("查询历史记录失败")
             return []
