@@ -584,13 +584,17 @@ class HistoryManager:
             | TaskRecord.part_title.contains(keyword)
             | TaskRecord.bvid.contains(keyword)
         )
+        msg_match = SentDanmaku.msg.contains(keyword)
+        msg_task_ids = (
+            SentDanmaku
+                .select(SentDanmaku.task_id)
+                .where(msg_match, SentDanmaku.task_id.is_null(False))
+                .distinct()
+        )
         msg_count = (
             SentDanmaku
                 .select(fn.COUNT(SentDanmaku.dmid))
-                .where(
-                    SentDanmaku.task_id == TaskRecord.task_id,
-                    SentDanmaku.msg.contains(keyword),
-                )
+                .where(SentDanmaku.task_id == TaskRecord.task_id, msg_match)
         )
 
         try:
@@ -601,7 +605,7 @@ class HistoryManager:
                         title_match.alias('title_hit'),
                         msg_count.alias('msg_hits'),
                     )
-                    .where(title_match | (msg_count > 0))
+                    .where(title_match | TaskRecord.task_id.in_(msg_task_ids))
                     .order_by(TaskRecord.created_at, TaskRecord.task_id)
                     .dicts()
             )  # type: ignore[assignment]
