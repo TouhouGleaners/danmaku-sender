@@ -123,3 +123,39 @@ class PendingDanmakuRecord(TypedDict):
     msg: str
     progress: int
     ctime: float
+
+
+class TaskRecordRow(TypedDict):
+    """一条任务的持久记录行。
+
+    Attributes:
+        task_id (str): 任务标识。
+        bvid (str): 目标视频 BV 号。
+        cid (int): 目标分P标识。
+        video_title (str | None): 视频标题。
+        part_page (int | None): 第几 P（1-based），未指定为 None。
+        part_title (str | None): 分P标题。
+        xml_path (str | None): 弹幕文件来自哪。
+        created_at (float): 任务开始执行的时刻（Unix 时间戳）。
+        status (str): 任务状态，取 ``TaskStatus.name``。
+    """
+    task_id: str
+    bvid: str
+    cid: int
+    video_title: str | None
+    part_page: int | None
+    part_title: str | None
+    xml_path: str | None
+    created_at: float
+    status: str
+
+
+class TaskSearchHit(TaskRecordRow):
+    """搜索命中的一条任务记录。
+
+    Attributes:
+        title_hit (bool): 任务标题或 BV 号是否命中关键词。
+        msg_hits (int): 任务弹幕中命中关键词的条数。
+    """
+    title_hit: bool
+    msg_hits: int
