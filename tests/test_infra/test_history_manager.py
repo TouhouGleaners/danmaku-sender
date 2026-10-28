@@ -329,6 +329,21 @@ class TestTaskQueries:
         hm.upsert_task(_task_definition(task_id="t1"), TaskStatus.COMPLETED)
         assert hm.search_tasks("") == []
 
+    def test_search_treats_wildcards_literally(self, hm):
+        """% 与 _ 按字面匹配，不当通配符"""
+        hm.upsert_task(_task_definition(task_id="t1", video_title="完成度 100%"), TaskStatus.COMPLETED)
+        hm.upsert_task(_task_definition(task_id="t2", video_title="完成度 1000"), TaskStatus.COMPLETED)
+
+        assert [h["task_id"] for h in hm.search_tasks("100%")] == ["t1"]
+
+    def test_search_title_hit_follows_database_collation(self, hm):
+        """命中来源与筛选同口径：标题命中由同一条 SQL 条件判定"""
+        hm.upsert_task(_task_definition(task_id="t1", video_title="BV1Pkq 补档"), TaskStatus.COMPLETED)
+
+        hits = hm.search_tasks("pkq")
+        assert [h["task_id"] for h in hits] == ["t1"]
+        assert hits[0]["title_hit"] is True
+
     def test_search_orders_by_start_time(self, hm):
         hm.upsert_task(_task_definition(task_id="t2", video_title="宝可梦"), TaskStatus.COMPLETED)
         hm.upsert_task(_task_definition(task_id="t1", video_title="宝可梦"), TaskStatus.COMPLETED)

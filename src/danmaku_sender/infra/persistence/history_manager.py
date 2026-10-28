@@ -568,6 +568,8 @@ class HistoryManager:
     def search_tasks(self, keyword: str) -> list[TaskSearchHit]:
         """按关键词搜索任务，命中任务标题、BV 号或任务弹幕内容。
 
+        标题命中与弹幕命中条数由数据库同一组条件算出，命中来源与筛选口径一致。
+
         Args:
             keyword (str): 搜索关键词，按子串匹配；空串返回空表。
 
@@ -577,30 +579,29 @@ class HistoryManager:
         if not keyword:
             return []
 
-        try:
-            hit_rows: list[dict] = list(
-                SentDanmaku
-                    .select(SentDanmaku.task_id, fn.COUNT(SentDanmaku.dmid).alias('n'))
-                    .where(
-                        SentDanmaku.msg.contains(keyword)
-                        & SentDanmaku.task_id.is_null(False)
-                    )
-                    .group_by(SentDanmaku.task_id)
-                    .dicts()
-            )  # type: ignore[assignment]
-            msg_hits: dict[str, int] = {
-                row['task_id']: int(row['n']) for row in hit_rows
-            }
+        title_match = (
+            TaskRecord.video_title.contains(keyword)
+            | TaskRecord.part_title.contains(keyword)
+            | TaskRecord.bvid.contains(keyword)
+        )
+        msg_count = (
+            SentDanmaku
+                .select(fn.COUNT(SentDanmaku.dmid))
+                .where(
+                    SentDanmaku.task_id == TaskRecord.task_id,
+                    SentDanmaku.msg.contains(keyword),
+                )
+        )
 
-            rows: list[TaskRecordRow] = list(
+        try:
+            rows: list[TaskSearchHit] = list(
                 TaskRecord
-                    .select()
-                    .where(
-                        TaskRecord.video_title.contains(keyword)
-                        | TaskRecord.part_title.contains(keyword)
-                        | TaskRecord.bvid.contains(keyword)
-                        | TaskRecord.task_id.in_(list(msg_hits))
+                    .select(
+                        TaskRecord,
+                        title_match.alias('title_hit'),
+                        msg_count.alias('msg_hits'),
                     )
+                    .where(title_match | (msg_count > 0))
                     .order_by(TaskRecord.created_at, TaskRecord.task_id)
                     .dicts()
             )  # type: ignore[assignment]
@@ -608,23 +609,6 @@ class HistoryManager:
             logger.exception("搜索任务失败")
             return []
 
-        hits: list[TaskSearchHit] = []
         for row in rows:
-            hits.append(TaskSearchHit(
-                task_id=row['task_id'],
-                bvid=row['bvid'],
-                cid=row['cid'],
-                video_title=row['video_title'],
-                part_page=row['part_page'],
-                part_title=row['part_title'],
-                xml_path=row['xml_path'],
-                created_at=row['created_at'],
-                status=row['status'],
-                title_hit=(
-                    keyword in (row['video_title'] or '')
-                    or keyword in (row['part_title'] or '')
-                    or keyword in row['bvid']
-                ),
-                msg_hits=msg_hits.get(row['task_id'], 0),
-            ))
-        return hits
+            row['title_hit'] = bool(row['title_hit'])
+        return rows
