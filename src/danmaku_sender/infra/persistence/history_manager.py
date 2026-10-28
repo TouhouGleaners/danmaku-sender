@@ -11,6 +11,8 @@ from danmaku_sender.types.models.common import (
     MonitorStats,
     PendingCidRecord,
     PendingDanmakuRecord,
+    TaskRecordRow,
+    TaskSearchHit,
     VideoTarget,
 )
 from danmaku_sender.types.models.danmaku import Danmaku
@@ -241,6 +243,69 @@ class HistoryManager:
             else None
         )
 
+    def list_tasks(self) -> list[TaskRecordRow]:
+        """列出全部任务记录，按开始时间升序。
+
+        Returns:
+            list[TaskRecordRow]: 任务记录行。
+        """
+        try:
+            return list(
+                TaskRecord
+                    .select()
+                    .order_by(TaskRecord.created_at, TaskRecord.task_id)
+                    .dicts()
+            )  # type: ignore[return-value]
+        except Exception:
+            logger.exception("查询任务清单失败")
+            return []
+
+    def get_task_stats(self, baseline: float = 0.0) -> dict[str, MonitorStats]:
+        """按任务统计核销状态。
+
+        Args:
+            baseline (float): 统计基线时间，0 表示不限。
+
+        Returns:
+            dict[str, MonitorStats]: 任务标识到存活统计的映射；没有存证的任务不出现，
+            ``task_id`` 为空的存证也不计入。
+        """
+        conditions = [SentDanmaku.task_id.is_null(False)]
+        if baseline > 0:
+            conditions.append(SentDanmaku.ctime >= baseline)
+
+        try:
+            rows: list[dict] = list(
+                SentDanmaku
+                    .select(
+                        SentDanmaku.task_id,
+                        SentDanmaku.status,
+                        fn.COUNT(SentDanmaku.dmid).alias('n'),
+                    )
+                    .where(*conditions)
+                    .group_by(SentDanmaku.task_id, SentDanmaku.status)
+                    .dicts()
+            )  # type: ignore[assignment]
+        except Exception:
+            logger.exception("按任务统计存活状态失败")
+            return {}
+
+        counts: dict[str, MonitorStats] = {}
+        for row in rows:
+            stats = counts.setdefault(
+                row['task_id'], MonitorStats(total=0, verified=0, pending=0, lost=0)
+            )
+            n = int(row['n'])
+            stats['total'] += n
+            if row['status'] == DanmakuStatus.VERIFIED.value:
+                stats['verified'] += n
+            elif row['status'] == DanmakuStatus.LOST.value:
+                stats['lost'] += n
+
+        for stats in counts.values():
+            stats['pending'] = max(0, stats['total'] - stats['verified'] - stats['lost'])
+        return counts
+
     def get_recorded_targets(self, baseline: float = 0.0) -> list[tuple[str, int]]:
         """返回 baseline 之后有记录的目标，即监视器的核销范围。
 
@@ -459,13 +524,20 @@ class HistoryManager:
             logger.exception("查重失败")
             raise HistoryStorageError(f"查重查询失败，无法判断弹幕是否已发送: {e}", original_error=e) from e
 
-    def query_history(self, keyword: str = "", status: int = -1, limit: int = 500) -> list[dict]:
-        """按关键词与状态筛选弹幕历史。
+    def query_history(
+        self,
+        keyword: str = "",
+        status: int = -1,
+        limit: int = 500,
+        task_id: str | None = None,
+    ) -> list[dict]:
+        """按关键词、状态与归属任务筛选弹幕历史。
 
         Args:
             keyword (str): 消息关键词，空串表示不筛。
             status (int): 核销状态，-1 表示不筛。
             limit (int): 返回条数上限。
+            task_id (str | None): 归属任务，None 表示不筛。
 
         Returns:
             list[dict]: 数据库原始记录，由 UI 层结合 API 数据展示。
@@ -482,6 +554,9 @@ class HistoryManager:
             if status != -1:
                 query = query.where(SentDanmaku.status == status)
 
+            if task_id is not None:
+                query = query.where(SentDanmaku.task_id == task_id)
+
             query = query.order_by(SentDanmaku.ctime.desc()).limit(limit)
 
             return list(query.dicts())  # type: ignore[return-value]
@@ -489,3 +564,67 @@ class HistoryManager:
         except Exception:
             logger.exception("查询历史记录失败")
             return []
+
+    def search_tasks(self, keyword: str) -> list[TaskSearchHit]:
+        """按关键词搜索任务，命中任务标题、BV 号或任务弹幕内容。
+
+        Args:
+            keyword (str): 搜索关键词，按子串匹配；空串返回空表。
+
+        Returns:
+            list[TaskSearchHit]: 命中的任务记录，按开始时间升序。
+        """
+        if not keyword:
+            return []
+
+        try:
+            hit_rows: list[dict] = list(
+                SentDanmaku
+                    .select(SentDanmaku.task_id, fn.COUNT(SentDanmaku.dmid).alias('n'))
+                    .where(
+                        SentDanmaku.msg.contains(keyword)
+                        & SentDanmaku.task_id.is_null(False)
+                    )
+                    .group_by(SentDanmaku.task_id)
+                    .dicts()
+            )  # type: ignore[assignment]
+            msg_hits: dict[str, int] = {
+                row['task_id']: int(row['n']) for row in hit_rows
+            }
+
+            rows: list[TaskRecordRow] = list(
+                TaskRecord
+                    .select()
+                    .where(
+                        TaskRecord.video_title.contains(keyword)
+                        | TaskRecord.part_title.contains(keyword)
+                        | TaskRecord.bvid.contains(keyword)
+                        | TaskRecord.task_id.in_(list(msg_hits))
+                    )
+                    .order_by(TaskRecord.created_at, TaskRecord.task_id)
+                    .dicts()
+            )  # type: ignore[assignment]
+        except Exception:
+            logger.exception("搜索任务失败")
+            return []
+
+        hits: list[TaskSearchHit] = []
+        for row in rows:
+            hits.append(TaskSearchHit(
+                task_id=row['task_id'],
+                bvid=row['bvid'],
+                cid=row['cid'],
+                video_title=row['video_title'],
+                part_page=row['part_page'],
+                part_title=row['part_title'],
+                xml_path=row['xml_path'],
+                created_at=row['created_at'],
+                status=row['status'],
+                title_hit=(
+                    keyword in (row['video_title'] or '')
+                    or keyword in (row['part_title'] or '')
+                    or keyword in row['bvid']
+                ),
+                msg_hits=msg_hits.get(row['task_id'], 0),
+            ))
+        return hits

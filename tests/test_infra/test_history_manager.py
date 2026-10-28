@@ -31,6 +31,22 @@ def _record(hm: HistoryManager, target: VideoTarget, dmid: str, msg: str = "弹�
     hm.record_danmaku(task_id, target, Danmaku(msg=msg, progress=1000), dmid)
 
 
+def _task_definition(
+    task_id: str = "t1",
+    bvid: str = "BV1xx",
+    cid: int = 1001,
+    video_title: str = "标题",
+    part_title: str = "分P",
+) -> TaskDefinition:
+    return TaskDefinition(
+        task_id=task_id,
+        target=VideoTarget(bvid=bvid, cid=cid),
+        meta=TaskMeta(video_title=video_title, part_page=2, part_title=part_title),
+        danmakus=(Danmaku(msg="x", progress=0),),
+        config=SenderConfig.PacingConfig(min_delay=0.1, max_delay=0.2).to_task_config(),
+    )
+
+
 class TestRecordDanmaku:
     """存证回归：发送成功后记录必须真实落库"""
 
@@ -165,18 +181,8 @@ class TestStatsAndDedup:
 class TestTaskRecord:
     """任务记录：身份与运行态落账，供任务级历史对账"""
 
-    @staticmethod
-    def _definition(task_id: str = "t1", bvid: str = "BV1xx", cid: int = 1001) -> TaskDefinition:
-        return TaskDefinition(
-            task_id=task_id,
-            target=VideoTarget(bvid=bvid, cid=cid),
-            meta=TaskMeta(video_title="标题", part_page=2, part_title="分P"),
-            danmakus=(Danmaku(msg="x", progress=0),),
-            config=SenderConfig.PacingConfig(min_delay=0.1, max_delay=0.2).to_task_config(),
-        )
-
     def test_upsert_inserts_then_updates(self, hm):
-        definition = self._definition()
+        definition = _task_definition()
         hm.upsert_task(definition, TaskStatus.RUNNING)
         row = hm.get_task("t1")
         assert row is not None
@@ -198,7 +204,7 @@ class TestTaskRecord:
 
     def test_task_record_and_evidence_share_task_id(self, hm, target):
         """同一条任务：弹幕存证与任务记录靠 task_id 对上"""
-        definition = self._definition(task_id="任务归属-8f3c")
+        definition = _task_definition(task_id="任务归属-8f3c")
         hm.upsert_task(definition, TaskStatus.COMPLETED)
         _record(hm, target, "dm1", task_id="任务归属-8f3c")
 
@@ -207,6 +213,135 @@ class TestTaskRecord:
             "SELECT task_id FROM sent_danmaku WHERE dmid='dm1'"
         ).fetchall()
         assert rows == [("任务归属-8f3c",)]
+
+
+class TestTaskQueries:
+    """任务级查询：清单、存活聚合与搜索命中"""
+
+    @staticmethod
+    def _set_created_at(hm: HistoryManager, task_id: str, created_at: float) -> None:
+        conn = sqlite3.connect(hm.db_path)
+        conn.execute("UPDATE task_record SET created_at=? WHERE task_id=?", (created_at, task_id))
+        conn.commit()
+        conn.close()
+
+    @staticmethod
+    def _set_ctime(hm: HistoryManager, dmid: str, ctime: float) -> None:
+        conn = sqlite3.connect(hm.db_path)
+        conn.execute("UPDATE sent_danmaku SET ctime=? WHERE dmid=?", (ctime, dmid))
+        conn.commit()
+        conn.close()
+
+    def test_list_tasks_orders_by_start_time(self, hm):
+        hm.upsert_task(_task_definition(task_id="t2"), TaskStatus.RUNNING)
+        hm.upsert_task(_task_definition(task_id="t1"), TaskStatus.RUNNING)
+        self._set_created_at(hm, "t2", 2000.0)
+        self._set_created_at(hm, "t1", 1000.0)
+
+        assert [row["task_id"] for row in hm.list_tasks()] == ["t1", "t2"]
+
+    def test_get_task_stats_groups_by_task(self, hm, target):
+        _record(hm, target, "dm1", task_id="t1")
+        _record(hm, target, "dm2", task_id="t1")
+        _record(hm, target, "dm3", task_id="t2")
+        hm.verify_dmids(["dm1"])
+
+        stats = hm.get_task_stats()
+        assert stats["t1"] == {"total": 2, "verified": 1, "pending": 1, "lost": 0}
+        assert stats["t2"] == {"total": 1, "verified": 0, "pending": 1, "lost": 0}
+
+    def test_get_task_stats_counts_lost(self, hm, target):
+        _record(hm, target, "dm1", task_id="t1")
+        _record(hm, target, "dm2", task_id="t1")
+        hm.verify_dmids(["dm1"])
+        hm.mark_as_lost(1001, ["dm1"])
+
+        assert hm.get_task_stats()["t1"] == {"total": 2, "verified": 1, "pending": 0, "lost": 1}
+
+    def test_get_task_stats_ignores_rows_without_task(self, hm, target):
+        """task_id 为空的旧存证不归属任何任务"""
+        _record(hm, target, "dm1", task_id="t1")
+        conn = sqlite3.connect(hm.db_path)
+        conn.execute("UPDATE sent_danmaku SET task_id=NULL WHERE dmid='dm1'")
+        conn.commit()
+        conn.close()
+
+        assert hm.get_task_stats() == {}
+
+    def test_get_task_stats_respects_baseline(self, hm, target):
+        import time
+        _record(hm, target, "dm1", task_id="t1")
+        _record(hm, target, "dm2", task_id="t1")
+        self._set_ctime(hm, "dm1", time.time() - 3600)
+
+        assert hm.get_task_stats(baseline=time.time() - 60)["t1"] == {
+            "total": 1, "verified": 0, "pending": 1, "lost": 0,
+        }
+        assert hm.get_task_stats()["t1"]["total"] == 2
+
+    def test_search_by_title_hit(self, hm):
+        hm.upsert_task(_task_definition(task_id="t1", video_title="宝可梦补档"), TaskStatus.COMPLETED)
+        hm.upsert_task(_task_definition(task_id="t2", video_title="无关标题"), TaskStatus.COMPLETED)
+
+        hits = hm.search_tasks("宝可梦")
+        assert [h["task_id"] for h in hits] == ["t1"]
+        assert hits[0]["title_hit"] is True
+        assert hits[0]["msg_hits"] == 0
+
+    def test_search_by_bvid_hit(self, hm):
+        hm.upsert_task(_task_definition(task_id="t1", bvid="BV1pkq"), TaskStatus.COMPLETED)
+
+        hits = hm.search_tasks("pkq")
+        assert [h["task_id"] for h in hits] == ["t1"]
+        assert hits[0]["title_hit"] is True
+
+    def test_search_by_msg_counts_hits(self, hm, target):
+        hm.upsert_task(_task_definition(task_id="t1"), TaskStatus.COMPLETED)
+        _record(hm, target, "dm1", msg="宝可梦真好玩", task_id="t1")
+        _record(hm, target, "dm2", msg="宝可梦再来", task_id="t1")
+        _record(hm, target, "dm3", msg="无关内容", task_id="t1")
+
+        hits = hm.search_tasks("宝可梦")
+        assert [h["task_id"] for h in hits] == ["t1"]
+        assert hits[0]["title_hit"] is False
+        assert hits[0]["msg_hits"] == 2
+
+    def test_search_reports_both_hit_sources(self, hm, target):
+        hm.upsert_task(_task_definition(task_id="t1", video_title="宝可梦补档"), TaskStatus.COMPLETED)
+        _record(hm, target, "dm1", msg="宝可梦", task_id="t1")
+
+        hits = hm.search_tasks("宝可梦")
+        assert hits[0]["title_hit"] is True
+        assert hits[0]["msg_hits"] == 1
+
+    def test_search_ignores_evidence_without_task(self, hm, target):
+        """task_id 为空的旧存证搜不出来"""
+        hm.upsert_task(_task_definition(task_id="t1", video_title="无关标题"), TaskStatus.COMPLETED)
+        _record(hm, target, "dm1", msg="宝可梦", task_id="t1")
+        conn = sqlite3.connect(hm.db_path)
+        conn.execute("UPDATE sent_danmaku SET task_id=NULL WHERE dmid='dm1'")
+        conn.commit()
+        conn.close()
+
+        assert hm.search_tasks("宝可梦") == []
+
+    def test_search_empty_keyword_returns_empty(self, hm):
+        hm.upsert_task(_task_definition(task_id="t1"), TaskStatus.COMPLETED)
+        assert hm.search_tasks("") == []
+
+    def test_search_orders_by_start_time(self, hm):
+        hm.upsert_task(_task_definition(task_id="t2", video_title="宝可梦"), TaskStatus.COMPLETED)
+        hm.upsert_task(_task_definition(task_id="t1", video_title="宝可梦"), TaskStatus.COMPLETED)
+        self._set_created_at(hm, "t2", 2000.0)
+        self._set_created_at(hm, "t1", 1000.0)
+
+        assert [h["task_id"] for h in hm.search_tasks("宝可梦")] == ["t1", "t2"]
+
+    def test_query_history_filters_by_task(self, hm, target):
+        _record(hm, target, "dm1", task_id="t1")
+        _record(hm, target, "dm2", task_id="t2")
+
+        assert [row["dmid"] for row in hm.query_history(task_id="t1")] == ["dm1"]
 
 
 class TestMigration:
