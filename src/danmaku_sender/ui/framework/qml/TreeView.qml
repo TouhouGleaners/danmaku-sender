@@ -158,9 +158,6 @@ Item {
                     : row.isCurrent && rowMouse.containsMouse ? theme.fillPressed
                     : row.isCurrent || rowMouse.containsMouse ? theme.fillHover
                     : "transparent"
-                Behavior on color {
-                    ColorAnimation { duration: 83 }
-                }
 
                 // 键盘焦点环（仅键盘模式显示，对齐 WinUI 的 focus visual）
                 Rectangle {
