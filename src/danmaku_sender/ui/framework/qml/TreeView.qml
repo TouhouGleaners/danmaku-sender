@@ -2,13 +2,15 @@ pragma ComponentBehavior: Bound
 
 import QtQuick
 
-// 通用 Fluent 风格树行列表。度量照 WinUI 3 TreeView：行槽 32（内容 28 + 上下边距 2）、
-// 内容圆角 4、缩进 16/层、chevron 槽 40（字形 12，双字形切换）、选中条 3×16 圆角 2。
+// 通用 Fluent 风格树视图。度量与状态照 WinUI 3 TreeView：
+// 行槽 32（内容 28 + 上下边距 2）、内容圆角 4、缩进 16/层、chevron 槽 40（字形 12，
+// 双字形切换不旋转）、选中条 3×16 圆角 2；状态取色照 SubtleFill 阶梯——
+// 悬停/选中 Secondary，悬停于选中、按压未选中 Tertiary。
+// 展开 = 子行滑入淡入，收起 = 淡出；键盘：↑↓ 选行、→ 展开、← 收起、Enter 选中、Home/End。
 //
 // 契约：
 // - model 为 TreeRowsModel：结构角色 depth/expandable/expanded，
 //   内容列按 columns 的 {role, width, align} 渲染；width 为 null 的弹性列须是第一列。
-// - 交互：chevron 单击/行双击切换展开，行单击选中并发出 rowPicked(row)。
 Item {
     id: root
 
@@ -17,6 +19,8 @@ Item {
     property var columns: []
 
     signal rowPicked(int row)
+
+    property bool keyboardMode: false
 
     readonly property string glyphCollapsed: String.fromCharCode(0xe76c)
     readonly property string glyphExpanded: String.fromCharCode(0xe70d)
@@ -37,6 +41,10 @@ Item {
         let right = root.columns.length > 1 ? trailingX(1) : tree.width - 8
         return right - 8 - columnX(idx, indent)
     }
+    function pickCurrent() {
+        if (tree.currentIndex >= 0)
+            root.rowPicked(tree.currentIndex)
+    }
 
     ListView {
         id: tree
@@ -45,6 +53,8 @@ Item {
         model: root.model
         currentIndex: -1
         boundsBehavior: Flickable.StopAtBounds
+        keyNavigationEnabled: false
+        activeFocusOnTab: true
 
         highlightFollowsCurrentItem: true
         highlightMoveDuration: 150
@@ -61,16 +71,60 @@ Item {
         }
 
         add: Transition {
-            NumberAnimation { property: "opacity"; from: 0; to: 1; duration: 150 }
+            ParallelAnimation {
+                NumberAnimation { property: "opacity"; from: 0; to: 1; duration: 150 }
+                NumberAnimation { property: "slide"; from: -8; to: 0; duration: 150; easing.type: Easing.OutCubic }
+            }
         }
         displaced: Transition {
             NumberAnimation { properties: "x,y"; duration: 150; easing.type: Easing.OutCubic }
         }
         remove: Transition {
-            NumberAnimation { property: "opacity"; to: 0; duration: 120 }
+            NumberAnimation { property: "opacity"; to: 0; duration: 100 }
         }
         removeDisplaced: Transition {
             NumberAnimation { properties: "x,y"; duration: 150; easing.type: Easing.OutCubic }
+        }
+
+        Keys.onPressed: (event) => {
+            root.keyboardMode = true
+            switch (event.key) {
+            case Qt.Key_Up:
+                tree.decrementCurrentIndex()
+                root.pickCurrent()
+                event.accepted = true
+                break
+            case Qt.Key_Down:
+                tree.incrementCurrentIndex()
+                root.pickCurrent()
+                event.accepted = true
+                break
+            case Qt.Key_Right:
+                if (tree.currentIndex >= 0)
+                    root.model.toggle(tree.currentIndex)
+                event.accepted = true
+                break
+            case Qt.Key_Left:
+                if (tree.currentIndex >= 0)
+                    root.model.toggle(tree.currentIndex)
+                event.accepted = true
+                break
+            case Qt.Key_Return:
+            case Qt.Key_Enter:
+                root.pickCurrent()
+                event.accepted = true
+                break
+            case Qt.Key_Home:
+                tree.currentIndex = 0
+                root.pickCurrent()
+                event.accepted = true
+                break
+            case Qt.Key_End:
+                tree.currentIndex = tree.count - 1
+                root.pickCurrent()
+                event.accepted = true
+                break
+            }
         }
 
         delegate: Item {
@@ -82,10 +136,14 @@ Item {
             required property bool expanded
             required property var model
 
+            property real slide: 0
+
             readonly property int indent: depth * 16
+            readonly property bool isCurrent: tree.currentIndex === row.index
 
             width: tree.width
             height: 32
+            transform: Translate { y: row.slide }
 
             Rectangle {
                 id: bg
@@ -94,9 +152,25 @@ Item {
                 width: parent.width - 8
                 height: 28
                 radius: 4
-                color: rowMouse.pressed || chevronMouse.pressed ? theme.fillPressed
-                    : tree.currentIndex === row.index || rowMouse.containsMouse ? theme.fillHover
+                // WinUI 状态矩阵：按压未选中 / 悬停于选中 → Tertiary；其余悬停与选中 → Secondary
+                color: rowMouse.pressed || chevronMouse.pressed
+                        ? (row.isCurrent ? theme.fillHover : theme.fillPressed)
+                    : row.isCurrent && rowMouse.containsMouse ? theme.fillPressed
+                    : row.isCurrent || rowMouse.containsMouse ? theme.fillHover
                     : "transparent"
+                Behavior on color {
+                    ColorAnimation { duration: 83 }
+                }
+
+                // 键盘焦点环（仅键盘模式显示，对齐 WinUI 的 focus visual）
+                Rectangle {
+                    anchors.fill: parent
+                    radius: 6
+                    color: "transparent"
+                    border.color: theme.accent
+                    border.width: 2
+                    visible: root.keyboardMode && tree.activeFocus && row.isCurrent
+                }
 
                 Text {
                     id: chevronGlyph
@@ -108,7 +182,7 @@ Item {
                     text: row.expanded ? root.glyphExpanded : root.glyphCollapsed
                     font.family: "Segoe Fluent Icons"
                     font.pixelSize: 12
-                    color: theme.text
+                    color: rowMouse.pressed || chevronMouse.pressed ? theme.textSecondary : theme.text
                 }
 
                 Repeater {
@@ -125,7 +199,9 @@ Item {
                         elide: index === 0 ? Text.ElideRight : Text.ElideNone
                         font.family: theme.fontFamily
                         font.pointSize: theme.fontPointSize
-                        color: index === 0 ? theme.text : theme.textSecondary
+                        color: index === 0
+                            ? ((rowMouse.pressed || chevronMouse.pressed) ? theme.textSecondary : theme.text)
+                            : theme.textSecondary
                     }
                 }
 
@@ -134,7 +210,9 @@ Item {
                     anchors.fill: parent
                     hoverEnabled: true
                     onClicked: {
+                        root.keyboardMode = false
                         tree.currentIndex = row.index
+                        tree.forceActiveFocus()
                         root.rowPicked(row.index)
                     }
                     onDoubleClicked: {
@@ -150,7 +228,10 @@ Item {
                     width: 40
                     height: parent.height
                     visible: row.expandable
-                    onClicked: root.model.toggle(row.index)
+                    onClicked: {
+                        root.keyboardMode = false
+                        root.model.toggle(row.index)
+                    }
                 }
             }
         }
