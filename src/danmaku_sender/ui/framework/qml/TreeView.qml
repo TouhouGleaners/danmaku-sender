@@ -11,6 +11,7 @@ import QtQuick
 // 契约：
 // - model 为 TreeRowsModel：结构角色 depth/expandable/expanded，
 //   内容列按 columns 的 {role, width, align} 渲染；width 为 null 的弹性列须是第一列。
+// - 行内定位一律不引用 parent（delegate 销毁期绑定解引用会刷 TypeError）。
 Item {
     id: root
 
@@ -55,22 +56,6 @@ Item {
         boundsBehavior: Flickable.StopAtBounds
         keyNavigationEnabled: false
         activeFocusOnTab: true
-
-        highlightFollowsCurrentItem: true
-        highlightMoveDuration: 150
-        highlightResizeDuration: 150
-        // 选中条要压在行底色之上：ListView 的 highlight 默认在 delegate 下层
-        highlight: Item {
-            z: 1
-            Rectangle {
-                x: 4
-                width: 3
-                height: 16
-                radius: 2
-                anchors.verticalCenter: parent.verticalCenter
-                color: theme.accent
-            }
-        }
 
         add: Transition {
             ParallelAnimation {
@@ -151,7 +136,7 @@ Item {
                 id: bg
                 x: 4
                 y: 2
-                width: parent.width - 8
+                width: row.width - 8
                 height: 28
                 radius: 4
                 // WinUI 状态矩阵：按压未选中 / 悬停于选中 → Tertiary；其余悬停与选中 → Secondary
@@ -161,9 +146,23 @@ Item {
                     : row.isCurrent || rowMouse.containsMouse ? theme.fillHover
                     : "transparent"
 
+                // 选中条画在本行内（WinUI 式）：随行而定，不依赖 highlight 定位
+                Rectangle {
+                    x: 0
+                    y: 6
+                    width: 3
+                    height: 16
+                    radius: 2
+                    color: theme.accent
+                    visible: row.isCurrent
+                }
+
                 // 键盘焦点环（仅键盘模式显示，对齐 WinUI 的 focus visual）
                 Rectangle {
-                    anchors.fill: parent
+                    x: 0
+                    y: 0
+                    width: bg.width
+                    height: bg.height
                     radius: 6
                     color: "transparent"
                     border.color: theme.accent
@@ -174,9 +173,9 @@ Item {
                 Text {
                     id: chevronGlyph
                     x: row.indent + 14
+                    y: (bg.height - height) / 2
                     width: 12
                     height: 12
-                    anchors.verticalCenter: parent.verticalCenter
                     visible: row.expandable
                     text: row.expanded ? root.glyphExpanded : root.glyphCollapsed
                     font.family: "Segoe Fluent Icons"
@@ -191,8 +190,8 @@ Item {
                         required property var modelData
 
                         x: root.columnX(index, row.indent)
+                        y: (bg.height - height) / 2
                         width: root.columnWidth(index, row.indent)
-                        anchors.verticalCenter: parent.verticalCenter
                         text: row.model[modelData.role] ?? ""
                         horizontalAlignment: modelData.align === "right" ? Text.AlignRight : Text.AlignLeft
                         elide: index === 0 ? Text.ElideRight : Text.ElideNone
@@ -206,7 +205,10 @@ Item {
 
                 MouseArea {
                     id: rowMouse
-                    anchors.fill: parent
+                    x: 0
+                    y: 0
+                    width: bg.width
+                    height: bg.height
                     hoverEnabled: true
                     onClicked: {
                         root.keyboardMode = false
@@ -224,8 +226,9 @@ Item {
                 MouseArea {
                     id: chevronMouse
                     x: row.indent
+                    y: 0
                     width: 40
-                    height: parent.height
+                    height: bg.height
                     visible: row.expandable
                     onClicked: {
                         root.keyboardMode = false
