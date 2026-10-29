@@ -59,7 +59,9 @@ Item {
         highlightFollowsCurrentItem: true
         highlightMoveDuration: 150
         highlightResizeDuration: 150
+        // 选中条要压在行底色之上：ListView 的 highlight 默认在 delegate 下层
         highlight: Item {
+            z: 1
             Rectangle {
                 x: 4
                 width: 3
