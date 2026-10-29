@@ -71,9 +71,10 @@ Item {
                 : row.index % 2 ? theme.background : "transparent"
 
             RowLayout {
-                anchors.fill: parent
-                anchors.leftMargin: 4
-                anchors.rightMargin: 4
+                x: 4
+                y: 0
+                width: row.width - 8
+                height: row.height
                 spacing: 8
 
                 Repeater {
@@ -94,7 +95,10 @@ Item {
 
             MouseArea {
                 id: rowMouse
-                anchors.fill: parent
+                x: 0
+                y: 0
+                width: row.width
+                height: row.height
                 hoverEnabled: true
                 acceptedButtons: Qt.LeftButton | Qt.RightButton
                 onDoubleClicked: root.rowActivated(row.index)
