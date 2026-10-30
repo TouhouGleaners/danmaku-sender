@@ -27,7 +27,7 @@ def _tree_rows(model: TreeRowsModel) -> tuple[QQuickView, object]:
     for _ in range(5):
         QGuiApplication.processEvents()
     rows = view.rootObject().childItems()[0]
-    rows.forceActiveFocus()
+    view.rootObject().forceActiveFocus()
     return view, rows
 
 

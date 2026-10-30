@@ -22,6 +22,7 @@ Item {
     signal rowPicked(int row)
 
     property bool keyboardMode: false
+    activeFocusOnTab: true
 
     // 箭头字形由令牌桥下发（含字体回退决策），QML 只消费成品
 
@@ -47,6 +48,64 @@ Item {
             root.rowPicked(tree.currentIndex)
     }
 
+    Keys.onPressed: (event) => {
+        root.keyboardMode = true
+        switch (event.key) {
+        case Qt.Key_Up:
+            tree.decrementCurrentIndex()
+            root.pickCurrent()
+            event.accepted = true
+            break
+        case Qt.Key_Down:
+            tree.incrementCurrentIndex()
+            root.pickCurrent()
+            event.accepted = true
+            break
+        case Qt.Key_Right: {
+            // WinUI 语义：收起时展开，已展开则下潜到首个子行；
+            // 槽的 None 进 QML 是 undefined，按 typeof 判数
+            const cur = tree.currentIndex
+            if (!root.model.expand(cur)) {
+                const child = root.model.first_child_row(cur)
+                if (typeof child === "number") {
+                    tree.currentIndex = child
+                    root.pickCurrent()
+                }
+            }
+            event.accepted = true
+            break
+        }
+        case Qt.Key_Left: {
+            // WinUI 语义：展开时收起，已收起则回父行
+            const cur = tree.currentIndex
+            if (!root.model.collapse(cur)) {
+                const parentRow = root.model.parent_row(cur)
+                if (typeof parentRow === "number") {
+                    tree.currentIndex = parentRow
+                    root.pickCurrent()
+                }
+            }
+            event.accepted = true
+            break
+        }
+        case Qt.Key_Return:
+        case Qt.Key_Enter:
+            root.pickCurrent()
+            event.accepted = true
+            break
+        case Qt.Key_Home:
+            tree.currentIndex = 0
+            root.pickCurrent()
+            event.accepted = true
+            break
+        case Qt.Key_End:
+            tree.currentIndex = tree.count - 1
+            root.pickCurrent()
+            event.accepted = true
+            break
+        }
+    }
+
     ListView {
         id: tree
         anchors.fill: parent
@@ -55,7 +114,6 @@ Item {
         currentIndex: -1
         boundsBehavior: Flickable.StopAtBounds
         keyNavigationEnabled: false
-        activeFocusOnTab: true
 
         add: Transition {
             ParallelAnimation {
@@ -71,64 +129,6 @@ Item {
         }
         removeDisplaced: Transition {
             NumberAnimation { properties: "x,y"; duration: 150; easing.type: Easing.OutCubic }
-        }
-
-        Keys.onPressed: (event) => {
-            root.keyboardMode = true
-            switch (event.key) {
-            case Qt.Key_Up:
-                tree.decrementCurrentIndex()
-                root.pickCurrent()
-                event.accepted = true
-                break
-            case Qt.Key_Down:
-                tree.incrementCurrentIndex()
-                root.pickCurrent()
-                event.accepted = true
-                break
-            case Qt.Key_Right: {
-                // WinUI 语义：收起时展开，已展开则下潜到首个子行；
-                // 槽的 None 进 QML 是 undefined，按 typeof 判数
-                const cur = tree.currentIndex
-                if (!root.model.expand(cur)) {
-                    const child = root.model.first_child_row(cur)
-                    if (typeof child === "number") {
-                        tree.currentIndex = child
-                        root.pickCurrent()
-                    }
-                }
-                event.accepted = true
-                break
-            }
-            case Qt.Key_Left: {
-                // WinUI 语义：展开时收起，已收起则回父行
-                const cur = tree.currentIndex
-                if (!root.model.collapse(cur)) {
-                    const parentRow = root.model.parent_row(cur)
-                    if (typeof parentRow === "number") {
-                        tree.currentIndex = parentRow
-                        root.pickCurrent()
-                    }
-                }
-                event.accepted = true
-                break
-            }
-            case Qt.Key_Return:
-            case Qt.Key_Enter:
-                root.pickCurrent()
-                event.accepted = true
-                break
-            case Qt.Key_Home:
-                tree.currentIndex = 0
-                root.pickCurrent()
-                event.accepted = true
-                break
-            case Qt.Key_End:
-                tree.currentIndex = tree.count - 1
-                root.pickCurrent()
-                event.accepted = true
-                break
-            }
         }
 
         delegate: Item {
@@ -184,7 +184,7 @@ Item {
                     color: "transparent"
                     border.color: root.theme.accent
                     border.width: 2
-                    visible: root.keyboardMode && tree.activeFocus && row.isCurrent
+                    visible: root.keyboardMode && root.activeFocus && row.isCurrent
                 }
 
                 Text {
@@ -230,7 +230,7 @@ Item {
                     onClicked: {
                         root.keyboardMode = false
                         tree.currentIndex = row.index
-                        tree.forceActiveFocus()
+                        root.forceActiveFocus()
                         root.rowPicked(row.index)
                     }
                     onDoubleClicked: {
@@ -249,7 +249,7 @@ Item {
                     visible: row.expandable
                     onClicked: {
                         root.keyboardMode = false
-                        tree.forceActiveFocus()
+                        root.forceActiveFocus()
                         root.model.toggle(row.index)
                     }
                 }
