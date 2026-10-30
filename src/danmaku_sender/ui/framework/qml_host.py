@@ -12,7 +12,7 @@ from pathlib import Path
 from typing import Any
 
 from PySide6.QtCore import Property, QEvent, QObject, QUrl, Signal
-from PySide6.QtGui import QColor, QFont, QFontInfo, QPalette
+from PySide6.QtGui import QColor, QFont, QGuiApplication, QPalette
 from PySide6.QtQml import QQmlComponent
 from PySide6.QtQuick import QQuickView
 from PySide6.QtQuickWidgets import QQuickWidget
@@ -86,8 +86,11 @@ class QmlPaletteBridge(QObject):
 
     @Property(int, notify=changed)
     def fontPointSize(self) -> int:
-        """字号（磅），经 QFontInfo 解析为实际生效值。"""
-        return QFontInfo(self._font).pointSize()
+        """字号（磅）；像素字号按屏上 DPI 折算，QFont.pointSize 对其返回 -1。"""
+        if self._font.pointSize() > 0:
+            return self._font.pointSize()
+        dpi = QGuiApplication.primaryScreen().logicalDotsPerInch()
+        return round(self._font.pixelSize() * 72.0 / dpi)
 
 
 class QmlHost(QQuickWidget):
@@ -153,7 +156,7 @@ class QmlWindowHost(QWidget):
 
         self._view = QQuickView()
         self._view.setResizeMode(QQuickView.ResizeMode.SizeRootObjectToView)
-        self._view.setInitialProperties({"theme": self._bridge, **(properties or {})})
+        self._view.setInitialProperties({**(properties or {}), "theme": self._bridge})
         self._sync_surface()
         self._bridge.sync(self.palette(), self.font())
         self._view.setSource(QUrl.fromLocalFile(str(qml_path)))
