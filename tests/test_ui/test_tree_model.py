@@ -38,6 +38,20 @@ class TestTreeNode:
         assert first.children == []
         assert child.parent is second
 
+    def test_add_child_same_parent_is_idempotent(self):
+        parent = TreeNode()
+        child = TreeNode()
+        parent.add_child(child)
+        parent.add_child(child)
+        assert parent.children == [child]
+
+    def test_children_constructor_detaches_from_previous_parent(self):
+        child = TreeNode()
+        old = TreeNode(children=[child])
+        new = TreeNode(children=[child])
+        assert old.children == []
+        assert child.parent is new
+
 
 class TestTreeRows:
     def test_collapsed_shows_roots_only(self, qapp):
@@ -90,6 +104,15 @@ class TestTreeRows:
     def test_payload_at_rejects_out_of_range(self, qapp):
         model = _model()
         assert model.payload_at(99) is None
+
+    def test_set_roots_detaches_promoted_root(self, qapp):
+        """把现有后代提为根节点时，旧父的子列表不再保留它。"""
+        child = TreeNode(data={"label": "子"})
+        old_parent = TreeNode(children=[child])
+        model = TreeRowsModel(("label",))
+        model.set_roots([child])
+        assert old_parent.children == []
+        assert child.parent is None
 
     def test_data_rejects_stale_index(self, qapp):
         """模型重建后遗留的旧索引返回 None，不抛 IndexError。"""

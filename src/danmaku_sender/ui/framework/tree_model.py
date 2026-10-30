@@ -29,6 +29,9 @@ ROLE_CONTENT_BASE = ROLE_DEPTH + 3
 class TreeNode:
     """通用树节点。
 
+    父指针与子列表保持对应：挂载统一走 :meth:`add_child`（增量）或
+    ``children=``（批量），节点同时只属于一个父节点。
+
     Attributes:
         data (dict[str, Any]): 内容角色取值，键与模型登记的角色名对应。
         payload (Any): 业务负载，不进角色，供调用方按行取回。
@@ -48,28 +51,43 @@ class TreeNode:
         data: dict[str, Any] | None = None,
         payload: Any = None,
         children: list["TreeNode"] | None = None,
-        parent: "TreeNode | None" = None,
     ) -> None:
         self.data = data if data is not None else {}
         self.payload = payload
         self.children = children if children is not None else []
         self.expanded = False
-        self.parent = parent
+        self.parent = None
         for child in self.children:
+            TreeNode._detach(child)
             child.parent = self
 
     def add_child(self, child: "TreeNode") -> None:
         """挂载子节点并同步父子指针。
 
-        节点同时只属于一个父节点：挂载前先从原父节点摘除。
+        节点同时只属于一个父节点，挂载前先从原父节点摘除；
+        向同一父节点重复挂载不产生重复子项。
 
         Args:
             child (TreeNode): 待挂载的子节点。
         """
-        if child.parent is not None:
-            child.parent.children.remove(child)
+        TreeNode._detach(child)
+        if child not in self.children:
+            self.children.append(child)
         child.parent = self
-        self.children.append(child)
+
+    @staticmethod
+    def _detach(child: "TreeNode") -> None:
+        """把节点从原父节点的子列表摘除。
+
+        手工挂载可能留下「有父指针、不在子列表」的半一致状态，
+        与装载归一化同口径容忍，不作报错。
+
+        Args:
+            child (TreeNode): 待摘除的节点。
+        """
+        old = child.parent
+        if old is not None and child in old.children:
+            old.children.remove(child)
 
     @property
     def depth(self) -> int:
@@ -118,6 +136,7 @@ class TreeRowsModel(QAbstractListModel):
         self.beginResetModel()
         self._roots = list(roots)
         for root in self._roots:
+            TreeNode._detach(root)
             root.parent = None
         self._relink(self._roots)
         self._set_expanded(self._roots, False)
