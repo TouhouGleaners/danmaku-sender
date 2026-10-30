@@ -82,10 +82,13 @@ class TreeRowsModel(QAbstractListModel):
         parent (QObject | None): 父对象。
     """
 
+    # 结构角色名：roleNames 的前三项，也是内容角色的保留字
+    STRUCTURAL_ROLE_NAMES = ("depth", "expandable", "expanded")
+
     def __init__(self, content_roles: Sequence[str], parent: QObject | None = None) -> None:
         super().__init__(parent)
         roles = tuple(content_roles)
-        reserved = {"depth", "expandable", "expanded"}
+        reserved = set(self.STRUCTURAL_ROLE_NAMES)
         if len(set(roles)) != len(roles) or not reserved.isdisjoint(roles):
             raise ValueError("content_roles 不得重复，也不得占用结构角色名 depth/expandable/expanded")
         self._content_roles = roles
@@ -204,11 +207,9 @@ class TreeRowsModel(QAbstractListModel):
         return 0 if parent.isValid() else len(self._visible)
 
     def roleNames(self) -> dict[int, bytes]:
-        roles = {
-            ROLE_DEPTH: b"depth",
-            ROLE_EXPANDABLE: b"expandable",
-            ROLE_EXPANDED: b"expanded",
-        }
+        roles: dict[int, bytes] = {}
+        for offset, name in enumerate(self.STRUCTURAL_ROLE_NAMES):
+            roles[ROLE_DEPTH + offset] = name.encode()
         for offset, name in enumerate(self._content_roles):
             roles[ROLE_CONTENT_BASE + offset] = name.encode()
         return roles
