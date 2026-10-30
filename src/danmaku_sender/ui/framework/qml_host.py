@@ -134,6 +134,7 @@ class QmlHost(QQuickWidget):
             QEvent.Type.ApplicationPaletteChange,
             QEvent.Type.FontChange,
             QEvent.Type.ScreenChangeInternal,
+            QEvent.Type.DevicePixelRatioChange,
         ):
             self._bridge.sync(self.palette(), self.font(), self.screen().logicalDotsPerInch())
 
@@ -184,6 +185,7 @@ class QmlWindowHost(QWidget):
             QEvent.Type.ApplicationPaletteChange,
             QEvent.Type.FontChange,
             QEvent.Type.ScreenChangeInternal,
+            QEvent.Type.DevicePixelRatioChange,
         ):
             self._sync_surface()
             self._bridge.sync(self.palette(), self.font(), self.screen().logicalDotsPerInch())
