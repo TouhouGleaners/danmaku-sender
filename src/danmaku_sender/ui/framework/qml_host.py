@@ -7,19 +7,15 @@
 QmlWindowHost 以原生 Quick 窗口承载，适合大场景——不经控件贴图回读，
 且场景内部的布局变化（如分栏拖动）不触碰承载面的改尺寸。
 """
-import logging
 from pathlib import Path
 from typing import Any
 
 from PySide6.QtCore import Property, QEvent, QObject, QUrl, Signal
-from PySide6.QtGui import QColor, QFont, QGuiApplication, QPalette
+from PySide6.QtGui import QColor, QFont, QPalette
 from PySide6.QtQml import QQmlComponent
 from PySide6.QtQuick import QQuickView
 from PySide6.QtQuickWidgets import QQuickWidget
 from PySide6.QtWidgets import QVBoxLayout, QWidget
-
-logger = logging.getLogger(__name__)
-
 
 class QmlPaletteBridge(QObject):
     """注入 QML 根对象的主题令牌，属性名为 ``theme``。
@@ -37,16 +33,19 @@ class QmlPaletteBridge(QObject):
         super().__init__(parent)
         self._palette = QPalette()
         self._font = QFont()
+        self._dpi: float | None = None
 
-    def sync(self, palette: QPalette, font: QFont) -> None:
-        """刷新取色与字体来源并广播变更。
+    def sync(self, palette: QPalette, font: QFont, dpi: float) -> None:
+        """刷新取色、字体与 DPI 来源并广播变更。
 
         Args:
             palette (QPalette): 当前生效的调色板。
             font (QFont): 当前生效的字体。
+            dpi (float): 宿主所在屏幕的逻辑 DPI，用于像素字号折算。
         """
         self._palette = palette
         self._font = font
+        self._dpi = dpi
         self.changed.emit()
 
     @Property(QColor, notify=changed)
@@ -86,10 +85,11 @@ class QmlPaletteBridge(QObject):
 
     @Property(int, notify=changed)
     def fontPointSize(self) -> int:
-        """字号（磅）；像素字号按屏上 DPI 折算，QFont.pointSize 对其返回 -1。"""
+        """字号（磅）；像素字号按宿主屏幕 DPI 折算，QFont.pointSize 对其返回 -1。"""
         if self._font.pointSize() > 0:
             return self._font.pointSize()
-        dpi = QGuiApplication.primaryScreen().logicalDotsPerInch()
+        # 像素字号按宿主屏幕 DPI 折算；同步前无 DPI 可用，退回 96 这一行业基准
+        dpi = self._dpi if self._dpi is not None else 96.0
         return round(self._font.pixelSize() * 72.0 / dpi)
 
 
@@ -118,19 +118,24 @@ class QmlHost(QQuickWidget):
         self._bridge = QmlPaletteBridge(self)
         self.setInitialProperties({**(properties or {}), "theme": self._bridge})
 
-        self._bridge.sync(self.palette(), self.font())
+        self._bridge.sync(self.palette(), self.font(), self.screen().logicalDotsPerInch())
         self.setSource(QUrl.fromLocalFile(str(qml_path)))
         if self.status() == QQuickWidget.Status.Error:
             detail = " | ".join(
                 error.toString() for error in QQmlComponent(self.engine(), self.source()).errors()
             )
-            logger.error(f"QML 加载失败: {qml_path} | {detail}")
+            raise RuntimeError(f"QML 加载失败: {qml_path} | {detail}")
 
     def changeEvent(self, event: QEvent) -> None:
-        """调色板或字体变更后刷新主题令牌。"""
+        """调色板、字体或所在屏幕变更后刷新主题令牌。"""
         super().changeEvent(event)
-        if event.type() in (QEvent.Type.PaletteChange, QEvent.Type.FontChange):
-            self._bridge.sync(self.palette(), self.font())
+        if event.type() in (
+            QEvent.Type.PaletteChange,
+            QEvent.Type.ApplicationPaletteChange,
+            QEvent.Type.FontChange,
+            QEvent.Type.ScreenChangeInternal,
+        ):
+            self._bridge.sync(self.palette(), self.font(), self.screen().logicalDotsPerInch())
 
 
 class QmlWindowHost(QWidget):
@@ -158,25 +163,30 @@ class QmlWindowHost(QWidget):
         self._view.setResizeMode(QQuickView.ResizeMode.SizeRootObjectToView)
         self._view.setInitialProperties({**(properties or {}), "theme": self._bridge})
         self._sync_surface()
-        self._bridge.sync(self.palette(), self.font())
+        self._bridge.sync(self.palette(), self.font(), self.screen().logicalDotsPerInch())
         self._view.setSource(QUrl.fromLocalFile(str(qml_path)))
         if self._view.status() == QQuickView.Status.Error:
             detail = " | ".join(
                 error.toString()
                 for error in QQmlComponent(self._view.engine(), self._view.source()).errors()
             )
-            logger.error(f"QML 加载失败: {qml_path} | {detail}")
+            raise RuntimeError(f"QML 加载失败: {qml_path} | {detail}")
 
         layout = QVBoxLayout(self)
         layout.setContentsMargins(0, 0, 0, 0)
         layout.addWidget(QWidget.createWindowContainer(self._view, self))
 
     def changeEvent(self, event: QEvent) -> None:
-        """调色板或字体变更后刷新表面底色与主题令牌。"""
+        """调色板、字体或所在屏幕变更后刷新表面底色与主题令牌。"""
         super().changeEvent(event)
-        if event.type() in (QEvent.Type.PaletteChange, QEvent.Type.FontChange):
+        if event.type() in (
+            QEvent.Type.PaletteChange,
+            QEvent.Type.ApplicationPaletteChange,
+            QEvent.Type.FontChange,
+            QEvent.Type.ScreenChangeInternal,
+        ):
             self._sync_surface()
-            self._bridge.sync(self.palette(), self.font())
+            self._bridge.sync(self.palette(), self.font(), self.screen().logicalDotsPerInch())
 
     def _sync_surface(self) -> None:
         """把 QML 表面的清屏色同步为画布底色。"""
