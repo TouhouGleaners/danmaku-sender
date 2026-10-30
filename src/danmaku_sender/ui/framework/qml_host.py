@@ -11,7 +11,7 @@ from pathlib import Path
 from typing import Any
 
 from PySide6.QtCore import Property, QEvent, QObject, QUrl, Signal
-from PySide6.QtGui import QColor, QFont, QPalette
+from PySide6.QtGui import QColor, QFont, QFontDatabase, QPalette
 from PySide6.QtQml import QQmlComponent
 from PySide6.QtQuick import QQuickView
 from PySide6.QtQuickWidgets import QQuickWidget
@@ -34,6 +34,11 @@ class QmlPaletteBridge(QObject):
         self._palette = QPalette()
         self._font = QFont()
         self._dpi: float | None = None
+        # WinUI 的图标字体回退链；无字体的系统留空串，由 QML 端容错
+        self._icon_font_family = next(
+            (name for name in ("Segoe Fluent Icons", "Segoe MDL2 Assets") if name in QFontDatabase.families()),
+            "",
+        )
 
     def sync(self, palette: QPalette, font: QFont, dpi: float) -> None:
         """刷新取色、字体与 DPI 来源并广播变更。
@@ -91,6 +96,11 @@ class QmlPaletteBridge(QObject):
         # 像素字号按宿主屏幕 DPI 折算；同步前无 DPI 可用，退回 96 这一行业基准
         dpi = self._dpi if self._dpi is not None else 96.0
         return round(self._font.pixelSize() * 72.0 / dpi)
+
+    @Property(str, notify=changed)
+    def iconFontFamily(self) -> str:
+        """图标字体族；取值见构造时的回退链。"""
+        return self._icon_font_family
 
 
 class QmlHost(QQuickWidget):

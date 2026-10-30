@@ -6,7 +6,7 @@ import QtQuick
 // 行槽 32（内容 28 + 上下边距 2）、内容圆角 4、缩进 16/层、chevron 槽 40（字形 12，
 // 双字形切换不旋转）、选中条 3×16 圆角 2；状态取色照 SubtleFill 阶梯——
 // 悬停/选中 Secondary，悬停于选中、按压未选中 Tertiary。
-// 展开 = 子行滑入淡入，收起 = 淡出；键盘：↑↓ 选行、→ 展开、← 收起、Enter 选中、Home/End。
+// 展开 = 子行滑入淡入，收起 = 淡出；键盘：↑↓ 选行、→ 展开或下潜、← 收起或回父、Enter 选中、Home/End。
 //
 // 契约：
 // - model 为 TreeRowsModel：结构角色 depth/expandable/expanded，
@@ -86,16 +86,38 @@ Item {
                 root.pickCurrent()
                 event.accepted = true
                 break
-            case Qt.Key_Right:
-                if (tree.currentIndex >= 0)
+            case Qt.Key_Right: {
+                // WinUI 语义：收起时展开，已展开则下潜到下一行（首个子行）
+                const item = tree.itemAtIndex(tree.currentIndex)
+                if (item && item.expandable && !item.expanded) {
                     root.model.toggle(tree.currentIndex)
+                } else if (item && item.expanded) {
+                    tree.incrementCurrentIndex()
+                    root.pickCurrent()
+                }
                 event.accepted = true
                 break
-            case Qt.Key_Left:
-                if (tree.currentIndex >= 0)
+            }
+            case Qt.Key_Left: {
+                // WinUI 语义：展开时收起，已收起则回父行（向上找更浅的一行）
+                const item = tree.itemAtIndex(tree.currentIndex)
+                if (item && item.expandable && item.expanded) {
                     root.model.toggle(tree.currentIndex)
+                } else if (item) {
+                    let i = tree.currentIndex - 1
+                    let up = tree.itemAtIndex(i)
+                    while (i >= 0 && up && up.depth >= item.depth) {
+                        --i
+                        up = tree.itemAtIndex(i)
+                    }
+                    if (up && up.depth < item.depth) {
+                        tree.currentIndex = i
+                        root.pickCurrent()
+                    }
+                }
                 event.accepted = true
                 break
+            }
             case Qt.Key_Return:
             case Qt.Key_Enter:
                 root.pickCurrent()
@@ -178,7 +200,7 @@ Item {
                     height: 12
                     visible: row.expandable
                     text: row.expanded ? root.glyphExpanded : root.glyphCollapsed
-                    font.family: "Segoe Fluent Icons"
+                    font.family: theme.iconFontFamily
                     font.pixelSize: 12
                     color: rowMouse.pressed || chevronMouse.pressed ? theme.textSecondary : theme.text
                 }
@@ -232,6 +254,7 @@ Item {
                     visible: row.expandable
                     onClicked: {
                         root.keyboardMode = false
+                        tree.forceActiveFocus()
                         root.model.toggle(row.index)
                     }
                 }
