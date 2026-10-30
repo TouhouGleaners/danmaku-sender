@@ -61,9 +61,13 @@ class TreeNode:
     def add_child(self, child: "TreeNode") -> None:
         """挂载子节点并同步父子指针。
 
+        节点同时只属于一个父节点：挂载前先从原父节点摘除。
+
         Args:
             child (TreeNode): 待挂载的子节点。
         """
+        if child.parent is not None:
+            child.parent.children.remove(child)
         child.parent = self
         self.children.append(child)
 
@@ -296,7 +300,7 @@ class TreeRowsModel(QAbstractListModel):
         return roles
 
     def data(self, index: QModelIndex, role: int = Qt.ItemDataRole.DisplayRole) -> Any:
-        if not index.isValid():
+        if not index.isValid() or not 0 <= index.row() < len(self._visible):
             return None
 
         node = self._visible[index.row()]

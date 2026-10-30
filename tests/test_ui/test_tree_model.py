@@ -28,6 +28,17 @@ def _model() -> TreeRowsModel:
     return model
 
 
+class TestTreeNode:
+    def test_add_child_detaches_from_previous_parent(self):
+        first = TreeNode(data={"label": "A"})
+        second = TreeNode(data={"label": "B"})
+        child = TreeNode(data={"label": "C"})
+        first.add_child(child)
+        second.add_child(child)
+        assert first.children == []
+        assert child.parent is second
+
+
 class TestTreeRows:
     def test_collapsed_shows_roots_only(self, qapp):
         model = _model()
@@ -79,3 +90,12 @@ class TestTreeRows:
     def test_payload_at_rejects_out_of_range(self, qapp):
         model = _model()
         assert model.payload_at(99) is None
+
+    def test_data_rejects_stale_index(self, qapp):
+        """模型重建后遗留的旧索引返回 None，不抛 IndexError。"""
+        model = _model()
+        model.expand_all()
+        stale = model.index(3, 0)
+        model.set_roots([])
+        assert stale.isValid()
+        assert model.data(stale, ROLE_CONTENT_BASE) is None
