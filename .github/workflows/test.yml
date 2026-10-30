@@ -5,11 +5,13 @@ on:
     branches: [main]
     paths:
       - "src/**/*.py"
+      - "src/**/*.qml"
       - "tests/**/*.py"
       - "pyproject.toml"
   pull_request:
     paths:
       - "src/**/*.py"
+      - "src/**/*.qml"
       - "tests/**/*.py"
       - "pyproject.toml"
 
