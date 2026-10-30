@@ -139,6 +139,68 @@ class TreeRowsModel(QAbstractListModel):
         else:
             self._expand(node, row)
 
+    @Slot(int, result=bool)
+    def expand(self, row: int) -> bool:
+        """展开指定行。
+
+        Args:
+            row (int): 行号。
+
+        Returns:
+            bool: 是否发生展开；已展开或无子行时为 False。
+        """
+        node = self._node_at(row)
+        if node.expanded or not node.children:
+            return False
+        self._expand(node, row)
+        return True
+
+    @Slot(int, result=bool)
+    def collapse(self, row: int) -> bool:
+        """收起指定行。
+
+        Args:
+            row (int): 行号。
+
+        Returns:
+            bool: 是否发生收起；已收起或无子行时为 False。
+        """
+        node = self._node_at(row)
+        if not node.expanded:
+            return False
+        self._collapse(node, row)
+        return True
+
+    @Slot(int, result=object)
+    def first_child_row(self, row: int) -> int | None:
+        """取首个可见子行的行号。
+
+        Args:
+            row (int): 行号。
+
+        Returns:
+            int | None: 子行行号；无可见子行时为 None。
+        """
+        node = self._node_at(row)
+        if not node.expanded or not node.children:
+            return None
+        return self._visible.index(node.children[0])
+
+    @Slot(int, result=object)
+    def parent_row(self, row: int) -> int | None:
+        """取父行的行号。
+
+        Args:
+            row (int): 行号。
+
+        Returns:
+            int | None: 父行行号；顶层行或非法行为 None。
+        """
+        node = self._node_at(row)
+        if node.parent is None:
+            return None
+        return self._visible.index(node.parent)
+
     def expand_all(self) -> None:
         """展开全部分组节点。"""
         self.beginResetModel()

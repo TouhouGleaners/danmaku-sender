@@ -87,31 +87,25 @@ Item {
                 event.accepted = true
                 break
             case Qt.Key_Right: {
-                // WinUI 语义：收起时展开，已展开则下潜到下一行（首个子行）
-                const item = tree.itemAtIndex(tree.currentIndex)
-                if (item && item.expandable && !item.expanded) {
-                    root.model.toggle(tree.currentIndex)
-                } else if (item && item.expanded) {
-                    tree.incrementCurrentIndex()
-                    root.pickCurrent()
+                // WinUI 语义：收起时展开，已展开则下潜到首个子行
+                const cur = tree.currentIndex
+                if (!root.model.expand(cur)) {
+                    const child = root.model.first_child_row(cur)
+                    if (child !== null) {
+                        tree.currentIndex = child
+                        root.pickCurrent()
+                    }
                 }
                 event.accepted = true
                 break
             }
             case Qt.Key_Left: {
-                // WinUI 语义：展开时收起，已收起则回父行（向上找更浅的一行）
-                const item = tree.itemAtIndex(tree.currentIndex)
-                if (item && item.expandable && item.expanded) {
-                    root.model.toggle(tree.currentIndex)
-                } else if (item) {
-                    let i = tree.currentIndex - 1
-                    let up = tree.itemAtIndex(i)
-                    while (i >= 0 && up && up.depth >= item.depth) {
-                        --i
-                        up = tree.itemAtIndex(i)
-                    }
-                    if (up && up.depth < item.depth) {
-                        tree.currentIndex = i
+                // WinUI 语义：展开时收起，已收起则回父行
+                const cur = tree.currentIndex
+                if (!root.model.collapse(cur)) {
+                    const parentRow = root.model.parent_row(cur)
+                    if (parentRow !== null) {
+                        tree.currentIndex = parentRow
                         root.pickCurrent()
                     }
                 }
@@ -163,9 +157,9 @@ Item {
                 radius: 4
                 // WinUI 状态矩阵：按压未选中 / 悬停于选中 → Tertiary；其余悬停与选中 → Secondary
                 color: rowMouse.pressed || chevronMouse.pressed
-                        ? (row.isCurrent ? theme.fillHover : theme.fillPressed)
-                    : row.isCurrent && rowMouse.containsMouse ? theme.fillPressed
-                    : row.isCurrent || rowMouse.containsMouse ? theme.fillHover
+                        ? (row.isCurrent ? root.theme.fillHover : root.theme.fillPressed)
+                    : row.isCurrent && rowMouse.containsMouse ? root.theme.fillPressed
+                    : row.isCurrent || rowMouse.containsMouse ? root.theme.fillHover
                     : "transparent"
 
                 // 选中条画在本行内（WinUI 式）：随行而定，不依赖 highlight 定位
@@ -175,7 +169,7 @@ Item {
                     width: 3
                     height: 16
                     radius: 2
-                    color: theme.accent
+                    color: root.theme.accent
                     visible: row.isCurrent
                 }
 
@@ -187,7 +181,7 @@ Item {
                     height: bg.height
                     radius: 6
                     color: "transparent"
-                    border.color: theme.accent
+                    border.color: root.theme.accent
                     border.width: 2
                     visible: root.keyboardMode && tree.activeFocus && row.isCurrent
                 }
@@ -200,9 +194,9 @@ Item {
                     height: 12
                     visible: row.expandable
                     text: row.expanded ? root.glyphExpanded : root.glyphCollapsed
-                    font.family: theme.iconFontFamily
+                    font.family: root.theme.iconFontFamily
                     font.pixelSize: 12
-                    color: rowMouse.pressed || chevronMouse.pressed ? theme.textSecondary : theme.text
+                    color: rowMouse.pressed || chevronMouse.pressed ? root.theme.textSecondary : root.theme.text
                 }
 
                 Repeater {
@@ -217,11 +211,11 @@ Item {
                         text: row.model[modelData.role] ?? ""
                         horizontalAlignment: modelData.align === "right" ? Text.AlignRight : Text.AlignLeft
                         elide: index === 0 ? Text.ElideRight : Text.ElideNone
-                        font.family: theme.fontFamily
-                        font.pointSize: theme.fontPointSize
+                        font.family: root.theme.fontFamily
+                        font.pointSize: root.theme.fontPointSize
                         color: index === 0
-                            ? ((rowMouse.pressed || chevronMouse.pressed) ? theme.textSecondary : theme.text)
-                            : theme.textSecondary
+                            ? ((rowMouse.pressed || chevronMouse.pressed) ? root.theme.textSecondary : root.theme.text)
+                            : root.theme.textSecondary
                     }
                 }
 
