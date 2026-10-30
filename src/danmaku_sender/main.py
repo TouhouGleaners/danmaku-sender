@@ -2,6 +2,7 @@ import ctypes
 import faulthandler
 import sys
 
+from PySide6.QtQuickControls2 import QQuickStyle
 from PySide6.QtWidgets import QApplication
 
 from danmaku_sender.config.app_meta import AppInfo
@@ -46,7 +47,9 @@ def main(argv=None):
     # 必须早于任何控件创建：光标在控件 polish 时设置
     app.installEventFilter(AutoHandCursorFilter(app))
     app.installEventFilter(ClickAwayFocusFilter(app))
+    # 风格初始化：widgets 与 QML 控件同用 Fusion、共用应用调色板；须早于控件与 QML 引擎创建
     app.setStyle("Fusion")
+    QQuickStyle.setStyle("Fusion")
     app.setWindowIcon(get_app_icon())
     app.setApplicationName(AppInfo.NAME)
     app.setApplicationVersion(AppInfo.VERSION)

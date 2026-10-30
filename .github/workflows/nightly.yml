@@ -75,6 +75,7 @@ jobs:
                --windows-console-mode=disable `
                --windows-icon-from-ico=assets/icon.ico `
                --include-data-dir=assets=assets `
+               --include-data-files="src/danmaku_sender=danmaku_sender/=**/*.qml" `
                --output-dir=dist-standalone `
                --output-filename=BiliDanmakuSender `
                src/danmaku_sender
@@ -88,6 +89,7 @@ jobs:
                --windows-console-mode=disable `
                --windows-icon-from-ico=assets/icon.ico `
                --include-data-dir=assets=assets `
+               --include-data-files="src/danmaku_sender=danmaku_sender/=**/*.qml" `
                --output-dir=dist-onefile `
                --output-filename=BiliDanmakuSender `
                src/danmaku_sender

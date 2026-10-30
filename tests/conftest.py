@@ -12,6 +12,8 @@ from danmaku_sender.types.models.editor_types import EditorItem
 def qapp():
     """创建 QApplication。无头 CI 没有显示服务器，必须先切到 offscreen。"""
     os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
+    # QQuickWidget 在 offscreen 平台没有 GPU 上下文，走软件渲染后端
+    os.environ.setdefault("QSG_RHI_BACKEND", "software")
     app = QApplication.instance() or QApplication([])
     yield app
 

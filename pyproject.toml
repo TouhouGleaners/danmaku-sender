@@ -62,6 +62,9 @@ testpaths = ["tests"]
 [tool.setuptools.dynamic]
 version = {attr = "danmaku_sender._version.__version__"}
 
+[tool.setuptools.package-data]
+"danmaku_sender" = ["**/*.qml"]
+
 [tool.ruff]
 include = ["src/**/*.py", "tests/**/*.py"]
 
