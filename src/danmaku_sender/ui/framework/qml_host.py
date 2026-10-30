@@ -11,7 +11,7 @@ from pathlib import Path
 from typing import Any
 
 from PySide6.QtCore import Property, QEvent, QObject, QUrl, Signal
-from PySide6.QtGui import QColor, QFont, QPalette
+from PySide6.QtGui import QColor, QFont, QFontDatabase, QFontInfo, QPalette
 from PySide6.QtQml import QQmlComponent
 from PySide6.QtQuick import QQuickView
 from PySide6.QtQuickWidgets import QQuickWidget
@@ -33,19 +33,28 @@ class QmlPaletteBridge(QObject):
         super().__init__(parent)
         self._palette = QPalette()
         self._font = QFont()
-        self._dpi: float | None = None
+        # WinUI 同款图标字体回退链；两代 Segoe 皆缺时退到应用字体并换非 PUA 箭头
+        self._icon_font_family = next(
+            (name for name in ("Segoe Fluent Icons", "Segoe MDL2 Assets") if name in QFontDatabase.families()),
+            "",
+        )
+        if self._icon_font_family:
+            self._chevron_collapsed = chr(0xE76C)
+            self._chevron_expanded = chr(0xE70D)
+        else:
+            self._icon_font_family = self._font.family()
+            self._chevron_collapsed = "▸"
+            self._chevron_expanded = "▾"
 
-    def sync(self, palette: QPalette, font: QFont, dpi: float) -> None:
-        """刷新取色、字体与 DPI 来源并广播变更。
+    def sync(self, palette: QPalette, font: QFont) -> None:
+        """刷新取色与字体来源并广播变更。
 
         Args:
             palette (QPalette): 当前生效的调色板。
             font (QFont): 当前生效的字体。
-            dpi (float): 宿主所在屏幕的逻辑 DPI，用于像素字号折算。
         """
         self._palette = palette
         self._font = font
-        self._dpi = dpi
         self.changed.emit()
 
     @Property(QColor, notify=changed)
@@ -85,12 +94,23 @@ class QmlPaletteBridge(QObject):
 
     @Property(int, notify=changed)
     def fontPointSize(self) -> int:
-        """字号（磅）；像素字号按宿主屏幕 DPI 折算，QFont.pointSize 对其返回 -1。"""
-        if self._font.pointSize() > 0:
-            return self._font.pointSize()
-        # 像素字号按宿主屏幕 DPI 折算；同步前无 DPI 可用，退回 96 这一行业基准
-        dpi = self._dpi if self._dpi is not None else 96.0
-        return round(self._font.pixelSize() * 72.0 / dpi)
+        """字号（磅）；QFontInfo 对点数字体与像素字号统一给出磅值。"""
+        return QFontInfo(self._font).pointSize()
+
+    @Property(str, notify=changed)
+    def chevronCollapsed(self) -> str:
+        """收起态箭头字形。"""
+        return self._chevron_collapsed
+
+    @Property(str, notify=changed)
+    def chevronExpanded(self) -> str:
+        """展开态箭头字形。"""
+        return self._chevron_expanded
+
+    @Property(str, notify=changed)
+    def iconFontFamily(self) -> str:
+        """图标字体族；取值见构造时的回退链。"""
+        return self._icon_font_family
 
 
 class QmlHost(QQuickWidget):
@@ -118,12 +138,14 @@ class QmlHost(QQuickWidget):
         self._bridge = QmlPaletteBridge(self)
         self.setInitialProperties({**(properties or {}), "theme": self._bridge})
 
-        self._bridge.sync(self.palette(), self.font(), self.screen().logicalDotsPerInch())
+        self._bridge.sync(self.palette(), self.font())
         self.setSource(QUrl.fromLocalFile(str(qml_path)))
         if self.status() == QQuickWidget.Status.Error:
             detail = " | ".join(
                 error.toString() for error in QQmlComponent(self.engine(), self.source()).errors()
             )
+            # 脱离父控件再抛出：失败件不留在调用方布局里，避免捕获重试时累积孤儿
+            self.setParent(None)
             raise RuntimeError(f"QML 加载失败: {qml_path} | {detail}")
 
     def changeEvent(self, event: QEvent) -> None:
@@ -136,7 +158,7 @@ class QmlHost(QQuickWidget):
             QEvent.Type.ScreenChangeInternal,
             QEvent.Type.DevicePixelRatioChange,
         ):
-            self._bridge.sync(self.palette(), self.font(), self.screen().logicalDotsPerInch())
+            self._bridge.sync(self.palette(), self.font())
 
 
 class QmlWindowHost(QWidget):
@@ -164,13 +186,15 @@ class QmlWindowHost(QWidget):
         self._view.setResizeMode(QQuickView.ResizeMode.SizeRootObjectToView)
         self._view.setInitialProperties({**(properties or {}), "theme": self._bridge})
         self._sync_surface()
-        self._bridge.sync(self.palette(), self.font(), self.screen().logicalDotsPerInch())
+        self._bridge.sync(self.palette(), self.font())
         self._view.setSource(QUrl.fromLocalFile(str(qml_path)))
         if self._view.status() == QQuickView.Status.Error:
             detail = " | ".join(
                 error.toString()
                 for error in QQmlComponent(self._view.engine(), self._view.source()).errors()
             )
+            # 脱离父控件再抛出：失败件不留在调用方布局里，避免捕获重试时累积孤儿
+            self.setParent(None)
             raise RuntimeError(f"QML 加载失败: {qml_path} | {detail}")
 
         layout = QVBoxLayout(self)
@@ -188,7 +212,7 @@ class QmlWindowHost(QWidget):
             QEvent.Type.DevicePixelRatioChange,
         ):
             self._sync_surface()
-            self._bridge.sync(self.palette(), self.font(), self.screen().logicalDotsPerInch())
+            self._bridge.sync(self.palette(), self.font())
 
     def _sync_surface(self) -> None:
         """把 QML 表面的清屏色同步为画布底色。"""
