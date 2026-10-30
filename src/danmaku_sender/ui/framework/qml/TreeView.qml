@@ -23,8 +23,9 @@ Item {
 
     property bool keyboardMode: false
 
-    readonly property string glyphCollapsed: String.fromCharCode(0xe76c)
-    readonly property string glyphExpanded: String.fromCharCode(0xe70d)
+    // 双 Segoe 图标字体皆缺时退回非 PUA 箭头（通用字体皆有此二形）
+    readonly property string glyphCollapsed: root.theme.iconFontFamily !== "" ? String.fromCharCode(0xe76c) : "▸"
+    readonly property string glyphExpanded: root.theme.iconFontFamily !== "" ? String.fromCharCode(0xe70d) : "▾"
 
     // 定宽列从右缘反向排列，弹性列从 chevron 槽后接出
     function trailingX(idx) {

@@ -52,7 +52,7 @@ class TreeNode:
     ) -> None:
         self.data = data if data is not None else {}
         self.payload = payload
-        self.children = children or []
+        self.children = children if children is not None else []
         self.expanded = False
         self.parent = parent
         for child in self.children:
@@ -97,7 +97,8 @@ class TreeRowsModel(QAbstractListModel):
     def __init__(self, content_roles: Sequence[str], parent: QObject | None = None) -> None:
         super().__init__(parent)
         roles = tuple(content_roles)
-        reserved = set(self.STRUCTURAL_ROLE_NAMES)
+        # 结构角色 + 委托保留名（index/model 是 QML 行委托的内建属性名）
+        reserved = set(self.STRUCTURAL_ROLE_NAMES) | {"index", "model"}
         if len(set(roles)) != len(roles) or not reserved.isdisjoint(roles):
             raise ValueError("content_roles 不得重复，也不得占用结构角色名 depth/expandable/expanded")
         self._content_roles = roles
@@ -114,6 +115,7 @@ class TreeRowsModel(QAbstractListModel):
         self._roots = list(roots)
         for root in self._roots:
             root.parent = None
+        self._relink(self._roots)
         self._set_expanded(self._roots, False)
         self._visible = list(self._roots)
         self.endResetModel()
@@ -263,6 +265,14 @@ class TreeRowsModel(QAbstractListModel):
             if child.expanded:
                 rows.extend(self._flatten(child))
         return rows
+
+    @classmethod
+    def _relink(cls, nodes: list[TreeNode]) -> None:
+        """装载时归一化父子指针，容忍调用方手工挂载的不一致。"""
+        for node in nodes:
+            for child in node.children:
+                child.parent = node
+            cls._relink(node.children)
 
     @classmethod
     def _set_expanded(cls, nodes: list[TreeNode], expanded: bool) -> None:
