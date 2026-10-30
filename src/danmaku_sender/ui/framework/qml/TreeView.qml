@@ -23,9 +23,7 @@ Item {
 
     property bool keyboardMode: false
 
-    // 双 Segoe 图标字体皆缺时退回非 PUA 箭头（通用字体皆有此二形）
-    readonly property string glyphCollapsed: root.theme.iconFontFamily !== "" ? String.fromCharCode(0xe76c) : "▸"
-    readonly property string glyphExpanded: root.theme.iconFontFamily !== "" ? String.fromCharCode(0xe70d) : "▾"
+    // 箭头字形由令牌桥下发（含字体回退决策），QML 只消费成品
 
     // 定宽列从右缘反向排列，弹性列从 chevron 槽后接出
     function trailingX(idx) {
@@ -195,7 +193,7 @@ Item {
                     width: 12
                     height: 12
                     visible: row.expandable
-                    text: row.expanded ? root.glyphExpanded : root.glyphCollapsed
+                    text: row.expanded ? root.theme.chevronExpanded : root.theme.chevronCollapsed
                     font.family: root.theme.iconFontFamily
                     font.pixelSize: 12
                     color: rowMouse.pressed || chevronMouse.pressed ? root.theme.textSecondary : root.theme.text
