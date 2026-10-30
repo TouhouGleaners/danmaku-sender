@@ -87,11 +87,12 @@ Item {
                 event.accepted = true
                 break
             case Qt.Key_Right: {
-                // WinUI 语义：收起时展开，已展开则下潜到首个子行
+                // WinUI 语义：收起时展开，已展开则下潜到首个子行；
+                // 槽的 None 进 QML 是 undefined，按 typeof 判数
                 const cur = tree.currentIndex
                 if (!root.model.expand(cur)) {
                     const child = root.model.first_child_row(cur)
-                    if (child !== null) {
+                    if (typeof child === "number") {
                         tree.currentIndex = child
                         root.pickCurrent()
                     }
@@ -104,7 +105,7 @@ Item {
                 const cur = tree.currentIndex
                 if (!root.model.collapse(cur)) {
                     const parentRow = root.model.parent_row(cur)
-                    if (parentRow !== null) {
+                    if (typeof parentRow === "number") {
                         tree.currentIndex = parentRow
                         root.pickCurrent()
                     }

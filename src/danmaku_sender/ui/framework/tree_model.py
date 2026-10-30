@@ -205,7 +205,7 @@ class TreeRowsModel(QAbstractListModel):
         self._collapse(node, row)
         return True
 
-    @Slot(int, result=object)
+    @Slot(int, result="QVariant")
     def first_child_row(self, row: int) -> int | None:
         """取首个可见子行的行号。
 
@@ -220,7 +220,7 @@ class TreeRowsModel(QAbstractListModel):
             return None
         return self._visible.index(node.children[0])
 
-    @Slot(int, result=object)
+    @Slot(int, result="QVariant")
     def parent_row(self, row: int) -> int | None:
         """取父行的行号。
 

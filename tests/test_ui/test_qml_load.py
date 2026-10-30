@@ -15,10 +15,11 @@ QML_DIR = Path(qml_host.__file__).parent / "qml"
 class TestQmlLoad:
     def test_tree_view_loads(self, qapp):
         """TreeView.qml 装载成功：语法与绑定错误会在此暴露。"""
+        model = TreeRowsModel(("label",))
         parent = QWidget()
         host = QmlHost(
             QML_DIR / "TreeView.qml",
-            properties={"model": TreeRowsModel(("label",))},
+            properties={"model": model},
             parent=parent,
         )
         assert host.status() == QQuickWidget.Status.Ready
