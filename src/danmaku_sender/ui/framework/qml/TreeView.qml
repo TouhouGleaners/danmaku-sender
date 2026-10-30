@@ -39,8 +39,9 @@ Item {
     function columnWidth(idx, indent) {
         if (root.columns[idx].width !== null && root.columns[idx].width !== undefined)
             return root.columns[idx].width
-        let right = root.columns.length > 1 ? trailingX(1) : tree.width - 8
-        return right - 8 - columnX(idx, indent)
+        const hasFollowing = root.columns.length > 1
+        const right = hasFollowing ? trailingX(1) : tree.width - 8
+        return right - (hasFollowing ? 8 : 0) - columnX(idx, indent)
     }
     function pickCurrent() {
         if (tree.currentIndex >= 0)

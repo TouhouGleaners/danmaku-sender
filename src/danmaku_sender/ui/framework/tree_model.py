@@ -50,13 +50,22 @@ class TreeNode:
         children: list["TreeNode"] | None = None,
         parent: "TreeNode | None" = None,
     ) -> None:
-        self.data = data or {}
+        self.data = data if data is not None else {}
         self.payload = payload
         self.children = children or []
         self.expanded = False
         self.parent = parent
         for child in self.children:
             child.parent = self
+
+    def add_child(self, child: "TreeNode") -> None:
+        """挂载子节点并同步父子指针。
+
+        Args:
+            child (TreeNode): 待挂载的子节点。
+        """
+        child.parent = self
+        self.children.append(child)
 
     @property
     def depth(self) -> int:
