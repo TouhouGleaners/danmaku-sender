@@ -124,6 +124,8 @@ class QmlHost(QQuickWidget):
             detail = " | ".join(
                 error.toString() for error in QQmlComponent(self.engine(), self.source()).errors()
             )
+            # 脱离父控件再抛出：失败件不留在调用方布局里，避免捕获重试时累积孤儿
+            self.setParent(None)
             raise RuntimeError(f"QML 加载失败: {qml_path} | {detail}")
 
     def changeEvent(self, event: QEvent) -> None:
@@ -171,6 +173,8 @@ class QmlWindowHost(QWidget):
                 error.toString()
                 for error in QQmlComponent(self._view.engine(), self._view.source()).errors()
             )
+            # 脱离父控件再抛出：失败件不留在调用方布局里，避免捕获重试时累积孤儿
+            self.setParent(None)
             raise RuntimeError(f"QML 加载失败: {qml_path} | {detail}")
 
         layout = QVBoxLayout(self)
