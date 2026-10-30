@@ -25,7 +25,7 @@ class QmlPaletteBridge(QObject):
     """注入 QML 根对象的主题令牌，属性名为 ``theme``。
 
     取色角色与 ``ThemeService.ROLE_SOURCES`` 的语义对应：
-    填充阶梯的悬停与按压档取自 Light / Midlight，画布取自 Base。
+    填充阶梯的悬停与按压档取自 Light / Midlight，画布取自 Window。
 
     Attributes:
         changed (Signal): 令牌取值变更广播，驱动 QML 绑定刷新。
@@ -51,8 +51,8 @@ class QmlPaletteBridge(QObject):
 
     @Property(QColor, notify=changed)
     def background(self) -> QColor:
-        """画布底色，取自 QPalette.Base。"""
-        return self._palette.color(QPalette.ColorRole.Base)
+        """画布底色，取自 QPalette.Window。"""
+        return self._palette.color(QPalette.ColorRole.Window)
 
     @Property(QColor, notify=changed)
     def fillHover(self) -> QColor:
@@ -113,7 +113,7 @@ class QmlHost(QQuickWidget):
         self.setResizeMode(QQuickWidget.ResizeMode.SizeRootObjectToView)
 
         self._bridge = QmlPaletteBridge(self)
-        self.setInitialProperties({"theme": self._bridge, **(properties or {})})
+        self.setInitialProperties({**(properties or {}), "theme": self._bridge})
 
         self._bridge.sync(self.palette(), self.font())
         self.setSource(QUrl.fromLocalFile(str(qml_path)))
@@ -177,4 +177,4 @@ class QmlWindowHost(QWidget):
 
     def _sync_surface(self) -> None:
         """把 QML 表面的清屏色同步为画布底色。"""
-        self._view.setColor(self.palette().color(QPalette.ColorRole.Base))
+        self._view.setColor(self.palette().color(QPalette.ColorRole.Window))
