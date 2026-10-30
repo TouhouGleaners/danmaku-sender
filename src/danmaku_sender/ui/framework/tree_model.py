@@ -84,7 +84,11 @@ class TreeRowsModel(QAbstractListModel):
 
     def __init__(self, content_roles: Sequence[str], parent: QObject | None = None) -> None:
         super().__init__(parent)
-        self._content_roles = tuple(content_roles)
+        roles = tuple(content_roles)
+        reserved = {"depth", "expandable", "expanded"}
+        if len(set(roles)) != len(roles) or not reserved.isdisjoint(roles):
+            raise ValueError("content_roles 不得重复，也不得占用结构角色名 depth/expandable/expanded")
+        self._content_roles = roles
         self._roots: list[TreeNode] = []
         self._visible: list[TreeNode] = []
 
@@ -98,6 +102,7 @@ class TreeRowsModel(QAbstractListModel):
         self._roots = list(roots)
         for root in self._roots:
             root.parent = None
+        self._set_expanded(self._roots, False)
         self._visible = list(self._roots)
         self.endResetModel()
 
