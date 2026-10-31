@@ -4,7 +4,7 @@ import sys
 from datetime import UTC, datetime
 from pathlib import Path
 
-from PySide6.QtCore import QObject, QMessageLogContext, QtMsgType, Signal, qInstallMessageHandler
+from PySide6.QtCore import QLoggingCategory, QObject, Signal
 
 from danmaku_sender.config.app_meta import AppInfo
 
@@ -117,12 +117,14 @@ def init_app_logging(log_dir: Path):
     logging.getLogger("keyring").setLevel(logging.WARNING)
     logging.getLogger("win32ctypes").setLevel(logging.WARNING)
 
-    # Qt 平台层的剪贴板重试日志（他进程占用系统剪贴板时反复打印），仅静默此条，其余原样输出
-    def _qt_message(mode: QtMsgType, context: QMessageLogContext, message: str) -> None:
-        if "Retrying to obtain clipboard" in message:
-            return
-        sys.stderr.write(f"{context.category}: {message}\n")
-
-    qInstallMessageHandler(_qt_message)
+    # 外部进程占用系统剪贴板时，Qt 平台剪贴板层会反复重试并刷告警；触发方在本进程之外，
+    # 按 Qt 日志分类静默 qt.qpa.mime 的非致命输出，critical 级保留
+    QLoggingCategory.setFilterRules(
+        """
+        qt.qpa.mime.debug=false
+        qt.qpa.mime.info=false
+        qt.qpa.mime.warning=false
+        """
+    )
 
     logging.info(f"日志系统初始化完成。日志路径: {log_file_path}")
