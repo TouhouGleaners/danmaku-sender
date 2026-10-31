@@ -3,14 +3,14 @@ pragma ComponentBehavior: Bound
 import QtQuick
 
 // 通用 Fluent 风格树视图。度量与状态照 WinUI 3 TreeView：
-// 行槽 32（内容 28 + 上下边距 2）、内容圆角 4、缩进 16/层、chevron 槽 40（字形 12，
-// 双字形切换不旋转）、选中条 3×16 圆角 2；状态取色照 SubtleFill 阶梯——
-// 悬停/选中 Secondary，悬停于选中、按压未选中 Tertiary。
+// 行槽 32（内容 28 + 上下边距 2）、内容圆角 4、缩进 16/层、chevron 槽 40（字形 12，双字形切换不旋转）、选中条 3×16 圆角 2；
+// 状态取色照 SubtleFill 阶梯——悬停/选中 Secondary，悬停于选中、按压未选中 Tertiary。
 // 展开 = 子行滑入淡入，收起 = 淡出；键盘：↑↓ 选行、→ 展开或下潜、← 收起或回父、Enter 选中、Home/End。
 //
 // 契约：
-// - model 为 TreeRowsModel：结构角色 depth/expandable/expanded，
-//   内容列按 columns 的 {role, width, align} 渲染；width 为 null 的弹性列须是第一列。
+// - model 为 TreeRowsModel：
+//   结构角色 depth/expandable/expanded，内容列按 columns 的 {role, width, align} 渲染；
+//   width 为 null 的弹性列须是第一列。
 // - 行内定位一律不引用 parent（delegate 销毁期绑定解引用会触发 TypeError）。
 Item {
     id: root
@@ -23,8 +23,6 @@ Item {
 
     property bool keyboardMode: false
     activeFocusOnTab: true
-
-    // 箭头字形由令牌桥下发，QML 不做字体选择
 
     // 定宽列从右缘反向排列，弹性列从 chevron 槽后接出
     function trailingX(idx) {
@@ -62,10 +60,10 @@ Item {
             event.accepted = true
             break
         case Qt.Key_Right: {
-            // WinUI 语义：收起时展开，已展开则下潜到首个子行；
-            // 槽的 None 进 QML 是 undefined，按 typeof 判数
+            // WinUI 语义：收起时展开，已展开则下潜到首个子行
             const cur = tree.currentIndex
             if (!root.model.expand(cur)) {
+                // 返回 None 时 QML 侧是 undefined，仅 number 是有效行号
                 const child = root.model.first_child_row(cur)
                 if (typeof child === "number") {
                     tree.currentIndex = child
@@ -79,6 +77,7 @@ Item {
             // WinUI 语义：展开时收起，已收起则回父行
             const cur = tree.currentIndex
             if (!root.model.collapse(cur)) {
+                // 返回 None 时 QML 侧是 undefined，仅 number 是有效行号
                 const parentRow = root.model.parent_row(cur)
                 if (typeof parentRow === "number") {
                     tree.currentIndex = parentRow

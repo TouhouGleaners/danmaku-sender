@@ -34,18 +34,21 @@ class QmlPaletteBridge(QObject):
         super().__init__(parent)
         self._palette = QPalette()
         self._font = QFont()
-        # 图标字体回退链：Segoe Fluent Icons → Segoe MDL2 Assets；皆缺时改用应用字体与非 PUA 箭头字形
-        self._icon_font_family = next(
-            (name for name in ("Segoe Fluent Icons", "Segoe MDL2 Assets") if name in QFontDatabase.families()),
-            "",
-        )
-        if self._icon_font_family:
-            self._chevron_collapsed = chr(0xE76C)
-            self._chevron_expanded = chr(0xE70D)
-        else:
-            self._icon_font_family = self._font.family()
-            self._chevron_collapsed = "▸"
-            self._chevron_expanded = "▾"
+        self._icon_font_family, self._chevron_collapsed, self._chevron_expanded = self._resolve_icon_font()
+
+    def _resolve_icon_font(self) -> tuple[str, str, str]:
+        """选定图标字体族与收起、展开两态的箭头字形。
+
+        优先取可用的图标字体族（Segoe Fluent Icons → Segoe MDL2 Assets），
+        皆不可用时返回应用字体族与非 PUA 箭头字形。
+
+        Returns:
+            tuple[str, str, str]: 图标字体族、收起态箭头字形、展开态箭头字形。
+        """
+        for name in ("Segoe Fluent Icons", "Segoe MDL2 Assets"):
+            if name in QFontDatabase.families():
+                return name, chr(0xE76C), chr(0xE70D)
+        return self._font.family(), "▸", "▾"
 
     def sync(self, palette: QPalette, font: QFont) -> None:
         """刷新取色与字体来源并广播变更。
@@ -149,14 +152,27 @@ class QmlHost(QQuickWidget):
         self.setInitialProperties({**(properties or {}), "theme": self._bridge})
 
         self._bridge.sync(self.palette(), self.font())
+        self._load_qml(qml_path)
+
+    def _load_qml(self, qml_path: Path) -> None:
+        """加载 QML 并校验结果。
+
+        加载失败时脱离父控件并抛出，失败的宿主不留在调用方布局中。
+
+        Args:
+            qml_path (Path): QML 文件路径。
+
+        Raises:
+            RuntimeError: QML 加载失败。
+        """
         self.setSource(QUrl.fromLocalFile(str(qml_path)))
-        if self.status() == QQuickWidget.Status.Error:
-            detail = " | ".join(
-                error.toString() for error in QQmlComponent(self.engine(), self.source()).errors()
-            )
-            # 脱离父控件再抛出：失败件不留在调用方布局里，避免捕获重试时累积孤儿
-            self.setParent(None)
-            raise RuntimeError(f"QML 加载失败: {qml_path} | {detail}")
+        if self.status() != QQuickWidget.Status.Error:
+            return
+        detail = " | ".join(
+            error.toString() for error in QQmlComponent(self.engine(), self.source()).errors()
+        )
+        self.setParent(None)
+        raise RuntimeError(f"QML 加载失败: {qml_path} | {detail}")
 
     def changeEvent(self, event: QEvent) -> None:
         """调色板、字体或所在屏幕变更后刷新主题令牌。"""
@@ -208,19 +224,32 @@ class QmlWindowHost(QWidget):
         self._view.setInitialProperties({**(properties or {}), "theme": self._bridge})
         self._sync_surface()
         self._bridge.sync(self.palette(), self.font())
-        self._view.setSource(QUrl.fromLocalFile(str(qml_path)))
-        if self._view.status() == QQuickView.Status.Error:
-            detail = " | ".join(
-                error.toString()
-                for error in QQmlComponent(self._view.engine(), self._view.source()).errors()
-            )
-            # 脱离父控件再抛出：失败件不留在调用方布局里，避免捕获重试时累积孤儿
-            self.setParent(None)
-            raise RuntimeError(f"QML 加载失败: {qml_path} | {detail}")
+        self._load_qml(qml_path)
 
         layout = QVBoxLayout(self)
         layout.setContentsMargins(0, 0, 0, 0)
         layout.addWidget(QWidget.createWindowContainer(self._view, self))
+
+    def _load_qml(self, qml_path: Path) -> None:
+        """加载 QML 并校验结果。
+
+        加载失败时脱离父控件并抛出，失败的宿主不留在调用方布局中。
+
+        Args:
+            qml_path (Path): QML 文件路径。
+
+        Raises:
+            RuntimeError: QML 加载失败。
+        """
+        self._view.setSource(QUrl.fromLocalFile(str(qml_path)))
+        if self._view.status() != QQuickView.Status.Error:
+            return
+        detail = " | ".join(
+            error.toString()
+            for error in QQmlComponent(self._view.engine(), self._view.source()).errors()
+        )
+        self.setParent(None)
+        raise RuntimeError(f"QML 加载失败: {qml_path} | {detail}")
 
     def changeEvent(self, event: QEvent) -> None:
         """调色板、字体或所在屏幕变更后刷新表面底色与主题令牌。"""
