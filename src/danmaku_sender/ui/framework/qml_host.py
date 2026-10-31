@@ -1,6 +1,6 @@
 """QML 承载基座。
 
-把 QML 表面装进 widgets 界面，并以根对象初始属性注入主题令牌与字体。
+把 QML 表面嵌入 widgets 界面，并以根对象初始属性注入主题令牌与字体。
 取色与字体均取自控件自身的 QPalette / QFont，随全局主题与字体变更同步。
 
 两种承载：QmlHost 以 QQuickWidget 装进控件树，适合小控件；
@@ -16,6 +16,7 @@ from PySide6.QtQml import QQmlComponent
 from PySide6.QtQuick import QQuickView
 from PySide6.QtQuickWidgets import QQuickWidget
 from PySide6.QtWidgets import QVBoxLayout, QWidget
+
 
 class QmlPaletteBridge(QObject):
     """注入 QML 根对象的主题令牌，属性名为 ``theme``。
@@ -33,7 +34,7 @@ class QmlPaletteBridge(QObject):
         super().__init__(parent)
         self._palette = QPalette()
         self._font = QFont()
-        # WinUI 同款图标字体回退链；两代 Segoe 皆缺时退到应用字体并换非 PUA 箭头
+        # 图标字体回退链：Segoe Fluent Icons → Segoe MDL2 Assets；皆缺时改用应用字体与非 PUA 箭头字形
         self._icon_font_family = next(
             (name for name in ("Segoe Fluent Icons", "Segoe MDL2 Assets") if name in QFontDatabase.families()),
             "",
@@ -109,7 +110,7 @@ class QmlPaletteBridge(QObject):
 
     @Property(str, notify=changed)
     def iconFontFamily(self) -> str:
-        """图标字体族；取值见构造时的回退链。"""
+        """图标字体族；无可用图标字体时为应用字体族。"""
         return self._icon_font_family
 
 
@@ -124,6 +125,15 @@ class QmlHost(QQuickWidget):
         qml_path (Path): QML 文件路径。
         properties (dict[str, Any] | None): 注入 QML 根对象的初始属性表。
         parent (QWidget | None): 父控件。
+
+    Typical usage example::
+
+        host = QmlHost(
+            QML_DIR / "TreeView.qml",
+            properties={"model": tree_rows},
+            parent=self,
+        )
+        layout.addWidget(host)
     """
 
     def __init__(
@@ -171,6 +181,15 @@ class QmlWindowHost(QWidget):
         qml_path (Path): QML 文件路径。
         properties (dict[str, Any] | None): 注入 QML 根对象的初始属性表。
         parent (QWidget | None): 父控件。
+
+    Typical usage example::
+
+        host = QmlWindowHost(
+            SPLIT_AREA_QML,
+            properties={"bridge": bridge, "records": table_model},
+            parent=self,
+        )
+        layout.addWidget(host)
     """
 
     def __init__(
@@ -183,7 +202,7 @@ class QmlWindowHost(QWidget):
         self._bridge = QmlPaletteBridge(self)
 
         self._view = QQuickView()
-        # 桥改挂到视图生命周期：视图析构先拆场景再拆子对象，拆卸期绑定不再对空 theme 求值
+        # 桥挂载于视图之下：销毁顺序保证场景先于令牌桥拆除，绑定求值期间 theme 恒可用
         self._bridge.setParent(self._view)
         self._view.setResizeMode(QQuickView.ResizeMode.SizeRootObjectToView)
         self._view.setInitialProperties({**(properties or {}), "theme": self._bridge})

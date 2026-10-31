@@ -1,4 +1,4 @@
-"""TreeView 键盘交互：方向键的 WinUI 语义与行内定位。"""
+"""TreeView 键盘交互：方向键的 WinUI 语义与行定位。"""
 from pathlib import Path
 
 from PySide6.QtCore import QEvent, Qt, QUrl
@@ -32,7 +32,7 @@ def _tree_rows(model: TreeRowsModel) -> tuple[QQuickView, object]:
 
 
 def _press(view: QQuickView, key: Qt.Key) -> None:
-    """向视图送一个合成按键。"""
+    """向视图发送一个合成按键事件。"""
     QGuiApplication.sendEvent(view, QKeyEvent(QEvent.Type.KeyPress, key, Qt.KeyboardModifier.NoModifier))
 
 

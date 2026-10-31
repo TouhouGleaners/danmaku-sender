@@ -1,4 +1,4 @@
-"""QML 装载冒烟：组件语法错与加载失败路径在测试内兜住。"""
+"""QML 装载冒烟：在测试中暴露组件语法错与加载失败路径。"""
 from pathlib import Path
 
 import pytest
@@ -26,7 +26,7 @@ class TestQmlLoad:
         assert host.rootObject() is not None
 
     def test_load_failure_raises_and_detaches(self, qapp, tmp_path):
-        """加载失败抛 RuntimeError，失败件不留挂在调用方父控件上。"""
+        """加载失败抛 RuntimeError，宿主不留在调用方父控件上。"""
         broken = tmp_path / "broken.qml"
         broken.write_text("Item {", encoding="utf-8")
         parent = QWidget()

@@ -1,7 +1,7 @@
 """通用树视图的平铺行模型。
 
 节点树只在内部持有，行列表只含当前展开可见的节点。
-展开 = 在行间插入子行，折叠 = 移除子行，供 QML 行列表的插入/位移过渡画出展开动效。
+展开 = 在行间插入子行，折叠 = 移除子行，供 QML 行列表的插入/位移过渡呈现展开动效。
 
 角色契约（TreeRowsModel.roleNames）：
 结构角色 ``depth`` / ``expandable`` / ``expanded`` 由本模型固定提供，
@@ -38,6 +38,11 @@ class TreeNode:
         children (list[TreeNode]): 子节点。
         expanded (bool): 是否处于展开态。
         parent (TreeNode | None): 父节点，根为 None。
+
+    Typical usage example::
+
+        root = TreeNode(data={"label": "2026 年"})
+        root.add_child(TreeNode(data={"label": "10 月"}, payload="t1"))
     """
 
     data: dict[str, Any]
@@ -79,8 +84,7 @@ class TreeNode:
     def _detach(child: "TreeNode") -> None:
         """把节点从原父节点的子列表摘除。
 
-        手工挂载可能留下「有父指针、不在子列表」的半一致状态，
-        与装载归一化同口径容忍，不作报错。
+        容忍「有父指针、不在子列表」的半一致状态，不作报错。
 
         Args:
             child (TreeNode): 待摘除的节点。
@@ -111,6 +115,12 @@ class TreeRowsModel(QAbstractListModel):
     Args:
         content_roles (Sequence[str]): 内容角色名序列，取值来自节点 data 的同名键。
         parent (QObject | None): 父对象。
+
+    Typical usage example::
+
+        model = TreeRowsModel(("label", "sent"))
+        model.set_roots([TreeNode(data={"label": "2026 年"}, children=[...])])
+        model.expand(0)
     """
 
     # 结构角色名：roleNames 的前三项，也是内容角色的保留字
@@ -268,6 +278,7 @@ class TreeRowsModel(QAbstractListModel):
         self.dataChanged.emit(self.index(row), self.index(row), [ROLE_EXPANDED])
 
     def _node_at(self, row: int) -> TreeNode:
+        """返回行号对应的节点；非法行返回空叶子节点。"""
         if 0 <= row < len(self._visible):
             return self._visible[row]
         return TreeNode()

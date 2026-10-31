@@ -11,7 +11,7 @@ import QtQuick
 // 契约：
 // - model 为 TreeRowsModel：结构角色 depth/expandable/expanded，
 //   内容列按 columns 的 {role, width, align} 渲染；width 为 null 的弹性列须是第一列。
-// - 行内定位一律不引用 parent（delegate 销毁期绑定解引用会刷 TypeError）。
+// - 行内定位一律不引用 parent（delegate 销毁期绑定解引用会触发 TypeError）。
 Item {
     id: root
 
@@ -24,7 +24,7 @@ Item {
     property bool keyboardMode: false
     activeFocusOnTab: true
 
-    // 箭头字形由令牌桥下发（含字体回退决策），QML 只消费成品
+    // 箭头字形由令牌桥下发，QML 不做字体选择
 
     // 定宽列从右缘反向排列，弹性列从 chevron 槽后接出
     function trailingX(idx) {
@@ -163,7 +163,7 @@ Item {
                     : row.isCurrent || rowMouse.containsMouse ? root.theme.fillHover
                     : "transparent"
 
-                // 选中条画在本行内（WinUI 式）：随行而定，不依赖 highlight 定位
+                // 选中条绘制在本行内：随行而定，不依赖 highlight 定位
                 Rectangle {
                     x: 0
                     y: 6

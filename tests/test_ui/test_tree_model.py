@@ -106,7 +106,7 @@ class TestTreeRows:
         assert model.payload_at(99) is None
 
     def test_set_roots_detaches_promoted_root(self, qapp):
-        """把现有后代提为根节点时，旧父的子列表不再保留它。"""
+        """把现有后代提升为根节点时，旧父的子列表不再保留它。"""
         child = TreeNode(data={"label": "子"})
         old_parent = TreeNode(children=[child])
         model = TreeRowsModel(("label",))
