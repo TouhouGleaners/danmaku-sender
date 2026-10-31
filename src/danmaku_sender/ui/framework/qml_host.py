@@ -183,6 +183,8 @@ class QmlWindowHost(QWidget):
         self._bridge = QmlPaletteBridge(self)
 
         self._view = QQuickView()
+        # 桥改挂到视图生命周期：视图析构先拆场景再拆子对象，拆卸期绑定不再对空 theme 求值
+        self._bridge.setParent(self._view)
         self._view.setResizeMode(QQuickView.ResizeMode.SizeRootObjectToView)
         self._view.setInitialProperties({**(properties or {}), "theme": self._bridge})
         self._sync_surface()
