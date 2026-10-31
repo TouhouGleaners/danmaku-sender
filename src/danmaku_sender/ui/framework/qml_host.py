@@ -1,6 +1,6 @@
 """QML 承载基座。
 
-把 QML 表面装进 widgets 界面，并以根对象初始属性注入主题令牌与字体。
+把 QML 表面嵌入 widgets 界面，并以根对象初始属性注入主题令牌与字体。
 取色与字体均取自控件自身的 QPalette / QFont，随全局主题与字体变更同步。
 
 两种承载：QmlHost 以 QQuickWidget 装进控件树，适合小控件；
@@ -11,11 +11,12 @@ from pathlib import Path
 from typing import Any
 
 from PySide6.QtCore import Property, QEvent, QObject, QUrl, Signal
-from PySide6.QtGui import QColor, QFont, QPalette
+from PySide6.QtGui import QColor, QFont, QFontDatabase, QFontInfo, QPalette
 from PySide6.QtQml import QQmlComponent
 from PySide6.QtQuick import QQuickView
 from PySide6.QtQuickWidgets import QQuickWidget
 from PySide6.QtWidgets import QVBoxLayout, QWidget
+
 
 class QmlPaletteBridge(QObject):
     """注入 QML 根对象的主题令牌，属性名为 ``theme``。
@@ -33,19 +34,31 @@ class QmlPaletteBridge(QObject):
         super().__init__(parent)
         self._palette = QPalette()
         self._font = QFont()
-        self._dpi: float | None = None
+        self._icon_font_family, self._chevron_collapsed, self._chevron_expanded = self._resolve_icon_font()
 
-    def sync(self, palette: QPalette, font: QFont, dpi: float) -> None:
-        """刷新取色、字体与 DPI 来源并广播变更。
+    def _resolve_icon_font(self) -> tuple[str, str, str]:
+        """选定图标字体族与收起、展开两态的箭头字形。
+
+        优先取可用的图标字体族（Segoe Fluent Icons → Segoe MDL2 Assets）；
+        皆不可用时字体族为空字符串，箭头改用非 PUA 字形。
+
+        Returns:
+            tuple[str, str, str]: 图标字体族、收起态箭头字形、展开态箭头字形。
+        """
+        for name in ("Segoe Fluent Icons", "Segoe MDL2 Assets"):
+            if name in QFontDatabase.families():
+                return name, chr(0xE76C), chr(0xE70D)
+        return "", "▸", "▾"
+
+    def sync(self, palette: QPalette, font: QFont) -> None:
+        """刷新取色与字体来源并广播变更。
 
         Args:
             palette (QPalette): 当前生效的调色板。
             font (QFont): 当前生效的字体。
-            dpi (float): 宿主所在屏幕的逻辑 DPI，用于像素字号折算。
         """
         self._palette = palette
         self._font = font
-        self._dpi = dpi
         self.changed.emit()
 
     @Property(QColor, notify=changed)
@@ -85,12 +98,23 @@ class QmlPaletteBridge(QObject):
 
     @Property(int, notify=changed)
     def fontPointSize(self) -> int:
-        """字号（磅）；像素字号按宿主屏幕 DPI 折算，QFont.pointSize 对其返回 -1。"""
-        if self._font.pointSize() > 0:
-            return self._font.pointSize()
-        # 像素字号按宿主屏幕 DPI 折算；同步前无 DPI 可用，退回 96 这一行业基准
-        dpi = self._dpi if self._dpi is not None else 96.0
-        return round(self._font.pixelSize() * 72.0 / dpi)
+        """字号（磅）；QFontInfo 对点数字体与像素字号统一给出磅值。"""
+        return QFontInfo(self._font).pointSize()
+
+    @Property(str, notify=changed)
+    def chevronCollapsed(self) -> str:
+        """收起态箭头字形。"""
+        return self._chevron_collapsed
+
+    @Property(str, notify=changed)
+    def chevronExpanded(self) -> str:
+        """展开态箭头字形。"""
+        return self._chevron_expanded
+
+    @Property(str, notify=changed)
+    def iconFontFamily(self) -> str:
+        """图标字体族；无可用图标字体时为应用字体族。"""
+        return self._icon_font_family or self._font.family()
 
 
 class QmlHost(QQuickWidget):
@@ -104,6 +128,15 @@ class QmlHost(QQuickWidget):
         qml_path (Path): QML 文件路径。
         properties (dict[str, Any] | None): 注入 QML 根对象的初始属性表。
         parent (QWidget | None): 父控件。
+
+    Typical usage example::
+
+        host = QmlHost(
+            QML_DIR / "TreeView.qml",
+            properties={"model": tree_rows},
+            parent=self,
+        )
+        layout.addWidget(host)
     """
 
     def __init__(
@@ -118,13 +151,28 @@ class QmlHost(QQuickWidget):
         self._bridge = QmlPaletteBridge(self)
         self.setInitialProperties({**(properties or {}), "theme": self._bridge})
 
-        self._bridge.sync(self.palette(), self.font(), self.screen().logicalDotsPerInch())
+        self._bridge.sync(self.palette(), self.font())
+        self._load_qml(qml_path)
+
+    def _load_qml(self, qml_path: Path) -> None:
+        """加载 QML 并校验结果。
+
+        加载失败时脱离父控件并抛出，失败的宿主不留在调用方布局中。
+
+        Args:
+            qml_path (Path): QML 文件路径。
+
+        Raises:
+            RuntimeError: QML 加载失败。
+        """
         self.setSource(QUrl.fromLocalFile(str(qml_path)))
-        if self.status() == QQuickWidget.Status.Error:
-            detail = " | ".join(
-                error.toString() for error in QQmlComponent(self.engine(), self.source()).errors()
-            )
-            raise RuntimeError(f"QML 加载失败: {qml_path} | {detail}")
+        if self.status() != QQuickWidget.Status.Error:
+            return
+        detail = " | ".join(
+            error.toString() for error in QQmlComponent(self.engine(), self.source()).errors()
+        )
+        self.setParent(None)
+        raise RuntimeError(f"QML 加载失败: {qml_path} | {detail}")
 
     def changeEvent(self, event: QEvent) -> None:
         """调色板、字体或所在屏幕变更后刷新主题令牌。"""
@@ -136,7 +184,7 @@ class QmlHost(QQuickWidget):
             QEvent.Type.ScreenChangeInternal,
             QEvent.Type.DevicePixelRatioChange,
         ):
-            self._bridge.sync(self.palette(), self.font(), self.screen().logicalDotsPerInch())
+            self._bridge.sync(self.palette(), self.font())
 
 
 class QmlWindowHost(QWidget):
@@ -149,6 +197,15 @@ class QmlWindowHost(QWidget):
         qml_path (Path): QML 文件路径。
         properties (dict[str, Any] | None): 注入 QML 根对象的初始属性表。
         parent (QWidget | None): 父控件。
+
+    Typical usage example::
+
+        host = QmlWindowHost(
+            SPLIT_AREA_QML,
+            properties={"bridge": bridge, "records": table_model},
+            parent=self,
+        )
+        layout.addWidget(host)
     """
 
     def __init__(
@@ -161,21 +218,38 @@ class QmlWindowHost(QWidget):
         self._bridge = QmlPaletteBridge(self)
 
         self._view = QQuickView()
+        # 桥挂载于视图之下：销毁顺序保证场景先于令牌桥拆除，绑定求值期间 theme 恒可用
+        self._bridge.setParent(self._view)
         self._view.setResizeMode(QQuickView.ResizeMode.SizeRootObjectToView)
         self._view.setInitialProperties({**(properties or {}), "theme": self._bridge})
         self._sync_surface()
-        self._bridge.sync(self.palette(), self.font(), self.screen().logicalDotsPerInch())
-        self._view.setSource(QUrl.fromLocalFile(str(qml_path)))
-        if self._view.status() == QQuickView.Status.Error:
-            detail = " | ".join(
-                error.toString()
-                for error in QQmlComponent(self._view.engine(), self._view.source()).errors()
-            )
-            raise RuntimeError(f"QML 加载失败: {qml_path} | {detail}")
+        self._bridge.sync(self.palette(), self.font())
+        self._load_qml(qml_path)
 
         layout = QVBoxLayout(self)
         layout.setContentsMargins(0, 0, 0, 0)
         layout.addWidget(QWidget.createWindowContainer(self._view, self))
+
+    def _load_qml(self, qml_path: Path) -> None:
+        """加载 QML 并校验结果。
+
+        加载失败时脱离父控件并抛出，失败的宿主不留在调用方布局中。
+
+        Args:
+            qml_path (Path): QML 文件路径。
+
+        Raises:
+            RuntimeError: QML 加载失败。
+        """
+        self._view.setSource(QUrl.fromLocalFile(str(qml_path)))
+        if self._view.status() != QQuickView.Status.Error:
+            return
+        detail = " | ".join(
+            error.toString()
+            for error in QQmlComponent(self._view.engine(), self._view.source()).errors()
+        )
+        self.setParent(None)
+        raise RuntimeError(f"QML 加载失败: {qml_path} | {detail}")
 
     def changeEvent(self, event: QEvent) -> None:
         """调色板、字体或所在屏幕变更后刷新表面底色与主题令牌。"""
@@ -188,7 +262,7 @@ class QmlWindowHost(QWidget):
             QEvent.Type.DevicePixelRatioChange,
         ):
             self._sync_surface()
-            self._bridge.sync(self.palette(), self.font(), self.screen().logicalDotsPerInch())
+            self._bridge.sync(self.palette(), self.font())
 
     def _sync_surface(self) -> None:
         """把 QML 表面的清屏色同步为画布底色。"""

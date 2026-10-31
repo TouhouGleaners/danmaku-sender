@@ -4,7 +4,7 @@ import sys
 from datetime import UTC, datetime
 from pathlib import Path
 
-from PySide6.QtCore import QObject, Signal
+from PySide6.QtCore import QLoggingCategory, QObject, Signal
 
 from danmaku_sender.config.app_meta import AppInfo
 
@@ -30,16 +30,14 @@ class GuiLoggingHandler(QObject, logging.Handler):
         logging.Handler.__init__(self)
 
     def emit(self, record: logging.LogRecord) -> None:
-        """
-        发出一条日志记录。
+        """发出一条日志记录，按模块路径前缀路由到对应信号。
 
-        该方法会处理日志记录，并根据模块路径前缀路由至对应的信号:
-        danmaku_sender.service.sender / danmaku_sender.ui.views.sender → senderLogReceived
-        danmaku_sender.controller.monitor / danmaku_sender.ui.views.monitor → monitorLogReceived
-        其他模块的日志将被忽略
+        danmaku_sender.service.sender / danmaku_sender.ui.views.sender → senderLogReceived；
+        danmaku_sender.controller.monitor / danmaku_sender.ui.views.monitor → monitorLogReceived；
+        其他模块的日志忽略。
 
         Args:
-            record (logging.LogRecord)：待输出的日志记录对象。
+            record (logging.LogRecord): 待输出的日志记录对象。
         """
         try:
             text = self.format(record)
@@ -55,7 +53,14 @@ class GuiLoggingHandler(QObject, logging.Handler):
 class DailyLogFileHandler(logging.handlers.TimedRotatingFileHandler):
     """自定义日志轮转：YYYY-MM-DD.log"""
     def rotation_filename(self, filename: str) -> str:
-        """重写父类的 rotation_filename 方法，以自定义归档文件的命名格式。"""
+        """生成归档文件名，格式为 ``YYYY-MM-DD.log``。
+
+        Args:
+            filename (str): 轮转前的日志文件名。
+
+        Returns:
+            str: 归档文件名，形如 ``2026-03-27.log``。
+        """
         # 计算归档日期，保持文件名如：2026-03-27.log
         previous_rollover_time = self.rolloverAt - self.interval
         if self.utc:
@@ -67,7 +72,11 @@ class DailyLogFileHandler(logging.handlers.TimedRotatingFileHandler):
 
 
 def init_app_logging(log_dir: Path):
-    """全局日志系统"""
+    """初始化全局日志系统：文件、控制台与 GUI 三个 handler。
+
+    Args:
+        log_dir (Path): 日志目录。
+    """
     log_dir.mkdir(parents=True, exist_ok=True)
     log_file_path = log_dir / AppInfo.LOG_FILE_NAME
 
@@ -116,5 +125,15 @@ def init_app_logging(log_dir: Path):
     logging.getLogger("peewee").setLevel(logging.WARNING)
     logging.getLogger("keyring").setLevel(logging.WARNING)
     logging.getLogger("win32ctypes").setLevel(logging.WARNING)
+
+    # 静默 Qt 平台剪贴板层的重试告警：外部进程占用系统剪贴板时该分类反复打印同类警告。
+    # 按日志分类关闭 qt.qpa.mime 的非致命输出，critical 级保留
+    QLoggingCategory.setFilterRules(
+        """
+        qt.qpa.mime.debug=false
+        qt.qpa.mime.info=false
+        qt.qpa.mime.warning=false
+        """
+    )
 
     logging.info(f"日志系统初始化完成。日志路径: {log_file_path}")
