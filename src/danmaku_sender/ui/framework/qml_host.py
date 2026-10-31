@@ -39,8 +39,8 @@ class QmlPaletteBridge(QObject):
     def _resolve_icon_font(self) -> tuple[str, str, str]:
         """选定图标字体族与收起、展开两态的箭头字形。
 
-        优先取可用的图标字体族（Segoe Fluent Icons → Segoe MDL2 Assets），
-        皆不可用时返回应用字体族与非 PUA 箭头字形。
+        优先取可用的图标字体族（Segoe Fluent Icons → Segoe MDL2 Assets）；
+        皆不可用时字体族为空字符串，箭头改用非 PUA 字形。
 
         Returns:
             tuple[str, str, str]: 图标字体族、收起态箭头字形、展开态箭头字形。
@@ -48,7 +48,7 @@ class QmlPaletteBridge(QObject):
         for name in ("Segoe Fluent Icons", "Segoe MDL2 Assets"):
             if name in QFontDatabase.families():
                 return name, chr(0xE76C), chr(0xE70D)
-        return self._font.family(), "▸", "▾"
+        return "", "▸", "▾"
 
     def sync(self, palette: QPalette, font: QFont) -> None:
         """刷新取色与字体来源并广播变更。
@@ -114,7 +114,7 @@ class QmlPaletteBridge(QObject):
     @Property(str, notify=changed)
     def iconFontFamily(self) -> str:
         """图标字体族；无可用图标字体时为应用字体族。"""
-        return self._icon_font_family
+        return self._icon_font_family or self._font.family()
 
 
 class QmlHost(QQuickWidget):
