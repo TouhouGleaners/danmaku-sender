@@ -112,6 +112,8 @@ class TreeNode:
 class TreeRowsModel(QAbstractListModel):
     """通用树的平铺可见行模型。
 
+    行号语义统一：非法行号按空叶子处理——槽无动作并返回 False / None。
+
     Args:
         content_roles (Sequence[str]): 内容角色名序列，取值来自节点 data 的同名键。
         parent (QObject | None): 父对象。
@@ -228,7 +230,8 @@ class TreeRowsModel(QAbstractListModel):
         node = self._node_at(row)
         if not node.expanded or not node.children:
             return None
-        return self._visible.index(node.children[0])
+        child = node.children[0]
+        return self._visible.index(child) if child in self._visible else None
 
     @Slot(int, result="QVariant")
     def parent_row(self, row: int) -> int | None:
@@ -238,12 +241,12 @@ class TreeRowsModel(QAbstractListModel):
             row (int): 行号。
 
         Returns:
-            int | None: 父行行号；顶层行或非法行为 None。
+            int | None: 父行行号；顶层行、非法行或父行不可见时为 None。
         """
         node = self._node_at(row)
         if node.parent is None:
             return None
-        return self._visible.index(node.parent)
+        return self._visible.index(node.parent) if node.parent in self._visible else None
 
     def expand_all(self) -> None:
         """展开全部分组节点。"""

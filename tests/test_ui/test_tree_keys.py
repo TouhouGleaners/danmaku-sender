@@ -1,8 +1,8 @@
-"""TreeView 键盘交互：方向键的 WinUI 语义与行定位。"""
+"""TreeView 交互：键盘与鼠标的 WinUI 语义。"""
 from pathlib import Path
 
-from PySide6.QtCore import QEvent, Qt, QUrl
-from PySide6.QtGui import QGuiApplication, QKeyEvent
+from PySide6.QtCore import QEvent, QPoint, QPointF, Qt, QUrl
+from PySide6.QtGui import QGuiApplication, QKeyEvent, QMouseEvent
 from PySide6.QtQuick import QQuickView
 
 from danmaku_sender.ui.framework import qml_host
@@ -34,6 +34,18 @@ def _tree_rows(model: TreeRowsModel) -> tuple[QQuickView, object]:
 def _press(view: QQuickView, key: Qt.Key) -> None:
     """向视图发送一个合成按键事件。"""
     QGuiApplication.sendEvent(view, QKeyEvent(QEvent.Type.KeyPress, key, Qt.KeyboardModifier.NoModifier))
+
+
+def _click(view: QQuickView, x: int, y: int) -> None:
+    """向视图发送合成鼠标单击。"""
+    pos = QPointF(x, y)
+    global_pos = view.mapToGlobal(QPoint(x, y))
+    for typ in (QEvent.Type.MouseButtonPress, QEvent.Type.MouseButtonRelease):
+        buttons = Qt.MouseButton.NoButton if typ == QEvent.Type.MouseButtonRelease else Qt.MouseButton.LeftButton
+        QGuiApplication.sendEvent(
+            view,
+            QMouseEvent(typ, pos, global_pos, Qt.MouseButton.LeftButton, buttons, Qt.KeyboardModifier.NoModifier),
+        )
 
 
 def _model() -> TreeRowsModel:
@@ -84,3 +96,19 @@ class TestTreeKeys:
         rows.setProperty("currentIndex", 1)
         _press(view, Qt.Key.Key_Left)
         assert rows.property("currentIndex") == 0
+
+
+class TestTreeMouse:
+    def test_click_selects_row_without_toggle(self, qapp):
+        model = _model()
+        view, rows = _tree_rows(model)
+        _click(view, 60, 16)
+        assert rows.property("currentIndex") == 0
+        assert rows.property("count") == 3
+
+    def test_chevron_click_toggles_without_selecting(self, qapp):
+        model = _model()
+        view, rows = _tree_rows(model)
+        _click(view, 20, 16)
+        assert rows.property("currentIndex") == -1
+        assert rows.property("count") == 1
