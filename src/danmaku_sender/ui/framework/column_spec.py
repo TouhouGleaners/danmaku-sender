@@ -28,12 +28,17 @@ class ColumnSpec:
     color_role: str | None = None
 
     @staticmethod
-    def to_qml_columns(model: QAbstractItemModel, specs: Sequence["ColumnSpec"]) -> list[dict[str, Any]]:
+    def to_qml_columns(
+        model: QAbstractItemModel,
+        specs: Sequence["ColumnSpec"],
+        require_fill_first: bool = False,
+    ) -> list[dict[str, Any]]:
         """校验列规格与模型角色的对应关系，并转成 QML 列属性字典。
 
         Args:
             model (QAbstractItemModel): 提供行数据的模型，须按角色出数。
-            specs (Sequence[ColumnSpec]): 列规格序列；弹性列（width 为 None）须在首位。
+            specs (Sequence[ColumnSpec]): 列规格序列。
+            require_fill_first (bool): 要求弹性列（width 为 None）在首位；TreeView 的列几何只支持首位弹性列。
 
         Returns:
             list[dict[str, Any]]: QML 列属性字典序列。
@@ -54,7 +59,7 @@ class ColumnSpec:
             raise ValueError(f"列规格引用了模型未公开的角色: {missing}")
 
         fills = [index for index, spec in enumerate(specs) if spec.width is None]
-        if fills and fills != [0]:
+        if require_fill_first and fills and fills != [0]:
             raise ValueError("弹性列（width 为 None）须是第一列")
 
         bad_align = sorted({spec.align for spec in specs if spec.align not in ("left", "right")})

@@ -4,7 +4,7 @@ import QtQuick
 import QtQuick.Layouts
 
 // 通用 Fluent 风格表格：表头与行按列规格渲染，行交互发信号。
-// columns: [{role, title, width, align, colorRole}]——width 为 null 的弹性列须是第一列；
+// columns: [{role, title, width, align, colorRole}]——width 为 null 的列为弹性列，吸收行宽余量；
 // colorRole 非空时该列文字色取行的该角色（十六进制色）。
 // model 须按角色暴露行数据（roleNames），委托按列的 role 从行读取。
 Item {

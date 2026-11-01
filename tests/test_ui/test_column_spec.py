@@ -30,11 +30,17 @@ class TestColumnSpec:
         with pytest.raises(ValueError, match="nope"):
             ColumnSpec.to_qml_columns(model, specs)
 
-    def test_fill_column_must_be_first(self, qapp):
+    def test_fill_column_in_middle_allowed_by_default(self, qapp):
+        model = TreeRowsModel(("label", "sent"))
+        specs = (ColumnSpec(role="label", width=10), ColumnSpec(role="sent", width=None))
+        columns = ColumnSpec.to_qml_columns(model, specs)
+        assert columns[1]["width"] is None
+
+    def test_fill_column_must_be_first_when_required(self, qapp):
         model = TreeRowsModel(("label", "sent"))
         specs = (ColumnSpec(role="label", width=10), ColumnSpec(role="sent", width=None))
         with pytest.raises(ValueError, match="弹性列"):
-            ColumnSpec.to_qml_columns(model, specs)
+            ColumnSpec.to_qml_columns(model, specs, require_fill_first=True)
 
     def test_bad_align_raises(self, qapp):
         model = TreeRowsModel(("label",))
