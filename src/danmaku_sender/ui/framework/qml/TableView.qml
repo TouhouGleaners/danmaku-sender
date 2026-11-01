@@ -26,6 +26,7 @@ Item {
         id: headerBar
         width: parent.width
         height: 30
+        clip: true
         color: root.theme.fillPressed
 
         RowLayout {
@@ -43,6 +44,7 @@ Item {
                     Layout.preferredWidth: root.isFill(modelData) ? 0 : modelData.width
                     Layout.fillWidth: root.isFill(modelData)
                     text: modelData.title
+                    textFormat: Text.PlainText
                     elide: Text.ElideRight
                     horizontalAlignment: modelData.align === "right" ? Text.AlignRight : Text.AlignLeft
                     font.family: root.theme.fontFamily
@@ -123,6 +125,7 @@ Item {
         anchors.centerIn: list
         visible: list.count === 0
         text: root.emptyText
+        textFormat: Text.PlainText
         horizontalAlignment: Text.AlignHCenter
         font.family: root.theme.fontFamily
         font.pointSize: root.theme.fontPointSize

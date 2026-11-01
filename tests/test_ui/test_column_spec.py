@@ -51,11 +51,11 @@ class TestColumnSpec:
     def test_reserved_role_raises(self, qapp):
         model = TreeRowsModel(("label",))
         specs = (ColumnSpec(role="index", width=10),)
-        with pytest.raises(ValueError, match="index"):
+        with pytest.raises(ValueError, match=r"委托保留名: \['index'\]"):
             ColumnSpec.to_qml_columns(model, specs)
 
     def test_negative_width_raises(self, qapp):
         model = TreeRowsModel(("label",))
         specs = (ColumnSpec(role="label", width=-1),)
-        with pytest.raises(ValueError, match="width"):
+        with pytest.raises(ValueError, match="width 为负"):
             ColumnSpec.to_qml_columns(model, specs)
