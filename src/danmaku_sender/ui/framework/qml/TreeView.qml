@@ -209,6 +209,7 @@ Item {
                         y: (bg.height - height) / 2
                         width: root.columnWidth(index, row.indent)
                         text: row.model[modelData.role] ?? ""
+                        textFormat: Text.PlainText
                         horizontalAlignment: modelData.align === "right" ? Text.AlignRight : Text.AlignLeft
                         elide: index === 0 ? Text.ElideRight : Text.ElideNone
                         font.family: root.theme.fontFamily

@@ -89,6 +89,7 @@ Item {
                         Layout.preferredWidth: root.isFill(modelData) ? 0 : modelData.width
                         Layout.fillWidth: root.isFill(modelData)
                         text: row.model[modelData.role] ?? ""
+                        textFormat: Text.PlainText
                         elide: Text.ElideRight
                         horizontalAlignment: modelData.align === "right" ? Text.AlignRight : Text.AlignLeft
                         font.family: root.theme.fontFamily

@@ -27,6 +27,9 @@ class ColumnSpec:
     align: str = "left"
     color_role: str | None = None
 
+    # QML 行委托的保留属性名，同名角色会被委托属性遮蔽
+    RESERVED_ROLE_NAMES = frozenset({"index", "model"})
+
     @staticmethod
     def to_qml_columns(
         model: QAbstractItemModel,
@@ -44,9 +47,15 @@ class ColumnSpec:
             list[dict[str, Any]]: QML 列属性字典序列。
 
         Raises:
-            ValueError: 引用了模型未公开的角色、弹性列不在首位或 align 取值非法。
+            ValueError: 引用了委托保留名或模型未公开的角色、width 为负、弹性列不在首位或 align 取值非法。
         """
         names = set(model.roleNames().values())
+        clash = sorted(
+            ({spec.role for spec in specs} | {spec.color_role for spec in specs if spec.color_role})
+            & ColumnSpec.RESERVED_ROLE_NAMES
+        )
+        if clash:
+            raise ValueError(f"列规格引用了委托保留名: {clash}")
         missing = sorted(
             {spec.role for spec in specs if spec.role.encode() not in names}
             | {
@@ -57,6 +66,10 @@ class ColumnSpec:
         )
         if missing:
             raise ValueError(f"列规格引用了模型未公开的角色: {missing}")
+
+        negative = sorted({spec.role for spec in specs if spec.width is not None and spec.width < 0})
+        if negative:
+            raise ValueError(f"列规格的 width 为负: {negative}")
 
         fills = [index for index, spec in enumerate(specs) if spec.width is None]
         if require_fill_first and fills and fills != [0]:

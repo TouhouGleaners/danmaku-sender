@@ -47,3 +47,15 @@ class TestColumnSpec:
         specs = (ColumnSpec(role="label", width=10, align="middle"),)
         with pytest.raises(ValueError, match="align"):
             ColumnSpec.to_qml_columns(model, specs)
+
+    def test_reserved_role_raises(self, qapp):
+        model = TreeRowsModel(("label",))
+        specs = (ColumnSpec(role="index", width=10),)
+        with pytest.raises(ValueError, match="index"):
+            ColumnSpec.to_qml_columns(model, specs)
+
+    def test_negative_width_raises(self, qapp):
+        model = TreeRowsModel(("label",))
+        specs = (ColumnSpec(role="label", width=-1),)
+        with pytest.raises(ValueError, match="width"):
+            ColumnSpec.to_qml_columns(model, specs)
