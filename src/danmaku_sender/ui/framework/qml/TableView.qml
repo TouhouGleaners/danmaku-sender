@@ -38,10 +38,12 @@ Item {
                 delegate: Text {
                     required property var modelData
 
+                    Layout.minimumWidth: 0
                     Layout.preferredWidth: root.isFill(modelData) ? 0 : modelData.width
                     Layout.fillWidth: root.isFill(modelData)
                     text: modelData.title
                     elide: Text.ElideRight
+                    horizontalAlignment: modelData.align === "right" ? Text.AlignRight : Text.AlignLeft
                     font.family: root.theme.fontFamily
                     font.pointSize: root.theme.fontPointSize
                     font.bold: true
@@ -82,10 +84,12 @@ Item {
                     delegate: Text {
                         required property var modelData
 
+                        Layout.minimumWidth: 0
                         Layout.preferredWidth: root.isFill(modelData) ? 0 : modelData.width
                         Layout.fillWidth: root.isFill(modelData)
                         text: row.model[modelData.role] ?? ""
                         elide: Text.ElideRight
+                        horizontalAlignment: modelData.align === "right" ? Text.AlignRight : Text.AlignLeft
                         font.family: root.theme.fontFamily
                         font.pointSize: root.theme.fontPointSize
                         color: modelData.colorRole ? (row.model[modelData.colorRole] ?? root.theme.text) : root.theme.text
@@ -101,7 +105,10 @@ Item {
                 height: row.height
                 hoverEnabled: true
                 acceptedButtons: Qt.LeftButton | Qt.RightButton
-                onDoubleClicked: root.rowActivated(row.index)
+                onDoubleClicked: (mouse) => {
+                    if (mouse.button === Qt.LeftButton)
+                        root.rowActivated(row.index)
+                }
                 onClicked: (mouse) => {
                     if (mouse.button === Qt.RightButton)
                         root.rowContextMenu(row.index)
