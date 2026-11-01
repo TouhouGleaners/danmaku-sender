@@ -6,6 +6,7 @@ import QtQuick.Layouts
 // 通用 Fluent 风格表格：表头与行按列规格渲染，行交互发信号。
 // columns: [{role, title, width, align, colorRole}]——width 为 null 的弹性列须是第一列；
 // colorRole 非空时该列文字色取行的该角色（十六进制色）。
+// model 须按角色暴露行数据（roleNames），委托按列的 role 从行读取。
 Item {
     id: root
 
@@ -38,7 +39,7 @@ Item {
                 delegate: Text {
                     required property var modelData
 
-                    Layout.minimumWidth: 0
+                    Layout.minimumWidth: root.isFill(modelData) ? 0 : modelData.width
                     Layout.preferredWidth: root.isFill(modelData) ? 0 : modelData.width
                     Layout.fillWidth: root.isFill(modelData)
                     text: modelData.title
@@ -84,7 +85,7 @@ Item {
                     delegate: Text {
                         required property var modelData
 
-                        Layout.minimumWidth: 0
+                        Layout.minimumWidth: root.isFill(modelData) ? 0 : modelData.width
                         Layout.preferredWidth: root.isFill(modelData) ? 0 : modelData.width
                         Layout.fillWidth: root.isFill(modelData)
                         text: row.model[modelData.role] ?? ""
