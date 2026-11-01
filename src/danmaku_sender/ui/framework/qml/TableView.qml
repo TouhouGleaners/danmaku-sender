@@ -119,7 +119,7 @@ Item {
     }
 
     Text {
-        anchors.centerIn: parent
+        anchors.centerIn: list
         visible: list.count === 0
         text: root.emptyText
         horizontalAlignment: Text.AlignHCenter
