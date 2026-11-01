@@ -22,10 +22,10 @@ Item {
     }
 
     Rectangle {
-        id: header
+        id: headerBar
         width: parent.width
         height: 30
-        color: theme.fillPressed
+        color: root.theme.fillPressed
 
         RowLayout {
             anchors.fill: parent
@@ -42,10 +42,10 @@ Item {
                     Layout.fillWidth: root.isFill(modelData)
                     text: modelData.title
                     elide: Text.ElideRight
-                    font.family: theme.fontFamily
-                    font.pointSize: theme.fontPointSize
+                    font.family: root.theme.fontFamily
+                    font.pointSize: root.theme.fontPointSize
                     font.bold: true
-                    color: theme.text
+                    color: root.theme.text
                 }
             }
         }
@@ -53,9 +53,9 @@ Item {
 
     ListView {
         id: list
-        anchors.top: header.bottom
+        anchors.top: headerBar.bottom
         width: parent.width
-        height: parent.height - header.height
+        height: parent.height - headerBar.height
         clip: true
         model: root.model
         spacing: 0
@@ -67,8 +67,8 @@ Item {
 
             width: list.width
             height: 30
-            color: rowMouse.containsMouse ? theme.fillHover
-                : row.index % 2 ? theme.background : "transparent"
+            color: rowMouse.containsMouse ? root.theme.fillHover
+                : row.index % 2 ? root.theme.background : "transparent"
 
             RowLayout {
                 x: 4
@@ -86,9 +86,9 @@ Item {
                         Layout.fillWidth: root.isFill(modelData)
                         text: row.model[modelData.role] ?? ""
                         elide: Text.ElideRight
-                        font.family: theme.fontFamily
-                        font.pointSize: theme.fontPointSize
-                        color: modelData.colorRole ? (row.model[modelData.colorRole] ?? theme.text) : theme.text
+                        font.family: root.theme.fontFamily
+                        font.pointSize: root.theme.fontPointSize
+                        color: modelData.colorRole ? (row.model[modelData.colorRole] ?? root.theme.text) : root.theme.text
                     }
                 }
             }
@@ -115,8 +115,8 @@ Item {
         visible: list.count === 0
         text: root.emptyText
         horizontalAlignment: Text.AlignHCenter
-        font.family: theme.fontFamily
-        font.pointSize: theme.fontPointSize
-        color: theme.textSecondary
+        font.family: root.theme.fontFamily
+        font.pointSize: root.theme.fontPointSize
+        color: root.theme.textSecondary
     }
 }
