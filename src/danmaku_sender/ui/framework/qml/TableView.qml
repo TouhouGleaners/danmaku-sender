@@ -16,7 +16,7 @@ Item {
     property string emptyText: ""
 
     signal rowActivated(int row)
-    signal rowContextMenu(int row)
+    signal rowContextMenu(int row, point pos)
 
     function isFill(column) {
         return column.width === null || column.width === undefined
@@ -115,7 +115,7 @@ Item {
                 }
                 onClicked: (mouse) => {
                     if (mouse.button === Qt.RightButton)
-                        root.rowContextMenu(row.index)
+                        root.rowContextMenu(row.index, row.mapToItem(null, mouse.x, mouse.y))
                 }
             }
         }
