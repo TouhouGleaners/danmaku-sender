@@ -17,12 +17,15 @@ from PySide6.QtQuick import QQuickView
 from PySide6.QtQuickWidgets import QQuickWidget
 from PySide6.QtWidgets import QVBoxLayout, QWidget
 
+from .health_colors import HealthColors
+
 
 class QmlPaletteBridge(QObject):
     """注入 QML 根对象的主题令牌，属性名为 ``theme``。
 
     取色角色与 ``ThemeService.ROLE_SOURCES`` 的语义对应：
     填充阶梯的悬停与按压档取自 Light / Midlight，画布取自 Window。
+    健康色令牌（healthColors）取自 :class:`HealthColors`，含明暗两套渲染结果，按 ``dark`` 取用。
 
     Attributes:
         changed (Signal): 令牌取值变更广播，驱动 QML 绑定刷新。
@@ -110,6 +113,16 @@ class QmlPaletteBridge(QObject):
     def strokeStrong(self) -> QColor:
         """强描边色，取自 QPalette.Dark。"""
         return self._palette.color(QPalette.ColorRole.Dark)
+
+    @Property(bool, notify=changed)
+    def dark(self) -> bool:
+        """画布是否为深色模式（取自 QPalette.Window 的明度）。"""
+        return self._palette.color(QPalette.ColorRole.Window).lightness() < 128
+
+    @Property(dict, notify=changed)
+    def healthColors(self) -> dict[str, dict[str, dict[str, str]]]:
+        """健康档标签配色表：档位 → 明暗 → {fg, bg, border}，取自 :class:`HealthColors`。"""
+        return HealthColors.to_qml()
 
     @Property(str, notify=changed)
     def fontFamily(self) -> str:

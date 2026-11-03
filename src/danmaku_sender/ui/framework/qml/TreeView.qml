@@ -3,15 +3,16 @@ pragma ComponentBehavior: Bound
 import QtQuick
 import QtQuick.Controls
 
-// 通用 Fluent 风格树视图。度量与状态照 WinUI 3 TreeView，缩进照 VSCode 资源管理器收紧：
+// 通用 Fluent 风格树视图。度量与状态依 WinUI 3 TreeView，缩进依 VSCode 资源管理器收紧：
 // 行槽 32（内容 28 + 上下边距 2；带次行的行 44）、内容圆角 4、缩进 8/层、chevron 槽 24（字形 12，双字形切换不旋转，叶行同槽放叶图标）、选中条 3×16 圆角 2；
-// 状态取色照 SubtleFill 阶梯——悬停/选中 Secondary，悬停于选中、按压未选中 Tertiary。
-// 展开 = 子行滑入淡入，收起 = 淡出；键盘：↑↓ 选行、→ 展开或下潜、← 收起或回父、Enter 选中、Home/End。
+// 状态取色依 SubtleFill 阶梯——悬停/选中 Secondary，悬停于选中、按压未选中 Tertiary。
+// 展开 = 子行滑入淡入，收起 = 淡出；键盘：↑↓ 选行、→ 展开或进入子行、← 收起或返回父行、Enter 选中、Home/End。
 //
 // 契约：
 // - model 为 TreeRowsModel：
 //   结构角色 depth/expandable/expanded，内容列按 columns 的 {role, width, align} 渲染；
 //   width 为 null 的弹性列须是第一列。
+// - 标签列（tag）不按列宽排布：聚拢行右缘（右缘预留拇指槽 6）、自适应内容宽、按列序间距 4；须在列序末尾连续。
 // - 首列的 subRole 给出次行角色：取值非空的行双行显示（主行 + 次行，行高 44），空值行单行（行高 32）。
 // - 行内定位一律不引用 parent（delegate 销毁期绑定解引用会触发 TypeError）。
 Item {
@@ -26,23 +27,6 @@ Item {
     property bool keyboardMode: false
     activeFocusOnTab: true
 
-    // 定宽列从右缘反向排列，弹性列从 chevron 槽后接出
-    function trailingX(idx) {
-        let x = tree.width - 8
-        for (let i = root.columns.length - 1; i > idx; --i)
-            x -= root.columns[i].width + 8
-        return x - root.columns[idx].width
-    }
-    function columnX(idx, indent) {
-        return idx === 0 ? indent + 24 : trailingX(idx)
-    }
-    function columnWidth(idx, indent) {
-        if (root.columns[idx].width !== null && root.columns[idx].width !== undefined)
-            return root.columns[idx].width
-        const hasFollowing = root.columns.length > 1
-        const right = hasFollowing ? trailingX(1) : tree.width - 8
-        return right - (hasFollowing ? 8 : 0) - columnX(idx, indent)
-    }
     function pickCurrent() {
         if (tree.currentIndex >= 0)
             root.rowPicked(tree.currentIndex)
@@ -62,7 +46,7 @@ Item {
             event.accepted = true
             break
         case Qt.Key_Right: {
-            // WinUI 语义：收起时展开，已展开则下潜到首个子行
+            // WinUI 语义：收起时展开，已展开则进入首个子行
             const cur = tree.currentIndex
             if (!root.model.expand(cur)) {
                 // 返回 None 时 QML 侧是 undefined，仅 number 是有效行号
@@ -76,7 +60,7 @@ Item {
             break
         }
         case Qt.Key_Left: {
-            // WinUI 语义：展开时收起，已收起则回父行
+            // WinUI 语义：展开时收起，已收起则返回父行
             const cur = tree.currentIndex
             if (!root.model.collapse(cur)) {
                 // 返回 None 时 QML 侧是 undefined，仅 number 是有效行号
@@ -122,8 +106,8 @@ Item {
             visible: size < 1.0
             topPadding: 4
             bottomPadding: 4
-            leftPadding: 3
-            rightPadding: 3
+            leftPadding: 6
+            rightPadding: 0
 
             contentItem: Rectangle {
                 radius: 3
@@ -166,6 +150,34 @@ Item {
             readonly property string subRoleName: root.columns.length > 0 ? (root.columns[0].subRole ?? "") : ""
             readonly property string subText: row.subRoleName ? (row.model[row.subRoleName] ?? "") : ""
             readonly property bool twoLine: row.subText !== ""
+
+            // 标签簇定位于行右缘的拇指槽内缘；定宽非标签列自标签簇左缘逆向排列，弹性列自 chevron 槽后起排
+            function trailingX(idx) {
+                let x = tagRow.x - 8
+                for (let i = root.columns.length - 1; i > idx; --i)
+                    if (!root.columns[i].tag)
+                        x -= root.columns[i].width + 8
+                return x - root.columns[idx].width
+            }
+            function columnX(idx, indent) {
+                return idx === 0 ? indent + 24 : trailingX(idx)
+            }
+            function columnWidth(idx, indent) {
+                const spec = root.columns[idx]
+                if (spec.width !== null && spec.width !== undefined)
+                    return spec.width
+                // 弹性列右缘止于首个非标签定宽列，无则止于标签簇
+                let right = tagRow.x - 8
+                let gap = 0
+                for (let i = idx + 1; i < root.columns.length; ++i) {
+                    if (!root.columns[i].tag) {
+                        right = trailingX(i)
+                        gap = 8
+                        break
+                    }
+                }
+                return right - gap - columnX(idx, indent)
+            }
 
             width: tree.width
             height: row.twoLine ? 44 : 32
@@ -236,6 +248,28 @@ Item {
                     color: root.theme.textSecondary
                 }
 
+                // 标签列聚拢行右缘，按列序依次排列；右缘预留拇指槽，避让滚动条
+                Row {
+                    id: tagRow
+                    anchors.right: bg.right
+                    anchors.rightMargin: 6
+                    y: (bg.height - height) / 2
+                    spacing: 4
+
+                    Repeater {
+                        model: root.columns.filter((c) => c.tag === true)
+                        delegate: Tag {
+                            required property var modelData
+
+                            theme: root.theme
+                            text: row.model[modelData.role] ?? ""
+                            tone: modelData.toneRole ? (row.model[modelData.toneRole] ?? "") : ""
+                            fontPointSize: root.theme.fontPointSize - 1
+                            minWidth: 26
+                        }
+                    }
+                }
+
                 Repeater {
                     model: root.columns
                     delegate: Item {
@@ -243,11 +277,14 @@ Item {
                         required property int index
                         required property var modelData
 
+                        readonly property bool isTag: modelData.tag === true
+                        readonly property string cellText: row.model[modelData.role] ?? ""
                         readonly property bool withSub: cell.index === 0 && row.twoLine
 
-                        x: root.columnX(index, row.indent)
+                        visible: !cell.isTag
+                        x: cell.isTag ? 0 : row.columnX(index, row.indent)
                         y: (bg.height - height) / 2
-                        width: root.columnWidth(index, row.indent)
+                        width: cell.isTag ? 0 : row.columnWidth(index, row.indent)
                         height: cell.withSub ? 36 : 20
 
                         Text {
@@ -256,7 +293,7 @@ Item {
                             y: 0
                             width: cell.width
                             height: cell.withSub ? 18 : cell.height
-                            text: row.model[modelData.role] ?? ""
+                            text: cell.cellText
                             textFormat: Text.PlainText
                             verticalAlignment: Text.AlignVCenter
                             horizontalAlignment: cell.modelData.align === "right" ? Text.AlignRight : Text.AlignLeft
@@ -268,7 +305,7 @@ Item {
                                 : root.theme.textSecondary
                         }
 
-                        // 次行：同号次要色，与主行贴紧成双行
+                        // 次行：同号次要色，与主行紧凑排布为双行
                         Text {
                             id: subLabel
                             visible: cell.withSub
@@ -306,7 +343,7 @@ Item {
                     }
                 }
 
-                // chevron 命中区浮在行命中区之上，单击只切换展开，不选中
+                // chevron 命中区叠于行命中区之上，单击只切换展开，不选中
                 MouseArea {
                     id: chevronMouse
                     x: row.indent

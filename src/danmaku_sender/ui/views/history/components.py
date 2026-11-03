@@ -4,7 +4,6 @@ from enum import IntEnum
 from typing import Any
 
 from PySide6.QtCore import QAbstractTableModel, QModelIndex, QObject, Qt
-from PySide6.QtGui import QBrush, QColor
 
 from danmaku_sender.types.models.common import DanmakuStatus
 from danmaku_sender.types.models.video import VideoInfo
@@ -36,7 +35,7 @@ class HistoryTableModel(QAbstractTableModel):
 
     HEADERS = ["BVID", "分P", "弹幕内容", "状态", "发送时间"]
 
-    ROW_ROLE_NAMES = (b"bvid", b"part", b"msg", b"status", b"time", b"statusColor")
+    ROW_ROLE_NAMES = (b"bvid", b"part", b"msg", b"status", b"time", b"statusTone")
 
     def __init__(self, parent: QObject | None = None) -> None:
         super().__init__(parent)
@@ -134,7 +133,7 @@ class HistoryTableModel(QAbstractTableModel):
             role (int): 数据角色。
 
         Returns:
-            Any: 显示文本、提示文本、文字色或行级角色值；不适用时为 None。
+            Any: 显示文本、提示文本或行级角色值；不适用时为 None。
         """
         if not index.isValid():
             return None
@@ -144,8 +143,6 @@ class HistoryTableModel(QAbstractTableModel):
 
         if role == Qt.ItemDataRole.DisplayRole:
             return self._get_display_text(record, col)
-        elif role == Qt.ItemDataRole.ForegroundRole:
-            return self._get_text_color(record, col)
         elif role == Qt.ItemDataRole.ToolTipRole:
             return self._get_tooltip(record, col)
 
@@ -153,7 +150,7 @@ class HistoryTableModel(QAbstractTableModel):
         if 0 <= offset < len(Col):
             return self._get_display_text(record, offset)
         if offset == len(Col):
-            return self._status_color(record)
+            return self._status_tone(record)
 
         return None
 
@@ -207,35 +204,21 @@ class HistoryTableModel(QAbstractTableModel):
 
         return ""
 
-    def _status_color(self, record: dict) -> str:
-        """取状态的显示色（十六进制）。
+    def _status_tone(self, record: dict) -> str:
+        """取状态的健康档位。
 
         Args:
             record (dict): 弹幕历史记录行。
 
         Returns:
-            str: 十六进制颜色。
+            str: 已存活为 good、待验证为 warn、已丢失为 bad。
         """
         status = record['status']
         if status == DanmakuStatus.VERIFIED:
-            return "#27ae60"
+            return "good"
         if status == DanmakuStatus.LOST:
-            return "#c0392b"
-        return "#f39c12"
-
-    def _get_text_color(self, record: dict, col: int) -> QBrush | None:
-        """返回单元格文字色。
-
-        Args:
-            record (dict): 弹幕历史记录行。
-            col (int): 列序。
-
-        Returns:
-            QBrush | None: 状态列返回状态色；其余列返回 None。
-        """
-        if col == Col.STATUS:
-            return QBrush(QColor(self._status_color(record)))
-        return None
+            return "bad"
+        return "warn"
 
     def _get_tooltip(self, record: dict, col: int) -> str | None:
         """返回单元格提示文本。

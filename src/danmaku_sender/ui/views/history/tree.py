@@ -13,7 +13,7 @@ from danmaku_sender.ui.framework.tree_model import TreeNode
 class TaskTreeBuilder:
     """把任务记录行与存活统计构建成时间树节点。
 
-    节点 data 携带内容列 label / sublabel / sent / rate；
+    节点 data 携带内容列 label / sublabel / sent / rate / rateTone；
     任务叶子的 payload 是 (任务记录行, 存活统计)，分组节点的 payload 为 None。
 
     Typical usage example::
@@ -93,7 +93,28 @@ class TaskTreeBuilder:
 
         node.data['sent'] = str(merged['total'])
         node.data['rate'] = f"{merged['verified'] / merged['total']:.0%}" if merged['total'] > 0 else "-"
+        node.data['rateTone'] = TaskTreeBuilder._rate_tone(merged['verified'], merged['total'])
         return merged
+
+    @staticmethod
+    def _rate_tone(verified: int, total: int) -> str | None:
+        """返回存活率的健康档位。
+
+        Args:
+            verified (int): 已存求数。
+            total (int): 已发送数。
+
+        Returns:
+            str | None: 存活率 ≥90% 为 good、≥60% 为 warn、其余为 bad；无总量为 None（走中性标签）。
+        """
+        if total <= 0:
+            return None
+        ratio = verified / total
+        if ratio >= 0.9:
+            return "good"
+        if ratio >= 0.6:
+            return "warn"
+        return "bad"
 
     @staticmethod
     def task_labels(record: TaskRecordRow) -> tuple[str, str]:
@@ -103,7 +124,7 @@ class TaskTreeBuilder:
             record (TaskRecordRow): 任务记录行。
 
         Returns:
-            tuple[str, str]: 主行为视频标题（缺省回落 BV 号）；次行为分P序号与分P标题，
+            tuple[str, str]: 主行为视频标题（未传值时回落 BV 号）；次行为分P序号与分P标题，
                 分P标题与主行重复时只留序号，全空时次行为空串。
         """
         label = record['video_title'] or record['bvid']
@@ -115,7 +136,7 @@ class TaskTreeBuilder:
 
     @staticmethod
     def _copy_stats(stats: MonitorStats | None) -> MonitorStats:
-        """复制存活统计，缺省时返回零值。
+        """复制存活统计，未传值时返回零值。
 
         Args:
             stats (MonitorStats | None): 存活统计；None 表示无统计。
