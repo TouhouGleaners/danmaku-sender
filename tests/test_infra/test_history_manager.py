@@ -7,10 +7,8 @@ import sqlite3
 import pytest
 
 from danmaku_sender.config import SenderConfig
-from danmaku_sender.infra.persistence.history_manager import (
-    SCHEMA_VERSION,
-    HistoryManager,
-)
+from danmaku_sender.infra.persistence.history_manager import HistoryManager
+from danmaku_sender.infra.persistence.migrations import SCHEMA_VERSION
 from danmaku_sender.infra.persistence.orm_models import SentDanmaku
 from danmaku_sender.types.models.common import DanmakuStatus, TaskMeta, VideoTarget
 from danmaku_sender.types.models.danmaku import Danmaku
