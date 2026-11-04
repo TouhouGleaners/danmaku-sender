@@ -11,7 +11,7 @@ from playhouse.migrate import SqliteMigrator, migrate
 
 from danmaku_sender.types.models.queue import TaskStatus
 
-from .orm_models import SentDanmaku, TaskRecord
+from .orm_models import SentDanmaku, TaskRecord, db
 
 logger = logging.getLogger(__name__)
 
@@ -90,42 +90,36 @@ class LegacyBackfill:
 
     Attributes:
         GAP (float): 断段阈值（秒）；相邻发送间隔超过它视为新批次。
-        WRITE_BATCH (int): 回写批大小，不超过 SQLite 单语句的绑定变量上限。
     """
 
     GAP = 600.0
-    WRITE_BATCH = 500
 
     @classmethod
     def run(cls) -> None:
         """按 (bvid, cid) 与发送连续段归集无主存证并回填 task_id。
 
         每段创建一条 legacy 任务（标识为 ``legacy-{bvid}-{cid}-{段首时间戳}``，标题留空）；
-        只修改 task_id 为空的行，重复执行结果不变。逐行流式读取，回写按批落库。
+        只修改 task_id 为空的行，重复执行结果不变。逐行流式读取，每段整体落库。
         """
         orphans: Iterable[dict] = (
             SentDanmaku
-                .select(SentDanmaku.dmid, SentDanmaku.bvid, SentDanmaku.cid, SentDanmaku.ctime)
+                .select(SentDanmaku.bvid, SentDanmaku.cid, SentDanmaku.ctime)
                 .where(SentDanmaku.task_id.is_null(True))
-                .order_by(SentDanmaku.bvid, SentDanmaku.cid, SentDanmaku.ctime, SentDanmaku.dmid)
+                .order_by(SentDanmaku.bvid, SentDanmaku.cid, SentDanmaku.ctime)
                 .dicts()
+                .iterator()
         )  # type: ignore[assignment]
-        task_id: str | None = None
-        batch: list[str] = []
+        first: dict | None = None
         prev: dict | None = None
         for row in orphans:
-            if prev is not None and cls._is_new_segment(prev, row):
-                cls._write(task_id, batch)
-                batch = []
-                task_id = None
-            if task_id is None:
-                task_id = cls._start_segment(row)
-            batch.append(row['dmid'])
-            if len(batch) >= cls.WRITE_BATCH:
-                cls._write(task_id, batch)
-                batch = []
+            if first is not None and prev is not None and cls._is_new_segment(prev, row):
+                cls._backfill_segment(first, prev)
+                first = None
+            if first is None:
+                first = row
             prev = row
-        cls._write(task_id, batch)
+        if first is not None and prev is not None:
+            cls._backfill_segment(first, prev)
 
     @classmethod
     def _is_new_segment(cls, prev: dict, row: dict) -> bool:
@@ -144,44 +138,37 @@ class LegacyBackfill:
         )
 
     @staticmethod
-    def _start_segment(row: dict) -> str:
-        """创建一段的 legacy 任务并返回其标识。
+    def _backfill_segment(first: dict, last: dict) -> None:
+        """把一段无主存证建 legacy 任务并整体回填。
 
         Args:
-            row (dict): 段首存证。
-
-        Returns:
-            str: legacy 任务标识。
+            first (dict): 段首存证。
+            last (dict): 段尾存证。
         """
-        task_id = f"legacy-{row['bvid']}-{row['cid']}-{int(row['ctime'])}"
-        TaskRecord.get_or_create(
-            task_id=task_id,
-            defaults={
-                'bvid': row['bvid'],
-                'cid': row['cid'],
-                'video_title': None,
-                'part_page': None,
-                'part_title': None,
-                'xml_path': None,
-                'created_at': row['ctime'],
-                'status': TaskStatus.COMPLETED.name,
-            },
-        )
-        return task_id
-
-    @staticmethod
-    def _write(task_id: str | None, dmids: list[str]) -> None:
-        """把一批存证回填归属，只修改 task_id 为空的行。
-
-        Args:
-            task_id (str | None): 归属任务标识；None 表示无待写批次。
-            dmids (list[str]): 待回填的存证 dmid，长度不超过 :data:`WRITE_BATCH`。
-        """
-        if not dmids:
-            return
-        (
-            SentDanmaku
-                .update(task_id=task_id)
-                .where(SentDanmaku.dmid.in_(dmids), SentDanmaku.task_id.is_null(True))
-                .execute()
-        )
+        task_id = f"legacy-{first['bvid']}-{first['cid']}-{int(first['ctime'])}"
+        with db.atomic():
+            TaskRecord.get_or_create(
+                task_id=task_id,
+                defaults={
+                    'bvid': first['bvid'],
+                    'cid': first['cid'],
+                    'video_title': None,
+                    'part_page': None,
+                    'part_title': None,
+                    'xml_path': None,
+                    'created_at': first['ctime'],
+                    'status': TaskStatus.COMPLETED.name,
+                },
+            )
+            (
+                SentDanmaku
+                    .update(task_id=task_id)
+                    .where(
+                        SentDanmaku.task_id.is_null(True),
+                        SentDanmaku.bvid == first['bvid'],
+                        SentDanmaku.cid == first['cid'],
+                        SentDanmaku.ctime >= first['ctime'],
+                        SentDanmaku.ctime <= last['ctime'],
+                    )
+                    .execute()
+            )

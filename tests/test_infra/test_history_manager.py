@@ -413,16 +413,30 @@ class TestLegacyBackfill:
         assert [r.task_id for r in SentDanmaku.select()] == ["legacy-BV1xx411c7mD-1001-1000"]
         assert TaskRecord.select().count() == 1
 
-    def test_backfill_writes_in_batches(self, hm, target, monkeypatch):
-        """回写按批落库，同段行归属同一任务。"""
-        monkeypatch.setattr(LegacyBackfill, "WRITE_BATCH", 2)
-        for i in range(5):
+    def test_backfill_keeps_task_id_after_interrupt(self, hm, target, monkeypatch):
+        """段中途失败后重试，同段仍归同一 legacy 任务。"""
+        for i in range(3):
             _orphan(target, f"dm{i}", 1000.0 + i)
 
+        original = TaskRecord.get_or_create
+        calls = {"n": 0}
+
+        def flaky(*args, **kwargs):
+            result = original(*args, **kwargs)
+            calls["n"] += 1
+            if calls["n"] == 1:
+                raise RuntimeError("中断")
+            return result
+
+        monkeypatch.setattr(TaskRecord, "get_or_create", flaky)
+        with pytest.raises(RuntimeError):
+            LegacyBackfill.run()
+
+        monkeypatch.setattr(TaskRecord, "get_or_create", original)
         LegacyBackfill.run()
 
+        assert TaskRecord.select().count() == 1
         assert {r.task_id for r in SentDanmaku.select()} == {"legacy-BV1xx411c7mD-1001-1000"}
-        assert SentDanmaku.select().count() == 5
 
 
 class TestMigration:
