@@ -27,6 +27,7 @@ class SentDanmaku(BaseModel):
         indexes = (
             (('cid', 'status'), False),
             (('task_id',), False),
+            (('task_id', 'bvid', 'cid', 'ctime'), False),
         )
 
 
