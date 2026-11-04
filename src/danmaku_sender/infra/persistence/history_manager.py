@@ -2,8 +2,7 @@ import logging
 import time
 from pathlib import Path
 
-from peewee import Case, CharField, SqliteDatabase, fn
-from playhouse.migrate import SqliteMigrator, migrate
+from peewee import Case, SqliteDatabase, fn
 
 from danmaku_sender.types.exceptions.exceptions import HistoryStorageError
 from danmaku_sender.types.models.common import (
@@ -18,11 +17,10 @@ from danmaku_sender.types.models.common import (
 from danmaku_sender.types.models.danmaku import Danmaku
 from danmaku_sender.types.models.queue import TaskDefinition, TaskStatus
 
+from .migrations import SchemaMigration
 from .orm_models import SentDanmaku, TaskRecord, db
 
 logger = logging.getLogger(__name__)
-
-SCHEMA_VERSION = 1  # 数据库结构版本；0 表示 2.6.1 及更早的库
 
 
 class HistoryManager:
@@ -63,64 +61,11 @@ class HistoryManager:
             db.initialize(sqlite_db)
             sqlite_db.connect(reuse_if_open=True)
 
-            # 新库直接落成当前结构并打上最新版本号；已有库按版本号逐级升级
-            is_fresh = not sqlite_db.get_tables()
-            sqlite_db.create_tables([SentDanmaku, TaskRecord], safe=True)
-            if is_fresh:
-                self._set_user_version(sqlite_db, SCHEMA_VERSION)
-            else:
-                self._run_migrations(sqlite_db)
+            SchemaMigration.run(sqlite_db)
 
         except Exception as e:
             logger.critical(f"数据库初始化/迁移致命错误: {e}", exc_info=True)
             raise RuntimeError(f"HistoryManager 数据库初始化失败: {e}") from e
-
-    def _run_migrations(self, sqlite_db: SqliteDatabase) -> None:
-        """按数据库结构版本逐步升级到 :data:`SCHEMA_VERSION`。
-
-        新库不走这里，由 :meth:`_init_db` 直接落成当前结构并打上最新版本。
-        每步完成结构变更后抬高版本；中断后重跑不会重复变更。
-        无法识别的版本抛 RuntimeError：高于 :data:`SCHEMA_VERSION` 时提示升级应用。
-
-        Args:
-            sqlite_db (SqliteDatabase): 已连接的数据库。
-        """
-        migrator = SqliteMigrator(sqlite_db)
-        while (version := self._user_version(sqlite_db)) != SCHEMA_VERSION:
-            match version:
-                case 0:
-                    columns = {col.name for col in sqlite_db.get_columns('sent_danmaku')}
-                    if 'task_id' not in columns:
-                        migrate(migrator.add_column('sent_danmaku', 'task_id', CharField(null=True)))
-                    self._set_user_version(sqlite_db, 1)
-                case _:
-                    if version > SCHEMA_VERSION:
-                        raise RuntimeError(f"数据库结构版本 {version} 新于本应用支持的 {SCHEMA_VERSION}，请升级应用")
-                    raise RuntimeError(f"未知的数据库结构版本 {version}，本应用支持到 {SCHEMA_VERSION}")
-
-    @staticmethod
-    def _user_version(sqlite_db: SqliteDatabase) -> int:
-        """读取数据库结构版本（SQLite 的 user_version）。
-
-        Args:
-            sqlite_db (SqliteDatabase): 已连接的数据库。
-
-        Returns:
-            int: 数据库结构版本，从未写入时为 0。
-        """
-        return int(sqlite_db.execute_sql("PRAGMA user_version").fetchone()[0])
-
-    @staticmethod
-    def _set_user_version(sqlite_db: SqliteDatabase, version: int) -> None:
-        """写入数据库结构版本（SQLite 的 user_version）。
-
-        PRAGMA 不支持参数绑定，version 以整数形式拼入语句。
-
-        Args:
-            sqlite_db (SqliteDatabase): 已连接的数据库。
-            version (int): 要写入的数据库结构版本。
-        """
-        sqlite_db.execute_sql(f"PRAGMA user_version = {int(version)}")
 
     def record_danmaku(
         self,
