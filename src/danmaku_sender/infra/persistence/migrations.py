@@ -1,4 +1,4 @@
-"""历史账本迁移：建表与表结构版本升级。
+"""历史账本迁移：建表、表结构版本升级与数据回填。
 
 各步幂等、可重复执行；结构版本记在 SQLite 的 user_version。
 表结构变更用 playhouse.migrate，存在性检查用 peewee 的 get_columns。
@@ -7,6 +7,8 @@ import logging
 
 from peewee import CharField, SqliteDatabase
 from playhouse.migrate import SqliteMigrator, migrate
+
+from danmaku_sender.types.models.queue import TaskStatus
 
 from .orm_models import SentDanmaku, TaskRecord
 
@@ -80,3 +82,81 @@ class SchemaMigration:
             version (int): 要写入的数据库结构版本。
         """
         sqlite_db.execute_sql(f"PRAGMA user_version = {int(version)}")
+
+
+class LegacyBackfill:
+    """无主存证回填：把 task_id 为空的存证归集为 legacy 任务。
+
+    Attributes:
+        GAP (float): 断段阈值（秒）；相邻发送间隔超过它视为新批次。
+    """
+
+    GAP = 600.0
+
+    @classmethod
+    def run(cls) -> None:
+        """按 (bvid, cid) 与发送连续段归集无主存证并回填 task_id。
+
+        每段创建一条 legacy 任务（标识为 ``legacy-{bvid}-{cid}-{段首时间戳}``，标题留空）；
+        只修改 task_id 为空的行，重复执行结果不变。
+        """
+        orphans: list[dict] = list(
+            SentDanmaku
+                .select()
+                .where(SentDanmaku.task_id.is_null(True))
+                .order_by(SentDanmaku.bvid, SentDanmaku.cid, SentDanmaku.ctime, SentDanmaku.dmid)
+                .dicts()
+        )  # type: ignore[assignment]
+        segment: list[dict] = []
+        for row in orphans:
+            if segment and cls._is_new_segment(segment[-1], row):
+                cls._backfill_segment(segment)
+                segment = []
+            segment.append(row)
+        if segment:
+            cls._backfill_segment(segment)
+
+    @classmethod
+    def _is_new_segment(cls, prev: dict, row: dict) -> bool:
+        """判定是否另起一段：归属变化，或发送间隔超过断段阈值。
+
+        Args:
+            prev (dict): 段内上一条存证。
+            row (dict): 当前存证。
+
+        Returns:
+            bool: 另起一段时为 True。
+        """
+        return (
+            (prev['bvid'], prev['cid']) != (row['bvid'], row['cid'])
+            or row['ctime'] - prev['ctime'] > cls.GAP
+        )
+
+    @staticmethod
+    def _backfill_segment(rows: list[dict]) -> None:
+        """给一段无主存证建 legacy 任务并回填 task_id。
+
+        Args:
+            rows (list[dict]): 同一段的存证，按发送时间升序。
+        """
+        first = rows[0]
+        task_id = f"legacy-{first['bvid']}-{first['cid']}-{int(first['ctime'])}"
+        TaskRecord.get_or_create(
+            task_id=task_id,
+            defaults={
+                'bvid': first['bvid'],
+                'cid': first['cid'],
+                'video_title': None,
+                'part_page': None,
+                'part_title': None,
+                'xml_path': None,
+                'created_at': first['ctime'],
+                'status': TaskStatus.COMPLETED.name,
+            },
+        )
+        (
+            SentDanmaku
+                .update(task_id=task_id)
+                .where(SentDanmaku.dmid.in_([row['dmid'] for row in rows]))
+                .execute()
+        )

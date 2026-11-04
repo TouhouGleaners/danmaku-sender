@@ -17,7 +17,7 @@ from danmaku_sender.types.models.common import (
 from danmaku_sender.types.models.danmaku import Danmaku
 from danmaku_sender.types.models.queue import TaskDefinition, TaskStatus
 
-from .migrations import SchemaMigration
+from .migrations import LegacyBackfill, SchemaMigration
 from .orm_models import SentDanmaku, TaskRecord, db
 
 logger = logging.getLogger(__name__)
@@ -64,6 +64,7 @@ class HistoryManager:
             # 先升版后建表建索引：索引要建在补列之后
             SchemaMigration.run(sqlite_db)
             sqlite_db.create_tables([SentDanmaku, TaskRecord], safe=True)
+            LegacyBackfill.run()
 
         except Exception as e:
             logger.critical(f"数据库初始化/迁移致命错误: {e}", exc_info=True)

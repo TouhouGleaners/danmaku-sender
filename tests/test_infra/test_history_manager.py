@@ -8,8 +8,8 @@ import pytest
 
 from danmaku_sender.config import SenderConfig
 from danmaku_sender.infra.persistence.history_manager import HistoryManager
-from danmaku_sender.infra.persistence.migrations import SCHEMA_VERSION
-from danmaku_sender.infra.persistence.orm_models import SentDanmaku
+from danmaku_sender.infra.persistence.migrations import SCHEMA_VERSION, LegacyBackfill
+from danmaku_sender.infra.persistence.orm_models import SentDanmaku, TaskRecord
 from danmaku_sender.types.models.common import DanmakuStatus, TaskMeta, VideoTarget
 from danmaku_sender.types.models.danmaku import Danmaku
 from danmaku_sender.types.models.queue import TaskDefinition, TaskStatus
@@ -27,6 +27,24 @@ def hm(tmp_path) -> HistoryManager:
 
 def _record(hm: HistoryManager, target: VideoTarget, dmid: str, msg: str = "弹幕", task_id: str = "t1") -> None:
     hm.record_danmaku(task_id, target, Danmaku(msg=msg, progress=1000), dmid)
+
+
+def _orphan(target: VideoTarget, dmid: str, ctime: float) -> None:
+    """直接落一条无主存证，模拟老版本升级遗留的行。"""
+    SentDanmaku.create(
+        dmid=dmid,
+        cid=target.cid,
+        bvid=target.bvid,
+        msg="弹幕",
+        progress=1000,
+        mode=1,
+        fontsize=25,
+        color=16777215,
+        ctime=ctime,
+        is_visible=1,
+        status=DanmakuStatus.PENDING.value,
+        task_id=None,
+    )
 
 
 def _task_definition(
@@ -357,6 +375,45 @@ class TestTaskQueries:
         assert [row["dmid"] for row in hm.query_history(task_id="t1")] == ["dm1"]
 
 
+class TestLegacyBackfill:
+    """无主存证回填：按 (bvid, cid) 与发送连续段归集为 legacy 任务"""
+
+    def test_backfills_segments_and_keeps_owned_rows(self, hm, target):
+        _orphan(target, "dm1", 1000.0)
+        _orphan(target, "dm2", 1010.0)
+        _orphan(target, "dm3", 2000.0)
+        _orphan(VideoTarget(bvid=target.bvid, cid=2002), "dm5", 1010.0)
+        _record(hm, target, "dm4", task_id="t1")
+
+        LegacyBackfill.run()
+
+        rows = {r.dmid: r for r in SentDanmaku.select()}
+        assert rows["dm1"].task_id == "legacy-BV1xx411c7mD-1001-1000"
+        assert rows["dm2"].task_id == "legacy-BV1xx411c7mD-1001-1000"
+        assert rows["dm3"].task_id == "legacy-BV1xx411c7mD-1001-2000"
+        assert rows["dm5"].task_id == "legacy-BV1xx411c7mD-2002-1010"
+        assert rows["dm4"].task_id == "t1"
+
+    def test_backfill_creates_legacy_tasks(self, hm, target):
+        _orphan(target, "dm1", 1000.0)
+
+        LegacyBackfill.run()
+
+        task = TaskRecord.get_by_id("legacy-BV1xx411c7mD-1001-1000")
+        assert (task.bvid, task.cid, task.created_at) == (target.bvid, target.cid, 1000.0)
+        assert task.video_title is None and task.part_title is None
+        assert task.status == "COMPLETED"
+
+    def test_backfill_is_idempotent(self, hm, target):
+        _orphan(target, "dm1", 1000.0)
+
+        LegacyBackfill.run()
+        LegacyBackfill.run()
+
+        assert [r.task_id for r in SentDanmaku.select()] == ["legacy-BV1xx411c7mD-1001-1000"]
+        assert TaskRecord.select().count() == 1
+
+
 class TestMigration:
     """老库升级：补齐缺失的列与索引，且重复初始化幂等"""
 
@@ -380,7 +437,7 @@ class TestMigration:
 
         HistoryManager(db_path)
 
-        assert SentDanmaku.select().where(SentDanmaku.task_id.is_null(True)).count() == 1
+        assert [r.task_id for r in SentDanmaku.select()] == ["legacy-BV1-1001-1000"]
 
     def test_upgrades_legacy_schema(self, tmp_path, target):
         db_path = tmp_path / "legacy.db"
@@ -408,10 +465,10 @@ class TestMigration:
         ]
         assert ['task_id'] in indexed
 
-        # 老行留 NULL，新行能写能读且归属正确
+        # 老行回填 legacy 归属，新行能写能读且归属正确
         old_rows = SentDanmaku.select().order_by(SentDanmaku.dmid).execute()
         assert [r.dmid for r in old_rows] == ['dm1']
-        assert old_rows[0].task_id is None
+        assert old_rows[0].task_id == 'legacy-BV1-1001-0'
 
         hm.record_danmaku('任务归属-8f3c', target, Danmaku(msg='y', progress=0), 'dm2')
         new_row = SentDanmaku.get(SentDanmaku.dmid == 'dm2')
