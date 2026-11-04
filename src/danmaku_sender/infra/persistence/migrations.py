@@ -16,14 +16,14 @@ SCHEMA_VERSION = 1  # 数据库结构版本；0 表示 2.6.1 及更早的库
 
 
 class SchemaMigration:
-    """表结构迁移：建表并按版本号逐级升级到当前结构。"""
+    """表结构迁移：按版本号逐级升级到当前结构，并修复旧结构遗留的废索引。"""
 
     @staticmethod
     def run(sqlite_db: SqliteDatabase) -> None:
-        """建表并对已有库逐级升级到 :data:`SCHEMA_VERSION`。
+        """把已有库逐级升级到 :data:`SCHEMA_VERSION`，并修复旧结构遗留的废索引。
 
-        新库直接落成当前结构并打上最新版本；老库先按版本补列、后建表建索引；
-        每步完成结构变更后抬高版本，中断后重跑不会重复变更；无法识别的版本抛 RuntimeError。
+        空库无可升、直接落版；每步完成结构变更后抬高版本，中断后重跑不会重复变更；
+        无法识别的版本抛 RuntimeError。建表建索引由调用方负责，且须在本方法之后——索引要建在补列之后。
 
         Args:
             sqlite_db (SqliteDatabase): 已连接的数据库。
@@ -31,26 +31,40 @@ class SchemaMigration:
         Raises:
             RuntimeError: 数据库结构版本高于本应用支持或无法识别。
         """
-        is_fresh = not sqlite_db.get_tables()
-        if is_fresh:
-            sqlite_db.create_tables([SentDanmaku, TaskRecord], safe=True)
-            SchemaMigration._set_user_version(sqlite_db, SCHEMA_VERSION)
-            return
-
         migrator = SqliteMigrator(sqlite_db)
         while (version := SchemaMigration._user_version(sqlite_db)) != SCHEMA_VERSION:
             match version:
                 case 0:
-                    columns = {col.name for col in sqlite_db.get_columns('sent_danmaku')}
-                    if 'task_id' not in columns:
-                        migrate(migrator.add_column('sent_danmaku', 'task_id', CharField(null=True)))
+                    # 表不存在时无列可补，缺表由调用方按现行结构建出
+                    if 'sent_danmaku' in sqlite_db.get_tables():
+                        columns = {col.name for col in sqlite_db.get_columns('sent_danmaku')}
+                        if 'task_id' not in columns:
+                            migrate(migrator.add_column('sent_danmaku', 'task_id', CharField(null=True)))
                     SchemaMigration._set_user_version(sqlite_db, 1)
                 case _:
                     if version > SCHEMA_VERSION:
                         raise RuntimeError(f"数据库结构版本 {version} 新于本应用支持的 {SCHEMA_VERSION}，请升级应用")
                     raise RuntimeError(f"未知的数据库结构版本 {version}，本应用支持到 {SCHEMA_VERSION}")
 
-        sqlite_db.create_tables([SentDanmaku, TaskRecord], safe=True)
+        SchemaMigration._repair_indexes(sqlite_db)
+
+    @staticmethod
+    def _repair_indexes(sqlite_db: SqliteDatabase) -> None:
+        """重建旧结构遗留的废索引。
+
+        废索引的 index_info 列号为 -2（按缺列建出的空壳索引），走它的查询会漏行；
+        命中即整体 REINDEX 重建。
+
+        Args:
+            sqlite_db (SqliteDatabase): 已连接的数据库。
+        """
+        for table in sqlite_db.get_tables():
+            for index in sqlite_db.get_indexes(table):
+                rows = sqlite_db.execute_sql(f"PRAGMA index_info('{index.name}')").fetchall()
+                if any(column == -2 for _, column, _ in rows):
+                    logger.warning(f"索引 {index.name} 为废索引，重建")
+                    sqlite_db.execute_sql("REINDEX")
+                    return
 
     @staticmethod
     def _user_version(sqlite_db: SqliteDatabase) -> int:
