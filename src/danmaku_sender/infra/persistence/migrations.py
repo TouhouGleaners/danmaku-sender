@@ -50,21 +50,12 @@ class SchemaMigration:
 
     @staticmethod
     def _repair_indexes(sqlite_db: SqliteDatabase) -> None:
-        """重建旧结构遗留的废索引。
-
-        废索引的 index_info 列号为 -2（按缺列建出的空壳索引），走它的查询会漏行；
-        命中即整体 REINDEX 重建。
+        """重建全部索引，修复旧结构遗留的作废索引。
 
         Args:
             sqlite_db (SqliteDatabase): 已连接的数据库。
         """
-        for table in sqlite_db.get_tables():
-            for index in sqlite_db.get_indexes(table):
-                rows = sqlite_db.execute_sql(f"PRAGMA index_info('{index.name}')").fetchall()
-                if any(column == -2 for _, column, _ in rows):
-                    logger.warning(f"索引 {index.name} 为废索引，重建")
-                    sqlite_db.execute_sql("REINDEX")
-                    return
+        sqlite_db.execute_sql("REINDEX")
 
     @staticmethod
     def _user_version(sqlite_db: SqliteDatabase) -> int:
