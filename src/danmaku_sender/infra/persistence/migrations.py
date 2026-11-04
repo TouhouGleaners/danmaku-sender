@@ -53,11 +53,20 @@ class SchemaMigration:
 
     @staticmethod
     def _repair_indexes(sqlite_db: SqliteDatabase) -> None:
-        """重建全部索引，修复旧结构遗留的作废索引。
+        """重建一次作废索引，归组索引在场即视为已修。
+
+        旧结构遗留的作废索引不随补列更新；
+        以归组索引 (task_id, bvid, cid, ctime)的存在为修复标记，每库至多重建一次。
 
         Args:
             sqlite_db (SqliteDatabase): 已连接的数据库。
         """
+        indexes = {tuple(index.columns) for index in sqlite_db.get_indexes('sent_danmaku')}
+        if ('task_id', 'bvid', 'cid', 'ctime') in indexes:
+            return
+        if ('task_id',) not in indexes:
+            return
+        logger.warning("检测到旧结构遗留的作废索引，重建")
         sqlite_db.execute_sql("REINDEX")
 
     @staticmethod
