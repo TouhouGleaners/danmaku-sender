@@ -30,7 +30,7 @@ def _record(hm: HistoryManager, target: VideoTarget, dmid: str, msg: str = "弹�
 
 
 def _orphan(target: VideoTarget, dmid: str, ctime: float) -> None:
-    """直接落一条无主存证，模拟老版本升级遗留的行。"""
+    """直接写入一条无主存证，模拟旧版本遗留的数据行。"""
     SentDanmaku.create(
         dmid=dmid,
         cid=target.cid,
@@ -443,7 +443,7 @@ class TestMigration:
     """老库升级：补齐缺失的列与索引，且重复初始化幂等"""
 
     def test_repairs_stale_index(self, tmp_path):
-        """旧序建出的空壳索引在初始化时重建，走索引的查询不再漏行。"""
+        """按缺失列创建的失效索引在初始化时重建，查询不再遗漏数据行。"""
         db_path = tmp_path / "stale.db"
         conn = sqlite3.connect(db_path)
         conn.execute(

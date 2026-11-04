@@ -61,7 +61,7 @@ class HistoryManager:
             db.initialize(sqlite_db)
             sqlite_db.connect(reuse_if_open=True)
 
-            # 先升版后建表建索引：索引要建在补列之后
+            # 顺序：先升级版本号，后创建表与索引；索引必须在补列之后创建
             SchemaMigration.run(sqlite_db)
             sqlite_db.create_tables([SentDanmaku, TaskRecord], safe=True)
             LegacyBackfill.run()

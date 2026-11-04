@@ -19,14 +19,15 @@ SCHEMA_VERSION = 1  # 数据库结构版本；0 表示 2.6.1 及更早的库
 
 
 class SchemaMigration:
-    """表结构迁移：按版本号逐级升级到当前结构，并修复旧结构遗留的废索引。"""
+    """表结构迁移：按版本号逐级升级到当前结构，并重建失效索引。"""
 
     @staticmethod
     def run(sqlite_db: SqliteDatabase) -> None:
-        """把已有库逐级升级到 :data:`SCHEMA_VERSION`，并修复旧结构遗留的废索引。
+        """将已有数据库逐级升级至 :data:`SCHEMA_VERSION`，并重建失效索引。
 
-        空库无可升、直接落版；每步完成结构变更后抬高版本，中断后重跑不会重复变更；
-        无法识别的版本抛 RuntimeError。建表建索引由调用方负责，且须在本方法之后——索引要建在补列之后。
+        空数据库无版本可升级，直接写入当前版本号；每步完成结构变更后更新版本号，
+        中断后重跑不会重复变更；无法识别的版本抛 RuntimeError。
+        创建表与索引由调用方负责，且须在本方法之后执行。
 
         Args:
             sqlite_db (SqliteDatabase): 已连接的数据库。
@@ -38,7 +39,7 @@ class SchemaMigration:
         while (version := SchemaMigration._user_version(sqlite_db)) != SCHEMA_VERSION:
             match version:
                 case 0:
-                    # 表不存在时无列可补，缺表由调用方按现行结构建出
+                    # 表不存在时没有可添加的列；缺失的表由调用方按当前结构创建
                     if 'sent_danmaku' in sqlite_db.get_tables():
                         columns = {col.name for col in sqlite_db.get_columns('sent_danmaku')}
                         if 'task_id' not in columns:
@@ -53,10 +54,7 @@ class SchemaMigration:
 
     @staticmethod
     def _repair_indexes(sqlite_db: SqliteDatabase) -> None:
-        """重建一次作废索引，归组索引在场即视为已修。
-
-        旧结构遗留的作废索引不随补列更新；
-        以归组索引 (task_id, bvid, cid, ctime)的存在为修复标记，每库至多重建一次。
+        """重建失效索引：task_id 索引存在而 (task_id, bvid, cid, ctime) 索引缺失时执行 REINDEX。
 
         Args:
             sqlite_db (SqliteDatabase): 已连接的数据库。
@@ -66,7 +64,7 @@ class SchemaMigration:
             return
         if ('task_id',) not in indexes:
             return
-        logger.warning("检测到旧结构遗留的作废索引，重建")
+        logger.warning("检测到失效索引，执行 REINDEX")
         sqlite_db.execute_sql("REINDEX")
 
     @staticmethod
@@ -95,10 +93,10 @@ class SchemaMigration:
 
 
 class LegacyBackfill:
-    """无主存证回填：把 task_id 为空的存证归集为 legacy 任务。
+    """无主存证回填：将 task_id 为空的存证归集为 legacy 任务。
 
     Attributes:
-        GAP (float): 断段阈值（秒）；相邻发送间隔超过它视为新批次。
+        GAP (float): 分段间隔阈值（秒）；相邻发送间隔超过该值时开始新分段。
     """
 
     GAP = 600.0
@@ -108,7 +106,7 @@ class LegacyBackfill:
         """按 (bvid, cid) 与发送连续段归集无主存证并回填 task_id。
 
         每段创建一条 legacy 任务（标识为 ``legacy-{bvid}-{cid}-{段首时间戳}``，标题留空）；
-        只修改 task_id 为空的行，重复执行结果不变。逐行流式读取，每段整体落库。
+        只修改 task_id 为空的行，重复执行结果不变。逐行流式读取，每段整体写入。
         """
         orphans: Iterable[dict] = (
             SentDanmaku
@@ -132,14 +130,14 @@ class LegacyBackfill:
 
     @classmethod
     def _is_new_segment(cls, prev: dict, row: dict) -> bool:
-        """判定是否另起一段：归属变化，或发送间隔超过断段阈值。
+        """判定是否开始新分段：归属变化，或发送间隔超过分段间隔阈值。
 
         Args:
             prev (dict): 段内上一条存证。
             row (dict): 当前存证。
 
         Returns:
-            bool: 另起一段时为 True。
+            bool: 开始新分段时为 True。
         """
         return (
             (prev['bvid'], prev['cid']) != (row['bvid'], row['cid'])
@@ -148,7 +146,7 @@ class LegacyBackfill:
 
     @staticmethod
     def _backfill_segment(first: dict, last: dict) -> None:
-        """把一段无主存证建 legacy 任务并整体回填。
+        """为一个分段创建 legacy 任务并整体回填。
 
         Args:
             first (dict): 段首存证。
