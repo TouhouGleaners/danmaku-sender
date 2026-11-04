@@ -413,6 +413,17 @@ class TestLegacyBackfill:
         assert [r.task_id for r in SentDanmaku.select()] == ["legacy-BV1xx411c7mD-1001-1000"]
         assert TaskRecord.select().count() == 1
 
+    def test_backfill_writes_in_batches(self, hm, target, monkeypatch):
+        """回写按批落库，同段行归属同一任务。"""
+        monkeypatch.setattr(LegacyBackfill, "WRITE_BATCH", 2)
+        for i in range(5):
+            _orphan(target, f"dm{i}", 1000.0 + i)
+
+        LegacyBackfill.run()
+
+        assert {r.task_id for r in SentDanmaku.select()} == {"legacy-BV1xx411c7mD-1001-1000"}
+        assert SentDanmaku.select().count() == 5
+
 
 class TestMigration:
     """老库升级：补齐缺失的列与索引，且重复初始化幂等"""
