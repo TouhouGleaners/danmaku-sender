@@ -22,8 +22,8 @@ class SchemaMigration:
     def run(sqlite_db: SqliteDatabase) -> None:
         """建表并对已有库逐级升级到 :data:`SCHEMA_VERSION`。
 
-        新库直接落成当前结构并打上最新版本；每步完成结构变更后抬高版本，
-        中断后重跑不会重复变更；无法识别的版本抛 RuntimeError。
+        新库直接落成当前结构并打上最新版本；老库先按版本补列、后建表建索引；
+        每步完成结构变更后抬高版本，中断后重跑不会重复变更；无法识别的版本抛 RuntimeError。
 
         Args:
             sqlite_db (SqliteDatabase): 已连接的数据库。
@@ -32,8 +32,8 @@ class SchemaMigration:
             RuntimeError: 数据库结构版本高于本应用支持或无法识别。
         """
         is_fresh = not sqlite_db.get_tables()
-        sqlite_db.create_tables([SentDanmaku, TaskRecord], safe=True)
         if is_fresh:
+            sqlite_db.create_tables([SentDanmaku, TaskRecord], safe=True)
             SchemaMigration._set_user_version(sqlite_db, SCHEMA_VERSION)
             return
 
@@ -49,6 +49,8 @@ class SchemaMigration:
                     if version > SCHEMA_VERSION:
                         raise RuntimeError(f"数据库结构版本 {version} 新于本应用支持的 {SCHEMA_VERSION}，请升级应用")
                     raise RuntimeError(f"未知的数据库结构版本 {version}，本应用支持到 {SCHEMA_VERSION}")
+
+        sqlite_db.create_tables([SentDanmaku, TaskRecord], safe=True)
 
     @staticmethod
     def _user_version(sqlite_db: SqliteDatabase) -> int:
