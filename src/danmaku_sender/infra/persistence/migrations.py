@@ -106,7 +106,7 @@ class LegacyBackfill:
         """按 (bvid, cid) 与发送连续段归集无主存证并回填 task_id。
 
         每段创建一条 legacy 任务（标识为 ``legacy-{bvid}-{cid}-{段首时间戳}``，标题留空）；
-        只修改 task_id 为空的行，重复执行结果不变。逐行流式读取，每段整体写入。
+        只修改 task_id 为空的行，重复执行结果不变。先流式读取并划分分段，读取结束后逐段写入。
         """
         orphans: Iterable[dict] = (
             SentDanmaku
@@ -116,17 +116,27 @@ class LegacyBackfill:
                 .dicts()
                 .iterator()
         )  # type: ignore[assignment]
-        first: dict | None = None
-        prev: dict | None = None
-        for row in orphans:
-            if first is not None and prev is not None and cls._is_new_segment(prev, row):
-                cls._backfill_segment(first, prev)
-                first = None
-            if first is None:
+        segments: list[tuple[dict, dict]] = []
+        iterator: Iterable[dict] = iter(orphans)
+
+        try:
+            first = row = next(iterator)
+        except StopIteration:
+            return
+
+        prev = row
+
+        for row in iterator:
+            if cls._is_new_segment(prev, row):
+                segments.append((first, prev))
                 first = row
             prev = row
-        if first is not None and prev is not None:
-            cls._backfill_segment(first, prev)
+
+        if first is not None:
+            segments.append((first, prev))
+
+        for first, last in segments:
+            cls._backfill_segment(first, last)
 
     @classmethod
     def _is_new_segment(cls, prev: dict, row: dict) -> bool:
