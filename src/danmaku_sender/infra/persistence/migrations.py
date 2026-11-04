@@ -19,11 +19,11 @@ SCHEMA_VERSION = 1  # 数据库结构版本；0 表示 2.6.1 及更早的库
 
 
 class SchemaMigration:
-    """表结构迁移：按版本号逐级升级到当前结构，并重建失效索引。"""
+    """表结构迁移：按版本号逐级升级到当前结构。"""
 
     @staticmethod
     def run(sqlite_db: SqliteDatabase) -> None:
-        """将已有数据库逐级升级至 :data:`SCHEMA_VERSION`，并重建失效索引。
+        """将已有数据库逐级升级至 :data:`SCHEMA_VERSION`。
 
         空数据库无版本可升级，直接写入当前版本号；每步完成结构变更后更新版本号，
         中断后重跑不会重复变更；无法识别的版本抛 RuntimeError。
@@ -49,23 +49,6 @@ class SchemaMigration:
                     if version > SCHEMA_VERSION:
                         raise RuntimeError(f"数据库结构版本 {version} 新于本应用支持的 {SCHEMA_VERSION}，请升级应用")
                     raise RuntimeError(f"未知的数据库结构版本 {version}，本应用支持到 {SCHEMA_VERSION}")
-
-        SchemaMigration._repair_indexes(sqlite_db)
-
-    @staticmethod
-    def _repair_indexes(sqlite_db: SqliteDatabase) -> None:
-        """重建失效索引：task_id 索引存在而 (task_id, bvid, cid, ctime) 索引缺失时执行 REINDEX。
-
-        Args:
-            sqlite_db (SqliteDatabase): 已连接的数据库。
-        """
-        indexes = {tuple(index.columns) for index in sqlite_db.get_indexes('sent_danmaku')}
-        if ('task_id', 'bvid', 'cid', 'ctime') in indexes:
-            return
-        if ('task_id',) not in indexes:
-            return
-        logger.warning("检测到失效索引，执行 REINDEX")
-        sqlite_db.execute_sql("REINDEX")
 
     @staticmethod
     def _user_version(sqlite_db: SqliteDatabase) -> int:

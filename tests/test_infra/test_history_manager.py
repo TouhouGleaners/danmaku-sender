@@ -442,28 +442,6 @@ class TestLegacyBackfill:
 class TestMigration:
     """老库升级：补齐缺失的列与索引，且重复初始化幂等"""
 
-    def test_repairs_stale_index(self, tmp_path):
-        """按缺失列创建的失效索引在初始化时重建，查询不再遗漏数据行。"""
-        db_path = tmp_path / "stale.db"
-        conn = sqlite3.connect(db_path)
-        conn.execute(
-            "CREATE TABLE sent_danmaku (dmid VARCHAR PRIMARY KEY, cid INTEGER, bvid VARCHAR, "
-            "msg TEXT, progress INTEGER, mode INTEGER, fontsize INTEGER, color INTEGER, "
-            "ctime REAL, is_visible INTEGER, status INTEGER)"
-        )
-        conn.execute(
-            "INSERT INTO sent_danmaku VALUES ('dm1', 1001, 'BV1', 'x', 0, 1, 25, 16777215, 1000.0, 1, 0)"
-        )
-        conn.execute("CREATE INDEX sentdanmaku_task_id ON sent_danmaku (\"task_id\")")
-        conn.execute("ALTER TABLE sent_danmaku ADD COLUMN task_id VARCHAR")
-        conn.execute("PRAGMA user_version = 1")
-        conn.commit()
-        conn.close()
-
-        HistoryManager(db_path)
-
-        assert [r.task_id for r in SentDanmaku.select()] == ["legacy-BV1-1001-1000"]
-
     def test_upgrades_legacy_schema(self, tmp_path, target):
         db_path = tmp_path / "legacy.db"
         conn = sqlite3.connect(db_path)
