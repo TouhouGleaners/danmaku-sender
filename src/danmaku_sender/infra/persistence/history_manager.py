@@ -61,7 +61,9 @@ class HistoryManager:
             db.initialize(sqlite_db)
             sqlite_db.connect(reuse_if_open=True)
 
+            # 先升版后建表建索引：索引要建在补列之后
             SchemaMigration.run(sqlite_db)
+            sqlite_db.create_tables([SentDanmaku, TaskRecord], safe=True)
 
         except Exception as e:
             logger.critical(f"数据库初始化/迁移致命错误: {e}", exc_info=True)
