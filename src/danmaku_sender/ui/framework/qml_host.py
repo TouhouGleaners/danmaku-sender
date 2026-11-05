@@ -10,7 +10,7 @@ QmlWindowHost 以原生 Quick 窗口承载，适合大场景——不经控件�
 from pathlib import Path
 from typing import Any
 
-from PySide6.QtCore import Property, QEvent, QObject, QUrl, Signal
+from PySide6.QtCore import Property, QEvent, QObject, Qt, QUrl, Signal
 from PySide6.QtGui import QColor, QFont, QFontDatabase, QFontInfo, QPalette
 from PySide6.QtQml import QQmlComponent
 from PySide6.QtQuick import QQuickView
@@ -63,7 +63,7 @@ class QmlPaletteBridge(QObject):
 
     @Property(QColor, notify=changed)
     def background(self) -> QColor:
-        """画布底色，取自 QPalette.Window。"""
+        """页面基底色，取自 QPalette.Window。"""
         return self._palette.color(QPalette.ColorRole.Window)
 
     @Property(QColor, notify=changed)
@@ -91,6 +91,26 @@ class QmlPaletteBridge(QObject):
         """强调色，取自 QPalette.Highlight。"""
         return self._palette.color(QPalette.ColorRole.Highlight)
 
+    @Property(QColor, notify=changed)
+    def border(self) -> QColor:
+        """描边色，取自 QPalette.Mid。"""
+        return self._palette.color(QPalette.ColorRole.Mid)
+
+    @Property(QColor, notify=changed)
+    def card(self) -> QColor:
+        """卡片表面色，取自 QPalette.ToolTipBase。"""
+        return self._palette.color(QPalette.ColorRole.ToolTipBase)
+
+    @Property(QColor, notify=changed)
+    def divider(self) -> QColor:
+        """分隔线色，取自 QPalette.Shadow。"""
+        return self._palette.color(QPalette.ColorRole.Shadow)
+
+    @Property(QColor, notify=changed)
+    def strokeStrong(self) -> QColor:
+        """强描边色，取自 QPalette.Dark。"""
+        return self._palette.color(QPalette.ColorRole.Dark)
+
     @Property(str, notify=changed)
     def fontFamily(self) -> str:
         """字体族名称。"""
@@ -115,6 +135,11 @@ class QmlPaletteBridge(QObject):
     def iconFontFamily(self) -> str:
         """图标字体族；无可用图标字体时为应用字体族。"""
         return self._icon_font_family or self._font.family()
+
+    @Property(str, notify=changed)
+    def leafGlyph(self) -> str:
+        """叶行图标字形（视频）；无可用图标字体时为空字符串。"""
+        return chr(0xE714) if self._icon_font_family else ""
 
 
 class QmlHost(QQuickWidget):
@@ -228,7 +253,9 @@ class QmlWindowHost(QWidget):
 
         layout = QVBoxLayout(self)
         layout.setContentsMargins(0, 0, 0, 0)
-        layout.addWidget(QWidget.createWindowContainer(self._view, self))
+        self._container = QWidget.createWindowContainer(self._view, self)
+        self._container.setFocusPolicy(Qt.FocusPolicy.StrongFocus)
+        layout.addWidget(self._container)
 
     def _load_qml(self, qml_path: Path) -> None:
         """加载 QML 并校验结果。

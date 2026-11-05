@@ -15,6 +15,7 @@ class ColumnSpec:
 
     Attributes:
         role (str): 行数据角色名。
+        sub_role (str | None): 次行角色名（树视图标签列的第二行文字）；仅第一列可用，取值为空的行按单行显示。
         title (str): 表头文字；树视图的列不使用。
         width (int | None): 列宽；None 表示弹性列。
         align (str): 对齐方式，取值为 left / right。
@@ -22,6 +23,7 @@ class ColumnSpec:
     """
 
     role: str
+    sub_role: str | None = None
     title: str = ""
     width: int | None = None
     align: str = "left"
@@ -47,11 +49,15 @@ class ColumnSpec:
             list[dict[str, Any]]: QML 列属性字典序列。
 
         Raises:
-            ValueError: 引用了委托保留名或模型未公开的角色、width 为负、弹性列不在首位或 align 取值非法。
+            ValueError: 引用了委托保留名或模型未公开的角色、width 为负、弹性列不在首位、sub_role 不在第一列或 align 取值非法。
         """
         names = set(model.roleNames().values())
         clash = sorted(
-            ({spec.role for spec in specs} | {spec.color_role for spec in specs if spec.color_role})
+            (
+                {spec.role for spec in specs}
+                | {spec.color_role for spec in specs if spec.color_role}
+                | {spec.sub_role for spec in specs if spec.sub_role}
+            )
             & ColumnSpec.RESERVED_ROLE_NAMES
         )
         if clash:
@@ -62,6 +68,11 @@ class ColumnSpec:
                 spec.color_role
                 for spec in specs
                 if spec.color_role and spec.color_role.encode() not in names
+            }
+            | {
+                spec.sub_role
+                for spec in specs
+                if spec.sub_role and spec.sub_role.encode() not in names
             }
         )
         if missing:
@@ -75,6 +86,10 @@ class ColumnSpec:
         if require_fill_first and fills and fills != [0]:
             raise ValueError("弹性列（width 为 None）须是第一列")
 
+        stray_sub = sorted({spec.role for spec in specs[1:] if spec.sub_role})
+        if stray_sub:
+            raise ValueError(f"sub_role 仅限第一列: {stray_sub}")
+
         bad_align = sorted({spec.align for spec in specs if spec.align not in ("left", "right")})
         if bad_align:
             raise ValueError(f"列规格的 align 取值非法: {bad_align}，仅支持 left / right")
@@ -82,6 +97,7 @@ class ColumnSpec:
         return [
             {
                 "role": spec.role,
+                "subRole": spec.sub_role,
                 "title": spec.title,
                 "width": spec.width,
                 "align": spec.align,
