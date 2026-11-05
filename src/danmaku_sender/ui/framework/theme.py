@@ -26,7 +26,7 @@ QSS_PATH = AppInfo.Paths.ASSETS / "qss" / "style.qss"
 # QPalette.ColorRole 到颜色来源的映射：取值为 Palette 的属性名，
 # 或以 # 开头的颜色字面量。须覆盖 Qt 全部 ColorRole，未覆盖的角色会被 Qt 回退为系统默认值。
 ROLE_SOURCES: dict[QPalette.ColorRole, str] = {
-    QPalette.ColorRole.Window: "bg_canvas",
+    QPalette.ColorRole.Window: "bg_page",
     QPalette.ColorRole.WindowText: "text_main",
     QPalette.ColorRole.Base: "bg_control",
     QPalette.ColorRole.AlternateBase: "bg_layer_alt",
