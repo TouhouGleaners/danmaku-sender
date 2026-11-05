@@ -17,7 +17,7 @@ class ColumnSpec:
         role (str): 行数据角色名。
         sub_role (str | None): 次行角色名（树视图标签列的第二行文字）；仅第一列可用，取值为空的行按单行显示。
         title (str): 表头文字；树视图的列不使用。
-        width (int | None): 列宽；None 表示弹性列。标签列不按列宽排布：树自适应内容聚拢行右缘，表格以列宽为槽宽（None 随内容）。
+        width (int | None): 列宽；None 表示弹性列。标签列不按列宽排布：树自适应内容聚拢行右缘，表格以列宽为槽宽（须给定列宽，否则行间与表头不齐）。
         align (str): 对齐方式，取值为 left / right。
         tone_role (str | None): 小标签健康档角色名（good / warn / bad）；须与 tag 同用。
         tag (bool): 是否渲染为小标签。

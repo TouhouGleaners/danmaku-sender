@@ -45,6 +45,7 @@ class TestHealthColors:
         table = HealthColors.to_qml()
         assert set(table) == set(GOLDEN)
         for tone, modes in table.items():
+            assert set(modes) == set(GOLDEN[tone])
             for mode, tint in modes.items():
                 assert set(tint) == {"fg", "bg", "border"}
                 assert tint == {field: getattr(GOLDEN[tone][mode], field) for field in ("fg", "bg", "border")}
