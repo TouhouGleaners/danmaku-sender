@@ -374,6 +374,15 @@ class TestTaskQueries:
 
         assert [row["dmid"] for row in hm.query_history(task_id="t1")] == ["dm1"]
 
+    def test_query_history_limit_optional(self, hm, target):
+        """默认不限量；显式传入仍按上限截取。"""
+        _record(hm, target, "dm1", task_id="t1")
+        _record(hm, target, "dm2", task_id="t1")
+        _record(hm, target, "dm3", task_id="t1")
+
+        assert {row["dmid"] for row in hm.query_history(task_id="t1")} == {"dm1", "dm2", "dm3"}
+        assert len(hm.query_history(task_id="t1", limit=2)) == 2
+
 
 class TestLegacyBackfill:
     """无主存证回填：按 (bvid, cid) 与发送连续段归集为 legacy 任务"""

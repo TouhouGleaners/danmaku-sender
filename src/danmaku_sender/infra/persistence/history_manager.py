@@ -196,17 +196,16 @@ class HistoryManager:
 
         Returns:
             list[TaskRecordRow]: 任务记录行。
+
+        Raises:
+            Exception: 查询失败时上抛，不得伪装成空清单。
         """
-        try:
-            return list(
-                TaskRecord
-                    .select()
-                    .order_by(TaskRecord.created_at, TaskRecord.task_id)
-                    .dicts()
-            )  # type: ignore[return-value]
-        except Exception:
-            logger.exception("查询任务清单失败")
-            return []
+        return list(
+            TaskRecord
+                .select()
+                .order_by(TaskRecord.created_at, TaskRecord.task_id)
+                .dicts()
+        )  # type: ignore[return-value]
 
     def get_task_stats(self, baseline: float = 0.0) -> dict[str, MonitorStats]:
         """按任务统计核销状态。
@@ -215,28 +214,26 @@ class HistoryManager:
             baseline (float): 统计基线时间，0 表示不限。
 
         Returns:
-            dict[str, MonitorStats]: 任务标识到存活统计的映射；没有存证的任务不出现，
-            ``task_id`` 为空的存证也不计入。
+            dict[str, MonitorStats]: 任务标识到存活统计的映射；没有存证的任务不出现，``task_id`` 为空的存证也不计入。
+
+        Raises:
+            Exception: 查询失败时上抛，不得伪装成空统计。
         """
         conditions = [SentDanmaku.task_id.is_null(False)]
         if baseline > 0:
             conditions.append(SentDanmaku.ctime >= baseline)
 
-        try:
-            rows: list[dict] = list(
-                SentDanmaku
-                    .select(
-                        SentDanmaku.task_id,
-                        SentDanmaku.status,
-                        fn.COUNT(SentDanmaku.dmid).alias('n'),
-                    )
-                    .where(*conditions)
-                    .group_by(SentDanmaku.task_id, SentDanmaku.status)
-                    .dicts()
-            )  # type: ignore[assignment]
-        except Exception:
-            logger.exception("按任务统计存活状态失败")
-            return {}
+        rows: list[dict] = list(
+            SentDanmaku
+                .select(
+                    SentDanmaku.task_id,
+                    SentDanmaku.status,
+                    fn.COUNT(SentDanmaku.dmid).alias('n'),
+                )
+                .where(*conditions)
+                .group_by(SentDanmaku.task_id, SentDanmaku.status)
+                .dicts()
+        )  # type: ignore[assignment]
 
         counts: dict[str, MonitorStats] = {}
         for row in rows:
@@ -476,7 +473,7 @@ class HistoryManager:
         self,
         keyword: str = "",
         status: int = -1,
-        limit: int = 500,
+        limit: int | None = None,
         task_id: str | None = None,
     ) -> list[dict]:
         """按关键词、状态与归属任务筛选弹幕历史。
@@ -484,34 +481,32 @@ class HistoryManager:
         Args:
             keyword (str): 消息关键词，空串表示不筛。
             status (int): 核销状态，-1 表示不筛。
-            limit (int): 返回条数上限。
+            limit (int | None): 返回条数上限；None 表示不限。
             task_id (str | None): 归属任务，None 表示不筛。
 
         Returns:
             list[dict]: 数据库原始记录，由 UI 层结合 API 数据展示。
+
+        Raises:
+            Exception: 查询失败时上抛，不得伪装成空表。
         """
-        try:
-            query = SentDanmaku.select()
+        query = SentDanmaku.select()
 
-            if keyword:
-                query = query.where(
-                    (SentDanmaku.msg.contains(keyword)) |
-                    (SentDanmaku.bvid.contains(keyword))
-                )
+        if keyword:
+            query = query.where(
+                (SentDanmaku.msg.contains(keyword)) |
+                (SentDanmaku.bvid.contains(keyword))
+            )
 
-            if status != -1:
-                query = query.where(SentDanmaku.status == status)
+        if status != -1:
+            query = query.where(SentDanmaku.status == status)
 
-            if task_id is not None:
-                query = query.where(SentDanmaku.task_id == task_id)
+        if task_id is not None:
+            query = query.where(SentDanmaku.task_id == task_id)
 
-            query = query.order_by(SentDanmaku.ctime.desc()).limit(limit)
+        query = query.order_by(SentDanmaku.ctime.desc()).limit(limit)
 
-            return list(query.dicts())  # type: ignore[return-value]
-
-        except Exception:
-            logger.exception("查询历史记录失败")
-            return []
+        return list(query.dicts())  # type: ignore[return-value]
 
     def search_tasks(self, keyword: str) -> list[TaskSearchHit]:
         """按关键词搜索任务，命中任务标题、BV 号或任务弹幕内容。
