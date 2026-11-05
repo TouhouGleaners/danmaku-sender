@@ -1,28 +1,24 @@
-"""健康档标签配色的渲染合约：浅色锁 subtle 配色，深色锁 GitHub 标签公式的折算值。"""
+"""健康档标签配色的渲染合约：浅色锁淡底深字配对，深色锁 GitHub 标签公式的折算值。"""
 import pytest
 
 from danmaku_sender.ui.framework.health_colors import HealthColors, LabelBase, Tint
 
 # 渲染折算的黄金值；改动配色或渲染管线须同步复核
 GOLDEN = {
-    "great": {
-        "light": Tint(fg="#116329", bg="#dafbe1", border="#33116329"),
-        "dark": Tint(fg="#36c45e", bg="#2e2da44e", border="#4d36c45e"),
-    },
     "good": {
-        "light": Tint(fg="#1a7f37", bg="#dafbe1", border="#331a7f37"),
+        "light": Tint(fg="#134d28", bg="#dafbe1", border="#dafbe1"),
         "dark": Tint(fg="#4bc36b", bg="#2e4ac26b", border="#4d4bc36b"),
     },
     "warn": {
-        "light": Tint(fg="#bc4c00", bg="#fff1e5", border="#33bc4c00"),
+        "light": Tint(fg="#642f08", bg="#fff1e5", border="#fff1e5"),
         "dark": Tint(fg="#d4a72b", bg="#2ed4a72c", border="#4dd4a72b"),
     },
     "bad": {
-        "light": Tint(fg="#cf222e", bg="#ffebe9", border="#33cf222e"),
+        "light": Tint(fg="#51180d", bg="#ffebe9", border="#ffebe9"),
         "dark": Tint(fg="#ff8080", bg="#2eff8182", border="#4dff8080"),
     },
     "neutral": {
-        "light": Tint(fg="#59636e", bg="#e6eaef", border="#3359636e"),
+        "light": Tint(fg="#373d46", bg="#e6eaef", border="#e6eaef"),
         "dark": Tint(fg="#999999", bg="#2e999999", border="#4d999999"),
     },
 }

@@ -105,14 +105,12 @@ class TaskTreeBuilder:
             total (int): 已发送数。
 
         Returns:
-            str | None: 存活率 ≥95% 为 great、≥90% 为 good、≥80% 为 warn、其余为 bad；无总量为 None（走中性标签）。
+            str | None: 存活率 ≥95% 为 good、≥80% 为 warn、其余为 bad；无总量为 None（走中性标签）。
         """
         if total <= 0:
             return None
         ratio = verified / total
         if ratio >= 0.95:
-            return "great"
-        if ratio >= 0.9:
             return "good"
         if ratio >= 0.8:
             return "warn"

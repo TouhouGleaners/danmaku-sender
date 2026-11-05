@@ -126,8 +126,9 @@ Item {
                             theme: root.theme
                             text: cell.cellText
                             tone: cell.modelData.toneRole ? (row.model[cell.modelData.toneRole] ?? "") : ""
-                            fontPointSize: root.theme.fontPointSize
+                            fontPointSize: root.theme.fontPointSize - 1
                             minWidth: 26
+                            padding: 8
                             height: 18
                         }
 
