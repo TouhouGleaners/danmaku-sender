@@ -1,9 +1,10 @@
 pragma ComponentBehavior: Bound
 
 import QtQuick
+import QtQuick.Controls
 
-// 通用 Fluent 风格树视图。度量与状态照 WinUI 3 TreeView：
-// 行槽 32（内容 28 + 上下边距 2）、内容圆角 4、缩进 16/层、chevron 槽 40（字形 12，双字形切换不旋转）、选中条 3×16 圆角 2；
+// 通用 Fluent 风格树视图。度量与状态照 WinUI 3 TreeView，缩进照 VSCode 资源管理器收紧：
+// 行槽 32（内容 28 + 上下边距 2；带次行的行 44）、内容圆角 4、缩进 8/层、chevron 槽 24（字形 12，双字形切换不旋转，叶行同槽放叶图标）、选中条 3×16 圆角 2；
 // 状态取色照 SubtleFill 阶梯——悬停/选中 Secondary，悬停于选中、按压未选中 Tertiary。
 // 展开 = 子行滑入淡入，收起 = 淡出；键盘：↑↓ 选行、→ 展开或下潜、← 收起或回父、Enter 选中、Home/End。
 //
@@ -11,6 +12,7 @@ import QtQuick
 // - model 为 TreeRowsModel：
 //   结构角色 depth/expandable/expanded，内容列按 columns 的 {role, width, align} 渲染；
 //   width 为 null 的弹性列须是第一列。
+// - 首列的 subRole 给出次行角色：取值非空的行双行显示（主行 + 次行，行高 44），空值行单行（行高 32）。
 // - 行内定位一律不引用 parent（delegate 销毁期绑定解引用会触发 TypeError）。
 Item {
     id: root
@@ -32,7 +34,7 @@ Item {
         return x - root.columns[idx].width
     }
     function columnX(idx, indent) {
-        return idx === 0 ? indent + 40 : trailingX(idx)
+        return idx === 0 ? indent + 24 : trailingX(idx)
     }
     function columnWidth(idx, indent) {
         if (root.columns[idx].width !== null && root.columns[idx].width !== undefined)
@@ -113,6 +115,23 @@ Item {
         currentIndex: -1
         boundsBehavior: Flickable.StopAtBounds
         keyNavigationEnabled: false
+        ScrollBar.vertical: ScrollBar {
+            id: vScroll
+            width: 12
+            policy: ScrollBar.AsNeeded
+            visible: size < 1.0
+            topPadding: 4
+            bottomPadding: 4
+            leftPadding: 3
+            rightPadding: 3
+
+            contentItem: Rectangle {
+                radius: 3
+                color: vScroll.hovered || vScroll.pressed ? root.theme.textSecondary : root.theme.border
+            }
+
+            background: Item {}
+        }
 
         add: Transition {
             ParallelAnimation {
@@ -141,11 +160,15 @@ Item {
 
             property real slide: 0
 
-            readonly property int indent: depth * 16
+            readonly property int indent: depth * 8
             readonly property bool isCurrent: tree.currentIndex === row.index
 
+            readonly property string subRoleName: root.columns.length > 0 ? (root.columns[0].subRole ?? "") : ""
+            readonly property string subText: row.subRoleName ? (row.model[row.subRoleName] ?? "") : ""
+            readonly property bool twoLine: row.subText !== ""
+
             width: tree.width
-            height: 32
+            height: row.twoLine ? 44 : 32
             transform: Translate { y: row.slide }
 
             Rectangle {
@@ -153,7 +176,7 @@ Item {
                 x: 4
                 y: 2
                 width: row.width - 8
-                height: 28
+                height: row.height - 4
                 radius: 4
                 // WinUI 状态矩阵：按压未选中 / 悬停于选中 → Tertiary；其余悬停与选中 → Secondary
                 color: rowMouse.pressed || chevronMouse.pressed
@@ -165,7 +188,7 @@ Item {
                 // 选中条绘制在本行内：随行而定，不依赖 highlight 定位
                 Rectangle {
                     x: 0
-                    y: 6
+                    y: (bg.height - height) / 2
                     width: 3
                     height: 16
                     radius: 2
@@ -188,7 +211,7 @@ Item {
 
                 Text {
                     id: chevronGlyph
-                    x: row.indent + 14
+                    x: row.indent + 4
                     y: (bg.height - height) / 2
                     width: 12
                     height: 12
@@ -199,24 +222,68 @@ Item {
                     color: rowMouse.pressed || chevronMouse.pressed ? root.theme.textSecondary : root.theme.text
                 }
 
+                // 叶行无 chevron，同槽放叶图标；与 chevron 同字形族同尺寸
+                Text {
+                    id: leafGlyph
+                    x: row.indent + 4
+                    y: (bg.height - height) / 2
+                    width: 12
+                    height: 12
+                    visible: !row.expandable
+                    text: root.theme.leafGlyph
+                    font.family: root.theme.iconFontFamily
+                    font.pixelSize: 12
+                    color: root.theme.textSecondary
+                }
+
                 Repeater {
                     model: root.columns
-                    delegate: Text {
+                    delegate: Item {
+                        id: cell
                         required property int index
                         required property var modelData
+
+                        readonly property bool withSub: cell.index === 0 && row.twoLine
 
                         x: root.columnX(index, row.indent)
                         y: (bg.height - height) / 2
                         width: root.columnWidth(index, row.indent)
-                        text: row.model[modelData.role] ?? ""
-                        textFormat: Text.PlainText
-                        horizontalAlignment: modelData.align === "right" ? Text.AlignRight : Text.AlignLeft
-                        elide: index === 0 ? Text.ElideRight : Text.ElideNone
-                        font.family: root.theme.fontFamily
-                        font.pointSize: root.theme.fontPointSize
-                        color: index === 0
-                            ? ((rowMouse.pressed || chevronMouse.pressed) ? root.theme.textSecondary : root.theme.text)
-                            : root.theme.textSecondary
+                        height: cell.withSub ? 36 : 20
+
+                        Text {
+                            id: plainLabel
+                            x: 0
+                            y: 0
+                            width: cell.width
+                            height: cell.withSub ? 18 : cell.height
+                            text: row.model[modelData.role] ?? ""
+                            textFormat: Text.PlainText
+                            verticalAlignment: Text.AlignVCenter
+                            horizontalAlignment: cell.modelData.align === "right" ? Text.AlignRight : Text.AlignLeft
+                            elide: cell.index === 0 ? Text.ElideRight : Text.ElideNone
+                            font.family: root.theme.fontFamily
+                            font.pointSize: root.theme.fontPointSize
+                            color: cell.index === 0
+                                ? ((rowMouse.pressed || chevronMouse.pressed) ? root.theme.textSecondary : root.theme.text)
+                                : root.theme.textSecondary
+                        }
+
+                        // 次行：同号次要色，与主行贴紧成双行
+                        Text {
+                            id: subLabel
+                            visible: cell.withSub
+                            x: 0
+                            y: 18
+                            width: cell.width
+                            height: 18
+                            text: row.subText
+                            textFormat: Text.PlainText
+                            verticalAlignment: Text.AlignVCenter
+                            elide: Text.ElideRight
+                            font.family: root.theme.fontFamily
+                            font.pointSize: root.theme.fontPointSize
+                            color: root.theme.textSecondary
+                        }
                     }
                 }
 
@@ -244,7 +311,7 @@ Item {
                     id: chevronMouse
                     x: row.indent
                     y: 0
-                    width: 40
+                    width: 24
                     height: bg.height
                     visible: row.expandable
                     onClicked: {
