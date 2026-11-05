@@ -1,14 +1,29 @@
+"""历史页的弹幕详情对话框。"""
 from datetime import datetime
+from typing import Any
 
 from PySide6.QtCore import Qt
-from PySide6.QtWidgets import QDialog, QFormLayout, QLabel, QFrame
+from PySide6.QtWidgets import QDialog, QFormLayout, QFrame, QLabel, QWidget
 
-from danmaku_sender.types.models.video import VideoInfo
 from danmaku_sender.types.models.common import DanmakuStatus
+from danmaku_sender.types.models.video import VideoInfo
 
 
 class DanmakuDetailDialog(QDialog):
-    def __init__(self, record: dict, video_info: VideoInfo | None, parent= None):
+    """单条弹幕的详情档案。
+
+    Args:
+        record (dict): 弹幕历史记录行。
+        video_info (VideoInfo | None): 所属视频信息；None 表示尚未获取。
+        parent (QWidget | None): 父控件。
+
+    Typical usage example::
+
+        dialog = DanmakuDetailDialog(record, video_info, self)
+        dialog.exec()
+    """
+
+    def __init__(self, record: dict, video_info: VideoInfo | None, parent: QWidget | None = None) -> None:
         super().__init__(parent)
         self.setWindowTitle("弹幕详情档案")
         self.resize(500, 450)
@@ -16,12 +31,20 @@ class DanmakuDetailDialog(QDialog):
         self._video_info = video_info
         self._create_ui()
 
-    def _create_ui(self):
+    def _create_ui(self) -> None:
+        """搭建表单布局。"""
         layout = QFormLayout(self)
         layout.setLabelAlignment(Qt.AlignmentFlag.AlignRight)
 
-        def add_row(label, value):
+        def add_row(label: str, value: Any) -> None:
+            """向表单追加一行标签与值。
+
+            Args:
+                label (str): 标签文字。
+                value (Any): 显示值，转换为文本后按字面显示。
+            """
             lbl = QLabel(str(value))
+            lbl.setTextFormat(Qt.TextFormat.PlainText)
             lbl.setTextInteractionFlags(Qt.TextInteractionFlag.TextSelectableByMouse)
             lbl.setWordWrap(True)
             layout.addRow(f"{label}:", lbl)

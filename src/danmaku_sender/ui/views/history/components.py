@@ -1,14 +1,18 @@
-from enum import IntEnum
+"""历史页弹幕表模型：行数据以角色形式提供，显示文本与状态色按列语义生成。"""
 from datetime import datetime
+from enum import IntEnum
+from typing import Any
 
-from PySide6.QtCore import Qt, QAbstractTableModel, QModelIndex
-from PySide6.QtGui import QColor, QBrush
+from PySide6.QtCore import QAbstractTableModel, QModelIndex, QObject, Qt
+from PySide6.QtGui import QBrush, QColor
 
 from danmaku_sender.types.models.common import DanmakuStatus
 from danmaku_sender.types.models.video import VideoInfo
 
 
 class Col(IntEnum):
+    """弹幕表的列序。"""
+
     BVID = 0
     PART = 1
     MSG = 2
@@ -17,24 +21,55 @@ class Col(IntEnum):
 
 
 class HistoryTableModel(QAbstractTableModel):
+    """弹幕历史的表模型。
+
+    Attributes:
+        HEADERS (list[str]): 表头文字，按列序排列。
+        ROW_ROLE_NAMES (tuple[bytes, ...]): 行级角色名，供 QML 行委托按行取值。
+
+    Typical usage example::
+
+        model = HistoryTableModel(self)
+        model.set_records(records)
+        model.update_video_cache(bvid, video_info)
+    """
+
     HEADERS = ["BVID", "分P", "弹幕内容", "状态", "发送时间"]
 
-    def __init__(self, parent = None):
-        super().__init__(parent)
-        self._records = []
-        self._video_cache: dict[str, VideoInfo] = {}  # Key: BVID, Value: VideoInfo
-        self._loading_bvids = set()
+    ROW_ROLE_NAMES = (b"bvid", b"part", b"msg", b"status", b"time", b"statusColor")
 
-    def set_records(self, records):
+    def __init__(self, parent: QObject | None = None) -> None:
+        super().__init__(parent)
+        self._records: list[dict] = []
+        self._video_cache: dict[str, VideoInfo] = {}
+        self._loading_bvids: set[str] = set()
+
+    def set_records(self, records: list[dict]) -> None:
+        """整体替换弹幕记录行。
+
+        Args:
+            records (list[dict]): 弹幕历史记录行。
+        """
         self.beginResetModel()
         self._records = records
         self.endResetModel()
 
-    def mark_as_loading(self, bvid):
+    def mark_as_loading(self, bvid: str) -> None:
+        """标记 BVID 的视频信息正在获取。
+
+        Args:
+            bvid (str): 视频 BVID。
+        """
         self._loading_bvids.add(bvid)
         self.layoutChanged.emit()
 
-    def update_video_cache(self, bvid: str, info: VideoInfo | None):
+    def update_video_cache(self, bvid: str, info: VideoInfo | None) -> None:
+        """写入视频信息缓存并清除该 BVID 的加载标记。
+
+        Args:
+            bvid (str): 视频 BVID。
+            info (VideoInfo | None): 视频信息；None 表示获取失败。
+        """
         if info:
             self._video_cache[bvid] = info
 
@@ -44,26 +79,63 @@ class HistoryTableModel(QAbstractTableModel):
         self.layoutChanged.emit()
 
     def get_video_info(self, bvid: str) -> VideoInfo | None:
+        """取视频信息缓存。
+
+        Args:
+            bvid (str): 视频 BVID。
+
+        Returns:
+            VideoInfo | None: 缓存中的视频信息；未缓存时为 None。
+        """
         return self._video_cache.get(bvid)
 
-    def get_record_at(self, row):
+    def get_record_at(self, row: int) -> dict | None:
+        """取行对应的弹幕记录。
+
+        Args:
+            row (int): 行号。
+
+        Returns:
+            dict | None: 弹幕历史记录行；非法行返回 None。
+        """
         if 0 <= row < len(self._records):
             return self._records[row]
         return None
 
     # --- Qt Methods ---
-    def rowCount(self, parent = QModelIndex()):
+    def rowCount(self, parent: QModelIndex = QModelIndex()) -> int:
+        """返回记录行数。"""
         return len(self._records)
 
-    def columnCount(self, parent = QModelIndex()):
+    def columnCount(self, parent: QModelIndex = QModelIndex()) -> int:
+        """返回列数，即表头长度。"""
         return len(self.HEADERS)
 
-    def headerData(self, section, orientation, role):
+    def headerData(self, section: int, orientation: Qt.Orientation, role: int) -> str | None:
+        """返回横向表头文字。
+
+        Args:
+            section (int): 列序。
+            orientation (Qt.Orientation): 表头方向。
+            role (int): 数据角色。
+
+        Returns:
+            str | None: 表头文字；非横向 DisplayRole 返回 None。
+        """
         if orientation == Qt.Orientation.Horizontal and role == Qt.ItemDataRole.DisplayRole:
             return self.HEADERS[section]
         return None
 
-    def data(self, index: QModelIndex, role = Qt.ItemDataRole.DisplayRole):
+    def data(self, index: QModelIndex, role: int = Qt.ItemDataRole.DisplayRole) -> Any:
+        """返回单元格数据。
+
+        Args:
+            index (QModelIndex): 模型索引。
+            role (int): 数据角色。
+
+        Returns:
+            Any: 显示文本、提示文本、文字色或行级角色值；不适用时为 None。
+        """
         if not index.isValid():
             return None
 
@@ -77,9 +149,31 @@ class HistoryTableModel(QAbstractTableModel):
         elif role == Qt.ItemDataRole.ToolTipRole:
             return self._get_tooltip(record, col)
 
+        offset = role - (Qt.ItemDataRole.UserRole + 1)
+        if 0 <= offset < len(Col):
+            return self._get_display_text(record, offset)
+        if offset == len(Col):
+            return self._status_color(record)
+
         return None
 
-    def _get_display_text(self, record, col):
+    def roleNames(self) -> dict[int, bytes]:
+        """返回行级角色名表，键为角色号、值为角色名。"""
+        return {
+            Qt.ItemDataRole.UserRole + 1 + offset: name
+            for offset, name in enumerate(self.ROW_ROLE_NAMES)
+        }
+
+    def _get_display_text(self, record: dict, col: int) -> str:
+        """返回单元格显示文本。
+
+        Args:
+            record (dict): 弹幕历史记录行。
+            col (int): 列序。
+
+        Returns:
+            str: 显示文本。
+        """
         if col == Col.BVID:
             return record['bvid']
 
@@ -113,17 +207,46 @@ class HistoryTableModel(QAbstractTableModel):
 
         return ""
 
-    def _get_text_color(self, record, col):
+    def _status_color(self, record: dict) -> str:
+        """取状态的显示色（十六进制）。
+
+        Args:
+            record (dict): 弹幕历史记录行。
+
+        Returns:
+            str: 十六进制颜色。
+        """
+        status = record['status']
+        if status == DanmakuStatus.VERIFIED:
+            return "#27ae60"
+        if status == DanmakuStatus.LOST:
+            return "#c0392b"
+        return "#f39c12"
+
+    def _get_text_color(self, record: dict, col: int) -> QBrush | None:
+        """返回单元格文字色。
+
+        Args:
+            record (dict): 弹幕历史记录行。
+            col (int): 列序。
+
+        Returns:
+            QBrush | None: 状态列返回状态色；其余列返回 None。
+        """
         if col == Col.STATUS:
-            status = record['status']
-            if status == DanmakuStatus.VERIFIED:
-                return QBrush(QColor("#27ae60"))
-            if status == DanmakuStatus.LOST:
-                return QBrush(QColor("#c0392b"))
-            return QBrush(QColor("#f39c12"))
+            return QBrush(QColor(self._status_color(record)))
         return None
 
-    def _get_tooltip(self, record, col):
+    def _get_tooltip(self, record: dict, col: int) -> str | None:
+        """返回单元格提示文本。
+
+        Args:
+            record (dict): 弹幕历史记录行。
+            col (int): 列序。
+
+        Returns:
+            str | None: 提示文本；不适用时为 None。
+        """
         video_info = self._video_cache.get(record['bvid'])
 
         if col == Col.BVID:
