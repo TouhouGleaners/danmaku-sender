@@ -105,14 +105,16 @@ class TaskTreeBuilder:
             total (int): 已发送数。
 
         Returns:
-            str | None: 存活率 ≥90% 为 good、≥60% 为 warn、其余为 bad；无总量为 None（走中性标签）。
+            str | None: 存活率 ≥95% 为 great、≥90% 为 good、≥80% 为 warn、其余为 bad；无总量为 None（走中性标签）。
         """
         if total <= 0:
             return None
         ratio = verified / total
+        if ratio >= 0.95:
+            return "great"
         if ratio >= 0.9:
             return "good"
-        if ratio >= 0.6:
+        if ratio >= 0.8:
             return "warn"
         return "bad"
 
@@ -124,7 +126,7 @@ class TaskTreeBuilder:
             record (TaskRecordRow): 任务记录行。
 
         Returns:
-            tuple[str, str]: 主行为视频标题（未传值时回落 BV 号）；次行为分P序号与分P标题，
+            tuple[str, str]: 主行为视频标题（无标题时回落 BV 号）；次行为分P序号与分P标题，
                 分P标题与主行重复时只留序号，全空时次行为空串。
         """
         label = record['video_title'] or record['bvid']
@@ -136,7 +138,7 @@ class TaskTreeBuilder:
 
     @staticmethod
     def _copy_stats(stats: MonitorStats | None) -> MonitorStats:
-        """复制存活统计，未传值时返回零值。
+        """复制存活统计，未传参时返回零值。
 
         Args:
             stats (MonitorStats | None): 存活统计；None 表示无统计。

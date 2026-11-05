@@ -111,24 +111,27 @@ class LabelBase:
 
 
 class HealthColors:
-    """健康档标签配色：好 / 警 / 坏，外加无健康语义的中性档。
+    """健康档标签配色：优 / 好 / 警 / 坏，外加无健康语义的中性档。
 
     浅色一套（LIGHT）为手选的 Primer subtle 形制；深色一套由基色按 GitHub 公式折算。
 
     Attributes:
+        GREAT (LabelBase): 优（存活率 ≥95%），档位取值 great；深色基色 Primer green.4。
         GOOD (LabelBase): 好（存活率 ≥90%、已存活），档位取值 good；深色基色 Primer green.3。
-        WARN (LabelBase): 警（存活率 ≥60%、待验证），档位取值 warn；深色基色 Primer yellow.3。
-        BAD (LabelBase): 坏（存活率 <60%、已丢失），档位取值 bad；深色基色 Primer red.3。
+        WARN (LabelBase): 警（存活率 ≥80%、待验证），档位取值 warn；深色基色 Primer yellow.3。
+        BAD (LabelBase): 坏（存活率 <80%、已丢失），档位取值 bad；深色基色 Primer red.3。
         NEUTRAL (LabelBase): 中性（无健康语义标签），深色基色 GitHub 标签默认 #999。
         LIGHT (ClassVar[dict[str, Tint]]): 浅色配色表，同族 0 档淡色底 + 5 档较深字色；警档取 severe 橙，避免黄系字色偏棕。
     """
 
+    GREAT: LabelBase = LabelBase.from_hex("#2da44e")
     GOOD: LabelBase = LabelBase.from_hex("#4ac26b")
     WARN: LabelBase = LabelBase.from_hex("#d4a72c")
     BAD: LabelBase = LabelBase.from_hex("#ff8182")
     NEUTRAL: LabelBase = LabelBase.from_hex("#999999")
 
     TONES: ClassVar[dict[str, LabelBase]] = {
+        "great": GREAT,
         "good": GOOD,
         "warn": WARN,
         "bad": BAD,
@@ -136,6 +139,7 @@ class HealthColors:
     }
 
     LIGHT: ClassVar[dict[str, Tint]] = {
+        "great": Tint(fg="#116329", bg="#dafbe1", border="#33116329"),
         "good": Tint(fg="#1a7f37", bg="#dafbe1", border="#331a7f37"),
         "warn": Tint(fg="#bc4c00", bg="#fff1e5", border="#33bc4c00"),
         "bad": Tint(fg="#cf222e", bg="#ffebe9", border="#33cf222e"),

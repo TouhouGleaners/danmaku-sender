@@ -7,7 +7,7 @@ import QtQuick
 //
 // 契约：
 // - theme 为令牌桥；text 为标签文字。
-// - tone 为健康档取值 good / warn / bad / neutral，配色取 theme.healthColors[tone][dark ? "dark" : "light"]，
+// - tone 为健康档取值 great / good / warn / bad / neutral，配色取 theme.healthColors[tone][dark ? "dark" : "light"]，
 //   空档与未知档回落 neutral。三元组 {fg, bg, border} 由 HealthColors 折算（深色 GitHub 公式、浅色柔化变体）。
 // - 尺寸由调用方指定：fontPointSize 为字号（默认取 theme 值），minWidth 为最小宽下限（默认 0，不设下限），高可由 height 覆盖（默认 16）；
 //   implicitWidth = max(文字宽, minWidth) + 10，圆角取高度之半。

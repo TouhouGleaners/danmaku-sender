@@ -5,6 +5,10 @@ from danmaku_sender.ui.framework.health_colors import HealthColors, LabelBase, T
 
 # 渲染折算的黄金值；改动配色或渲染管线须同步复核
 GOLDEN = {
+    "great": {
+        "light": Tint(fg="#116329", bg="#dafbe1", border="#33116329"),
+        "dark": Tint(fg="#36c45e", bg="#2e2da44e", border="#4d36c45e"),
+    },
     "good": {
         "light": Tint(fg="#1a7f37", bg="#dafbe1", border="#331a7f37"),
         "dark": Tint(fg="#4bc36b", bg="#2e4ac26b", border="#4d4bc36b"),

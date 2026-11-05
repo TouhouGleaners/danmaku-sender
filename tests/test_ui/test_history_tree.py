@@ -119,22 +119,24 @@ class TestTaskTree:
         assert _value(model, 3, "rateTone") is None
 
     def test_rate_tone_follows_health(self, qapp):
-        """存活率 ≥90% good、≥60% warn、其余 bad"""
+        """存活率 ≥95% great、≥90% good、≥80% warn、其余 bad"""
         model = _rows(
             [
                 _record("t1", _local(2026, 10, 27)),
                 _record("t2", _local(2026, 10, 27, 10)),
                 _record("t3", _local(2026, 10, 27, 11)),
+                _record("t4", _local(2026, 10, 27, 12)),
             ],
             {
-                "t1": _stats(total=10, verified=9),
-                "t2": _stats(total=10, verified=6),
-                "t3": _stats(total=10, verified=2),
+                "t1": _stats(total=20, verified=19),
+                "t2": _stats(total=20, verified=18),
+                "t3": _stats(total=20, verified=16),
+                "t4": _stats(total=20, verified=10),
             },
         )
         model.expand_all()
 
-        for row, tone in ((3, "good"), (4, "warn"), (5, "bad")):
+        for row, tone in ((3, "great"), (4, "good"), (5, "warn"), (6, "bad")):
             assert _value(model, row, "rateTone") == tone
 
     def test_label_falls_back_to_bvid_without_video_title(self, qapp):
