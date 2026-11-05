@@ -1,6 +1,7 @@
 pragma ComponentBehavior: Bound
 
 import QtQuick
+import QtQuick.Controls
 import QtQuick.Layouts
 
 // 通用 Fluent 风格表格：表头与行按列规格渲染，行交互发信号。
@@ -13,10 +14,13 @@ Item {
     required property var theme
     required property var model
     property var columns: []
-    property string emptyText: ""
+    property string emptyTitle: ""
+    property string emptyDescription: ""
+    property string emptyActionText: ""
 
     signal rowActivated(int row)
     signal rowContextMenu(int row, point pos)
+    signal emptyActionClicked()
 
     function isFill(column) {
         return column.width === null || column.width === undefined
@@ -64,6 +68,23 @@ Item {
         clip: true
         model: root.model
         spacing: 0
+        ScrollBar.vertical: ScrollBar {
+            id: vScroll
+            width: 12
+            policy: ScrollBar.AsNeeded
+            visible: size < 1.0
+            topPadding: 4
+            bottomPadding: 4
+            leftPadding: 3
+            rightPadding: 3
+
+            contentItem: Rectangle {
+                radius: 3
+                color: vScroll.hovered || vScroll.pressed ? root.theme.textSecondary : root.theme.border
+            }
+
+            background: Item {}
+        }
 
         delegate: Rectangle {
             id: row
@@ -121,14 +142,17 @@ Item {
         }
     }
 
-    Text {
-        anchors.centerIn: list
+    EmptyState {
+        anchors.fill: list
         visible: list.count === 0
-        text: root.emptyText
-        textFormat: Text.PlainText
-        horizontalAlignment: Text.AlignHCenter
-        font.family: root.theme.fontFamily
-        font.pointSize: root.theme.fontPointSize
-        color: root.theme.textSecondary
+        theme: root.theme
+        title: root.emptyTitle
+        description: root.emptyDescription
+
+        Button {
+            visible: root.emptyActionText !== ""
+            text: root.emptyActionText
+            onClicked: root.emptyActionClicked()
+        }
     }
 }
