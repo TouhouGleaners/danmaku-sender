@@ -10,12 +10,12 @@ class TestColumnSpec:
         model = TreeRowsModel(("label", "sent"))
         specs = (
             ColumnSpec(role="label", title="名称", width=None, sub_role="sent"),
-            ColumnSpec(role="sent", title="已发", width=56, align="right", color_role="label"),
+            ColumnSpec(role="sent", title="已发", width=56, align="right", tone_role="sent", tag=True),
         )
         columns = ColumnSpec.to_qml_columns(model, specs)
         assert columns == [
-            {"role": "label", "subRole": "sent", "title": "名称", "width": None, "align": "left", "colorRole": None},
-            {"role": "sent", "subRole": None, "title": "已发", "width": 56, "align": "right", "colorRole": "label"},
+            {"role": "label", "subRole": "sent", "title": "名称", "width": None, "align": "left", "toneRole": None, "tag": False},
+            {"role": "sent", "subRole": None, "title": "已发", "width": 56, "align": "right", "toneRole": "sent", "tag": True},
         ]
 
     def test_missing_role_raises(self, qapp):
@@ -24,10 +24,16 @@ class TestColumnSpec:
         with pytest.raises(ValueError, match="nope"):
             ColumnSpec.to_qml_columns(model, specs)
 
-    def test_missing_color_role_raises(self, qapp):
+    def test_missing_tone_role_raises(self, qapp):
         model = TreeRowsModel(("label",))
-        specs = (ColumnSpec(role="label", width=10, color_role="nope"),)
+        specs = (ColumnSpec(role="label", width=10, tone_role="nope", tag=True),)
         with pytest.raises(ValueError, match="nope"):
+            ColumnSpec.to_qml_columns(model, specs)
+
+    def test_tone_role_requires_tag(self, qapp):
+        model = TreeRowsModel(("label", "sent"))
+        specs = (ColumnSpec(role="label", width=None), ColumnSpec(role="sent", tone_role="sent"))
+        with pytest.raises(ValueError, match="tone_role"):
             ColumnSpec.to_qml_columns(model, specs)
 
     def test_missing_sub_role_raises(self, qapp):
@@ -53,6 +59,25 @@ class TestColumnSpec:
         specs = (ColumnSpec(role="label", width=10), ColumnSpec(role="sent", width=None))
         with pytest.raises(ValueError, match="弹性列"):
             ColumnSpec.to_qml_columns(model, specs, require_fill_first=True)
+
+    def test_tag_without_width_is_not_fill(self, qapp):
+        """标签列自适应内容，不计弹性列。"""
+        model = TreeRowsModel(("label", "sent"))
+        specs = (ColumnSpec(role="label", width=None), ColumnSpec(role="sent", tag=True))
+        columns = ColumnSpec.to_qml_columns(model, specs, require_fill_first=True)
+        assert columns[1]["width"] is None
+
+    def test_trailing_tags_ok(self, qapp):
+        model = TreeRowsModel(("label", "sent"))
+        specs = (ColumnSpec(role="label", width=None), ColumnSpec(role="sent", tag=True))
+        columns = ColumnSpec.to_qml_columns(model, specs, require_trailing_tags=True)
+        assert columns[1]["tag"] is True
+
+    def test_tag_must_be_trailing_when_required(self, qapp):
+        model = TreeRowsModel(("label", "sent"))
+        specs = (ColumnSpec(role="label", width=None, tag=True), ColumnSpec(role="sent", width=10))
+        with pytest.raises(ValueError, match="标签列"):
+            ColumnSpec.to_qml_columns(model, specs, require_trailing_tags=True)
 
     def test_bad_align_raises(self, qapp):
         model = TreeRowsModel(("label",))

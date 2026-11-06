@@ -31,17 +31,17 @@ logger = logging.getLogger(__name__)
 
 SPLIT_AREA_QML = Path(__file__).with_name("SplitArea.qml")
 
-# 时间树的列规格；弹性列在首位。
+# 时间树的列规格；弹性列在首位，标签列在末尾连续并聚拢行右缘；数量是元数据，走小号次要文字不套标签。
 TREE_COLUMNS = (
     ColumnSpec(role="label", width=None, sub_role="sublabel"),
-    ColumnSpec(role="sent", width=56, align="right"),
-    ColumnSpec(role="rate", width=48, align="right"),
+    ColumnSpec(role="sent", width=48, align="right"),
+    ColumnSpec(role="rate", align="right", tag=True, tone_role="rateTone"),
 )
 
-# 弹幕表的列规格；弹幕内容为弹性列。
+# 弹幕表的列规格；弹幕内容为弹性列，状态列渲染为小标签。
 TABLE_COLUMNS = (
     ColumnSpec(role="msg", title="弹幕内容", width=None),
-    ColumnSpec(role="status", title="状态", width=64, color_role="statusColor"),
+    ColumnSpec(role="status", title="状态", width=64, tag=True, tone_role="statusTone"),
     ColumnSpec(role="time", title="发送时间", width=130),
 )
 
@@ -86,7 +86,7 @@ class HistoryPage(QWidget):
     def _create_ui(self) -> None:
         """搭建 QML 分栏区与数据模型。"""
         self._bridge = HistoryBridge(self)
-        self._tree_rows = TreeRowsModel(("label", "sublabel", "sent", "rate"), self)
+        self._tree_rows = TreeRowsModel(("label", "sublabel", "sent", "rate", "rateTone"), self)
         self._model = HistoryTableModel(self)
 
         layout = QVBoxLayout(self)
@@ -97,7 +97,10 @@ class HistoryPage(QWidget):
                     "bridge": self._bridge,
                     "treeRows": self._tree_rows,
                     "records": self._model,
-                    "treeColumns": ColumnSpec.to_qml_columns(self._tree_rows, TREE_COLUMNS, require_fill_first=True),
+                    "treeColumns": ColumnSpec.to_qml_columns(
+                        self._tree_rows, TREE_COLUMNS,
+                        require_fill_first=True, require_trailing_tags=True,
+                    ),
                     "tableColumns": ColumnSpec.to_qml_columns(self._model, TABLE_COLUMNS),
                 },
                 parent=self,

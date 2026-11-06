@@ -5,8 +5,8 @@ import QtQuick.Controls
 import QtQuick.Layouts
 
 // 通用 Fluent 风格表格：表头与行按列规格渲染，行交互发信号。
-// columns: [{role, title, width, align, colorRole}]——width 为 null 的列为弹性列，吸收行宽余量；
-// colorRole 非空时该列文字色取行的该角色（十六进制色）。
+// columns: [{role, title, width, align, toneRole, tag}]——width 为 null 的列为弹性列，吸收行宽余量；
+// tag 列渲染为小标签（健康档着色，toneRole 为档位角色名）。
 // model 须按角色暴露行数据（roleNames），委托按列的 role 从行读取。
 Item {
     id: root
@@ -23,7 +23,7 @@ Item {
     signal emptyActionClicked()
 
     function isFill(column) {
-        return column.width === null || column.width === undefined
+        return !column.tag && (column.width === null || column.width === undefined)
     }
 
     Rectangle {
@@ -44,8 +44,8 @@ Item {
                 delegate: Text {
                     required property var modelData
 
-                    Layout.minimumWidth: root.isFill(modelData) ? 0 : modelData.width
-                    Layout.preferredWidth: root.isFill(modelData) ? 0 : modelData.width
+                    Layout.minimumWidth: root.isFill(modelData) ? 0 : (modelData.width ?? implicitWidth)
+                    Layout.preferredWidth: root.isFill(modelData) ? 0 : (modelData.width ?? implicitWidth)
                     Layout.fillWidth: root.isFill(modelData)
                     text: modelData.title
                     textFormat: Text.PlainText
@@ -105,19 +105,46 @@ Item {
 
                 Repeater {
                     model: root.columns
-                    delegate: Text {
+                    delegate: Item {
+                        id: cell
                         required property var modelData
 
-                        Layout.minimumWidth: root.isFill(modelData) ? 0 : modelData.width
-                        Layout.preferredWidth: root.isFill(modelData) ? 0 : modelData.width
+                        readonly property bool isTag: modelData.tag === true
+                        readonly property string cellText: row.model[modelData.role] ?? ""
+
+                        Layout.minimumWidth: root.isFill(modelData) ? 0 : (modelData.width ?? implicitWidth)
+                        Layout.preferredWidth: root.isFill(modelData) ? 0 : (modelData.width ?? implicitWidth)
                         Layout.fillWidth: root.isFill(modelData)
-                        text: row.model[modelData.role] ?? ""
-                        textFormat: Text.PlainText
-                        elide: Text.ElideRight
-                        horizontalAlignment: modelData.align === "right" ? Text.AlignRight : Text.AlignLeft
-                        font.family: root.theme.fontFamily
-                        font.pointSize: root.theme.fontPointSize
-                        color: modelData.colorRole ? (row.model[modelData.colorRole] ?? root.theme.text) : root.theme.text
+                        implicitWidth: cell.isTag ? tagPill.implicitWidth : plainLabel.implicitWidth
+                        implicitHeight: cell.isTag ? tagPill.implicitHeight : plainLabel.implicitHeight
+
+                        Tag {
+                            id: tagPill
+                            visible: cell.isTag
+                            x: cell.modelData.align === "right" ? cell.width - width : 0
+                            y: (cell.height - height) / 2
+                            theme: root.theme
+                            text: cell.cellText
+                            tone: cell.modelData.toneRole ? (row.model[cell.modelData.toneRole] ?? "") : ""
+                            fontPointSize: root.theme.fontPointSize - 1
+                            minWidth: 26
+                            padding: 8
+                            height: 18
+                        }
+
+                        Text {
+                            id: plainLabel
+                            visible: !cell.isTag
+                            anchors.fill: parent
+                            text: cell.cellText
+                            textFormat: Text.PlainText
+                            verticalAlignment: Text.AlignVCenter
+                            horizontalAlignment: cell.modelData.align === "right" ? Text.AlignRight : Text.AlignLeft
+                            elide: Text.ElideRight
+                            font.family: root.theme.fontFamily
+                            font.pointSize: root.theme.fontPointSize
+                            color: root.theme.text
+                        }
                     }
                 }
             }

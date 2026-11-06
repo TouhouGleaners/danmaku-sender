@@ -34,7 +34,7 @@ class BiliApiClient:
         Args:
             auth: 身份凭据，决定以谁的名义调用。
             network: 传输策略，决定怎么连网。
-            logger: 日志器；缺省用本模块的命名空间。
+            logger: 日志器；默认用本模块的命名空间。
         """
         self.sessdata = auth.sessdata
         self.bili_jct = auth.bili_jct
