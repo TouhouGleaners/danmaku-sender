@@ -11,7 +11,7 @@
 2. QQC2 风格用 ast 从源码取 QQuickStyle.setStyle 的字符串字面量，取不出字面量即报错退出；风格连同其 qmldir 的 "import ... auto" 回退链整目录保留（如 FluentWinUI3 -> Fusion -> Basic）。
    Basic 恒保留（风格未覆盖某控件时的回退基底）。风格不出现在 import 里，不进白名单。
 3. 保留集按 .qml 与 .js 辅助脚本的 import、qmldir 的 depends / import / default import 声明递推求闭包；字符串 import 指向文件时保留其所在目录。
-   qmldir 的 optional 声明不入保留集——可选即非必需，风格的可选面已由 setStyle 链覆盖（如 Controls 对各风格的 optional import）。
+   qmldir 的 optional 声明不入保留集——可选即非必需，风格的可选依赖已由 setStyle 链覆盖（如 Controls 对各风格的 optional import）。
    模块目录只保留本层文件与保留集内的子目录；风格目录整棵保留（含 dark / light / icons 等资源子目录）。
 4. 本脚本默认仅检查；--trim 才执行移除。本地开发环境不要使用 --trim（会删除 venv 里的 QML 模块）；
    仅在 CI 的 pip install 之后、nuitka 之前执行。
@@ -28,7 +28,7 @@ import shutil
 from collections import deque
 from collections.abc import Iterable
 from pathlib import Path
-from typing import NamedTuple
+from typing import NamedTuple, Protocol
 
 import pefile
 import PySide6
@@ -96,7 +96,7 @@ class KeepSet:
         self.keep_dir(directory, False)
 
     def scan(self) -> None:
-        """按登记目录的依赖边递推登记，直至不动点。"""
+        """按登记目录的依赖边递推登记，直到没有新增为止。"""
         while self._scan_queue:
             modules, dirs = QmlRuntimeSlimmer.dir_edges(self._scan_queue.popleft(), self.qml_root)
             for module in modules:
@@ -105,14 +105,19 @@ class KeepSet:
                 self.keep_dir(directory, False)
 
 
+class _ImportEntry(Protocol):
+    """pefile 导入表条目中用到的形状：dll 为被链接的 DLL 名。"""
+
+    dll: bytes
+
+
 class QmlRuntimeSlimmer:
     """PySide6/qml 保留集的推导与未使用模块的移除。"""
 
     WHITELIST = frozenset({"QtQuick", "QtQuick.Controls", "QtQuick.Layouts"})
     ALWAYS_KEEP_MODULES = frozenset({"QtQml"})
     ALWAYS_KEEP_STYLES = frozenset({"Basic"})
-    # 闭包自检的守护锚点：Templates 守 .qml 通道（风格模板的 import），impl 守 qmldir 通道（depends 声明）
-    CLOSURE_ANCHORS = frozenset({"QtQuick.Templates", "QtQuick.Controls.impl"})
+    RUNTIME_REQUIRED_MODULES = frozenset({"QtQuick.Templates", "QtQuick.Controls.impl"})  # QML Runtime 隐式依赖
 
     _IMPORT_RE = re.compile(r"^\s*\.?import\s+([A-Za-z_][\w.]*)")
     _STRING_IMPORT_RE = re.compile(r'^\s*\.?import\s+"([^"]+)"')
@@ -367,7 +372,7 @@ class QmlRuntimeSlimmer:
 
         missing = sorted(
             module
-            for module in QmlRuntimeSlimmer.CLOSURE_ANCHORS | QmlRuntimeSlimmer.ALWAYS_KEEP_MODULES | app_modules
+            for module in QmlRuntimeSlimmer.RUNTIME_REQUIRED_MODULES | QmlRuntimeSlimmer.ALWAYS_KEEP_MODULES | app_modules
             if module not in keep_modules
         )
         required_styles = set(chain) | QmlRuntimeSlimmer.ALWAYS_KEEP_STYLES
@@ -434,7 +439,7 @@ class QmlRuntimeSlimmer:
 
     @staticmethod
     def pe_imports(dll_path: Path) -> set[str]:
-        """用 pefile 读取 PE 文件导入表与延迟导入表中的 DLL 名。
+        """读取 PE 文件导入表与延迟导入表中的 DLL 名。
 
         Args:
             dll_path (Path): DLL 文件。
@@ -450,7 +455,10 @@ class QmlRuntimeSlimmer:
                     pefile.DIRECTORY_ENTRY["IMAGE_DIRECTORY_ENTRY_DELAY_IMPORT"],
                 ]
             )
-            entries = [*getattr(pe, "DIRECTORY_ENTRY_IMPORT", []), *getattr(pe, "DIRECTORY_ENTRY_DELAY_IMPORT", [])]
+            entries: list[_ImportEntry] = [
+                *getattr(pe, "DIRECTORY_ENTRY_IMPORT", []),
+                *getattr(pe, "DIRECTORY_ENTRY_DELAY_IMPORT", []),
+            ]
             return {entry.dll.decode("ascii", "replace") for entry in entries}
         except (OSError, pefile.PEFormatError):
             print(f"PE 解析失败，按无链接处理：{dll_path.name}")
@@ -460,7 +468,7 @@ class QmlRuntimeSlimmer:
     def walk_links(starts: Iterable[Path], index: dict[str, Path], memo: dict[str, set[str]]) -> set[Path]:
         """沿 PE 导入图广度优先求链接闭包，返回途经的全部文件（含起点）。
 
-        PySide6 的二进制按文件名互不重复，名字即身份。系统 DLL 不在索引内，自然跳过。
+        PySide6 的二进制文件名互不重复，按文件名判等价。系统 DLL 不在索引内，自然跳过。
 
         Args:
             starts (Iterable[Path]): 起始二进制。
@@ -492,7 +500,7 @@ class QmlRuntimeSlimmer:
     ) -> list[Path]:
         """推导随包收录的 PySide6 pyd（应用 import 加链接闭包隐含的绑定）。
 
-        绑定发现规则：闭包内出现 Qt6X.dll 即隐含 QtX.pyd（与 Nuitka 的 getImplicitImports 同义），定点扩展直至不再新增。
+        绑定发现规则：闭包内出现 Qt6X.dll 即隐含 QtX.pyd（与 Nuitka 的 getImplicitImports 同义），反复扩展直到没有新增。
 
         Args:
             pyside_dir (Path): PySide6 目录。
