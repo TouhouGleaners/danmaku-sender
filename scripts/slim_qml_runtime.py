@@ -11,7 +11,7 @@
    目录形态的 import（import "../../x"）指向仓库内文件，不进白名单。
 2. QQC2 风格取源码中 QQuickStyle.setStyle 的设置值，连同其 qmldir 的 "import ... auto" 回退链整目录保留（如 FluentWinUI3 -> Fusion -> Basic）；
    Basic 恒保留（风格未覆盖某控件时的回退基底）。风格不出现在 import 里，不进白名单。
-3. 保留集按 .qml 的 import 递推求闭包（如 QtQuick.Templates、QtQuick.Controls.impl 由风格模板引入）。
+3. 保留集按 .qml 的 import 与 qmldir 的 depends / import 声明递推求闭包（如 QtQuick.Templates、QtQuick.Controls.impl 由风格模板与 qmldir 声明引入）。
    模块目录只保留本层文件与保留集内的子目录；
    风格目录整棵保留（含 dark / light / icons 等资源子目录）。
 4. 本脚本默认仅检查；--trim 才执行移除。本地开发环境不要使用 --trim（会删除 venv 里的 QML 模块）；
@@ -44,6 +44,7 @@ class QmlRuntimeSlimmer:
 
     _IMPORT_RE = re.compile(r"^\s*import\s+([A-Za-z_][\w.]*)")
     _STRING_IMPORT_RE = re.compile(r'^\s*import\s+"([^"]+)"')
+    _QMDDIR_DEP_RE = re.compile(r"^\s*(?:depends|import)\s+([A-Za-z_][\w.]*)")
     _STYLE_RE = re.compile(r"""QQuickStyle\.setStyle\(\s*["']([^"']+)["']\s*\)""")
     _FALLBACK_RE = re.compile(r"^\s*import\s+QtQuick\.Controls\.([A-Za-z_]\w*)\s+auto\b")
 
@@ -174,6 +175,12 @@ class QmlRuntimeSlimmer:
 
         while scan_queue:
             directory = scan_queue.popleft()
+            qmldir = directory / "qmldir"
+            if qmldir.is_file():
+                for line in qmldir.read_text(encoding="utf-8").splitlines():
+                    match = QmlRuntimeSlimmer._QMDDIR_DEP_RE.match(line)
+                    if match and (qml_root / match.group(1).replace(".", "/")).is_dir():
+                        keep_module(match.group(1))
             for qml_file in directory.glob("*.qml"):
                 modules, paths = QmlRuntimeSlimmer.parse_imports(qml_file)
                 for module in modules:
