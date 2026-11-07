@@ -11,7 +11,9 @@
    目录形态的 import（import "../../x"）指向仓库内文件，不进白名单。
 2. QQC2 风格取源码中 QQuickStyle.setStyle 的设置值，连同其 qmldir 的 "import ... auto" 回退链整目录保留（如 FluentWinUI3 -> Fusion -> Basic）；
    Basic 恒保留（风格未覆盖某控件时的回退基底）。风格不出现在 import 里，不进白名单。
-3. 保留集按 .qml 的 import 与 qmldir 的 depends / import 声明递推求闭包（如 QtQuick.Templates、QtQuick.Controls.impl 由风格模板与 qmldir 声明引入）。
+3. 保留集按 .qml 与 .js 辅助脚本的 import、qmldir 的 depends / import 声明递推求闭包（如 QtQuick.Templates、QtQuick.Controls.impl 由风格模板与 qmldir 声明引入）；
+   字符串 import 指向文件时保留其所在目录。
+   qmldir 的 optional 声明不入保留集——可选即非必需，风格的可选面已由 setStyle 链覆盖（如 Controls 对各风格的 optional import）。
    模块目录只保留本层文件与保留集内的子目录；
    风格目录整棵保留（含 dark / light / icons 等资源子目录）。
 4. 本脚本默认仅检查；--trim 才执行移除。本地开发环境不要使用 --trim（会删除 venv 里的 QML 模块）；
@@ -42,8 +44,8 @@ class QmlRuntimeSlimmer:
     ALWAYS_KEEP_MODULES = frozenset({"QtQml"})
     ALWAYS_KEEP_STYLES = frozenset({"Basic"})
 
-    _IMPORT_RE = re.compile(r"^\s*import\s+([A-Za-z_][\w.]*)")
-    _STRING_IMPORT_RE = re.compile(r'^\s*import\s+"([^"]+)"')
+    _IMPORT_RE = re.compile(r"^\s*\.?import\s+([A-Za-z_][\w.]*)")
+    _STRING_IMPORT_RE = re.compile(r'^\s*\.?import\s+"([^"]+)"')
     _QMDDIR_DEP_RE = re.compile(r"^\s*(?:depends|import)\s+([A-Za-z_][\w.]*)")
     _STYLE_RE = re.compile(r"""QQuickStyle\.setStyle\(\s*["']([^"']+)["']\s*\)""")
     _FALLBACK_RE = re.compile(r"^\s*import\s+QtQuick\.Controls\.([A-Za-z_]\w*)\s+auto\b")
@@ -181,15 +183,18 @@ class QmlRuntimeSlimmer:
                     match = QmlRuntimeSlimmer._QMDDIR_DEP_RE.match(line)
                     if match and (qml_root / match.group(1).replace(".", "/")).is_dir():
                         keep_module(match.group(1))
-            for qml_file in directory.glob("*.qml"):
-                modules, paths = QmlRuntimeSlimmer.parse_imports(qml_file)
+            for script in [*directory.glob("*.qml"), *directory.glob("*.js")]:
+                modules, paths = QmlRuntimeSlimmer.parse_imports(script)
                 for module in modules:
                     if (qml_root / module.replace(".", "/")).is_dir():
                         keep_module(module)
                 for path in paths:
                     target = (directory / path).resolve()
-                    if target.is_relative_to(qml_root):
-                        keep_dir(target, wholesale=False)
+                    if not target.is_relative_to(qml_root):
+                        continue
+                    if target.is_file():
+                        target = target.parent
+                    keep_dir(target, wholesale=False)
         return keep_dirs, keep_modules
 
     @staticmethod
@@ -420,7 +425,12 @@ def main() -> None:
         count, size = QmlRuntimeSlimmer.tree_stats(top)
         rows.append((str(top.relative_to(qml_root)) + "/", count, size))
 
-    baseline_starts = [dll for directory in keep_dirs for dll in directory.rglob("*.dll")]
+    baseline_starts = [
+        dll
+        for directory in keep_dirs
+        for dll in directory.rglob("*.dll")
+        if not any(dll.is_relative_to(top) for top in tops)
+    ]
     baseline_starts += QmlRuntimeSlimmer.shipped_pyds(pyside_dir)
     baseline_starts += list((pyside_dir / "qt-plugins").rglob("*.dll"))
     baseline = QmlRuntimeSlimmer.linked_closure(baseline_starts, pyside_dir)
