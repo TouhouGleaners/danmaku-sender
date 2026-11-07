@@ -16,7 +16,7 @@
 4. 本脚本默认仅检查；--trim 才执行移除。本地开发环境不要使用 --trim（会删除 venv 里的 QML 模块）；
    仅在 CI 的 pip install 之后、nuitka 之前执行。
 
-用法：
+Typical usage example::
     python scripts/slim_qml_runtime.py          # 检查，列出未使用的模块
     python scripts/slim_qml_runtime.py --trim   # 移除未使用的模块（CI 使用）
 """
@@ -484,7 +484,10 @@ class QmlRuntimeSlimmer:
         reached = set(starts)
         while queue:
             path = queue.popleft()
-            deps = memo.setdefault(path.name.lower(), QmlRuntimeSlimmer.pe_imports(path))
+            key = path.name.lower()
+            if key not in memo:
+                memo[key] = QmlRuntimeSlimmer.pe_imports(path)
+            deps = memo[key]
             for dep in deps:
                 target = index.get(dep.lower())
                 if target is None or target.name.lower() in seen:
@@ -611,7 +614,7 @@ def main() -> None:
     print(f"  风格 {chain_text}")
     if not args.trim:
         print()
-        print("警告：--trim 会删除 venv 里的 QML 模块，仅限打包流水线使用；非打包场景且不确定后果时不要执行。")
+        print("警告：--trim 会删除 venv 里的 QML 模块，仅限打包 Workflow 使用；非打包场景且不确定后果时不要执行。")
 
 
 if __name__ == "__main__":
