@@ -45,7 +45,7 @@ jobs:
 
     - name: Trim QML runtime
       if: steps.check.outputs.skip != 'true'
-      run: python scripts/slim_qml_runtime.py --trim
+      run: python scripts/trim_qml_runtime.py --trim
       env:
         PYTHONIOENCODING: utf-8
 

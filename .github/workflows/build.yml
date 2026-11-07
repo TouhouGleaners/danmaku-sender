@@ -24,7 +24,7 @@ jobs:
         pip install .[build]
 
     - name: Trim QML runtime
-      run: python scripts/slim_qml_runtime.py --trim
+      run: python scripts/trim_qml_runtime.py --trim
       env:
         PYTHONIOENCODING: utf-8
 

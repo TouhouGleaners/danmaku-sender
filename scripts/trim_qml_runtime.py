@@ -17,8 +17,8 @@
    仅在 CI 的 pip install 之后、nuitka 之前执行。
 
 Typical usage example::
-    python scripts/slim_qml_runtime.py          # 检查，列出未使用的模块
-    python scripts/slim_qml_runtime.py --trim   # 移除未使用的模块（CI 使用）
+    python scripts/trim_qml_runtime.py          # 检查，列出未使用的模块
+    python scripts/trim_qml_runtime.py --trim   # 移除未使用的模块（CI 使用）
 """
 
 import argparse
@@ -89,7 +89,7 @@ class KeepSet:
         Args:
             module (str): 点分模块名。
         """
-        directory = QmlRuntimeSlimmer.module_dir(self.qml_root, module)
+        directory = QmlRuntimeTrimmer.module_dir(self.qml_root, module)
         if not directory.is_dir():
             return
         self.modules.add(module)
@@ -98,7 +98,7 @@ class KeepSet:
     def scan(self) -> None:
         """按登记目录的依赖边递推登记，直到没有新增为止。"""
         while self._scan_queue:
-            modules, dirs = QmlRuntimeSlimmer.dir_edges(self._scan_queue.popleft(), self.qml_root)
+            modules, dirs = QmlRuntimeTrimmer.dir_edges(self._scan_queue.popleft(), self.qml_root)
             for module in modules:
                 self.keep_module(module)
             for directory in dirs:
@@ -111,7 +111,7 @@ class _ImportEntry(Protocol):
     dll: bytes
 
 
-class QmlRuntimeSlimmer:
+class QmlRuntimeTrimmer:
     """PySide6/qml 保留集的推导与未使用模块的移除。"""
 
     WHITELIST = frozenset({"QtQuick", "QtQuick.Controls", "QtQuick.Layouts"})
@@ -137,9 +137,9 @@ class QmlRuntimeSlimmer:
         modules: set[str] = set()
         paths: set[str] = set()
         for line in source_file.read_text(encoding="utf-8").splitlines():
-            if match := QmlRuntimeSlimmer._IMPORT_RE.match(line):
+            if match := QmlRuntimeTrimmer._IMPORT_RE.match(line):
                 modules.add(match.group(1))
-            elif match := QmlRuntimeSlimmer._STRING_IMPORT_RE.match(line):
+            elif match := QmlRuntimeTrimmer._STRING_IMPORT_RE.match(line):
                 paths.add(match.group(1))
         return modules, paths
 
@@ -169,7 +169,7 @@ class QmlRuntimeSlimmer:
         required: set[str] = set()
         fallbacks: set[str] = set()
         for line in qmldir.read_text(encoding="utf-8").splitlines():
-            if match := QmlRuntimeSlimmer._QMLDIR_EDGE_RE.match(line):
+            if match := QmlRuntimeTrimmer._QMLDIR_EDGE_RE.match(line):
                 kind, word, module = match.groups()
                 if kind == "optional":
                     continue
@@ -193,15 +193,15 @@ class QmlRuntimeSlimmer:
         dirs: set[Path] = set()
         qmldir = directory / "qmldir"
         if qmldir.is_file():
-            modules |= QmlRuntimeSlimmer.qmldir_edges(qmldir)[0]
+            modules |= QmlRuntimeTrimmer.qmldir_edges(qmldir)[0]
         for script in [*directory.glob("*.qml"), *directory.glob("*.js")]:
-            imported, paths = QmlRuntimeSlimmer.parse_imports(script)
+            imported, paths = QmlRuntimeTrimmer.parse_imports(script)
             modules |= imported
             for path in paths:
                 target = (directory / path).resolve()
                 if target.is_relative_to(qml_root):
                     dirs.add(target.parent if target.is_file() else target)
-        kept_modules = {module for module in modules if QmlRuntimeSlimmer.module_dir(qml_root, module).is_dir()}
+        kept_modules = {module for module in modules if QmlRuntimeTrimmer.module_dir(qml_root, module).is_dir()}
         return kept_modules, dirs
 
     @staticmethod
@@ -217,15 +217,15 @@ class QmlRuntimeSlimmer:
         modules: set[str] = set()
         violations: list[tuple[str, str]] = []
         for source_file in sorted([*APP_SRC_ROOT.rglob("*.qml"), *APP_SRC_ROOT.rglob("*.js")]):
-            for module in QmlRuntimeSlimmer.parse_imports(source_file)[0]:
+            for module in QmlRuntimeTrimmer.parse_imports(source_file)[0]:
                 modules.add(module)
-                if module not in QmlRuntimeSlimmer.WHITELIST:
+                if module not in QmlRuntimeTrimmer.WHITELIST:
                     violations.append((module, str(source_file.relative_to(REPO_ROOT))))
         if violations:
             print("白名单外的模块 import：")
             for module, location in violations:
                 print(f"  {module} --> {location}")
-            print("help: 新增 QML 模块须先扩充 QmlRuntimeSlimmer.WHITELIST。")
+            print("help: 新增 QML 模块须先扩充 QmlRuntimeTrimmer.WHITELIST。")
             raise SystemExit(1)
         return modules
 
@@ -243,8 +243,8 @@ class QmlRuntimeSlimmer:
         style: str | None = None
         for py_file in sorted(APP_SRC_ROOT.rglob("*.py")):
             tree = ast.parse(py_file.read_text(encoding="utf-8"))
-            modules |= QmlRuntimeSlimmer._py_pyside_modules(tree)
-            style = style or QmlRuntimeSlimmer._py_style(tree, py_file)
+            modules |= QmlRuntimeTrimmer._py_pyside_modules(tree)
+            style = style or QmlRuntimeTrimmer._py_style(tree, py_file)
         return modules, style
 
     @staticmethod
@@ -284,7 +284,7 @@ class QmlRuntimeSlimmer:
             SystemExit: 风格名不是字符串字面量。
         """
         for node in ast.walk(tree):
-            if isinstance(node, ast.Call) and QmlRuntimeSlimmer._is_qquick_setstyle(node):
+            if isinstance(node, ast.Call) and QmlRuntimeTrimmer._is_qquick_setstyle(node):
                 literal = node.args[0] if node.args else None
                 if not isinstance(literal, ast.Constant) or not isinstance(literal.value, str):
                     print(f"QQuickStyle.setStyle 的风格名不是字符串字面量：{py_file.relative_to(REPO_ROOT)}")
@@ -324,7 +324,7 @@ class QmlRuntimeSlimmer:
             qmldir = controls_dir / name / "qmldir"
             if not qmldir.is_file():
                 continue
-            for module in QmlRuntimeSlimmer.qmldir_edges(qmldir)[1]:
+            for module in QmlRuntimeTrimmer.qmldir_edges(qmldir)[1]:
                 if module.startswith("QtQuick.Controls.") and (fallback := module.removeprefix("QtQuick.Controls.")) not in chain:
                     chain.append(fallback)
         return chain
@@ -341,11 +341,11 @@ class QmlRuntimeSlimmer:
         Returns:
             tuple[set[Path], set[str]]: 保留目录与保留模块。
         """
-        controls_dir = QmlRuntimeSlimmer.module_dir(qml_root, "QtQuick.Controls")
+        controls_dir = QmlRuntimeTrimmer.module_dir(qml_root, "QtQuick.Controls")
         keep = KeepSet(qml_root)
-        for module in app_modules | QmlRuntimeSlimmer.ALWAYS_KEEP_MODULES:
+        for module in app_modules | QmlRuntimeTrimmer.ALWAYS_KEEP_MODULES:
             keep.keep_module(module)
-        for name in {*chain, *QmlRuntimeSlimmer.ALWAYS_KEEP_STYLES}:
+        for name in {*chain, *QmlRuntimeTrimmer.ALWAYS_KEEP_STYLES}:
             keep.keep_dir(controls_dir / name, wholesale=True)
         keep.scan()
         return keep.dirs, keep.modules
@@ -364,23 +364,23 @@ class QmlRuntimeSlimmer:
         Raises:
             SystemExit: 闭包自检失败（解析回归或环境异常）。
         """
-        app_modules = QmlRuntimeSlimmer.collect_app_imports()
-        controls_dir = QmlRuntimeSlimmer.module_dir(qml_root, "QtQuick.Controls")
-        chain = QmlRuntimeSlimmer.style_chain(style, controls_dir) if style else []
-        keep_dirs, keep_modules = QmlRuntimeSlimmer.expand(qml_root, app_modules, chain)
-        tops = QmlRuntimeSlimmer.doomed_tops(qml_root, keep_dirs)
+        app_modules = QmlRuntimeTrimmer.collect_app_imports()
+        controls_dir = QmlRuntimeTrimmer.module_dir(qml_root, "QtQuick.Controls")
+        chain = QmlRuntimeTrimmer.style_chain(style, controls_dir) if style else []
+        keep_dirs, keep_modules = QmlRuntimeTrimmer.expand(qml_root, app_modules, chain)
+        tops = QmlRuntimeTrimmer.doomed_tops(qml_root, keep_dirs)
 
         missing = sorted(
             module
-            for module in QmlRuntimeSlimmer.RUNTIME_REQUIRED_MODULES | QmlRuntimeSlimmer.ALWAYS_KEEP_MODULES | app_modules
+            for module in QmlRuntimeTrimmer.RUNTIME_REQUIRED_MODULES | QmlRuntimeTrimmer.ALWAYS_KEEP_MODULES | app_modules
             if module not in keep_modules
         )
-        required_styles = set(chain) | QmlRuntimeSlimmer.ALWAYS_KEEP_STYLES
+        required_styles = set(chain) | QmlRuntimeTrimmer.ALWAYS_KEEP_STYLES
         missing.extend(
             sorted(f"QtQuick.Controls.{name}" for name in required_styles if (controls_dir / name) not in keep_dirs)
         )
         for directory in keep_dirs:
-            modules, dirs = QmlRuntimeSlimmer.dir_edges(directory, qml_root)
+            modules, dirs = QmlRuntimeTrimmer.dir_edges(directory, qml_root)
             missing.extend(sorted(modules - keep_modules))
             missing.extend(sorted(str(path.relative_to(qml_root)) for path in dirs - keep_dirs))
         if missing:
@@ -486,7 +486,7 @@ class QmlRuntimeSlimmer:
             path = queue.popleft()
             key = path.name.lower()
             if key not in memo:
-                memo[key] = QmlRuntimeSlimmer.pe_imports(path)
+                memo[key] = QmlRuntimeTrimmer.pe_imports(path)
             deps = memo[key]
             for dep in deps:
                 target = index.get(dep.lower())
@@ -518,8 +518,8 @@ class QmlRuntimeSlimmer:
         seen = set(batch)
         reached: set[Path] = set()
         while batch:
-            reached |= QmlRuntimeSlimmer.walk_links(batch, index, memo)
-            batch = [pyd for pyd in QmlRuntimeSlimmer._qt_pyds(reached, pyside_dir) if pyd not in seen]
+            reached |= QmlRuntimeTrimmer.walk_links(batch, index, memo)
+            batch = [pyd for pyd in QmlRuntimeTrimmer._qt_pyds(reached, pyside_dir) if pyd not in seen]
             seen.update(batch)
         return sorted(path for path in reached if path.suffix == ".pyd")
 
@@ -536,7 +536,7 @@ class QmlRuntimeSlimmer:
         """
         pyds: list[Path] = []
         for path in reached:
-            if match := QmlRuntimeSlimmer._QT_DLL_RE.fullmatch(path.name):
+            if match := QmlRuntimeTrimmer._QT_DLL_RE.fullmatch(path.name):
                 pyd = pyside_dir / f"Qt{match.group(1)}.pyd"
                 if pyd.is_file():
                     pyds.append(pyd)
@@ -555,26 +555,26 @@ def main() -> None:
         print(f"未找到 QML 运行时目录：{qml_root}")
         raise SystemExit(1)
 
-    pyside_modules, style = QmlRuntimeSlimmer.app_py_facts()
-    trim_plan = QmlRuntimeSlimmer.plan(qml_root, style)
+    pyside_modules, style = QmlRuntimeTrimmer.app_py_facts()
+    trim_plan = QmlRuntimeTrimmer.plan(qml_root, style)
     if not trim_plan.tops:
         print("PySide6/qml 无未使用模块。")
         return
 
     index = {path.name.lower(): path for path in pyside_dir.glob("*.dll")}
     memo: dict[str, set[str]] = {}
-    rows = [(top, *QmlRuntimeSlimmer.tree_stats(path for path in top.rglob("*") if path.is_file())) for top in trim_plan.tops]
+    rows = [(top, *QmlRuntimeTrimmer.tree_stats(path for path in top.rglob("*") if path.is_file())) for top in trim_plan.tops]
     removed_files = sum(count for _, count, _ in rows)
     removed_bytes = sum(size for _, _, size in rows)
-    kept_count, kept_bytes = QmlRuntimeSlimmer.tree_stats(QmlRuntimeSlimmer.kept_files(trim_plan.keep_dirs, qml_root))
+    kept_count, kept_bytes = QmlRuntimeTrimmer.tree_stats(QmlRuntimeTrimmer.kept_files(trim_plan.keep_dirs, qml_root))
     total_files, total_bytes = removed_files + kept_count, removed_bytes + kept_bytes
 
-    baseline_starts = [dll for dll in QmlRuntimeSlimmer.kept_files(trim_plan.keep_dirs, qml_root) if dll.suffix == ".dll"]
-    baseline_starts += QmlRuntimeSlimmer.shipped_pyds(pyside_dir, pyside_modules, index, memo)
+    baseline_starts = [dll for dll in QmlRuntimeTrimmer.kept_files(trim_plan.keep_dirs, qml_root) if dll.suffix == ".dll"]
+    baseline_starts += QmlRuntimeTrimmer.shipped_pyds(pyside_dir, pyside_modules, index, memo)
     baseline_starts += list((pyside_dir / "qt-plugins").rglob("*.dll"))
     baseline_names = {
         path.name
-        for path in QmlRuntimeSlimmer.walk_links(baseline_starts, index, memo)
+        for path in QmlRuntimeTrimmer.walk_links(baseline_starts, index, memo)
         if path.parent == pyside_dir and path.suffix == ".dll"
     }
     closure_rows: list[tuple[str, dict[str, int]]] = []
@@ -582,7 +582,7 @@ def main() -> None:
     for top, _, _ in rows:
         pulled = {
             path.name: path.stat().st_size
-            for path in QmlRuntimeSlimmer.walk_links(top.rglob("*.dll"), index, memo)
+            for path in QmlRuntimeTrimmer.walk_links(top.rglob("*.dll"), index, memo)
             if path.parent == pyside_dir and path.suffix == ".dll" and path.name not in baseline_names
         }
         if pulled:
@@ -610,7 +610,7 @@ def main() -> None:
     chain_text = " -> ".join(trim_plan.chain) if trim_plan.chain else "未设置（仅 Basic）"
     print()
     print(f"PySide6/qml 保留模块 {len(trim_plan.keep_modules)} 个（{total_files - removed_files} 个文件, {(total_bytes - removed_bytes) / 1e6:.1f} MB）：")
-    print(f"  白名单 {', '.join(sorted(QmlRuntimeSlimmer.WHITELIST))}")
+    print(f"  白名单 {', '.join(sorted(QmlRuntimeTrimmer.WHITELIST))}")
     print(f"  风格 {chain_text}")
     if not args.trim:
         print()
