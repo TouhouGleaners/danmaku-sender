@@ -23,6 +23,11 @@ jobs:
         python -m pip install --upgrade pip
         pip install .[build]
 
+    - name: Trim QML runtime
+      run: python scripts/slim_qml_runtime.py --trim
+      env:
+        PYTHONIOENCODING: utf-8
+
     - name: Parse Version Strings
       id: version
       shell: pwsh
