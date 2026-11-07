@@ -40,6 +40,7 @@ build = [
 dev = [
     "pytest>=8.0.0",
     "nuitka>=2.0",
+    "pefile>=2024.8.26",
     "zstandard>=0.15.0",
     "types-peewee",
     "ruff>=0.16.7",
