@@ -55,7 +55,12 @@ Item {
     // 滑块中心的行程：两端各留 inset
     readonly property real knobCenter: root.inset + 6 + (root.width - 2 * root.inset - 12) * root.progress
 
+    // 焦点环只在键盘操作后出现；鼠标交互与失焦即灭（WinUI FocusVisual 语义）
+    property bool focusRingVisible: false
+
     function toggle() {
+        if (!root.enabled)
+            return
         root.checked = !root.checked
         root.toggled(root.checked)
         if (root.host)
@@ -98,14 +103,13 @@ Item {
 
     Rectangle {
         id: focusRing
-        visible: root.activeFocus && !area.containsMouse
+        visible: root.focusRingVisible
         anchors.fill: parent
         anchors.margins: 1.5
         radius: height / 2
         color: "transparent"
-        border.width: 1
-        border.color: root.accent
-        opacity: 0.6
+        border.width: 2
+        border.color: root.theme.text
     }
 
     MouseArea {
@@ -113,13 +117,20 @@ Item {
         anchors.fill: parent
         hoverEnabled: true
         enabled: root.enabled
+        onPressed: root.focusRingVisible = false
         onClicked: root.toggle()
     }
 
     Keys.onPressed: (event) => {
         if (event.key === Qt.Key_Space || event.key === Qt.Key_Return || event.key === Qt.Key_Enter) {
+            root.focusRingVisible = true
             root.toggle()
             event.accepted = true
         }
+    }
+
+    onActiveFocusChanged: {
+        if (!activeFocus)
+            focusRingVisible = false
     }
 }
