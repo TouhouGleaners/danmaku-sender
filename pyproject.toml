@@ -23,7 +23,8 @@ dependencies = [
     "cryptography>=46.0.3",
     "peewee>=4.3.0",
     "pydantic>=2.12.5",
-    "qrcode[pil]>=8.2"
+    "qrcode[pil]>=8.2",
+    "packaging>=26.2"
 ]
 
 [project.urls]
