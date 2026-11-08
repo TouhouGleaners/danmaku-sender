@@ -25,6 +25,7 @@ import argparse
 import ast
 import re
 import shutil
+import time
 from collections import deque
 from collections.abc import Iterable
 from pathlib import Path
@@ -425,6 +426,25 @@ class QmlRuntimeTrimmer:
         return files
 
     @staticmethod
+    def _remove_tree(directory: Path) -> None:
+        """删除目录树；Windows 上安全软件可能短暂占用文件，稍候重试。
+
+        Args:
+            directory (Path): 待删目录。
+
+        Raises:
+            PermissionError: 重试后文件仍被占用。
+        """
+        for attempt in range(5):
+            try:
+                shutil.rmtree(directory)
+                return
+            except PermissionError:
+                if attempt == 4:
+                    raise
+                time.sleep(1)
+
+    @staticmethod
     def tree_stats(files: Iterable[Path]) -> tuple[int, int]:
         """统计一批文件的个数与字节数。
 
@@ -459,7 +479,9 @@ class QmlRuntimeTrimmer:
                 *getattr(pe, "DIRECTORY_ENTRY_IMPORT", []),
                 *getattr(pe, "DIRECTORY_ENTRY_DELAY_IMPORT", []),
             ]
-            return {entry.dll.decode("ascii", "replace") for entry in entries}
+            names = {entry.dll.decode("ascii", "replace") for entry in entries}
+            pe.close()
+            return names
         except (OSError, pefile.PEFormatError):
             print(f"PE 解析失败，按无链接处理：{dll_path.name}")
             return set()
@@ -592,7 +614,7 @@ def main() -> None:
 
     if args.trim:
         for top, _, _ in rows:
-            shutil.rmtree(top)
+            QmlRuntimeTrimmer._remove_tree(top)
 
     verb = "已移除" if args.trim else "未使用"
     print(f"PySide6/qml {verb}模块 {len(rows)} 个（{removed_files} 个文件, {removed_bytes / 1e6:.1f} MB）：")
