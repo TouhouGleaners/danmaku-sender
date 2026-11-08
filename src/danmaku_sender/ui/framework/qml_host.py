@@ -190,6 +190,7 @@ class QmlHost(QQuickWidget):
         self.setInitialProperties({**(properties or {}), "theme": self._bridge})
 
         self._bridge.sync(self.palette(), self.font())
+        # 清屏取承载面底色；透明清屏经屏上合成会变黑，不可用
         self._sync_surface()
         self._load_qml(qml_path)
 
@@ -227,8 +228,8 @@ class QmlHost(QQuickWidget):
             self._sync_surface()
 
     def _sync_surface(self) -> None:
-        """把 QML 表面的清屏色同步为画布底色。"""
-        self.setClearColor(self.palette().color(QPalette.ColorRole.Window))
+        """把 QML 表面的清屏色同步为承载面（card）底色。"""
+        self.setClearColor(self._bridge.card)
 
 
 class QmlWindowHost(QWidget):
