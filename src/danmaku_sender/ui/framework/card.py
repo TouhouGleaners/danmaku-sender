@@ -13,6 +13,7 @@ from PySide6.QtCore import (
     QEvent,
     Qt,
     QVariantAnimation,
+    Signal,
 )
 from PySide6.QtGui import QColor, QEnterEvent, QPainter, QPaintEvent, QPalette
 from PySide6.QtWidgets import QApplication, QFrame, QWidget
@@ -37,6 +38,8 @@ class Card(QFrame):
     建立布局挂载内容。
     """
 
+    surfaceChanged = Signal()
+
     # 悬停底板：内缩一个边框宽度，避免覆盖样式绘制的描边
     PLATE_INSET = 1
     PLATE_RADIUS = 3
@@ -60,6 +63,7 @@ class Card(QFrame):
         self._fade.setDuration(self.FADE_MS)
         self._fade.setEasingCurve(QEasingCurve.Type.OutCubic)
         self._fade.valueChanged.connect(self._accept_reveal)
+        self._sync_surface_palette()
 
     def appearance(self) -> CardAppearance:
         """返回当前填充表面。"""
@@ -161,7 +165,40 @@ class Card(QFrame):
 
     def _accept_reveal(self, value: float) -> None:
         self._plate_reveal = float(value)
+        self._sync_surface_palette()
         self.update()
+
+    def _sync_surface_palette(self) -> None:
+        """把当前表面色写入 Window 角色并广播 surfaceChanged。
+
+        表面色 = 卡面（layer 取 bg_layer、alt 取 bg_layer_alt）叠加悬停薄纱后的混合结果；
+        子件的调色板继承不可靠，由 surfaceChanged 信号推送，承载的 QML 宿主以此跟随。
+        """
+        app = QApplication.instance()
+        base = app.palette() if isinstance(app, QApplication) else self.palette()
+        appearance = CardAppearance(self.property("appearance"))
+        role = QPalette.ColorRole.AlternateBase if appearance == CardAppearance.LAYER_ALT else QPalette.ColorRole.ToolTipBase
+        if self.property("danger") == "true":
+            role = QPalette.ColorRole.BrightText
+        surface = QColor(base.color(role))
+        scrim = QColor(base.color(QPalette.ColorRole.Text))
+        factor = self.PLATE_SCRIM_ALPHA * self._plate_reveal
+        blended = QColor(
+            round(surface.red() * (1 - factor) + scrim.red() * factor),
+            round(surface.green() * (1 - factor) + scrim.green() * factor),
+            round(surface.blue() * (1 - factor) + scrim.blue() * factor),
+        )
+        if self.palette().color(QPalette.ColorRole.Window) == blended:
+            return
+        base.setColor(QPalette.ColorRole.Window, blended)
+        self.setPalette(base)
+        self.surfaceChanged.emit()
+
+    def changeEvent(self, event: QEvent) -> None:
+        """调色板变更后重新同步表面色。"""
+        super().changeEvent(event)
+        if event.type() in (QEvent.Type.PaletteChange, QEvent.Type.ApplicationPaletteChange):
+            self._sync_surface_palette()
 
     def _repolish(self) -> None:
         """属性变更后触发样式重绘。"""

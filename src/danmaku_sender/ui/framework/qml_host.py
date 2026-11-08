@@ -11,12 +11,13 @@ from pathlib import Path
 from typing import Any
 
 from PySide6.QtCore import Property, QEvent, QObject, Qt, QUrl, Signal
-from PySide6.QtGui import QColor, QFont, QFontDatabase, QFontInfo, QPalette
+from PySide6.QtGui import QColor, QFont, QFontDatabase, QFontInfo, QPalette, QShowEvent
 from PySide6.QtQml import QQmlComponent
 from PySide6.QtQuick import QQuickView
 from PySide6.QtQuickWidgets import QQuickWidget
 from PySide6.QtWidgets import QVBoxLayout, QWidget
 
+from .card import Card
 from .health_colors import HealthColors
 
 
@@ -190,7 +191,8 @@ class QmlHost(QQuickWidget):
         self.setInitialProperties({**(properties or {}), "theme": self._bridge})
 
         self._bridge.sync(self.palette(), self.font())
-        # 清屏取承载面底色；透明清屏经屏上合成会变黑，不可用
+        self._surface_card: Card | None = None
+        self._bind_surface_source()
         self._sync_surface()
         self._load_qml(qml_path)
 
@@ -215,11 +217,14 @@ class QmlHost(QQuickWidget):
         raise RuntimeError(f"QML 加载失败: {qml_path} | {detail}")
 
     def changeEvent(self, event: QEvent) -> None:
-        """调色板、字体或所在屏幕变更后刷新表面底色与主题令牌。"""
+        """调色板、字体或所在屏幕变更后刷新表面底色与主题令牌；入列新父件时重绑定表面色来源。"""
         super().changeEvent(event)
+        if event.type() == QEvent.Type.ParentChange:
+            self._bind_surface_source()
         if event.type() in (
             QEvent.Type.PaletteChange,
             QEvent.Type.ApplicationPaletteChange,
+            QEvent.Type.ParentChange,
             QEvent.Type.FontChange,
             QEvent.Type.ScreenChangeInternal,
             QEvent.Type.DevicePixelRatioChange,
@@ -227,9 +232,28 @@ class QmlHost(QQuickWidget):
             self._bridge.sync(self.palette(), self.font())
             self._sync_surface()
 
+    def showEvent(self, event: QShowEvent) -> None:
+        """显示时重绑定表面色来源并重同步；认亲与入列的时序在此收敛。"""
+        super().showEvent(event)
+        self._bind_surface_source()
+        self._sync_surface()
+
+    def _bind_surface_source(self) -> None:
+        """绑定最近的 Card 为表面色来源；调色板继承不可靠，改由 surfaceChanged 信号推送。"""
+        if self._surface_card is not None:
+            self._surface_card.surfaceChanged.disconnect(self._sync_surface)
+        parent = self.parentWidget()
+        while parent is not None and not isinstance(parent, Card):
+            parent = parent.parentWidget()
+        self._surface_card = parent
+        if parent is not None:
+            parent.surfaceChanged.connect(self._sync_surface)
+
     def _sync_surface(self) -> None:
-        """把 QML 表面的清屏色同步为承载面（card）底色。"""
-        self.setClearColor(self._bridge.card)
+        """把 QML 表面的清屏色同步为承载面底色（Card 的 surfaceChanged 驱动）。"""
+        source = self._surface_card if self._surface_card is not None else self.parentWidget()
+        palette = source.palette() if source is not None else self.palette()
+        self.setClearColor(palette.color(QPalette.ColorRole.Window))
 
 
 class QmlWindowHost(QWidget):

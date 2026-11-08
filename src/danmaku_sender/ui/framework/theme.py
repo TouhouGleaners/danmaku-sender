@@ -33,7 +33,8 @@ ROLE_SOURCES: dict[QPalette.ColorRole, str] = {
     QPalette.ColorRole.Text: "text_main",
     QPalette.ColorRole.Button: "bg_hover",
     QPalette.ColorRole.ButtonText: "text_main",
-    QPalette.ColorRole.BrightText: "primary",
+    # BrightText 与 Highlight 语义重复（同映射 primary）且全仓无消费者，借载危险行表面色
+    QPalette.ColorRole.BrightText: "danger_bg",
     QPalette.ColorRole.Highlight: "primary",
     QPalette.ColorRole.HighlightedText: "#ffffff",
     QPalette.ColorRole.ToolTipBase: "bg_layer",
