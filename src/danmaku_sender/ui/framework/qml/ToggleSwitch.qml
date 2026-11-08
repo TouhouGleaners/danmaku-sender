@@ -13,6 +13,7 @@ Item {
     id: root
 
     required property var theme
+    property var host
     property bool checked: false
     signal toggled(bool checked)
 
@@ -55,6 +56,8 @@ Item {
     function toggle() {
         root.checked = !root.checked
         root.toggled(root.checked)
+        if (root.host)
+            root.host.notify_toggled(root.checked)
     }
 
     Rectangle {

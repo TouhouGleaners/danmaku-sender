@@ -18,6 +18,8 @@ from PySide6.QtWidgets import (
     QWidget,
 )
 
+from danmaku_sender.ui.framework.toggle_switch import ToggleSwitch
+
 logger = logging.getLogger(__name__)
 
 # 标红前保存的常驻 tooltip，清除无效态时还回去。
@@ -88,6 +90,8 @@ class _WidgetAdapter:
         """
         if isinstance(widget, QCheckBox):
             return widget.isChecked()
+        if isinstance(widget, ToggleSwitch):
+            return widget.isOn()
         if isinstance(widget, (QSpinBox, QDoubleSpinBox)):
             return widget.value()
         if isinstance(widget, QLineEdit):
@@ -123,6 +127,8 @@ class _WidgetAdapter:
 
         if isinstance(widget, QCheckBox):
             _apply_val(bool(value), widget.isChecked, widget.setChecked)
+        elif isinstance(widget, ToggleSwitch):
+            _apply_val(bool(value), widget.isOn, widget.setIsOn)
         elif isinstance(widget, QSpinBox):
             _apply_val(int(float(value)), widget.value, widget.setValue)
         elif isinstance(widget, QDoubleSpinBox):
@@ -169,6 +175,8 @@ class _WidgetAdapter:
         """
         if isinstance(widget, QCheckBox):
             return widget.stateChanged
+        if isinstance(widget, ToggleSwitch):
+            return widget.toggled
         if isinstance(widget, (QSpinBox, QDoubleSpinBox)):
             return widget.valueChanged
         if isinstance(widget, QLineEdit):
