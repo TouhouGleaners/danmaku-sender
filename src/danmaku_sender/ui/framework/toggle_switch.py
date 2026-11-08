@@ -3,7 +3,7 @@
 import logging
 from pathlib import Path
 
-from PySide6.QtCore import Signal, Slot
+from PySide6.QtCore import QEvent, Qt, Signal, Slot
 from PySide6.QtWidgets import QWidget
 
 from danmaku_sender.ui.framework.qml_host import QmlHost
@@ -34,6 +34,14 @@ class ToggleSwitch(QmlHost):
     def __init__(self, parent: QWidget | None = None) -> None:
         super().__init__(QML_PATH, properties={"host": self}, parent=parent)
         self.setFixedSize(40, 20)
+        self.setFocusPolicy(Qt.FocusPolicy.StrongFocus)
+        self.rootObject().setProperty("enabled", self.isEnabled())
+
+    def changeEvent(self, event: QEvent) -> None:
+        """启用状态变更后同步到 QML 根对象。"""
+        super().changeEvent(event)
+        if event.type() == QEvent.Type.EnabledChange:
+            self.rootObject().setProperty("enabled", self.isEnabled())
 
     @Slot(bool)
     def notify_toggled(self, value: bool) -> None:
@@ -53,9 +61,12 @@ class ToggleSwitch(QmlHost):
         return bool(self.rootObject().property("checked"))
 
     def setIsOn(self, value: bool) -> None:
-        """设置开关状态；不发出 toggled（写回非用户操作）。
+        """设置开关状态；值变化时发 toggled（与 QCheckBox.setChecked 同语义）。
 
         Args:
             value (bool): 目标状态。
         """
+        if self.isOn() == value:
+            return
         self.rootObject().setProperty("checked", value)
+        self.toggled.emit(value)

@@ -40,6 +40,8 @@ Item {
 
     width: 40
     height: 20
+    focus: true
+    activeFocusOnTab: true
     // WinUI 禁用态用 Disabled 专用笔刷（约四成透明度）；以整体透明度近似
     opacity: root.enabled ? 1 : 0.45
 

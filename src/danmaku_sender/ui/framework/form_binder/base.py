@@ -154,6 +154,8 @@ class _WidgetAdapter:
             widget.toggled.emit(widget.isChecked())
             # stateChanged 携带 Qt.CheckState（0/1/2），不是 bool
             widget.stateChanged.emit(widget.checkState().value)
+        if isinstance(widget, ToggleSwitch):
+            widget.toggled.emit(widget.isOn())
         elif isinstance(widget, (QSpinBox, QDoubleSpinBox)):
             widget.valueChanged.emit(widget.value())
         elif isinstance(widget, QLineEdit):
