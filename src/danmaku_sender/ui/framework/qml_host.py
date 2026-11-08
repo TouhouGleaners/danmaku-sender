@@ -190,6 +190,7 @@ class QmlHost(QQuickWidget):
         self.setInitialProperties({**(properties or {}), "theme": self._bridge})
 
         self._bridge.sync(self.palette(), self.font())
+        self._sync_surface()
         self._load_qml(qml_path)
 
     def _load_qml(self, qml_path: Path) -> None:
@@ -213,7 +214,7 @@ class QmlHost(QQuickWidget):
         raise RuntimeError(f"QML 加载失败: {qml_path} | {detail}")
 
     def changeEvent(self, event: QEvent) -> None:
-        """调色板、字体或所在屏幕变更后刷新主题令牌。"""
+        """调色板、字体或所在屏幕变更后刷新表面底色与主题令牌。"""
         super().changeEvent(event)
         if event.type() in (
             QEvent.Type.PaletteChange,
@@ -223,6 +224,11 @@ class QmlHost(QQuickWidget):
             QEvent.Type.DevicePixelRatioChange,
         ):
             self._bridge.sync(self.palette(), self.font())
+            self._sync_surface()
+
+    def _sync_surface(self) -> None:
+        """把 QML 表面的清屏色同步为画布底色。"""
+        self.setClearColor(self.palette().color(QPalette.ColorRole.Window))
 
 
 class QmlWindowHost(QWidget):
