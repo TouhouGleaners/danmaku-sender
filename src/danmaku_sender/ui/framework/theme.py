@@ -6,6 +6,7 @@
 
 import logging
 from dataclasses import dataclass
+from typing import ClassVar
 
 from PySide6.QtCore import QObject, Qt, Signal, Slot
 from PySide6.QtGui import QColor, QGuiApplication, QPalette
@@ -105,15 +106,23 @@ class Palette:
 
 
 class ThemeService(QObject):
-    """主题渲染服务（隶属 UI 层，由 MainWindow 持有）"""
+    """主题渲染服务（隶属 UI 层，由 MainWindow 持有）。
+
+    Attributes:
+        tokens (ClassVar[Palette]): 当前主题 token，构造与渲染时更新；
+            供 Card.surface_color 等按名取色。
+    """
 
     themeChanged = Signal(Palette)
+
+    tokens: ClassVar[Palette]
 
     def __init__(self, parent=None):
         super().__init__(parent)
         self.light_palette = self._load_palette("light")
         self.dark_palette = self._load_palette("dark")
         self.current_palette: Palette = self.light_palette
+        ThemeService.tokens = self.current_palette
         self._current_mode = ThemeMode.SYSTEM
 
         # 监听操作系统层面的深浅色切换
@@ -153,6 +162,8 @@ class ThemeService(QObject):
     def _render(self, palette: Palette) -> None:
         """同步更新 QPalette 与 QSS 样式表，使两者的渲染变更同时生效。"""
         self.current_palette = palette
+        # 先更新 tokens 再 setPalette：PaletteChange 触发的表面重算须取到新值
+        ThemeService.tokens = palette
 
         app = QApplication.instance()
         if not isinstance(app, QApplication):

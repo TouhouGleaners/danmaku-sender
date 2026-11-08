@@ -13,9 +13,12 @@ from PySide6.QtCore import (
     QEvent,
     Qt,
     QVariantAnimation,
+    Signal,
 )
-from PySide6.QtGui import QColor, QEnterEvent, QPainter, QPaintEvent, QPalette
-from PySide6.QtWidgets import QApplication, QFrame, QWidget
+from PySide6.QtGui import QColor, QEnterEvent, QPainter, QPaintEvent
+from PySide6.QtWidgets import QFrame, QWidget
+
+from .theme import ThemeService
 
 
 class CardAppearance(Enum):
@@ -35,7 +38,13 @@ class Card(QFrame):
 
     本类负责外观属性、样式重绘与悬停底板，不创建布局——调用方或子类自行
     建立布局挂载内容。
+
+    Attributes:
+        surface_color (QColor): 当前表面色（卡面叠加悬停薄纱）；
+            经 surfaceChanged 广播，承载的 QML 宿主以此跟随。
     """
+
+    surfaceChanged = Signal()
 
     # 悬停底板：内缩一个边框宽度，避免覆盖样式绘制的描边
     PLATE_INSET = 1
@@ -50,16 +59,17 @@ class Card(QFrame):
             parent (QWidget | None): 父控件。
         """
         super().__init__(parent)
-        self.setObjectName("card")
-        self.setProperty("appearance", CardAppearance.LAYER.value)
-        self.setProperty("border", "true")
-
+        self.surface_color = QColor()
         self._hoverable = False
         self._plate_reveal = 0.0
         self._fade = QVariantAnimation(self)
         self._fade.setDuration(self.FADE_MS)
         self._fade.setEasingCurve(QEasingCurve.Type.OutCubic)
         self._fade.valueChanged.connect(self._accept_reveal)
+        self.setObjectName("card")
+        self.setProperty("appearance", CardAppearance.LAYER.value)
+        self.setProperty("border", "true")
+        self._sync_surface_color()
 
     def appearance(self) -> CardAppearance:
         """返回当前填充表面。"""
@@ -124,10 +134,8 @@ class Card(QFrame):
         if self._plate_reveal <= 0.0:
             return
 
-        app = QApplication.instance()
-        palette = app.palette() if isinstance(app, QApplication) else self.palette()
         # 以前景色作薄纱：浅色主题下压暗、深色主题下提亮，两向均有对比
-        color = QColor(palette.color(QPalette.ColorRole.Text))
+        color = QColor(ThemeService.tokens.text_main)
         color.setAlphaF(color.alphaF() * self.PLATE_SCRIM_ALPHA * self._plate_reveal)
 
         painter = QPainter(self)
@@ -161,7 +169,47 @@ class Card(QFrame):
 
     def _accept_reveal(self, value: float) -> None:
         self._plate_reveal = float(value)
+        self._sync_surface_color()
         self.update()
+
+    def _sync_surface_color(self) -> None:
+        """按 ThemeService.tokens 计算表面色并广播 surfaceChanged。
+
+        表面色 = 卡面叠加悬停薄纱后的混合结果；
+        卡面按外观取色：layer 取 bg_layer、alt 取 bg_layer_alt、danger 取 danger_bg；
+        子件的调色板继承不可靠，由 surfaceChanged 信号推送，承载的 QML 宿主以此跟随。
+        """
+        tokens = ThemeService.tokens
+        if self.property("danger") == "true":
+            face = tokens.danger_bg
+        elif self.appearance() is CardAppearance.LAYER_ALT:
+            face = tokens.bg_layer_alt
+        else:
+            face = tokens.bg_layer
+        surface = QColor(face)
+        scrim = QColor(tokens.text_main)
+        factor = self.PLATE_SCRIM_ALPHA * self._plate_reveal
+        blended = QColor(
+            round(surface.red() * (1 - factor) + scrim.red() * factor),
+            round(surface.green() * (1 - factor) + scrim.green() * factor),
+            round(surface.blue() * (1 - factor) + scrim.blue() * factor),
+        )
+        if blended == self.surface_color:
+            return
+        self.surface_color = blended
+        self.surfaceChanged.emit()
+
+    def event(self, event: QEvent) -> bool:
+        """外观属性（appearance / danger）变更后重算表面色。"""
+        if event.type() == QEvent.Type.DynamicPropertyChange:
+            self._sync_surface_color()
+        return super().event(event)
+
+    def changeEvent(self, event: QEvent) -> None:
+        """调色板变更后重新同步表面色（tokens 随主题更新）。"""
+        super().changeEvent(event)
+        if event.type() in (QEvent.Type.PaletteChange, QEvent.Type.ApplicationPaletteChange):
+            self._sync_surface_color()
 
     def _repolish(self) -> None:
         """属性变更后触发样式重绘。"""

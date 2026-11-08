@@ -3,7 +3,6 @@ from enum import IntEnum
 from PySide6.QtCore import Qt, Signal, Slot
 from PySide6.QtGui import QIcon
 from PySide6.QtWidgets import (
-    QCheckBox,
     QComboBox,
     QFrame,
     QHBoxLayout,
@@ -24,6 +23,7 @@ from danmaku_sender.ui.framework.form_binder import LiveFormBinder
 from danmaku_sender.ui.framework.icons import SvgIcon, rerender
 from danmaku_sender.ui.framework.number_box import DoubleNumberBox, NumberBox
 from danmaku_sender.ui.framework.settings_row import ICON_SIZE, NavRow, SettingsRow
+from danmaku_sender.ui.framework.toggle_switch import ToggleSwitch
 from danmaku_sender.ui.framework.wrap_layout import WrapLayout
 
 
@@ -228,15 +228,15 @@ class SettingsPage(QWidget):
             self._row("界面字体", "切换字体会同步调整笔画渲染，保持清晰", SvgIcon.SHORT_TEXT, self.font_combo)
         )
 
-        self.prevent_sleep_checkbox = QCheckBox()
-        self.prevent_sleep_checkbox.setChecked(True)
-        self.prevent_sleep_checkbox.setToolTip("保持网络和CPU运行，但允许屏幕关闭。")
+        self.prevent_sleep_toggle = ToggleSwitch()
+        self.prevent_sleep_toggle.setIsOn(True)
+        self.prevent_sleep_toggle.setToolTip("保持网络和CPU运行，但允许屏幕关闭。")
         body.addWidget(
             self._row(
                 "阻止电脑休眠",
                 "任务运行期间保持网络与处理器工作，屏幕仍可关闭",
                 SvgIcon.START,
-                self.prevent_sleep_checkbox,
+                self.prevent_sleep_toggle,
             )
         )
         body.addStretch()
@@ -246,15 +246,15 @@ class SettingsPage(QWidget):
         """构建网络子页。"""
         page, body = self._subpage(["设置", "网络"])
 
-        self.proxy_checkbox = QCheckBox()
-        self.proxy_checkbox.setChecked(True)
-        self.proxy_checkbox.setToolTip("启用后，程序将使用系统设置的代理服务器进行网络请求。")
+        self.proxy_toggle = ToggleSwitch()
+        self.proxy_toggle.setIsOn(True)
+        self.proxy_toggle.setToolTip("启用后，程序将使用系统设置的代理服务器进行网络请求。")
         body.addWidget(
             self._row(
                 "使用系统代理",
                 "经由系统设置的代理服务器发起网络请求",
                 SvgIcon.SYNC_ALT,
-                self.proxy_checkbox,
+                self.proxy_toggle,
             )
         )
         body.addStretch()
@@ -301,10 +301,10 @@ class SettingsPage(QWidget):
             self._row("随机间隔", "相邻两条弹幕之间的发送间隔", SvgIcon.TUNE, delay_box)
         )
 
-        self.burst_enabled_cb = QCheckBox()
-        self.burst_enabled_cb.setToolTip("勾选启用爆发模式：每发 N 条后自动休息一段时间")
-        self.burst_enabled_cb.toggled.connect(self._on_burst_toggled)
-        self.burst_enabled_cb.setAccessibleName("爆发模式")
+        self.burst_enabled_toggle = ToggleSwitch()
+        self.burst_enabled_toggle.setToolTip("开启爆发模式：每发 N 条后自动休息一段时间")
+        self.burst_enabled_toggle.toggled.connect(self._on_burst_toggled)
+        self.burst_enabled_toggle.setAccessibleName("爆发模式")
 
         self.burst_size = NumberBox()
         self.burst_size.setRange(2, 100)
@@ -324,7 +324,7 @@ class SettingsPage(QWidget):
 
         burst_box = QWidget()
         burst_lay = WrapLayout(burst_box, spacing=6)
-        burst_lay.addWidget(self.burst_enabled_cb)
+        burst_lay.addWidget(self.burst_enabled_toggle)
         burst_lay.addWidget(QLabel("每"))
         burst_lay.addWidget(self.burst_size)
         burst_lay.addWidget(QLabel("条，休息"))
@@ -354,14 +354,14 @@ class SettingsPage(QWidget):
         danger_heading.setObjectName("settingsSectionTitle")
         body.addWidget(danger_heading)
 
-        self.allow_duplicates = QCheckBox()
-        self.allow_duplicates.setAccessibleName("允许重复发送")
+        self.allow_duplicates_toggle = ToggleSwitch()
+        self.allow_duplicates_toggle.setAccessibleName("允许重复发送")
         body.addWidget(
             self._row(
                 "允许重复发送",
                 "开启后，发送将不再比对数据库。已经发出的弹幕会允许再次发送，视频内会出现重复。",
                 SvgIcon.CONTENT_COPY,
-                self.allow_duplicates,
+                self.allow_duplicates_toggle,
                 danger=True,
             )
         )
@@ -406,14 +406,14 @@ class SettingsPage(QWidget):
         )
 
         # 全局系统设置（跨发送器/监视器共享，单绑一份）
-        LiveFormBinder.bind(self.prevent_sleep_checkbox, self.settings.global_config, "prevent_sleep", after_write=self._on_config_written)
-        LiveFormBinder.bind(self.proxy_checkbox, self.settings.global_config, "use_system_proxy", after_write=self._on_config_written)
+        LiveFormBinder.bind(self.prevent_sleep_toggle, self.settings.global_config, "prevent_sleep", after_write=self._on_config_written)
+        LiveFormBinder.bind(self.proxy_toggle, self.settings.global_config, "use_system_proxy", after_write=self._on_config_written)
 
         # 发送节奏（单个任务内）
         pacing = self.settings.sender_config.pacing
         LiveFormBinder.bind(self.min_delay, pacing, "min_delay", after_write=self._on_config_written)
         LiveFormBinder.bind(self.max_delay, pacing, "max_delay", after_write=self._on_config_written)
-        LiveFormBinder.bind(self.burst_enabled_cb, pacing, "burst_enabled", after_write=self._on_config_written)
+        LiveFormBinder.bind(self.burst_enabled_toggle, pacing, "burst_enabled", after_write=self._on_config_written)
         LiveFormBinder.bind(self.burst_size, pacing, "burst_size", after_write=self._on_config_written)
         LiveFormBinder.bind(self.burst_rest_min, pacing, "rest_min", after_write=self._on_config_written)
         LiveFormBinder.bind(self.burst_rest_max, pacing, "rest_max", after_write=self._on_config_written)
@@ -425,7 +425,7 @@ class SettingsPage(QWidget):
         # 整队规则（一次队列运行共享，不随单个任务走）
         queue = self.settings.sender_config.queue
         LiveFormBinder.bind(self.delay_between, queue, "delay_between_tasks", after_write=self._on_config_written)
-        LiveFormBinder.bind(self.allow_duplicates, queue, "allow_duplicates", after_write=self._on_config_written)
+        LiveFormBinder.bind(self.allow_duplicates_toggle, queue, "allow_duplicates", after_write=self._on_config_written)
 
     def showEvent(self, event):
         """打开页面时从状态重读控件值（无隐式同步）"""
