@@ -427,7 +427,7 @@ class QmlRuntimeTrimmer:
 
     @staticmethod
     def _remove_tree(directory: Path) -> None:
-        """删除目录树；Windows 上安全软件可能短暂占用文件，稍候重试。
+        """删除目录树；Windows 上安全软件可能短暂占用文件，失败后最多重试 5 次、间隔 1 秒。
 
         Args:
             directory (Path): 待删目录。
@@ -435,12 +435,12 @@ class QmlRuntimeTrimmer:
         Raises:
             PermissionError: 重试后文件仍被占用。
         """
-        for attempt in range(5):
+        for attempt in range(6):
             try:
                 shutil.rmtree(directory)
                 return
             except PermissionError:
-                if attempt == 4:
+                if attempt == 5:
                     raise
                 time.sleep(1)
 
@@ -469,19 +469,20 @@ class QmlRuntimeTrimmer:
         """
         try:
             pe = pefile.PE(str(dll_path), fast_load=True)
-            pe.parse_data_directories(
-                directories=[
-                    pefile.DIRECTORY_ENTRY["IMAGE_DIRECTORY_ENTRY_IMPORT"],
-                    pefile.DIRECTORY_ENTRY["IMAGE_DIRECTORY_ENTRY_DELAY_IMPORT"],
+            try:
+                pe.parse_data_directories(
+                    directories=[
+                        pefile.DIRECTORY_ENTRY["IMAGE_DIRECTORY_ENTRY_IMPORT"],
+                        pefile.DIRECTORY_ENTRY["IMAGE_DIRECTORY_ENTRY_DELAY_IMPORT"],
+                    ]
+                )
+                entries: list[_ImportEntry] = [
+                    *getattr(pe, "DIRECTORY_ENTRY_IMPORT", []),
+                    *getattr(pe, "DIRECTORY_ENTRY_DELAY_IMPORT", []),
                 ]
-            )
-            entries: list[_ImportEntry] = [
-                *getattr(pe, "DIRECTORY_ENTRY_IMPORT", []),
-                *getattr(pe, "DIRECTORY_ENTRY_DELAY_IMPORT", []),
-            ]
-            names = {entry.dll.decode("ascii", "replace") for entry in entries}
-            pe.close()
-            return names
+                return {entry.dll.decode("ascii", "replace") for entry in entries}
+            finally:
+                pe.close()
         except (OSError, pefile.PEFormatError):
             print(f"PE 解析失败，按无链接处理：{dll_path.name}")
             return set()
