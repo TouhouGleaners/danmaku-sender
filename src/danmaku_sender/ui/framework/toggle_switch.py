@@ -4,6 +4,7 @@ import logging
 from pathlib import Path
 
 from PySide6.QtCore import QEvent, Qt, Signal, Slot
+from PySide6.QtGui import QFocusEvent
 from PySide6.QtWidgets import QWidget
 
 from danmaku_sender.ui.framework.qml_host import QmlHost
@@ -33,15 +34,26 @@ class ToggleSwitch(QmlHost):
 
     def __init__(self, parent: QWidget | None = None) -> None:
         super().__init__(QML_PATH, properties={"host": self}, parent=parent)
-        self.setFixedSize(40, 20)
+        root = self.rootObject()
+        self.setFixedSize(round(root.width()), round(root.height()))
         self.setFocusPolicy(Qt.FocusPolicy.StrongFocus)
-        self.rootObject().setProperty("enabled", self.isEnabled())
+        root.setProperty("enabled", self.isEnabled())
 
     def changeEvent(self, event: QEvent) -> None:
         """启用状态变更后同步到 QML 根对象。"""
         super().changeEvent(event)
         if event.type() == QEvent.Type.EnabledChange:
             self.rootObject().setProperty("enabled", self.isEnabled())
+
+    def focusInEvent(self, event: QFocusEvent) -> None:
+        """键盘聚焦即显焦点环，鼠标点击聚焦不显（WinUI FocusVisual 语义）。"""
+        super().focusInEvent(event)
+        keyboard = event.reason() in (
+            Qt.FocusReason.TabFocusReason,
+            Qt.FocusReason.BacktabFocusReason,
+            Qt.FocusReason.ShortcutFocusReason,
+        )
+        self.rootObject().setProperty("focusRingVisible", keyboard)
 
     @Slot(bool)
     def notify_toggled(self, value: bool) -> None:

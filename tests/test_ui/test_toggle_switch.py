@@ -1,7 +1,8 @@
 """ToggleSwitch 宿主与 QML 开关的契约测试。"""
 
 import pytest
-from PySide6.QtCore import Qt
+from PySide6.QtCore import QCoreApplication, QEvent, Qt
+from PySide6.QtGui import QFocusEvent
 from PySide6.QtTest import QTest
 
 from danmaku_sender.ui.framework.form_binder import base as form_binder_base
@@ -38,17 +39,18 @@ class TestToggleSwitch:
         form_binder_base._WidgetAdapter.emit_unchanged(switch)
         assert fired == [False]
 
-    def test_keyboard_toggles_and_shows_focus_ring(self, switch: ToggleSwitch, qapp) -> None:
+    def test_keyboard_toggles(self, switch: ToggleSwitch, qapp) -> None:
         switch.setFocus()
         qapp.processEvents()
         QTest.keyClick(switch, Qt.Key.Key_Space)
         assert switch.isOn() is True
+
+    def test_keyboard_focus_shows_focus_ring(self, switch: ToggleSwitch) -> None:
+        QCoreApplication.sendEvent(switch, QFocusEvent(QEvent.Type.FocusIn, Qt.FocusReason.TabFocusReason))
         assert switch.rootObject().property("focusRingVisible") is True
 
-    def test_mouse_press_hides_focus_ring(self, switch: ToggleSwitch, qapp) -> None:
-        switch.setFocus()
-        qapp.processEvents()
-        QTest.keyClick(switch, Qt.Key.Key_Space)
+    def test_mouse_focus_hides_focus_ring(self, switch: ToggleSwitch) -> None:
+        QCoreApplication.sendEvent(switch, QFocusEvent(QEvent.Type.FocusIn, Qt.FocusReason.TabFocusReason))
         QTest.mousePress(switch, Qt.MouseButton.LeftButton)
         assert switch.rootObject().property("focusRingVisible") is False
 
