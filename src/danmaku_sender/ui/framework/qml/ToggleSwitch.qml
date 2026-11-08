@@ -6,10 +6,13 @@ import QtQuick
 // 度量取自 WinUI 3 ToggleSwitch_themeresources.xaml：轨道 40×20，滑块常态 12 / 悬停 14 / 按下 17×14；
 // 滑块膨胀居中（源码 HorizontalAlignment="Center"），禁用态整体减淡（WinUI 用 Disabled 专用笔刷）。
 // 状态文字在左、轨道在右，焦点环连文字与轨道一起框住（2px 高对比描边、外扩 8px、圆角 10）。
+// 色阶命名取自 WinUI 3 ToggleSwitch_themeresources 的资源名，数值随主题换装。
+// 名称对应 FillOn / FillOff / StrokeOn / StrokeOff / KnobFillOn / KnobFillOff。
 //
 // 契约：
-// - theme 为令牌桥；checked 为开关状态，toggled 为状态变化信号。
-// - onText / offText 为状态文字；色阶走令牌随主题换装；焦点环仅键盘聚焦时显示。
+// - theme 为 QmlPaletteBridge；checked 为开关状态，toggled 为状态变化信号。
+// - onText / offText 为状态文字；色阶随主题换装；焦点环仅键盘聚焦时显示。
+// - surface 为承载面表面色，宿主随 Card.surfaceChanged 推送；根自绘表面底，圆角外四角与边缘抗锯齿混色取同一表面色，不依赖 clearColor。
 Item {
     id: root
 
@@ -18,28 +21,30 @@ Item {
     property bool checked: false
     property string onText: "开"
     property string offText: "关"
+    property color surface: root.theme.background
     signal toggled(bool checked)
 
-    property color accent: root.theme.accent
-    property color surface: root.theme.fillPressed
-    property color stroke: root.theme.border
-    property color knobOn: "#FFFFFF"
-    property color knobOff: root.theme.textSecondary
+    property color fillOn: root.theme.accent
+    property color fillOff: root.theme.fillPressed
+    property color strokeOn: root.theme.accent
+    property color strokeOff: root.theme.border
+    property color knobFillOn: "#FFFFFF"
+    property color knobFillOff: root.theme.textSecondary
 
     readonly property bool hovered: area.containsMouse
     readonly property bool pressed: area.pressed
 
     readonly property color trackFill: {
         if (!root.enabled)
-            return root.checked ? root.accent : root.surface
+            return root.checked ? root.fillOn : root.fillOff
         if (root.pressed)
-            return root.checked ? Qt.lighter(root.accent, 1.3) : Qt.darker(root.surface, 1.12)
+            return root.checked ? Qt.lighter(root.fillOn, 1.3) : Qt.darker(root.fillOff, 1.12)
         if (root.hovered)
-            return root.checked ? Qt.lighter(root.accent, 1.15) : Qt.darker(root.surface, 1.06)
-        return root.checked ? root.accent : root.surface
+            return root.checked ? Qt.lighter(root.fillOn, 1.15) : Qt.darker(root.fillOff, 1.06)
+        return root.checked ? root.fillOn : root.fillOff
     }
-    readonly property color trackStroke: root.checked ? root.accent : root.stroke
-    readonly property color knobFill: root.checked ? root.knobOn : root.knobOff
+    readonly property color trackStroke: root.checked ? root.strokeOn : root.strokeOff
+    readonly property color knobFill: root.checked ? root.knobFillOn : root.knobFillOff
 
     // 根盒为焦点环让位：环外扩 8px（6px 缝 + 2px 描边）
     width: content.width + 16
@@ -65,6 +70,12 @@ Item {
         root.toggled(root.checked)
         if (root.host)
             root.host.notify_toggled(root.checked)
+    }
+
+    // 自绘表面底：先声明垫底，内容叠于其上
+    Rectangle {
+        anchors.fill: parent
+        color: root.surface
     }
 
     Item {

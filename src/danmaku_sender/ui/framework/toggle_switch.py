@@ -18,7 +18,7 @@ class ToggleSwitch(QmlHost):
     """以 QML ToggleSwitch 为内容的二元开关控件。
 
     对外沿用开关契约（isOn / setIsOn / toggled），与 form_binder 的开关适配对齐；
-    明暗随主题令牌换装，宿主清屏色由 QmlHost 同步。
+    明暗随主题 token 换装，宿主 clearColor 由 QmlHost 同步。
 
     Args:
         parent (QWidget | None): 父控件。
