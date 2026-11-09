@@ -31,7 +31,7 @@ Item {
         width: parent.width
         height: 30
         clip: true
-        color: root.theme.fillPressed
+        color: root.theme.SubtleFillColorTertiary
 
         RowLayout {
             anchors.fill: parent
@@ -54,7 +54,7 @@ Item {
                     font.family: root.theme.fontFamily
                     font.pointSize: root.theme.fontPointSize
                     font.bold: true
-                    color: root.theme.text
+                    color: root.theme.TextFillColorPrimary
                 }
             }
         }
@@ -80,7 +80,7 @@ Item {
 
             contentItem: Rectangle {
                 radius: 3
-                color: vScroll.hovered || vScroll.pressed ? root.theme.textSecondary : root.theme.border
+                color: vScroll.hovered || vScroll.pressed ? root.theme.TextFillColorSecondary : root.theme.ControlStrokeColorDefault
             }
 
             background: Item {}
@@ -93,8 +93,8 @@ Item {
 
             width: list.width
             height: 30
-            color: rowMouse.containsMouse ? root.theme.fillHover
-                : row.index % 2 ? root.theme.background : "transparent"
+            color: rowMouse.containsMouse ? root.theme.SubtleFillColorSecondary
+                : row.index % 2 ? root.theme.SolidBackgroundFillColorTertiary : "transparent"
 
             RowLayout {
                 x: 4
@@ -143,7 +143,7 @@ Item {
                             elide: Text.ElideRight
                             font.family: root.theme.fontFamily
                             font.pointSize: root.theme.fontPointSize
-                            color: root.theme.text
+                            color: root.theme.TextFillColorPrimary
                         }
                     }
                 }

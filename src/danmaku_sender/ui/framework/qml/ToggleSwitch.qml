@@ -12,7 +12,7 @@ import QtQuick
 // 契约：
 // - theme 为 QmlPaletteBridge；checked 为开关状态，toggled 为状态变化信号。
 // - onText / offText 为状态文字；色阶随主题换装；焦点环仅键盘聚焦时显示。
-// - surface 为承载面表面色，宿主随 Card.surfaceChanged 推送；根自绘表面底，圆角外四角与边缘抗锯齿混色取同一表面色，不依赖 clearColor。
+// - surface 为底色，宿主随 Card.surfaceChanged 推送，根自绘垫底；圆角外四角与边缘抗锯齿混色同取此色，不依赖 clearColor。
 Item {
     id: root
 
@@ -21,15 +21,15 @@ Item {
     property bool checked: false
     property string onText: "开"
     property string offText: "关"
-    property color surface: root.theme.background
+    property color surface: root.theme.SolidBackgroundFillColorTertiary
     signal toggled(bool checked)
 
-    property color fillOn: root.theme.accent
-    property color fillOff: root.theme.fillPressed
-    property color strokeOn: root.theme.accent
-    property color strokeOff: root.theme.border
+    property color fillOn: root.theme.AccentFillColorDefault
+    property color fillOff: root.theme.SubtleFillColorTertiary
+    property color strokeOn: root.theme.AccentFillColorDefault
+    property color strokeOff: root.theme.ControlStrokeColorDefault
     property color knobFillOn: "#FFFFFF"
-    property color knobFillOff: root.theme.textSecondary
+    property color knobFillOff: root.theme.TextFillColorSecondary
 
     readonly property bool hovered: area.containsMouse
     readonly property bool pressed: area.pressed
@@ -89,7 +89,7 @@ Item {
             anchors.left: parent.left
             anchors.verticalCenter: parent.verticalCenter
             text: root.checked ? root.onText : root.offText
-            color: root.theme.text
+            color: root.theme.TextFillColorPrimary
             font.family: root.theme.fontFamily
             // WinUI 正文档为 14px（ControlContentThemeFontSize），状态文字随控件档
             font.pixelSize: 14
@@ -145,7 +145,7 @@ Item {
         radius: 10
         color: "transparent"
         border.width: 2
-        border.color: root.theme.text
+        border.color: root.theme.TextFillColorPrimary
     }
 
     MouseArea {

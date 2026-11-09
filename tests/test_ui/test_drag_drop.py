@@ -76,7 +76,7 @@ class TestXmlFilesFromDrop:
 def themed_qapp(qapp):
     """载入 style.qss：遮罩的外观由 QSS 提供，测试需自带主题管线。"""
     css = (AppInfo.Paths.ASSETS / "qss" / "style.qss").read_text(encoding="utf-8")
-    qapp.setStyleSheet(re.sub(r"\{[a-z_]+\}", "#888888", css))
+    qapp.setStyleSheet(re.sub(r"\{[A-Za-z_]+\}", "#888888", css))
     yield qapp
     qapp.setStyleSheet("")
 

@@ -5,9 +5,9 @@ import QtQuick
 // 空状态引导：数据为空时居中显示的提示块，标题在上、说明在下、动作按钮在最下。
 //
 // 契约：
-// - theme 为令牌桥；title 为标题，description 留空则不显示。
+// - theme 为 QmlPaletteBridge；title 为标题，description 留空则不显示。
 // - 动作按钮经默认属性挂载收进行内，无按钮则不显示按钮行。
-// - 显隐由使用方的 visible 控制，本件随承载区居中。
+// - 显隐由使用方的 visible 控制，本件在所在区域内居中。
 Item {
     id: root
 
@@ -28,7 +28,7 @@ Item {
             horizontalAlignment: Text.AlignHCenter
             font.family: root.theme.fontFamily
             font.pointSize: root.theme.fontPointSize + 2
-            color: root.theme.text
+            color: root.theme.TextFillColorPrimary
         }
 
         Text {
@@ -39,7 +39,7 @@ Item {
             horizontalAlignment: Text.AlignHCenter
             font.family: root.theme.fontFamily
             font.pointSize: root.theme.fontPointSize
-            color: root.theme.textSecondary
+            color: root.theme.TextFillColorSecondary
         }
 
         Item {

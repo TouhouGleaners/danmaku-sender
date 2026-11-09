@@ -1,17 +1,17 @@
 /* 全局基础色 */
 QMainWindow {
-    background-color: {bg_canvas};
+    background-color: {SolidBackgroundFillColorBase};
 }
 
 /* 侧边栏整体 */
 QFrame#sidebarFrame {
-    background-color: {bg_chrome};
-    border-right: 1px solid {border_color};
+    background-color: {SolidBackgroundFillColorSecondary};
+    border-right: 1px solid {ControlStrokeColorDefault};
 }
 
 /* 内容区 */
 QStackedWidget#contentStack {
-    background-color: {bg_page};
+    background-color: {SolidBackgroundFillColorTertiary};
 }
 
 /* 滚动区域：不画自身底色，沿用所在容器的表面色 */
@@ -36,19 +36,19 @@ QScrollBar:horizontal {
     height: 12px;
 }
 QScrollBar::handle:vertical {
-    background-color: {border_color};
+    background-color: {ControlStrokeColorDefault};
     min-height: 24px;
     margin: 4px 3px;
     border-radius: 3px;
 }
 QScrollBar::handle:horizontal {
-    background-color: {border_color};
+    background-color: {ControlStrokeColorDefault};
     min-width: 24px;
     margin: 3px 4px;
     border-radius: 3px;
 }
 QScrollBar::handle:hover {
-    background-color: {text_secondary};
+    background-color: {TextFillColorSecondary};
 }
 QScrollBar::add-line:vertical, QScrollBar::sub-line:vertical {
     height: 0;
@@ -70,7 +70,7 @@ QSpinBox, QDoubleSpinBox {
     background: transparent;
     border: none;
     padding: 4px 12px;
-    selection-background-color: {primary};
+    selection-background-color: {AccentFillColorDefault};
 }
 QSpinBox::up-button, QSpinBox::down-button,
 QDoubleSpinBox::up-button, QDoubleSpinBox::down-button {
@@ -87,19 +87,19 @@ QDoubleSpinBox::up-arrow, QDoubleSpinBox::down-arrow {
 
 /* 用户状态区 */
 QFrame#userWidget:hover {
-    background-color: {bg_hover}; /* 动态悬停反馈 */
+    background-color: {ControlFillColorSecondary}; /* 动态悬停反馈 */
 }
 
 QLabel#avatarLabel {
-    background-color: {border_color};
+    background-color: {ControlStrokeColorDefault};
     border-radius: 18px; /* 圆形头像感 */
 }
 
 /* 侧边栏 */
 QListWidget#sidebar {
-    background-color: {bg_chrome};
+    background-color: {SolidBackgroundFillColorSecondary};
     border: none;
-    border-right: 1px solid {border_color};
+    border-right: 1px solid {ControlStrokeColorDefault};
     outline: none;
     show-decoration-selected: 1;
 }
@@ -108,21 +108,21 @@ QListWidget#sidebar {
 QListWidget#sidebar::item {
     height: 40px;
     padding-left: 15px;
-    color: {text_main};
+    color: {TextFillColorPrimary};
     border-bottom: 1px solid transparent;
 }
 
 /* 侧边栏item 悬停 */
 QListWidget#sidebar::item:hover {
-    background-color: {bg_hover};
+    background-color: {ControlFillColorSecondary};
 }
 
 /* 侧边栏item 选中 */
 QListWidget#sidebar::item:selected {
-    background-color: {bg_layer};
-    color: {primary};
+    background-color: {CardBackgroundFillColorDefault};
+    color: {AccentFillColorDefault};
     font-weight: 600;
-    border-left: 4px solid {primary};
+    border-left: 4px solid {AccentFillColorDefault};
     margin-right: -1px;
 }
 
@@ -137,18 +137,18 @@ QPushButton[action="true"] {
 
 /* 状态：准备就绪 (ready) -> 绿色 */
 QPushButton[action="true"][state="ready"] {
-    background-color: {success};
+    background-color: {SystemFillColorSuccess};
 }
 QPushButton[action="true"][state="ready"]:hover {
     background-color: #27ae60;
 }
 QPushButton[action="true"][state="ready"]:disabled {
-    background-color: {border_color};
+    background-color: {ControlStrokeColorDefault};
 }
 
 /* 状态：运行中 (running) -> 红色 */
 QPushButton[action="true"][state="running"] {
-    background-color: {danger};
+    background-color: {SystemFillColorAttention};
 }
 QPushButton[action="true"][state="running"]:hover {
     background-color: #c0392b;
@@ -161,13 +161,13 @@ QPushButton[action="true"][state="running"]:hover {
     padding: 4px 12px;
     border-radius: 4px;
     border: none;
-    background-color: {success};
+    background-color: {SystemFillColorSuccess};
 }
 *[primary="true"]:hover {
     background-color: #27ae60;
 }
 *[primary="true"]:disabled {
-    background-color: {border_color};
+    background-color: {ControlStrokeColorDefault};
 }
 
 /* ========================================= */
@@ -175,24 +175,24 @@ QPushButton[action="true"][state="running"]:hover {
 /* ========================================= */
 
 *[invalid="true"] {
-    border: 1px solid {danger} !important;
-    background-color: {danger_bg} !important;
+    border: 1px solid {SystemFillColorAttention} !important;
+    background-color: {SystemFillColorAttentionBackground} !important;
 }
 
 *[invalid="true"]:focus {
-    border: 1px solid {danger} !important;
+    border: 1px solid {SystemFillColorAttention} !important;
 }
 
 /* 账号管理 - 账号行 */
 QFrame#accountRow {
     border: none;
-    border-bottom: 1px solid {border_color};
+    border-bottom: 1px solid {ControlStrokeColorDefault};
 }
 QFrame#accountRow:hover {
-    background-color: {bg_hover};
+    background-color: {ControlFillColorSecondary};
 }
 QFrame#accountRow[active="true"] {
-    background-color: {bg_hover};
+    background-color: {ControlFillColorSecondary};
 }
 QPushButton#accountIconBtn {
     border: 1px solid transparent;
@@ -201,11 +201,11 @@ QPushButton#accountIconBtn {
     padding: 2px;
 }
 QPushButton#accountIconBtn:hover {
-    background-color: {bg_hover};
-    border-color: {border_color};
+    background-color: {ControlFillColorSecondary};
+    border-color: {ControlStrokeColorDefault};
 }
 QPushButton#accountIconBtn:pressed {
-    background-color: {border_color};
+    background-color: {ControlStrokeColorDefault};
 }
 
 /* 账号管理 - 激活指示条 */
@@ -221,62 +221,62 @@ QFrame#accountAccent[active="true"] {
 QLabel#accountDialogTitle {
     font-size: 15px;
     font-weight: bold;
-    color: {text_main};
+    color: {TextFillColorPrimary};
 }
 QLabel#accountDialogCount {
     font-size: 12px;
-    color: {text_secondary};
+    color: {TextFillColorSecondary};
 }
 
 /* 账号管理 - 昵称 */
 QLabel#accountName {
     font-size: 15px;
     font-weight: bold;
-    color: {text_main};
+    color: {TextFillColorPrimary};
 }
 
 /* 账号管理 - 凭据行 */
 QLabel#credValue {
     font-family: Consolas, monospace;
     font-size: 11px;
-    color: {text_secondary};
+    color: {TextFillColorSecondary};
 }
 
 /* 账号管理 - 状态文字 */
 QLabel#accountStatus[status="valid"] {
-    color: {success};
+    color: {SystemFillColorSuccess};
 }
 QLabel#accountStatus[status="invalid"] {
-    color: {danger};
+    color: {SystemFillColorAttention};
 }
 QLabel#accountStatus[status="unknown"] {
-    color: {text_secondary};
+    color: {TextFillColorSecondary};
 }
 
 /* 卡片容器：圆角填充加细边框，用于分组呈现内容。
    appearance 取自表面层级：layer 为表面、alt 为表面内的次级填充、
    canvas 为最底层、overlay 为半透明覆盖。 */
 QFrame#card {
-    background-color: {bg_layer};
-    border: 1px solid {stroke_card};
-    border-bottom-color: {border_color};
+    background-color: {CardBackgroundFillColorDefault};
+    border: 1px solid {CardStrokeColorDefault};
+    border-bottom-color: {ControlStrokeColorDefault};
     border-radius: 4px;
 }
 QFrame#card[appearance="alt"] {
-    background-color: {bg_layer_alt};
+    background-color: {CardBackgroundFillColorSecondary};
 }
 QFrame#card[appearance="canvas"] {
-    background-color: {bg_canvas};
+    background-color: {SolidBackgroundFillColorBase};
     border: none;
 }
 QFrame#card[appearance="overlay"] {
-    background-color: {bg_layer_overlay};
+    background-color: {LayerFillColorDefault};
     border: none;
 }
 /* canvas / overlay 默认无边框，显式要求绘制时仍按属性兑现 */
 QFrame#card[appearance="canvas"][border="true"],
 QFrame#card[appearance="overlay"][border="true"] {
-    border: 1px solid {stroke_card};
+    border: 1px solid {CardStrokeColorDefault};
 }
 QFrame#card[border="false"] {
     border: none;
@@ -288,7 +288,7 @@ QLabel#settingsRowTitle {
 }
 QLabel#settingsRowSubtitle {
     font-size: 12px;
-    color: {text_secondary};
+    color: {TextFillColorSecondary};
 }
 
 /* 设置页节标题：与设置行名称同号，层级由「在卡片外」体现 */
@@ -300,8 +300,8 @@ QLabel#settingsSectionTitle {
 
 /* 高风险设置行：红框红底，文字配色与普通设置行一致 */
 QFrame#card[danger="true"] {
-    border-color: {danger};
-    background-color: {danger_bg};
+    border-color: {SystemFillColorAttention};
+    background-color: {SystemFillColorAttentionBackground};
 }
 
 /* 拖放覆盖层：遮罩色随主题反向取，浅色压暗、深色提亮 */
@@ -329,22 +329,22 @@ QLabel#emptyStateHintDesc {
 
 /* 应用内通知卡片 */
 QFrame#notificationCard {
-    background-color: {bg_layer};
-    border: 1px solid {border_color};
+    background-color: {CardBackgroundFillColorDefault};
+    border: 1px solid {ControlStrokeColorDefault};
     border-radius: 6px;
 }
 QFrame#notificationCard:hover {
-    background-color: {bg_hover};
-    border-color: {text_secondary};
+    background-color: {ControlFillColorSecondary};
+    border-color: {TextFillColorSecondary};
 }
 QLabel#notificationTitle {
     font-size: 13px;
     font-weight: bold;
-    color: {text_main};
+    color: {TextFillColorPrimary};
 }
 QLabel#notificationMessage {
     font-size: 12px;
-    color: {text_secondary};
+    color: {TextFillColorSecondary};
 }
 QWidget#notificationCountdown {
     border: none;

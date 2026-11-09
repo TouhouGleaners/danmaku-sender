@@ -5,7 +5,7 @@ import QtQuick
 // 卡片表面：WinUI 3 卡片形制——圆角 4、表面色填充、双色描边（整体淡描、底边提亮）。
 //
 // 契约：
-// - theme 为令牌桥；padding 为内容区四周内边距。
+// - theme 为 QmlPaletteBridge；padding 为内容区四周内边距。
 // - 内容经默认属性挂载，铺进内边距区；表面与描边由本件负责。
 Rectangle {
     id: root
@@ -15,8 +15,8 @@ Rectangle {
     default property alias content: inner.data
 
     radius: 4
-    color: root.theme.card
-    border.color: root.theme.divider
+    color: root.theme.CardBackgroundFillColorDefault
+    border.color: root.theme.DividerStrokeColorDefault
     border.width: 1
     clip: true
 
@@ -28,7 +28,7 @@ Rectangle {
         anchors.leftMargin: 4
         anchors.rightMargin: 4
         height: 1
-        color: root.theme.border
+        color: root.theme.ControlStrokeColorDefault
     }
 
     Item {
