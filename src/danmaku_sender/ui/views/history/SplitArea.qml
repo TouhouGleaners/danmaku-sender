@@ -99,17 +99,18 @@ Item {
             SplitView.fillWidth: true
             spacing: 8
 
-            // 任务详情与存活统计概览卡片（仅在选中具体任务时显示）
+            // 任务概览卡片：选中任务时显示详情与存活统计，未选中时卡内显示空态提示
             Fluent.Card {
                 Layout.fillWidth: true
-                implicitHeight: cardBody.implicitHeight + 32
+                // 地板对齐最小内容态（一行标题 + 一行分P + 最少统计行），空态与之等高，切换不跳
+                implicitHeight: Math.max(cardBody.implicitHeight, 100) + 32
                 padding: 16
                 theme: root.theme
-                visible: root.bridge.summaryTitle.length > 0
 
                 ColumnLayout {
                     id: cardBody
                     anchors.fill: parent
+                    visible: root.bridge.summaryTitle.length > 0
                     spacing: 16
 
                     // 视频标题与分P标识
@@ -199,17 +200,15 @@ Item {
                         Item { Layout.fillWidth: true }
                     }
                 }
-            }
 
-            // 未选中任务时的空态提示
-            Text {
-                Layout.fillWidth: true
-                visible: root.bridge.summaryTitle.length === 0
-                text: "未选择任务\n从左侧的时间树里选一个任务查看它的弹幕"
-                wrapMode: Text.WordWrap
-                font.family: root.theme.fontFamily
-                font.pointSize: root.theme.fontPointSize
-                color: root.theme.TextFillColorSecondary
+                // 未选中任务时的空态提示
+                Fluent.EmptyState {
+                    anchors.fill: parent
+                    visible: root.bridge.summaryTitle.length === 0
+                    theme: root.theme
+                    title: "未选择任务"
+                    description: "从左侧的时间树里选一个任务查看它的弹幕"
+                }
             }
 
             // 搜索与状态过滤工具栏

@@ -174,7 +174,7 @@ class ThemeService(QObject):
         if data is None:
             raise FileNotFoundError(f"主题文件缺失或无法解析: {path}")
         if not isinstance(data, dict):
-            raise TypeError(f"主题文件结构非法: {path}")
+            raise TypeError(f"非法的主题文件结构: {path}")
 
         try:
             return Palette(**data)
