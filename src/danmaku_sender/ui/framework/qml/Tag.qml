@@ -17,6 +17,7 @@ import QtQuick
 // - tone: 语义状态色阶（"good" | "warn" | "bad" | "neutral"），缺省或未匹配时回退为中性灰。
 // - fontPointSize: 字号大小，默认使用主题基准字号。
 // - minWidth / padding: 最小宽度约束与左右内边距，方便表格列对齐。
+// - 尺寸公式：implicitWidth = max(文字宽, minWidth) + 2 * padding；高度可由 height 覆盖（默认 16），圆角取高度之半。
 
 Rectangle {
     id: root

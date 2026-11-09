@@ -20,7 +20,13 @@ import QtQuick.Controls
 //    - 方向键 ←：若处于展开状态则折叠当前节点；若已折叠则焦点返回父节点。
 //    - 回车键 (Enter / Return)：激活选中项（触发 rowPicked 信号）。
 //
-// 避坑备忘：
+// 接口契约：
+// - model: TreeRowsModel，结构角色 depth / expandable / expanded，内容列按 columns 取行数据。
+// - columns: 列规格数组 {role, width, align}；width 为 null 的弹性列须是第一列。
+// - tag 列不按列宽排布：聚拢行右缘、自适应内容宽，须在列序末尾连续。
+// - 首列的 subRole 给出次行角色：取值非空的行双行显示（主行 + 次行）。
+//
+// 约束：
 // - 委托组件销毁期间，内部属性绑定若引用 parent 会触发 Qt TypeError，因此行内坐标统一基于局部 id 算式定位。
 
 Item {
