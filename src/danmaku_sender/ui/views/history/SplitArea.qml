@@ -6,7 +6,7 @@ import QtQuick.Layouts
 import "../../framework/qml" as Fluent
 
 // 历史页分栏区：
-// 整块一个 Quick 场景，分栏拖动只改场景内两个栏的宽度，承载面（原生 Quick 窗口）不改尺寸。
+// 整块一个 Quick 场景，分栏拖动只改场景内两个栏的宽度，宿主窗口不改尺寸。
 // 通用件是 Fluent.TreeView 与 Fluent.TableView，本文件仅承担组装与历史页专属组件（按钮、筛选行、标识条、菜单）。
 Item {
     id: root
@@ -18,7 +18,7 @@ Item {
     required property var treeColumns
     required property var tableColumns
 
-    // QtQuick.Controls 的调色板：原生风格控件不解析 theme 令牌，按令牌映射到 palette
+    // QtQuick.Controls 的调色板：原生风格控件不解析 theme token，按 token 映射到 palette
     palette.window: root.theme.SolidBackgroundFillColorTertiary
     palette.base: root.theme.SolidBackgroundFillColorTertiary
     palette.alternateBase: root.theme.SubtleFillColorTertiary

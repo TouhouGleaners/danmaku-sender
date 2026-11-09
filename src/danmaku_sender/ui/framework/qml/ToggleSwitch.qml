@@ -12,7 +12,7 @@ import QtQuick
 // 契约：
 // - theme 为 QmlPaletteBridge；checked 为开关状态，toggled 为状态变化信号。
 // - onText / offText 为状态文字；色阶随主题换装；焦点环仅键盘聚焦时显示。
-// - surface 为承载面表面色，宿主随 Card.surfaceChanged 推送；根自绘表面底，圆角外四角与边缘抗锯齿混色取同一表面色，不依赖 clearColor。
+// - surface 为底色，宿主随 Card.surfaceChanged 推送，根自绘垫底；圆角外四角与边缘抗锯齿混色同取此色，不依赖 clearColor。
 Item {
     id: root
 

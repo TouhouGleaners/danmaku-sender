@@ -1,11 +1,11 @@
-"""QML 承载基座。
+"""QML 宿主基座。
 
 把 QML 表面嵌入 widgets 界面，并以根对象初始属性注入主题 token 与字体。
 取色与字体均取自控件自身的 QPalette / QFont，随全局主题与字体变更同步。
 
 两种承载：QmlHost 以 QQuickWidget 装进控件树，适合小控件；
 QmlWindowHost 以原生 Quick 窗口承载，适合大场景——不经控件贴图回读，
-且场景内部的布局变化（如分栏拖动）不触碰承载面的改尺寸。
+且场景内部的布局变化（如分栏拖动）不改变宿主窗口的尺寸。
 """
 from pathlib import Path
 from typing import Any
@@ -157,7 +157,7 @@ class QmlPaletteBridge(QObject):
 
 
 class QmlHost(QQuickWidget):
-    """QML 表面承载器：加载 QML 并保持主题 token 同步。
+    """QML 宿主：加载 QML 并保持主题 token 同步。
 
     构造时把 ``theme`` 与调用方给出的对象作为根对象初始属性注入后立即加载，
     调用方须在构造前备齐要注入的对象，QML 根对象按名声明对应 required property。
@@ -250,7 +250,7 @@ class QmlHost(QQuickWidget):
             parent.surfaceChanged.connect(self._sync_surface)
 
     def _sync_surface(self) -> None:
-        """把 clearColor 与 QML 根对象 surface 属性同步为承载面表面色。
+        """把 clearColor 与 QML 根对象 surface 属性同步为底色。
 
         有 Card 祖先时取其 surface_color（surfaceChanged 驱动跟随）；否则回退父件调色板的 Window（页面底）。
         """
@@ -270,8 +270,8 @@ class QmlHost(QQuickWidget):
 class QmlWindowHost(QWidget):
     """以原生 Quick 窗口承载 QML 大场景的宿主控件。
 
-    注入契约与 :class:`QmlHost` 相同。承载面不经控件贴图回读；
-    场景内部的布局变化（如分栏拖动）不触碰承载面的改尺寸。
+    注入契约与 :class:`QmlHost` 相同。宿主窗口不经控件贴图回读；
+    场景内部的布局变化（如分栏拖动）不改变宿主窗口的尺寸。
 
     Args:
         qml_path (Path): QML 文件路径。

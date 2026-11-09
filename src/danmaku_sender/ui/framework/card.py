@@ -40,8 +40,8 @@ class Card(QFrame):
     建立布局挂载内容。
 
     Attributes:
-        surface_color (QColor): 当前表面色（卡面叠加悬停薄纱）；
-            经 surfaceChanged 广播，承载的 QML 宿主以此跟随。
+        surface_color (QColor): 当前表面色（卡面叠加悬停罩色）；
+            经 surfaceChanged 广播，QML 宿主以此跟随。
     """
 
     surfaceChanged = Signal()
@@ -134,7 +134,7 @@ class Card(QFrame):
         if self._plate_reveal <= 0.0:
             return
 
-        # 以前景色作薄纱：浅色主题下压暗、深色主题下提亮，两向均有对比
+        # 以前景色作罩色：浅色主题下压暗、深色主题下提亮，两向均有对比
         color = QColor(ThemeService.tokens.TextFillColorPrimary)
         color.setAlphaF(color.alphaF() * self.PLATE_SCRIM_ALPHA * self._plate_reveal)
 
@@ -175,9 +175,9 @@ class Card(QFrame):
     def _sync_surface_color(self) -> None:
         """按 ThemeService.tokens 计算表面色并广播 surfaceChanged。
 
-        表面色 = 卡面叠加悬停薄纱后的混合结果；
+        表面色 = 卡面叠加悬停罩色后的混合结果；
         卡面按外观取色：layer 取 CardBackgroundFillColorDefault、alt 取 CardBackgroundFillColorSecondary、danger 取 SystemFillColorAttentionBackground；
-        子件的调色板继承不可靠，由 surfaceChanged 信号推送，承载的 QML 宿主以此跟随。
+        子件的调色板继承不可靠，由 surfaceChanged 信号推送，QML 宿主以此跟随。
         """
         tokens = ThemeService.tokens
         if self.property("danger") == "true":

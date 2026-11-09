@@ -5,7 +5,7 @@ import QtQuick
 // 小标签：圆角 full、字重常规，内边距由调用方按场景给（padding）。
 //
 // 契约：
-// - theme 为令牌桥；text 为标签文字。
+// - theme 为 QmlPaletteBridge；text 为标签文字。
 // - tone 为健康档取值 good / warn / bad / neutral，配色取 theme.healthColors[tone][dark ? "dark" : "light"]，
 //   空档与未知档回落 neutral。三元组 {fg, bg, border} 由 HealthColors 折算：浅色淡底深字、深色晕底亮字。
 // - 描边仅深色模式有（1）；浅色不留描边。
