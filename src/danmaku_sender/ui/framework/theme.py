@@ -149,12 +149,19 @@ class ThemeService(QObject):
 
     @staticmethod
     def _scheme_to_mode(scheme: Qt.ColorScheme) -> ThemeMode:
-        """把系统色彩方案归入浅、深两档；未知方案（如高对比度）按浅色处理并告警。"""
+        """将系统主题方案枚举值映射为 ThemeMode。
+
+        Args:
+            scheme(Qt.ColorScheme): 系统色彩方案枚举值
+        """
         match scheme:
             case Qt.ColorScheme.Light:
                 return ThemeMode.LIGHT
             case Qt.ColorScheme.Dark:
                 return ThemeMode.DARK
+            case Qt.ColorScheme.Unknown:
+                logger.debug("系统色彩方案未知，默认回退为浅色模式")
+                return ThemeMode.LIGHT
             case _:
                 logger.warning(f"未知系统色彩方案: {scheme}，回退为浅色模式")
                 return ThemeMode.LIGHT
