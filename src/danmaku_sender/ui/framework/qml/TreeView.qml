@@ -3,18 +3,32 @@ pragma ComponentBehavior: Bound
 import QtQuick
 import QtQuick.Controls
 
-// 通用 Fluent 风格树视图。度量与状态依 WinUI 3 TreeView，缩进依 VSCode 资源管理器收紧：
-// 行槽 32（内容 28 + 上下边距 2；带次行的行 44）、内容圆角 4、缩进 8/层、chevron 槽 24（字形 12，双字形切换不旋转，叶行同槽放叶图标）、选中条 3×16 圆角 2；
-// 状态取色依 SubtleFill 阶梯——悬停/选中 Secondary，悬停于选中、按压未选中 Tertiary。
-// 展开 = 子行滑入淡入，收起 = 淡出；键盘：↑↓ 选行、→ 展开或进入子行、← 收起或返回父行、Enter 选中、Home/End。
+// 通用 Fluent 风格树形层级视图 (WinUI 3 TreeView)
 //
-// 契约：
-// - model 为 TreeRowsModel：
-//   结构角色 depth/expandable/expanded，内容列按 columns 的 {role, width, align} 渲染；
-//   width 为 null 的弹性列须是第一列。
-// - 标签列（tag）不按列宽排布：聚拢行右缘（右缘预留拇指槽 6）、自适应内容宽、按列序间距 4；须在列序末尾连续。
-// - 首列的 subRole 给出次行角色：取值非空的行双行显示（主行 + 次行，行高 44），空值行单行（行高 32）。
-// - 行内定位一律不引用 parent（delegate 销毁期绑定解引用会触发 TypeError）。
+// 设计与交互规范：
+// 1. 结构与度量：
+//    - 单行标准高 32px（若首列带有次行副标题则自动扩展至 44px），行内四周留白 2px，圆角 4px。
+//    - 缩进深度：每层按 8px 紧凑递增（对齐现代开发工具如 VS Code 的紧致层级感）。
+//    - 节点折叠与展开：由左侧 24px 宽度的独立点击热区触发，使用双字形无旋转切换。
+//      叶子节点无箭头，而是在同一占位处显示文档图标，确保文字起始线垂直对齐。
+// 2. 选中指示器：
+//    - 行左侧直接绘制 3x16px 圆角高亮滑块，不依赖 ListView.highlight 的几何移动，杜绝位移延迟。
+//    - 悬停与按压态严格遵循 WinUI 3 SubtleFill 色阶层次。
+// 3. 键盘操作支持：
+//    - 方向键 ↑ / ↓：切换选中行。
+//    - 方向键 →：若处于折叠状态则展开当前节点；若已展开则焦点顺次进入首个子节点。
+//    - 方向键 ←：若处于展开状态则折叠当前节点；若已折叠则焦点返回父节点。
+//    - 回车键 (Enter / Return)：激活选中项（触发 rowPicked 信号）。
+//
+// 接口契约：
+// - model: TreeRowsModel，结构角色 depth / expandable / expanded，内容列按 columns 取行数据。
+// - columns: 列规格数组 {role, width, align}；width 为 null 的弹性列须是第一列。
+// - tag 列不按列宽排布：聚拢行右缘、自适应内容宽，须在列序末尾连续。
+// - 首列的 subRole 给出次行角色：取值非空的行双行显示（主行 + 次行）。
+//
+// 约束：
+// - 委托组件销毁期间，内部属性绑定若引用 parent 会触发 Qt TypeError，因此行内坐标统一基于局部 id 算式定位。
+
 Item {
     id: root
 
@@ -24,6 +38,7 @@ Item {
 
     signal rowPicked(int row)
 
+    // 区分键盘导航与鼠标点击（键盘模式下显示焦点环，对齐 WinUI FocusVisuals 行为）
     property bool keyboardMode: false
     activeFocusOnTab: true
 
@@ -46,10 +61,9 @@ Item {
             event.accepted = true
             break
         case Qt.Key_Right: {
-            // WinUI 语义：收起时展开，已展开则进入首个子行
+            // 展开当前项；若已展开则进入第一个子项
             const cur = tree.currentIndex
             if (!root.model.expand(cur)) {
-                // 返回 None 时 QML 侧是 undefined，仅 number 是有效行号
                 const child = root.model.first_child_row(cur)
                 if (typeof child === "number") {
                     tree.currentIndex = child
@@ -60,10 +74,9 @@ Item {
             break
         }
         case Qt.Key_Left: {
-            // WinUI 语义：展开时收起，已收起则返回父行
+            // 折叠当前项；若已折叠则回退到父项
             const cur = tree.currentIndex
             if (!root.model.collapse(cur)) {
-                // 返回 None 时 QML 侧是 undefined，仅 number 是有效行号
                 const parentRow = root.model.parent_row(cur)
                 if (typeof parentRow === "number") {
                     tree.currentIndex = parentRow
@@ -99,6 +112,8 @@ Item {
         currentIndex: -1
         boundsBehavior: Flickable.StopAtBounds
         keyNavigationEnabled: false
+
+        // 垂直滚动条
         ScrollBar.vertical: ScrollBar {
             id: vScroll
             width: 12
@@ -117,6 +132,7 @@ Item {
             background: Item {}
         }
 
+        // 展开与折叠动效（平滑淡入滑出）
         add: Transition {
             ParallelAnimation {
                 NumberAnimation { property: "opacity"; from: 0; to: 1; duration: 150 }
@@ -147,11 +163,15 @@ Item {
             readonly property int indent: depth * 8
             readonly property bool isCurrent: tree.currentIndex === row.index
 
+            // 次行副标题：仅首列支持，若存在则行高扩展至 44px
             readonly property string subRoleName: root.columns.length > 0 ? (root.columns[0].subRole ?? "") : ""
             readonly property string subText: row.subRoleName ? (row.model[row.subRoleName] ?? "") : ""
             readonly property bool twoLine: row.subText !== ""
 
-            // 标签簇定位于行右缘的拇指槽内缘；定宽非标签列自标签簇左缘逆向排列，弹性列自 chevron 槽后起排
+            // 布局算法：
+            // 1. 右侧标签簇定位于行最右端（右边预留 6px 避免遮挡悬浮滚动条）。
+            // 2. 固定宽度的非标签列，从标签簇的左边缘开始【自右向左】逆向递减计算 X 坐标。
+            // 3. 第 0 列（弹性文本列）自左侧展开图标右缘开始，宽度自适应填满中间所有剩余空间。
             function trailingX(idx) {
                 let x = tagRow.x - 8
                 for (let i = root.columns.length - 1; i > idx; --i)
@@ -166,7 +186,6 @@ Item {
                 const spec = root.columns[idx]
                 if (spec.width !== null && spec.width !== undefined)
                     return spec.width
-                // 弹性列右缘止于首个非标签定宽列，无则止于标签簇
                 let right = tagRow.x - 8
                 let gap = 0
                 for (let i = idx + 1; i < root.columns.length; ++i) {
@@ -190,14 +209,25 @@ Item {
                 width: row.width - 8
                 height: row.height - 4
                 radius: 4
-                // WinUI 状态矩阵：按压未选中 / 悬停于选中 → Tertiary；其余悬停与选中 → Secondary
-                color: rowMouse.pressed || chevronMouse.pressed
-                        ? (row.isCurrent ? root.theme.SubtleFillColorSecondary : root.theme.SubtleFillColorTertiary)
-                    : row.isCurrent && rowMouse.containsMouse ? root.theme.SubtleFillColorTertiary
-                    : row.isCurrent || rowMouse.containsMouse ? root.theme.SubtleFillColorSecondary
-                    : "transparent"
 
-                // 选中条绘制在本行内：随行而定，不依赖 highlight 定位
+                color: {
+                    // 按压状态：点击未选态用 Tertiary，悬停已选态用 Secondary
+                    if (rowMouse.pressed || chevronMouse.pressed) {
+                        return row.isCurrent ? root.theme.SubtleFillColorSecondary : root.theme.SubtleFillColorTertiary;
+                    }
+                    // 悬停且已选态：用 Tertiary
+                    if (row.isCurrent && rowMouse.containsMouse) {
+                        return root.theme.SubtleFillColorTertiary;
+                    }
+                    // 常态已选 或 悬停未选：用 Secondary
+                    if (row.isCurrent || rowMouse.containsMouse) {
+                        return root.theme.SubtleFillColorSecondary;
+                    }
+                    // 默认透明
+                    return "transparent";
+                }
+
+                // 选中指示器：行左侧绘制 3x16px 圆角高亮滑块，避免使用 ListView.highlight 的几何移动，杜绝位移延迟
                 Rectangle {
                     x: 0
                     y: (bg.height - height) / 2
@@ -221,6 +251,7 @@ Item {
                     visible: root.keyboardMode && root.activeFocus && row.isCurrent
                 }
 
+                // 展开/收起箭头图标（仅在含有子节点时可见）
                 Text {
                     id: chevronGlyph
                     x: row.indent + 4
@@ -234,7 +265,7 @@ Item {
                     color: rowMouse.pressed || chevronMouse.pressed ? root.theme.TextFillColorSecondary : root.theme.TextFillColorPrimary
                 }
 
-                // 叶行无 chevron，同槽放叶图标；与 chevron 同字形族同尺寸
+                // 叶子节点文档占位图标（与箭头共享相同位置，保证文字始终垂直对齐）
                 Text {
                     id: leafGlyph
                     x: row.indent + 4
@@ -248,7 +279,7 @@ Item {
                     color: root.theme.TextFillColorSecondary
                 }
 
-                // 标签列聚拢行右缘，按列序依次排列；右缘预留拇指槽，避让滚动条
+                // 右侧标签组（贴右排列，并留出避让滚动条的 6px 右边距）
                 Row {
                     id: tagRow
                     anchors.right: bg.right
@@ -270,6 +301,7 @@ Item {
                     }
                 }
 
+                // 常规文本单元格排布
                 Repeater {
                     model: root.columns
                     delegate: Item {
@@ -287,6 +319,7 @@ Item {
                         width: cell.isTag ? 0 : row.columnWidth(index, row.indent)
                         height: cell.withSub ? 36 : 20
 
+                        // 主标题文本
                         Text {
                             id: plainLabel
                             x: 0
@@ -305,7 +338,7 @@ Item {
                                 : root.theme.TextFillColorSecondary
                         }
 
-                        // 次行：同号次要色，与主行紧凑排布为双行
+                        // 次行副标题文本（仅首列且存在副标题时展开双行）
                         Text {
                             id: subLabel
                             visible: cell.withSub
@@ -324,6 +357,7 @@ Item {
                     }
                 }
 
+                // 整行点击交互区（选中该行并上报）
                 MouseArea {
                     id: rowMouse
                     x: 0
@@ -343,7 +377,7 @@ Item {
                     }
                 }
 
-                // chevron 命中区叠于行命中区之上，单击只切换展开，不选中
+                // 展开/收起点击：仅切换展开状态，不改变当前选中项
                 MouseArea {
                     id: chevronMouse
                     x: row.indent
