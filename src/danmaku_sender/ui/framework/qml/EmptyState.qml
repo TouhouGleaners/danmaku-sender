@@ -28,7 +28,7 @@ Item {
             horizontalAlignment: Text.AlignHCenter
             font.family: root.theme.fontFamily
             font.pointSize: root.theme.fontPointSize + 2
-            color: root.theme.text
+            color: root.theme.TextFillColorPrimary
         }
 
         Text {
@@ -39,7 +39,7 @@ Item {
             horizontalAlignment: Text.AlignHCenter
             font.family: root.theme.fontFamily
             font.pointSize: root.theme.fontPointSize
-            color: root.theme.textSecondary
+            color: root.theme.TextFillColorSecondary
         }
 
         Item {

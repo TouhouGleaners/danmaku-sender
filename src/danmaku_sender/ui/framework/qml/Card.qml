@@ -15,8 +15,8 @@ Rectangle {
     default property alias content: inner.data
 
     radius: 4
-    color: root.theme.card
-    border.color: root.theme.divider
+    color: root.theme.CardBackgroundFillColorDefault
+    border.color: root.theme.DividerStrokeColorDefault
     border.width: 1
     clip: true
 
@@ -28,7 +28,7 @@ Rectangle {
         anchors.leftMargin: 4
         anchors.rightMargin: 4
         height: 1
-        color: root.theme.border
+        color: root.theme.ControlStrokeColorDefault
     }
 
     Item {

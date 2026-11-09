@@ -111,7 +111,7 @@ Item {
 
             contentItem: Rectangle {
                 radius: 3
-                color: vScroll.hovered || vScroll.pressed ? root.theme.textSecondary : root.theme.border
+                color: vScroll.hovered || vScroll.pressed ? root.theme.TextFillColorSecondary : root.theme.ControlStrokeColorDefault
             }
 
             background: Item {}
@@ -192,9 +192,9 @@ Item {
                 radius: 4
                 // WinUI 状态矩阵：按压未选中 / 悬停于选中 → Tertiary；其余悬停与选中 → Secondary
                 color: rowMouse.pressed || chevronMouse.pressed
-                        ? (row.isCurrent ? root.theme.fillHover : root.theme.fillPressed)
-                    : row.isCurrent && rowMouse.containsMouse ? root.theme.fillPressed
-                    : row.isCurrent || rowMouse.containsMouse ? root.theme.fillHover
+                        ? (row.isCurrent ? root.theme.SubtleFillColorSecondary : root.theme.SubtleFillColorTertiary)
+                    : row.isCurrent && rowMouse.containsMouse ? root.theme.SubtleFillColorTertiary
+                    : row.isCurrent || rowMouse.containsMouse ? root.theme.SubtleFillColorSecondary
                     : "transparent"
 
                 // 选中条绘制在本行内：随行而定，不依赖 highlight 定位
@@ -204,7 +204,7 @@ Item {
                     width: 3
                     height: 16
                     radius: 2
-                    color: root.theme.accent
+                    color: root.theme.AccentFillColorDefault
                     visible: row.isCurrent
                 }
 
@@ -216,7 +216,7 @@ Item {
                     height: bg.height
                     radius: 6
                     color: "transparent"
-                    border.color: root.theme.accent
+                    border.color: root.theme.AccentFillColorDefault
                     border.width: 2
                     visible: root.keyboardMode && root.activeFocus && row.isCurrent
                 }
@@ -231,7 +231,7 @@ Item {
                     text: row.expanded ? root.theme.chevronExpanded : root.theme.chevronCollapsed
                     font.family: root.theme.iconFontFamily
                     font.pixelSize: 12
-                    color: rowMouse.pressed || chevronMouse.pressed ? root.theme.textSecondary : root.theme.text
+                    color: rowMouse.pressed || chevronMouse.pressed ? root.theme.TextFillColorSecondary : root.theme.TextFillColorPrimary
                 }
 
                 // 叶行无 chevron，同槽放叶图标；与 chevron 同字形族同尺寸
@@ -245,7 +245,7 @@ Item {
                     text: root.theme.leafGlyph
                     font.family: root.theme.iconFontFamily
                     font.pixelSize: 12
-                    color: root.theme.textSecondary
+                    color: root.theme.TextFillColorSecondary
                 }
 
                 // 标签列聚拢行右缘，按列序依次排列；右缘预留拇指槽，避让滚动条
@@ -301,8 +301,8 @@ Item {
                             font.family: root.theme.fontFamily
                             font.pointSize: root.theme.fontPointSize
                             color: cell.index === 0
-                                ? ((rowMouse.pressed || chevronMouse.pressed) ? root.theme.textSecondary : root.theme.text)
-                                : root.theme.textSecondary
+                                ? ((rowMouse.pressed || chevronMouse.pressed) ? root.theme.TextFillColorSecondary : root.theme.TextFillColorPrimary)
+                                : root.theme.TextFillColorSecondary
                         }
 
                         // 次行：同号次要色，与主行紧凑排布为双行
@@ -319,7 +319,7 @@ Item {
                             elide: Text.ElideRight
                             font.family: root.theme.fontFamily
                             font.pointSize: root.theme.fontPointSize
-                            color: root.theme.textSecondary
+                            color: root.theme.TextFillColorSecondary
                         }
                     }
                 }

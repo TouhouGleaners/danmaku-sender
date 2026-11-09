@@ -47,7 +47,7 @@ class TestDisabledGroup:
             for role in DISABLED_TEXT_ROLES:
                 normal = qpal.color(QPalette.ColorGroup.Active, role)
                 disabled = qpal.color(QPalette.ColorGroup.Disabled, role)
-                assert disabled.name() == palette.text_secondary, (
-                    f"{mode} 下 {role} 的 Disabled 色应为 text_secondary"
+                assert disabled.name() == palette.TextFillColorSecondary, (
+                    f"{mode} 下 {role} 的 Disabled 色应为 TextFillColorSecondary"
                 )
                 assert disabled != normal, f"{mode} 下 {role} 禁用态未弱化"

@@ -66,52 +66,52 @@ class QmlPaletteBridge(QObject):
         self.changed.emit()
 
     @Property(QColor, notify=changed)
-    def background(self) -> QColor:
+    def SolidBackgroundFillColorTertiary(self) -> QColor:
         """页面基底色，取自 QPalette.Window。"""
         return self._palette.color(QPalette.ColorRole.Window)
 
     @Property(QColor, notify=changed)
-    def fillHover(self) -> QColor:
+    def SubtleFillColorSecondary(self) -> QColor:
         """悬停填充，取自 QPalette.Light。"""
         return self._palette.color(QPalette.ColorRole.Light)
 
     @Property(QColor, notify=changed)
-    def fillPressed(self) -> QColor:
+    def SubtleFillColorTertiary(self) -> QColor:
         """按压填充，取自 QPalette.Midlight。"""
         return self._palette.color(QPalette.ColorRole.Midlight)
 
     @Property(QColor, notify=changed)
-    def text(self) -> QColor:
+    def TextFillColorPrimary(self) -> QColor:
         """正文色，取自 QPalette.Text。"""
         return self._palette.color(QPalette.ColorRole.Text)
 
     @Property(QColor, notify=changed)
-    def textSecondary(self) -> QColor:
+    def TextFillColorSecondary(self) -> QColor:
         """次要文字色，取自 QPalette.PlaceholderText。"""
         return self._palette.color(QPalette.ColorRole.PlaceholderText)
 
     @Property(QColor, notify=changed)
-    def accent(self) -> QColor:
+    def AccentFillColorDefault(self) -> QColor:
         """强调色，取自 QPalette.Highlight。"""
         return self._palette.color(QPalette.ColorRole.Highlight)
 
     @Property(QColor, notify=changed)
-    def border(self) -> QColor:
+    def ControlStrokeColorDefault(self) -> QColor:
         """描边色，取自 QPalette.Mid。"""
         return self._palette.color(QPalette.ColorRole.Mid)
 
     @Property(QColor, notify=changed)
-    def card(self) -> QColor:
+    def CardBackgroundFillColorDefault(self) -> QColor:
         """卡片表面色，取自 QPalette.ToolTipBase。"""
         return self._palette.color(QPalette.ColorRole.ToolTipBase)
 
     @Property(QColor, notify=changed)
-    def divider(self) -> QColor:
+    def DividerStrokeColorDefault(self) -> QColor:
         """分隔线色，取自 QPalette.Shadow。"""
         return self._palette.color(QPalette.ColorRole.Shadow)
 
     @Property(QColor, notify=changed)
-    def strokeStrong(self) -> QColor:
+    def ControlStrongStrokeColorDefault(self) -> QColor:
         """强描边色，取自 QPalette.Dark。"""
         return self._palette.color(QPalette.ColorRole.Dark)
 

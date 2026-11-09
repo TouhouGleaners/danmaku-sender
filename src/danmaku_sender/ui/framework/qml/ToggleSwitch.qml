@@ -21,15 +21,15 @@ Item {
     property bool checked: false
     property string onText: "开"
     property string offText: "关"
-    property color surface: root.theme.background
+    property color surface: root.theme.SolidBackgroundFillColorTertiary
     signal toggled(bool checked)
 
-    property color fillOn: root.theme.accent
-    property color fillOff: root.theme.fillPressed
-    property color strokeOn: root.theme.accent
-    property color strokeOff: root.theme.border
+    property color fillOn: root.theme.AccentFillColorDefault
+    property color fillOff: root.theme.SubtleFillColorTertiary
+    property color strokeOn: root.theme.AccentFillColorDefault
+    property color strokeOff: root.theme.ControlStrokeColorDefault
     property color knobFillOn: "#FFFFFF"
-    property color knobFillOff: root.theme.textSecondary
+    property color knobFillOff: root.theme.TextFillColorSecondary
 
     readonly property bool hovered: area.containsMouse
     readonly property bool pressed: area.pressed
@@ -89,7 +89,7 @@ Item {
             anchors.left: parent.left
             anchors.verticalCenter: parent.verticalCenter
             text: root.checked ? root.onText : root.offText
-            color: root.theme.text
+            color: root.theme.TextFillColorPrimary
             font.family: root.theme.fontFamily
             // WinUI 正文档为 14px（ControlContentThemeFontSize），状态文字随控件档
             font.pixelSize: 14
@@ -145,7 +145,7 @@ Item {
         radius: 10
         color: "transparent"
         border.width: 2
-        border.color: root.theme.text
+        border.color: root.theme.TextFillColorPrimary
     }
 
     MouseArea {

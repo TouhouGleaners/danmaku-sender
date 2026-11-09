@@ -135,7 +135,7 @@ class Card(QFrame):
             return
 
         # 以前景色作薄纱：浅色主题下压暗、深色主题下提亮，两向均有对比
-        color = QColor(ThemeService.tokens.text_main)
+        color = QColor(ThemeService.tokens.TextFillColorPrimary)
         color.setAlphaF(color.alphaF() * self.PLATE_SCRIM_ALPHA * self._plate_reveal)
 
         painter = QPainter(self)
@@ -176,18 +176,18 @@ class Card(QFrame):
         """按 ThemeService.tokens 计算表面色并广播 surfaceChanged。
 
         表面色 = 卡面叠加悬停薄纱后的混合结果；
-        卡面按外观取色：layer 取 bg_layer、alt 取 bg_layer_alt、danger 取 danger_bg；
+        卡面按外观取色：layer 取 CardBackgroundFillColorDefault、alt 取 CardBackgroundFillColorSecondary、danger 取 SystemFillColorAttentionBackground；
         子件的调色板继承不可靠，由 surfaceChanged 信号推送，承载的 QML 宿主以此跟随。
         """
         tokens = ThemeService.tokens
         if self.property("danger") == "true":
-            face = tokens.danger_bg
+            face = tokens.SystemFillColorAttentionBackground
         elif self.appearance() is CardAppearance.LAYER_ALT:
-            face = tokens.bg_layer_alt
+            face = tokens.CardBackgroundFillColorSecondary
         else:
-            face = tokens.bg_layer
+            face = tokens.CardBackgroundFillColorDefault
         surface = QColor(face)
-        scrim = QColor(tokens.text_main)
+        scrim = QColor(tokens.TextFillColorPrimary)
         factor = self.PLATE_SCRIM_ALPHA * self._plate_reveal
         blended = QColor(
             round(surface.red() * (1 - factor) + scrim.red() * factor),

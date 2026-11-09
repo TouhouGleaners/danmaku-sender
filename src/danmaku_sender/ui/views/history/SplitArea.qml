@@ -19,18 +19,18 @@ Item {
     required property var tableColumns
 
     // QtQuick.Controls 的调色板：原生风格控件不解析 theme 令牌，按令牌映射到 palette
-    palette.window: root.theme.background
-    palette.base: root.theme.background
-    palette.alternateBase: root.theme.fillPressed
-    palette.text: root.theme.text
-    palette.windowText: root.theme.text
-    palette.button: root.theme.fillPressed
-    palette.buttonText: root.theme.text
-    palette.highlight: root.theme.accent
-    palette.highlightedText: root.theme.background
-    palette.placeholderText: root.theme.textSecondary
-    palette.mid: root.theme.fillPressed
-    palette.light: root.theme.fillHover
+    palette.window: root.theme.SolidBackgroundFillColorTertiary
+    palette.base: root.theme.SolidBackgroundFillColorTertiary
+    palette.alternateBase: root.theme.SubtleFillColorTertiary
+    palette.text: root.theme.TextFillColorPrimary
+    palette.windowText: root.theme.TextFillColorPrimary
+    palette.button: root.theme.SubtleFillColorTertiary
+    palette.buttonText: root.theme.TextFillColorPrimary
+    palette.highlight: root.theme.AccentFillColorDefault
+    palette.highlightedText: root.theme.SolidBackgroundFillColorTertiary
+    palette.placeholderText: root.theme.TextFillColorSecondary
+    palette.mid: root.theme.SubtleFillColorTertiary
+    palette.light: root.theme.SubtleFillColorSecondary
 
     SplitView {
         anchors.fill: parent
@@ -45,7 +45,7 @@ Item {
                 width: 2
                 height: parent.height
                 radius: 1
-                color: handleArea.pressed ? root.theme.strokeStrong : root.theme.divider
+                color: handleArea.pressed ? root.theme.ControlStrongStrokeColorDefault : root.theme.DividerStrokeColorDefault
                 opacity: handleArea.pressed || handleArea.containsMouse ? 1.0 : 0.0
                 Behavior on opacity { NumberAnimation { duration: 100 } }
             }
@@ -117,7 +117,7 @@ Item {
                             font.family: root.theme.fontFamily
                             font.pointSize: root.theme.fontPointSize
                             font.weight: Font.DemiBold
-                            color: root.theme.text
+                            color: root.theme.TextFillColorPrimary
                             textFormat: Text.PlainText
                         }
 
@@ -128,7 +128,7 @@ Item {
                             wrapMode: Text.WordWrap
                             font.family: root.theme.fontFamily
                             font.pointSize: root.theme.fontPointSize
-                            color: root.theme.text
+                            color: root.theme.TextFillColorPrimary
                             textFormat: Text.PlainText
                         }
                     }
@@ -144,14 +144,14 @@ Item {
                                 font.family: root.theme.fontFamily
                                 font.pointSize: root.theme.fontPointSize * 2
                                 font.bold: true
-                                color: root.theme.accent
+                                color: root.theme.AccentFillColorDefault
                             }
 
                             Text {
                                 text: "存活率"
                                 font.family: root.theme.fontFamily
                                 font.pointSize: root.theme.fontPointSize
-                                color: root.theme.textSecondary
+                                color: root.theme.TextFillColorSecondary
                             }
                         }
 
@@ -171,7 +171,7 @@ Item {
                                         text: statRow.modelData.label
                                         font.family: root.theme.fontFamily
                                         font.pointSize: root.theme.fontPointSize
-                                        color: root.theme.textSecondary
+                                        color: root.theme.TextFillColorSecondary
                                         textFormat: Text.PlainText
                                     }
 
@@ -179,7 +179,7 @@ Item {
                                         text: statRow.modelData.value
                                         font.family: root.theme.fontFamily
                                         font.pointSize: root.theme.fontPointSize
-                                        color: root.theme.text
+                                        color: root.theme.TextFillColorPrimary
                                         textFormat: Text.PlainText
                                     }
                                 }
@@ -198,7 +198,7 @@ Item {
                 wrapMode: Text.WordWrap
                 font.family: root.theme.fontFamily
                 font.pointSize: root.theme.fontPointSize
-                color: root.theme.textSecondary
+                color: root.theme.TextFillColorSecondary
             }
 
             RowLayout {
@@ -209,7 +209,7 @@ Item {
                     text: "搜索:"
                     font.family: root.theme.fontFamily
                     font.pointSize: root.theme.fontPointSize
-                    color: root.theme.text
+                    color: root.theme.TextFillColorPrimary
                 }
                 TextField {
                     Layout.fillWidth: true
@@ -220,7 +220,7 @@ Item {
                     text: "状态:"
                     font.family: root.theme.fontFamily
                     font.pointSize: root.theme.fontPointSize
-                    color: root.theme.text
+                    color: root.theme.TextFillColorPrimary
                 }
                 ComboBox {
                     model: ["全部状态", "待验证", "已存活", "已丢失"]

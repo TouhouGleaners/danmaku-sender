@@ -21,17 +21,17 @@ def tokens(qapp):
 class TestCardSurfaceColor:
     def test_layer_surface_matches_token(self, tokens) -> None:
         card = Card()
-        assert card.surface_color == QColor(tokens.bg_layer)
+        assert card.surface_color == QColor(tokens.CardBackgroundFillColorDefault)
 
     def test_alt_surface_matches_token(self, tokens) -> None:
         card = Card()
         card.setAppearance(CardAppearance.LAYER_ALT)
-        assert card.surface_color == QColor(tokens.bg_layer_alt)
+        assert card.surface_color == QColor(tokens.CardBackgroundFillColorSecondary)
 
     def test_danger_surface_matches_token(self, tokens) -> None:
         """danger 属性晚于构造期落地时表面色仍须正确（危险区设置行的真实时序）。"""
         row = SettingsRow("允许重复发送", "说明", danger=True)
-        assert row.surface_color == QColor(tokens.danger_bg)
+        assert row.surface_color == QColor(tokens.SystemFillColorAttentionBackground)
 
     def test_surface_changed_broadcasts(self, tokens) -> None:
         card = Card()
@@ -47,4 +47,4 @@ class TestHostFollowsSurface:
         row = SettingsRow("允许重复发送", "说明", trailing=switch, danger=True)
         row.show()
         qapp.processEvents()
-        assert switch.rootObject().property("surface") == QColor(tokens.danger_bg)
+        assert switch.rootObject().property("surface") == QColor(tokens.SystemFillColorAttentionBackground)

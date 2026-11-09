@@ -675,11 +675,11 @@ class SenderPage(QWidget):
         """
         match value:
             case RunAction.PAUSE | RunAction.RESUME:
-                return QColor(palette.caution)
+                return QColor(palette.SystemFillColorCaution)
             case RunAction.STOP:
-                return QColor(palette.danger)
+                return QColor(palette.SystemFillColorAttention)
             case _:
-                return QColor(palette.success)
+                return QColor(palette.SystemFillColorSuccess)
 
     def apply_theme(self, palette: Palette) -> None:
         """主题切换后按当前调色板重设强调色。

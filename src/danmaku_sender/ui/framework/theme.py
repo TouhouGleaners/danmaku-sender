@@ -27,29 +27,29 @@ QSS_PATH = AppInfo.Paths.ASSETS / "qss" / "style.qss"
 # QPalette.ColorRole 到颜色来源的映射：取值为 Palette 的属性名，
 # 或以 # 开头的颜色字面量。须覆盖 Qt 全部 ColorRole，未覆盖的角色会被 Qt 回退为系统默认值。
 ROLE_SOURCES: dict[QPalette.ColorRole, str] = {
-    QPalette.ColorRole.Window: "bg_page",
-    QPalette.ColorRole.WindowText: "text_main",
-    QPalette.ColorRole.Base: "bg_control",
-    QPalette.ColorRole.AlternateBase: "bg_layer_alt",
-    QPalette.ColorRole.Text: "text_main",
-    QPalette.ColorRole.Button: "bg_hover",
-    QPalette.ColorRole.ButtonText: "text_main",
-    QPalette.ColorRole.BrightText: "primary",
-    QPalette.ColorRole.Highlight: "primary",
+    QPalette.ColorRole.Window: "SolidBackgroundFillColorTertiary",
+    QPalette.ColorRole.WindowText: "TextFillColorPrimary",
+    QPalette.ColorRole.Base: "ControlFillColorDefault",
+    QPalette.ColorRole.AlternateBase: "CardBackgroundFillColorSecondary",
+    QPalette.ColorRole.Text: "TextFillColorPrimary",
+    QPalette.ColorRole.Button: "ControlFillColorSecondary",
+    QPalette.ColorRole.ButtonText: "TextFillColorPrimary",
+    QPalette.ColorRole.BrightText: "AccentFillColorDefault",
+    QPalette.ColorRole.Highlight: "AccentFillColorDefault",
     QPalette.ColorRole.HighlightedText: "#ffffff",
-    QPalette.ColorRole.ToolTipBase: "bg_layer",
-    QPalette.ColorRole.ToolTipText: "text_main",
-    QPalette.ColorRole.PlaceholderText: "text_secondary",
-    QPalette.ColorRole.Link: "primary",
-    QPalette.ColorRole.LinkVisited: "primary",
-    QPalette.ColorRole.Accent: "primary",
+    QPalette.ColorRole.ToolTipBase: "CardBackgroundFillColorDefault",
+    QPalette.ColorRole.ToolTipText: "TextFillColorPrimary",
+    QPalette.ColorRole.PlaceholderText: "TextFillColorSecondary",
+    QPalette.ColorRole.Link: "AccentFillColorDefault",
+    QPalette.ColorRole.LinkVisited: "AccentFillColorDefault",
+    QPalette.ColorRole.Accent: "AccentFillColorDefault",
     # Light / Midlight 承载控件填充阶梯的悬停与按压档。
     # Mid / Dark / Shadow 服务于描边：Dark 为立体描边的强端，Shadow 为弱端与分隔线。
-    QPalette.ColorRole.Light: "control_secondary",
-    QPalette.ColorRole.Midlight: "control_tertiary",
-    QPalette.ColorRole.Mid: "border_color",
-    QPalette.ColorRole.Dark: "stroke_secondary",
-    QPalette.ColorRole.Shadow: "stroke_divider",
+    QPalette.ColorRole.Light: "SubtleFillColorSecondary",
+    QPalette.ColorRole.Midlight: "SubtleFillColorTertiary",
+    QPalette.ColorRole.Mid: "ControlStrokeColorDefault",
+    QPalette.ColorRole.Dark: "ControlStrongStrokeColorDefault",
+    QPalette.ColorRole.Shadow: "DividerStrokeColorDefault",
 }
 
 # setColor(role, color) 会同时写入 Disabled 组，使禁用态文字与正常态同色，
@@ -63,28 +63,28 @@ DISABLED_TEXT_ROLES: tuple[QPalette.ColorRole, ...] = (
 
 @dataclass(frozen=True)
 class Palette:
-    """系统色彩语义 Token（不可变）"""
-    bg_canvas: str
-    bg_chrome: str
-    bg_page: str
-    bg_layer: str
-    bg_layer_alt: str
-    bg_layer_overlay: str
-    bg_control: str
-    bg_hover: str
-    control_secondary: str
-    control_tertiary: str
-    border_color: str
-    stroke_secondary: str
-    stroke_divider: str
-    stroke_card: str
-    text_main: str
-    text_secondary: str
-    primary: str
-    success: str
-    caution: str
-    danger: str
-    danger_bg: str
+    """系统色彩语义 Token（不可变），字段名即 WinUI 3 ThemeResource 名。"""
+    SolidBackgroundFillColorBase: str
+    SolidBackgroundFillColorSecondary: str
+    SolidBackgroundFillColorTertiary: str
+    CardBackgroundFillColorDefault: str
+    CardBackgroundFillColorSecondary: str
+    LayerFillColorDefault: str
+    ControlFillColorDefault: str
+    ControlFillColorSecondary: str
+    SubtleFillColorSecondary: str
+    SubtleFillColorTertiary: str
+    ControlStrokeColorDefault: str
+    ControlStrongStrokeColorDefault: str
+    DividerStrokeColorDefault: str
+    CardStrokeColorDefault: str
+    TextFillColorPrimary: str
+    TextFillColorSecondary: str
+    AccentFillColorDefault: str
+    SystemFillColorSuccess: str
+    SystemFillColorCaution: str
+    SystemFillColorAttention: str
+    SystemFillColorAttentionBackground: str
 
     def to_qpalette(self) -> QPalette:
         """映射为 Qt 原生调色板，供未被 QSS 覆盖的控件使用。
@@ -101,7 +101,7 @@ class Palette:
             p.setColor(role, QColor(color))
         # 覆写 Disabled 组文字色，恢复禁用态的置灰效果（见 DISABLED_TEXT_ROLES）
         for role in DISABLED_TEXT_ROLES:
-            p.setColor(QPalette.ColorGroup.Disabled, role, QColor(self.text_secondary))
+            p.setColor(QPalette.ColorGroup.Disabled, role, QColor(self.TextFillColorSecondary))
         return p
 
 
@@ -180,27 +180,27 @@ class ThemeService(QObject):
             try:
                 css = QSS_PATH.read_text(encoding="utf-8")
                 for token, color in {
-                    "{bg_canvas}": palette.bg_canvas,
-                    "{bg_chrome}": palette.bg_chrome,
-                    "{bg_page}": palette.bg_page,
-                    "{bg_layer}": palette.bg_layer,
-                    "{bg_layer_alt}": palette.bg_layer_alt,
-                    "{bg_layer_overlay}": palette.bg_layer_overlay,
-                    "{bg_control}": palette.bg_control,
-                    "{bg_hover}": palette.bg_hover,
-                    "{control_secondary}": palette.control_secondary,
-                    "{control_tertiary}": palette.control_tertiary,
-                    "{border_color}": palette.border_color,
-                    "{stroke_card}": palette.stroke_card,
-                    "{stroke_secondary}": palette.stroke_secondary,
-                    "{stroke_divider}": palette.stroke_divider,
-                    "{text_main}": palette.text_main,
-                    "{text_secondary}": palette.text_secondary,
-                    "{primary}": palette.primary,
-                    "{success}": palette.success,
-                    "{caution}": palette.caution,
-                    "{danger}": palette.danger,
-                    "{danger_bg}": palette.danger_bg,
+                    "{SolidBackgroundFillColorBase}": palette.SolidBackgroundFillColorBase,
+                    "{SolidBackgroundFillColorSecondary}": palette.SolidBackgroundFillColorSecondary,
+                    "{SolidBackgroundFillColorTertiary}": palette.SolidBackgroundFillColorTertiary,
+                    "{CardBackgroundFillColorDefault}": palette.CardBackgroundFillColorDefault,
+                    "{CardBackgroundFillColorSecondary}": palette.CardBackgroundFillColorSecondary,
+                    "{LayerFillColorDefault}": palette.LayerFillColorDefault,
+                    "{ControlFillColorDefault}": palette.ControlFillColorDefault,
+                    "{ControlFillColorSecondary}": palette.ControlFillColorSecondary,
+                    "{SubtleFillColorSecondary}": palette.SubtleFillColorSecondary,
+                    "{SubtleFillColorTertiary}": palette.SubtleFillColorTertiary,
+                    "{ControlStrokeColorDefault}": palette.ControlStrokeColorDefault,
+                    "{ControlStrongStrokeColorDefault}": palette.ControlStrongStrokeColorDefault,
+                    "{DividerStrokeColorDefault}": palette.DividerStrokeColorDefault,
+                    "{CardStrokeColorDefault}": palette.CardStrokeColorDefault,
+                    "{TextFillColorPrimary}": palette.TextFillColorPrimary,
+                    "{TextFillColorSecondary}": palette.TextFillColorSecondary,
+                    "{AccentFillColorDefault}": palette.AccentFillColorDefault,
+                    "{SystemFillColorSuccess}": palette.SystemFillColorSuccess,
+                    "{SystemFillColorCaution}": palette.SystemFillColorCaution,
+                    "{SystemFillColorAttention}": palette.SystemFillColorAttention,
+                    "{SystemFillColorAttentionBackground}": palette.SystemFillColorAttentionBackground,
                 }.items():
                     css = css.replace(token, color)
                 app.setStyleSheet(css)
