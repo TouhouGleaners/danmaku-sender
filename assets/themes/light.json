@@ -11,6 +11,7 @@
   "CardStrokeColorDefault": "rgba(0, 0, 0, 0.05)",
   "TextFillColorPrimary": "#191919",
   "TextFillColorSecondary": "#666666",
+  "TextOnAccentFillColorPrimary": "#ffffff",
   "AccentFillColorDefault": "#fb7299",
   "SystemFillColorSuccess": "#2ecc71",
   "SystemFillColorAttention": "#e74c3c",

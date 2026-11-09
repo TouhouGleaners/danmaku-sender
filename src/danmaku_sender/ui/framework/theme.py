@@ -42,7 +42,7 @@ ROLE_SOURCES: dict[QPalette.ColorRole, str] = {
     QPalette.ColorRole.ButtonText: "TextFillColorPrimary",
     QPalette.ColorRole.BrightText: "AccentFillColorDefault",
     QPalette.ColorRole.Highlight: "AccentFillColorDefault",
-    QPalette.ColorRole.HighlightedText: "TextFillColorPrimary",
+    QPalette.ColorRole.HighlightedText: "TextOnAccentFillColorPrimary",
     QPalette.ColorRole.ToolTipBase: "CardBackgroundFillColorDefault",
     QPalette.ColorRole.ToolTipText: "TextFillColorPrimary",
     QPalette.ColorRole.PlaceholderText: "TextFillColorSecondary",
@@ -57,7 +57,7 @@ ROLE_SOURCES: dict[QPalette.ColorRole, str] = {
 }
 
 # 禁用状态下需要降透明度/弱化的文本角色。
-# setPalette 会连同 Disabled 组一起覆写，因此需要单独对这些角色赋予次要文字色，确保置灰反馈明显。
+# setColor(role, color) 不带组时连写全组（含 Disabled），因此需要单独对这些角色赋予次要文字色，确保置灰反馈明显。
 DISABLED_TEXT_ROLES: tuple[QPalette.ColorRole, ...] = (
     QPalette.ColorRole.WindowText,
     QPalette.ColorRole.Text,
@@ -84,6 +84,7 @@ class Palette:
     CardStrokeColorDefault: str
     TextFillColorPrimary: str
     TextFillColorSecondary: str
+    TextOnAccentFillColorPrimary: str
     AccentFillColorDefault: str
     SystemFillColorSuccess: str
     SystemFillColorCaution: str
@@ -147,19 +148,22 @@ class ThemeService(QObject):
         return self._detect_system_mode()
 
     @staticmethod
+    def _scheme_to_mode(scheme: Qt.ColorScheme) -> ThemeMode:
+        """把系统色彩方案归入浅、深两档；未知方案（如高对比度）按浅色处理并告警。"""
+        match scheme:
+            case Qt.ColorScheme.Light:
+                return ThemeMode.LIGHT
+            case Qt.ColorScheme.Dark:
+                return ThemeMode.DARK
+            case _:
+                logger.warning(f"未知系统色彩方案: {scheme}，回退为浅色模式")
+                return ThemeMode.LIGHT
+
+    @staticmethod
     def _detect_system_mode() -> ThemeMode:
         """检测系统层面的深浅色模式"""
         if hasattr(QGuiApplication, "styleHints"):
-            hints = QGuiApplication.styleHints()
-            match hints.colorScheme():
-                case Qt.ColorScheme.Light:
-                    return ThemeMode.LIGHT
-                case Qt.ColorScheme.Dark:
-                    return ThemeMode.DARK
-                case _:
-                    logger.warning(f"未知系统色彩方案: {hints.colorScheme()}，回退为浅色模式")
-                    return ThemeMode.LIGHT
-
+            return ThemeService._scheme_to_mode(QGuiApplication.styleHints().colorScheme())
         return ThemeMode.LIGHT
 
     @staticmethod
@@ -167,8 +171,10 @@ class ThemeService(QObject):
         """从 assets/themes/{name}.json 加载调色板"""
         path = THEMES_DIR / f"{name}.json"
         data = read_json(path)
+        if data is None:
+            raise FileNotFoundError(f"主题文件缺失或无法解析: {path}")
         if not isinstance(data, dict):
-            raise FileNotFoundError(f"主题文件缺失或格式损坏: {path}")
+            raise TypeError(f"主题文件结构非法: {path}")
 
         try:
             return Palette(**data)
@@ -183,6 +189,7 @@ class ThemeService(QObject):
     def _render(self, palette: Palette) -> None:
         """同步更新 QPalette 与 QSS 样式表，使两者的渲染变更同时生效。"""
         self.current_palette = palette
+        # 先更新 tokens 再 setPalette：PaletteChange 触发的表面重算须取到新值
         ThemeService.tokens = palette
 
         app = QApplication.instance()
@@ -213,5 +220,4 @@ class ThemeService(QObject):
     def _on_system_scheme_changed(self, scheme: Qt.ColorScheme):
         """操作系统层面的深浅色切换回调"""
         if self._current_preference == ThemeMode.SYSTEM:
-            concrete_mode = ThemeMode.LIGHT if scheme == Qt.ColorScheme.Light else ThemeMode.DARK
-            self._render(self._palettes[concrete_mode])
+            self._render(self._palettes[self._scheme_to_mode(scheme)])
