@@ -271,3 +271,82 @@ class TestDedupReadFailure:
         assert len(executor.calls) == 0
         assert ctx.fatal_error_occurred is True
         assert "查重查询失败" in ctx.fatal_error_msg
+
+
+class TestResume:
+    """断点续传：从 start_index 起跑，进度按整份列表的绝对位置报"""
+
+    def test_sends_only_tail_from_start_index(self, hm):
+        """起点之前的弹幕不发包，起点之后的照常发"""
+        executor = StubExecutor([ok_response("d1"), ok_response("d2")])
+        job = build_job(make_dms("a", "b", "c", "d"), start_index=2)
+        ctx = run(make_scheduler(hm, executor), job)
+
+        assert [dm.msg for dm in executor.calls] == ["c", "d"]
+        assert ctx.success_count == 2
+        assert ctx.skipped_count == 0
+
+    def test_progress_reports_absolute_positions(self, hm):
+        """进度从起点接着报，分母始终是整份列表"""
+        reported: list[tuple[int, int]] = []
+        executor = StubExecutor([ok_response("d1"), ok_response("d2")])
+        job = build_job(
+            make_dms("a", "b", "c", "d"),
+            start_index=2,
+            progress_callback=lambda a, t: reported.append((a, t)),
+        )
+        run(make_scheduler(hm, executor), job)
+
+        assert reported == [(2, 4), (3, 4), (4, 4)]
+
+    def test_progress_advances_after_settlement(self, hm):
+        """进度在单条结算后才推进：在飞的一条没结算前，游标不盖它"""
+        order: list[str] = []
+
+        class RecordingExecutor:
+            def execute(self, target, danmaku, stop_event):
+                order.append(f"send:{danmaku.msg}")
+                return ok_response("dm-ok")
+
+        job = build_job(
+            make_dms("a", "b"),
+            progress_callback=lambda a, t: order.append(f"progress:{a}"),
+        )
+        run(make_scheduler(hm, RecordingExecutor()), job)
+
+        assert order == ["progress:0", "send:a", "progress:1", "send:b", "progress:2"]
+
+    def test_failed_item_counts_as_settled(self, hm):
+        """失败也算结算：游标越过它，进未发出清单由导出兜底"""
+        reported: list[int] = []
+        executor = StubExecutor([failed_response("限流中"), ok_response("d2")])
+        job = build_job(
+            make_dms("a", "b"),
+            progress_callback=lambda a, t: reported.append(a),
+        )
+        ctx = run(make_scheduler(hm, executor), job)
+
+        assert reported == [0, 1, 2]
+        assert [r['dm'].msg for r in ctx.unsent_records] == ["a"]
+
+    def test_prefix_is_seeded_into_dedup_occurrence(self, hm):
+        """起点前的同款计入出现次数，断点后的重复不被误判为已发而跳过"""
+        dms = [Danmaku(msg="same", progress=1000)] * 3
+        hm.record_danmaku("t1", TARGET, dms[0], "d0")
+        executor = StubExecutor([ok_response("d1"), ok_response("d2")])
+        job = build_job(dms, start_index=1)
+        ctx = run(make_scheduler(hm, executor), job)
+
+        # 前缀预热后「same」在起点后是第 2、3 次出现，账本只有 1 条，都不能跳
+        assert ctx.skipped_count == 0
+        assert len(executor.calls) == 2
+
+    def test_start_index_beyond_end_is_noop(self, hm):
+        """起点越界收到末尾：本轮无事可做"""
+        executor = StubExecutor([ok_response("d1")])
+        job = build_job(make_dms("a", "b"), start_index=99)
+        ctx = run(make_scheduler(hm, executor), job)
+
+        assert len(executor.calls) == 0
+        assert ctx.success_count == 0
+        assert ctx.unsent_records == []

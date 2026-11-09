@@ -151,6 +151,7 @@ class QueueSendWorker(WorkerThread):
                 config=definition.config,
                 queue_config=self.queue_config,
                 stop_event=self.stop_event,
+                start_index=snap.attempted,
             )
             ctx = pipeline.execute(job, progress_emitter=progress_emitter)
 
@@ -209,6 +210,7 @@ class QueueSendWorker(WorkerThread):
         for s in pending_future:
             # 与上一个任务之间的间隔
             queue_eta += queue_config.delay_between_tasks
-            queue_eta += _task_eta(0, s.definition.total, s.definition.config)
+            # 断点续传下后续任务也可能带着游标，从它接着估，不是从 0
+            queue_eta += _task_eta(s.attempted, s.definition.total, s.definition.config)
 
         return queue_eta

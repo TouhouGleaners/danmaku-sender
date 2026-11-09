@@ -330,6 +330,8 @@ class SenderPage(QWidget):
         # 编辑/移动只对未定稿的任务有意义；删除放宽到所有非发送中状态
         is_editable = idle and task.status.is_editable
         can_remove = idle and task.status is not TaskStatus.RUNNING
+        # 重置进度给「想从头再发」的游标：已完成的任务没有再发的语境
+        can_reset_progress = idle and task.attempted > 0 and task.status is not TaskStatus.COMPLETED
 
         menu.addAction(SvgIcon.TUNE, "查看详情/编辑配置", lambda: self._show_task_detail(task))  # 所有状态都能查看
         menu.addAction(SvgIcon.EDIT_DOCUMENT, "编辑弹幕", lambda: self._edit_danmakus(task)).setEnabled(is_editable)
@@ -345,6 +347,7 @@ class SenderPage(QWidget):
             ref_task_id=task.task_id, insert_position=RelativePosition.BELOW
         )).setEnabled(can_insert)
         menu.addSeparator()
+        menu.addAction(SvgIcon.RESTART_ALT, "重置进度", lambda: self._reset_progress(task.task_id)).setEnabled(can_reset_progress)
         menu.addAction(
             SvgIcon.FILE_SAVE, "导出未发送成功", lambda: self._export_single_unsent(task.task_id)
         ).setEnabled(task.task_id in self._unsent_by_task)
@@ -378,6 +381,11 @@ class SenderPage(QWidget):
             toward: 移向参考项的哪一侧，ABOVE 为上移，BELOW 为下移。
         """
         self.sender_controller.move_task(task_id, toward)
+
+    def _reset_progress(self, task_id: str):
+        """清零任务的发送进度游标，下次启动从头发。"""
+        self.sender_controller.reset_progress(task_id)
+        self.logger.info("已重置进度，该任务下次从第 1 条开始发")
 
     def _remove_task(self, task_id: str):
         self.sender_controller.remove_task(task_id)

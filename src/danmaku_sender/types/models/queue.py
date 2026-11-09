@@ -116,9 +116,13 @@ class Task:
 
 @dataclass(frozen=True)
 class TaskSnapshot:
-    """Worker 启动时的一次性采样：status 在采样时固定，与后续主线程落账隔离。"""
+    """Worker 启动时的一次性采样：status 在采样时固定，与后续主线程落账隔离。
+
+    attempted 是续传游标：已结算的条数（含失败与查重跳过），断点续传以它为起点。
+    """
     definition: TaskDefinition
     status: TaskStatus
+    attempted: int = 0
 
 
 class TaskView:
@@ -204,8 +208,12 @@ class TaskView:
         )
 
     def snapshot(self) -> TaskSnapshot:
-        """固定当前 status 的不可变采样（供 Worker / 跨线程读取）"""
-        return TaskSnapshot(definition=self._task.definition, status=self._task.execution.status)
+        """固定当前 status 与游标的不可变采样（供 Worker / 跨线程读取）"""
+        return TaskSnapshot(
+            definition=self._task.definition,
+            status=self._task.execution.status,
+            attempted=self._task.execution.attempted,
+        )
 
 
 @dataclass(kw_only=True)

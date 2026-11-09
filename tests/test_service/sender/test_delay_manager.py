@@ -97,3 +97,18 @@ class TestWaitAndCheckStop:
         calls = stop.wait.call_args_list
         assert calls[0][1]["timeout"] == 8.5   # normal path
         assert calls[1][1]["timeout"] == 45.0  # rest path
+
+    def test_initial_count_keeps_burst_phase(self, monkeypatch):
+        """断点续传时 initial_count 让爆发相位接着绝对位置走"""
+        dm = DelayManager(
+            normal_min=8.0, normal_max=8.5,
+            burst_enabled=True, burst_size=2, rest_min=40.0, rest_max=45.0,
+            initial_count=1,
+        )
+        stop = Event()
+        monkeypatch.setattr("random.uniform", lambda a, b: b)
+        stop.wait = MagicMock(return_value=False)
+
+        dm.wait_and_check_stop(stop)  # count=2 → 直接进爆发休息
+
+        assert stop.wait.call_args[1]["timeout"] == 45.0

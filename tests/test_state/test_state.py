@@ -348,6 +348,93 @@ class TestQueueState:
         assert len(qs.snapshots({TaskStatus.PENDING})) == 1
         assert len(qs.snapshots({TaskStatus.PENDING, TaskStatus.COMPLETED})) == 2
 
+    def test_snapshot_carries_cursor(self):
+        """快照带上游标，Worker 据此定断点续传的起点"""
+        qs = QueueState()
+        t = make_task(1)
+        qs.add_task(t)
+        qs.update_task_progress(t.task_id, 5, 10)
+        snap = qs.snapshots({TaskStatus.PENDING})[0]
+        assert snap.attempted == 5
+
+    def test_assign_danmakus_resets_cursor_on_new_list(self):
+        """换弹幕列表必须归零游标，否则游标会指进新列表的中段"""
+        qs = QueueState()
+        t = make_task(1)
+        qs.add_task(t)
+        qs.update_task_progress(t.task_id, 5, 10)
+        qs.assign_danmakus(t.task_id, [Danmaku(msg="x", progress=0)])
+        view = qs.get_task_by_id(t.task_id)
+        assert view is not None
+        assert view.attempted == 0
+
+    def test_assign_danmakus_keeps_cursor_on_same_list(self):
+        """同列表重贴不动游标，断点不丢"""
+        qs = QueueState()
+        t = make_task(1)
+        qs.add_task(t)
+        dms = [Danmaku(msg="m0", progress=0)]
+        qs.update_task_progress(t.task_id, 5, 10)
+        qs.assign_danmakus(t.task_id, dms)
+        view = qs.get_task_by_id(t.task_id)
+        assert view is not None
+        assert view.attempted == 5
+
+    def test_apply_edit_resets_cursor_on_new_list(self):
+        """详情编辑换了弹幕列表同样归零游标"""
+        qs = QueueState()
+        t = make_task(1)
+        qs.add_task(t)
+        qs.update_task_progress(t.task_id, 5, 10)
+        view = qs.get_task_by_id(t.task_id)
+        assert view is not None
+        draft = view.to_draft()
+        draft.danmakus = [Danmaku(msg="x", progress=0)]
+        qs.apply_edit(t.task_id, draft)
+        view = qs.get_task_by_id(t.task_id)
+        assert view is not None
+        assert view.attempted == 0
+
+    def test_apply_edit_retarget_resets_cursor(self):
+        """换目标换发新工单，旧视频的进度不得带进新视频"""
+        qs = QueueState()
+        t = make_task(1)
+        qs.add_task(t)
+        qs.update_task_progress(t.task_id, 5, 10)
+        view = qs.get_task_by_id(t.task_id)
+        assert view is not None
+        draft = view.to_draft()
+        draft.target = VideoTarget(bvid="BV999", cid=999)
+        qs.apply_edit(t.task_id, draft)
+        new_view = qs.tasks[0]  # 换目标换发新 task_id，按新工单查
+        assert new_view.task_id != t.task_id
+        assert new_view.attempted == 0
+
+    def test_reset_progress_zeroes_cursor(self):
+        """重置进度：游标清零并通知观察者"""
+        qs = QueueState()
+        t = make_task(1)
+        qs.add_task(t)
+        qs.update_task_progress(t.task_id, 5, 10)
+        events: list[tuple[str, int, int]] = []
+        qs.taskProgressChanged.connect(lambda tid, a, total: events.append((tid, a, total)))
+        qs.reset_progress(t.task_id)
+        view = qs.get_task_by_id(t.task_id)
+        assert view is not None
+        assert view.attempted == 0
+        assert events == [(t.task_id, 0, 1)]
+
+    def test_processed_count_sums_all_cursors(self):
+        """游标在暂停/待发任务上也算已处理，启动队列那一刻进度条不倒退"""
+        qs = QueueState()
+        t1 = make_task(1, TaskStatus.PENDING)
+        t2 = make_task(2, TaskStatus.PAUSED)
+        qs.add_task(t1)
+        qs.add_task(t2)
+        qs.update_task_progress(t1.task_id, 3, 10)
+        qs.update_task_progress(t2.task_id, 4, 10)
+        assert qs.processed_danmaku_count == 7
+
     def test_assign_danmakus_replaces_spec(self):
         qs = QueueState()
         t = make_task(1, TaskStatus.UNCONFIGURED, danmaku_count=0)

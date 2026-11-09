@@ -48,6 +48,22 @@ class DanmakuScheduler:
         """
         return (dm.msg, dm.progress, dm.mode, dm.fontsize, dm.color)
 
+    @classmethod
+    def _seed_local_counter(cls, ctx: SendingContext, danmakus: list[Danmaku], start_index: int):
+        """把起点之前的弹幕计入出现次数，让查重的「第几次出现」始终按整份列表数。
+
+        断点续传从中途起跑时，同一条内容可能在起点前后各出现过。若不预热，
+        起点之后那次会被当成第 1 次出现，从而被账本里已有的那条误判为重复而跳过。
+
+        Args:
+            ctx (SendingContext): 运行记录，持有指纹计数缓存。
+            danmakus (list[Danmaku]): 整份弹幕列表。
+            start_index (int): 断点续传的起点下标。
+        """
+        for dm in danmakus[:start_index]:
+            fingerprint = cls._get_fingerprint(dm)
+            ctx.local_counter[fingerprint] = ctx.local_counter.get(fingerprint, 0) + 1
+
     def _send_single(
         self,
         target: VideoTarget,
@@ -141,33 +157,39 @@ class DanmakuScheduler:
         if not job.danmakus:
             return
 
-        # 初始化时钟管理器
+        # 断点续传的起点：越界收到末尾，即本轮无事可做
+        start_index = min(max(0, job.start_index), ctx.total)
+        if start_index:
+            self.logger.info(f"📌 断点续传：从第 {start_index + 1} 条继续（前 {start_index} 条已处理）")
+            self._seed_local_counter(ctx, job.danmakus, start_index)
+
+        # 初始化时钟管理器（爆发计数接着断点走，与 calc_eta 的绝对索引对齐）
         delay_manager = DelayManager(
             normal_min=job.config.min_delay, normal_max=job.config.max_delay,
             burst_enabled=job.config.burst_enabled, burst_size=job.config.burst_size,
             rest_min=job.config.rest_min, rest_max=job.config.rest_max,
+            initial_count=start_index,
         )
 
         if job.progress_callback:
-            job.progress_callback(0, ctx.total)
+            job.progress_callback(start_index, ctx.total)
 
         # 待处理的弹幕下标，其后的尚未发包
-        pending_from = 0
+        pending_from = start_index
 
         try:
-            for i, dm in enumerate(job.danmakus):
+            for i, dm in enumerate(job.danmakus[start_index:], start=start_index):
                 # --- 检查中止指令 ---
                 if job.stop_event.is_set():
                     ctx.add_unsent(job.danmakus[i:], "任务手动停止")
                     break
 
-                if job.progress_callback:
-                    job.progress_callback(i + 1, ctx.total)
-
-                # --- 查重断点续传 ---
+                # --- 查重 ---
                 if self._should_skip(dm, ctx, job.queue_config):
                     ctx.skipped_count += 1
                     pending_from = i + 1
+                    if job.progress_callback:
+                        job.progress_callback(pending_from, ctx.total)
                     continue
 
                 ctx.attempted_count += 1
@@ -189,6 +211,9 @@ class DanmakuScheduler:
                         ctx.add_unsent(dm, result.response.hint)
 
                 pending_from = i + 1
+                # 进度在单条结算后推进：游标只盖已结算条目，在飞的一条崩了续传会重试
+                if job.progress_callback:
+                    job.progress_callback(pending_from, ctx.total)
 
                 if job.result_callback:
                     job.result_callback(dm, result)

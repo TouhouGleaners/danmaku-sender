@@ -76,3 +76,13 @@ class TestCalcQueueEta:
         # 两个任务的 config/弹幕数相同，故每个增量 = 一个间隔 + 一个任务 ETA
         assert one - base > queue_config.delay_between_tasks, "应含至少一个任务间隔"
         assert two - one == pytest.approx(one - base)
+
+    def test_future_task_eta_resumes_from_cursor(self):
+        """续传后待发任务也可能带着游标，ETA 从游标起估，不算前半段。"""
+        queue_config = SenderConfig.QueueConfig(delay_between_tasks=0.0)
+        fresh = TaskSnapshot(definition=_definition("t2", total=4), status=TaskStatus.PENDING)
+        resumed = TaskSnapshot(definition=_definition("t2", total=4), status=TaskStatus.PENDING, attempted=2)
+
+        # total=4：从 0 起还剩 3 次延时，从游标 2 起只剩 2 次
+        assert _eta((fresh,), queue_config) == pytest.approx(3.0)
+        assert _eta((resumed,), queue_config) == pytest.approx(2.0)
