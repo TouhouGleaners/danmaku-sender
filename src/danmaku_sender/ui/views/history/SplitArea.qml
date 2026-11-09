@@ -5,9 +5,13 @@ import QtQuick.Controls
 import QtQuick.Layouts
 import "../../framework/qml" as Fluent
 
-// 历史页分栏区：
-// 整块一个 Quick 场景，分栏拖动只改场景内两个栏的宽度，宿主窗口不改尺寸。
-// 通用件是 Fluent.TreeView 与 Fluent.TableView，本文件仅承担组装与历史页专属组件（按钮、筛选行、标识条、菜单）。
+// 弹幕历史主页面双栏分流区 (Split View Area)
+//
+// 架构定位：
+// 1. 混合桥接单场景：整个分栏区承载在同一个原生 QQuickView (QmlWindowHost) 内部。
+//    拖动分栏条时只改变场景内部两个区域的弹性宽度，宿主外部 Qt 窗口完全不需要改变几何尺寸，消除了 QSplitter 跨窗口重绘造成的掉帧问题。
+// 2. 组件分层：复用通用的 Fluent.TreeView 与 Fluent.TableView，本文件仅负责历史页专属的业务数据绑定（筛选工具条、统计看板卡片、右键操作菜单）。
+
 Item {
     id: root
 
@@ -18,7 +22,8 @@ Item {
     required property var treeColumns
     required property var tableColumns
 
-    // QtQuick.Controls 的调色板：原生风格控件不解析 theme token，按 token 映射到 palette
+    // 【QtQuick.Controls 风格适配】：
+    // 原生 Fusion 风格控件无法直接解析自定义主题 Token，在此处显式将 Token 映射到 QML 内置调色板角色中，确保下拉菜单、按钮的底色与高亮文本随系统主题动态联动。
     palette.window: root.theme.SolidBackgroundFillColorTertiary
     palette.base: root.theme.SolidBackgroundFillColorTertiary
     palette.alternateBase: root.theme.SubtleFillColorTertiary
@@ -36,6 +41,7 @@ Item {
         anchors.fill: parent
         orientation: Qt.Horizontal
 
+        // 分栏条拖拽手柄
         handle: Rectangle {
             implicitWidth: 4
             color: "transparent"
@@ -58,7 +64,7 @@ Item {
             }
         }
 
-        // ---------- 左栏：账本级操作 + 任务时间树 ----------
+        // 左栏：全量核销入口与任务时间树
         ColumnLayout {
             SplitView.preferredWidth: 300
             SplitView.minimumWidth: 220
@@ -88,11 +94,12 @@ Item {
             }
         }
 
-        // ---------- 右栏：任务标识 + 筛选 + 弹幕表 ----------
+        // 右栏：任务概览看板、搜索筛选条与弹幕记录数据表
         ColumnLayout {
             SplitView.fillWidth: true
             spacing: 8
 
+            // 任务详情与存活统计概览卡片（仅在选中具体任务时显示）
             Fluent.Card {
                 Layout.fillWidth: true
                 implicitHeight: cardBody.implicitHeight + 32
@@ -105,11 +112,12 @@ Item {
                     anchors.fill: parent
                     spacing: 16
 
+                    // 视频标题与分P标识
                     ColumnLayout {
                         Layout.fillWidth: true
                         spacing: 2
 
-                        // 标识双行：上行 Semibold、下行常规
+                        // 主标题文本
                         Text {
                             Layout.fillWidth: true
                             text: root.bridge.summaryTitle
@@ -121,6 +129,7 @@ Item {
                             textFormat: Text.PlainText
                         }
 
+                        // 分P标题文本
                         Text {
                             Layout.fillWidth: true
                             visible: root.bridge.summaryPart !== ""
@@ -133,6 +142,7 @@ Item {
                         }
                     }
 
+                    // 存活率与各项统计数据
                     RowLayout {
                         spacing: 32
 
@@ -191,6 +201,7 @@ Item {
                 }
             }
 
+            // 未选中任务时的空态提示
             Text {
                 Layout.fillWidth: true
                 visible: root.bridge.summaryTitle.length === 0
@@ -201,6 +212,7 @@ Item {
                 color: root.theme.TextFillColorSecondary
             }
 
+            // 搜索与状态过滤工具栏
             RowLayout {
                 Layout.fillWidth: true
                 spacing: 8
@@ -232,6 +244,7 @@ Item {
                 }
             }
 
+            // 弹幕记录数据表
             Fluent.Card {
                 Layout.fillWidth: true
                 Layout.fillHeight: true
@@ -259,6 +272,7 @@ Item {
         }
     }
 
+    // 右键菜单：针对选中行的操作
     Menu {
         id: rowMenu
 

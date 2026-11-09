@@ -4,10 +4,22 @@ import QtQuick
 import QtQuick.Controls
 import QtQuick.Layouts
 
-// 通用 Fluent 风格表格：表头与行按列规格渲染，行交互发信号。
-// columns: [{role, title, width, align, toneRole, tag}]——width 为 null 的列为弹性列，吸收行宽余量；
-// tag 列渲染为小标签（健康档着色，toneRole 为档位角色名）。
-// model 须按角色暴露行数据（roleNames），委托按列的 role 从行读取。
+// 通用 Fluent 风格数据表格 (WinUI 3 TableView)
+//
+// 架构设计：
+// 1. 列规格系统 (Column Specifications)：
+//    通过 columns 数组声明每列属性：[{ role, title, width, align, toneRole, tag }]。
+//    - 弹性列 (Fill Column)：未指定固定 width 且非 Tag 的列，自动吸收视口剩余宽度。
+//    - 胶囊标签列 (Tag Column)：带有 tag: true 的列，自动套用圆角状态胶囊 (Tag.qml) 渲染。
+// 2. 斑马纹与悬停：偶数行背景透明，奇数行微弱着色；鼠标悬停时整体平滑高亮。
+// 3. 空状态提示：当绑定的数据模型为空 (count === 0) 时，自动浮现 EmptyState 引导组件。
+// 4. 定制滚动条：集成轻量级细胶囊悬浮滚动条，常态淡化，操作时显形。
+//
+// 事件信号：
+// - rowActivated(int row): 行被左键双击时触发（通常用于呼出详情档案）。
+// - rowContextMenu(int row, point pos): 行被右键点击时触发，返回右键菜单所需坐标。
+// - emptyActionClicked(): 点击空状态引导按钮时触发。
+
 Item {
     id: root
 
@@ -22,10 +34,12 @@ Item {
     signal rowContextMenu(int row, point pos)
     signal emptyActionClicked()
 
+    // 弹性列判定：非 Tag 胶囊且未声明具体宽度的列，视为弹性吸收列
     function isFill(column) {
         return !column.tag && (column.width === null || column.width === undefined)
     }
 
+    // 表头横栏
     Rectangle {
         id: headerBar
         width: parent.width
@@ -60,6 +74,7 @@ Item {
         }
     }
 
+    // 数据行列表
     ListView {
         id: list
         anchors.top: headerBar.bottom
@@ -68,6 +83,8 @@ Item {
         clip: true
         model: root.model
         spacing: 0
+
+        // 垂直滚动条
         ScrollBar.vertical: ScrollBar {
             id: vScroll
             width: 12
@@ -86,6 +103,7 @@ Item {
             background: Item {}
         }
 
+        // 单行委托
         delegate: Rectangle {
             id: row
             required property int index
@@ -93,8 +111,13 @@ Item {
 
             width: list.width
             height: 30
-            color: rowMouse.containsMouse ? root.theme.SubtleFillColorSecondary
-                : row.index % 2 ? root.theme.SolidBackgroundFillColorTertiary : "transparent"
+
+            // 背景交互状态：悬停高亮 > 隔行斑马纹底色 > 透明
+            color: rowMouse.containsMouse
+                ? root.theme.SubtleFillColorSecondary
+                : row.index % 2
+                    ? root.theme.SolidBackgroundFillColorTertiary
+                    : "transparent"
 
             RowLayout {
                 x: 4
@@ -118,6 +141,7 @@ Item {
                         implicitWidth: cell.isTag ? tagPill.implicitWidth : plainLabel.implicitWidth
                         implicitHeight: cell.isTag ? tagPill.implicitHeight : plainLabel.implicitHeight
 
+                        // 状态标签列：尺寸随文字内容自适应，右对齐时按单元格宽度推至右边缘
                         Tag {
                             id: tagPill
                             visible: cell.isTag
@@ -132,6 +156,7 @@ Item {
                             height: 18
                         }
 
+                        // 普通文本列：单行显示，超出宽度时右侧省略
                         Text {
                             id: plainLabel
                             visible: !cell.isTag
@@ -169,6 +194,7 @@ Item {
         }
     }
 
+    // 空状态引导
     EmptyState {
         anchors.fill: list
         visible: list.count === 0

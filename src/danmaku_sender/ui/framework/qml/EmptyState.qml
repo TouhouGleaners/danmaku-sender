@@ -2,12 +2,18 @@ pragma ComponentBehavior: Bound
 
 import QtQuick
 
-// 空状态引导：数据为空时居中显示的提示块，标题在上、说明在下、动作按钮在最下。
+// 空状态引导视图 (Empty State Hint)
 //
-// 契约：
-// - theme 为 QmlPaletteBridge；title 为标题，description 留空则不显示。
-// - 动作按钮经默认属性挂载收进行内，无按钮则不显示按钮行。
-// - 显隐由使用方的 visible 控制，本件在所在区域内居中。
+// 设计与行为：
+// 1. 结构排布：垂直居中排列，自上而下依次为主标题、辅助说明文字以及可选的操作按钮组。
+// 2. 响应式显隐：说明文字与操作按钮均为可选。未设置时自动收折高度，保持整体视觉绝对居中。
+//
+// 属性与使用：
+// - theme: 注入的 QmlPaletteBridge 实例。
+// - title: 主提示标题。
+// - description: 可选的辅助说明文字，留空则不显示该文本行。
+// - actions (default): 默认属性，直接在标签内部放置的按钮会自动排入底部的横向操作栏中。
+
 Item {
     id: root
 
@@ -21,6 +27,7 @@ Item {
         width: parent.width
         spacing: 6
 
+        // 主标题
         Text {
             width: parent.width
             text: root.title
@@ -31,6 +38,7 @@ Item {
             color: root.theme.TextFillColorPrimary
         }
 
+        // 辅助说明（仅在非空时显示并占用高度）
         Text {
             width: parent.width
             visible: root.description !== ""
@@ -42,6 +50,7 @@ Item {
             color: root.theme.TextFillColorSecondary
         }
 
+        // 操作按钮容器：仅当外部传入了有效的子组件时才占用布局高度并显示，避免空留边距
         Item {
             width: parent.width
             height: buttons.height
