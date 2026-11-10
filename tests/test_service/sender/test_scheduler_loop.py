@@ -5,6 +5,7 @@
 - 诊断：致命原因与异常中断时的未发出清单。
 """
 from threading import Event
+from unittest.mock import MagicMock
 
 import pytest
 
@@ -350,3 +351,39 @@ class TestResume:
         assert len(executor.calls) == 0
         assert ctx.success_count == 0
         assert ctx.unsent_records == []
+
+
+class TestBurstPhase:
+    """爆发相位只计真发，每次执行从 0 起数"""
+
+    def _run_quiet(self, hm, dms, **overrides):
+        """跑一轮并收集延时口径；uniform 钉在上界，stop.wait 不真睡。"""
+        pacing = SenderConfig.PacingConfig(
+            min_delay=8.0, max_delay=8.5,
+            burst_enabled=True, burst_size=2,
+            rest_min=40.0, rest_max=45.0,
+        )
+        job = build_job(dms, config=pacing.to_task_config(), **overrides)
+        job.stop_event.wait = MagicMock(return_value=False)
+        executor = StubExecutor([ok_response(f"d{i}") for i in range(len(dms))])
+        run(make_scheduler(hm, executor), job)
+        return [c.kwargs["timeout"] for c in job.stop_event.wait.call_args_list]
+
+    def test_skip_does_not_advance_phase(self, hm, monkeypatch):
+        """查重跳过不占节奏位：休息落在第 N 个真发之后，不是第 N 格之后"""
+        monkeypatch.setattr("random.uniform", lambda a, b: b)
+        hm.record_danmaku("t1", TARGET, Danmaku(msg="a", progress=1000), "d0")
+
+        timeouts = self._run_quiet(hm, make_dms("a", "b", "c", "d"))
+
+        # a 跳过不计数：b 后普通间隔，c 后（第 2 个真发）爆发休息；d 是末条不再等
+        assert timeouts == [8.5, 45.0]
+
+    def test_phase_restarts_after_resume(self, hm, monkeypatch):
+        """断点重启后爆发相位重新起算，上一段的余数不带进新执行"""
+        monkeypatch.setattr("random.uniform", lambda a, b: b)
+
+        timeouts = self._run_quiet(hm, make_dms("a", "b", "c", "d", "e", "f"), start_index=3)
+
+        # 从第 4 条起发 d/e/f：e 后是第 2 个真发 → 爆发休息；相位若接着断点（3）走则两次都是普通间隔
+        assert timeouts == [8.5, 45.0]

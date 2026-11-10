@@ -163,12 +163,11 @@ class DanmakuScheduler:
             self.logger.info(f"📌 断点续传：从第 {start_index + 1} 条继续（前 {start_index} 条已处理）")
             self._seed_local_counter(ctx, job.danmakus, start_index)
 
-        # 初始化时钟管理器（爆发计数接着断点走，与 calc_eta 的绝对索引对齐）
+        # 初始化时钟管理器：爆发相位从本次执行起数，断点重启后重新起算
         delay_manager = DelayManager(
             normal_min=job.config.min_delay, normal_max=job.config.max_delay,
             burst_enabled=job.config.burst_enabled, burst_size=job.config.burst_size,
             rest_min=job.config.rest_min, rest_max=job.config.rest_max,
-            initial_count=start_index,
         )
 
         if job.progress_callback:
@@ -190,6 +189,7 @@ class DanmakuScheduler:
                     pending_from = i + 1
                     if job.progress_callback:
                         job.progress_callback(pending_from, ctx.total)
+                    # 跳过不占节奏位：不延时、不计爆发
                     continue
 
                 ctx.attempted_count += 1

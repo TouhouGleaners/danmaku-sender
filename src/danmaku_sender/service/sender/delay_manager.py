@@ -17,7 +17,6 @@ class DelayManager:
         burst_size: int = 3,
         rest_min: float = 0,
         rest_max: float = 0,
-        initial_count: int = 0,
     ):
         """
         Args:
@@ -27,8 +26,6 @@ class DelayManager:
             burst_size (int): 爆发阈值，每发 N 条触发一次长休息。
             rest_min (float): 休息时间的随机下界（秒）
             rest_max (float): 休息时间的随机上界（秒）
-            initial_count (int): 起跑前已有的延时次数。断点续传时传断点位置，
-                爆发休息的相位才跟 calc_eta 的绝对索引对得上。
         """
         self.logger = logging.getLogger(__name__)
 
@@ -42,8 +39,9 @@ class DelayManager:
         self.rest_min = rest_min
         self.rest_max = rest_max
 
-        # 内部计数器: 记录当前周期内已度过了多少次发送延时
-        self._current_count = initial_count
+        # 内部计数器: 记录当前周期内已度过了多少次发送延时。
+        # 每次执行从 0 起数（查重跳过不计、断点重启不带余数），爆发相位不跨任务。
+        self._current_count = 0
 
         if self.burst_enabled:
             self.logger.info(f"🚀 爆发模式已启用: 每 {self.burst_size} 条休息 {self.rest_min}-{self.rest_max} 秒")
@@ -92,6 +90,8 @@ class DelayManager:
         1. 延时发生在发送动作之后，因此最后一条弹幕发完不产生延时，总延时次数为 total - 1。
         2. 延时的物理索引从 1 开始（第 k 条弹幕发完后的延时索引为 k）。
         3. 仅当延时索引能被 burst_size 整除时，触发大休息 (avg_rest)。
+
+        按位置近似：查重跳过不产生延时、爆发相位随每次执行重算，实际节奏不逐格对齐本估算。
         """
         # 未启用爆发模式时，视为无爆发
         if not burst_enabled:
