@@ -39,7 +39,8 @@ class DelayManager:
         self.rest_min = rest_min
         self.rest_max = rest_max
 
-        # 内部计数器: 记录当前周期内已度过了多少次发送延时
+        # 内部计数器: 记录当前周期内已度过了多少次发送延时。
+        # 每次执行从 0 起数（查重跳过不计、断点重启不带余数），爆发相位不跨任务。
         self._current_count = 0
 
         if self.burst_enabled:
@@ -89,6 +90,8 @@ class DelayManager:
         1. 延时发生在发送动作之后，因此最后一条弹幕发完不产生延时，总延时次数为 total - 1。
         2. 延时的物理索引从 1 开始（第 k 条弹幕发完后的延时索引为 k）。
         3. 仅当延时索引能被 burst_size 整除时，触发大休息 (avg_rest)。
+
+        按位置近似：查重跳过不产生延时、爆发相位随每次执行重算，实际节奏不逐格对齐本估算。
         """
         # 未启用爆发模式时，视为无爆发
         if not burst_enabled:

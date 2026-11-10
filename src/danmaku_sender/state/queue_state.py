@@ -60,7 +60,7 @@ class QueueState(QObject):
     ) -> tuple[TaskSnapshot, ...]:
         """定死 status 的不可变采样，交给 Worker 后与后续变更隔离。"""
         return tuple(
-            TaskSnapshot(definition=r.definition, status=r.execution.status)
+            TaskSnapshot(definition=r.definition, status=r.execution.status, attempted=r.execution.attempted)
             for r in self._tasks
             if r.execution.status in statuses
         )
@@ -118,11 +118,12 @@ class QueueState(QObject):
 
     @property
     def processed_danmaku_count(self) -> int:
-        """全队列已处理弹幕数（不含 PENDING、UNCONFIGURED 和 PAUSED）"""
-        return sum(
-            r.execution.attempted for r in self._tasks
-            if r.execution.status not in (TaskStatus.PENDING, TaskStatus.UNCONFIGURED, TaskStatus.PAUSED)
-        )
+        """全队列已处理弹幕数（各任务游标之和，含未跑完的任务）。
+
+        断点续传下 PENDING / PAUSED 任务也带着游标，不能按状态排除，
+        否则启动队列那一刻进度条会倒退。
+        """
+        return sum(r.execution.attempted for r in self._tasks)
 
     @property
     def status_counts(self) -> dict[TaskStatus, int]:
@@ -335,6 +336,7 @@ class QueueState(QObject):
 
         拖放 XML、编辑器保存等场景的统一入口。
         弹幕与视频目标**都**齐备才会转待发，只有弹幕仍停在未配置。
+        换了弹幕列表则游标归零——旧游标会指进新列表的中段。
         """
         record = self._find(task_id)
         if record is None:
@@ -342,6 +344,10 @@ class QueueState(QObject):
 
         if not record.execution.status.is_editable:
             return
+
+        new_danmakus = tuple(danmakus)
+        if new_danmakus != record.definition.danmakus:
+            record.execution.attempted = 0
 
         record.definition = replace(
             record.definition,
@@ -363,6 +369,7 @@ class QueueState(QObject):
         发送中等非可编辑状态拒绝并记警告，队列保持原样。
         已指定的目标被改动视为换一份工单，换发新 task_id：同一 task_id 不得跨目标，
         否则先发出的存证会被后写的任务记录归到错误的视频上。
+        换了弹幕列表则游标归零——旧游标会指进新列表的中段。
         """
         record = self._find(task_id)
         if record is None:
@@ -376,7 +383,11 @@ class QueueState(QObject):
         # 未指定目标时填上是补配置，不换工单；其余情况以队列中的 task_id 为准
         reissued = old_target.is_assigned and source.target != old_target
         new_id = uuid.uuid4().hex if reissued else task_id
-        record.definition = replace(source.to_definition(), task_id=new_id)
+        new_definition = replace(source.to_definition(), task_id=new_id)
+        if reissued or new_definition.danmakus != record.definition.danmakus:
+            # 换工单或换弹幕列表，旧游标都不再指得准：前者换了目标视频，后者会指进新列表的中段
+            record.execution.attempted = 0
+        record.definition = new_definition
         record.execution.status = source.status
         record.execution.error_msg = source.error_msg
         self._reconcile_config_status(record)
@@ -429,6 +440,14 @@ class QueueState(QObject):
         record.execution.attempted = attempted
         actual_total = record.definition.total or total
         self.taskProgressChanged.emit(task_id, attempted, actual_total)
+
+    def reset_progress(self, task_id: str):
+        """清零任务的发送进度游标，下次启动从头发。"""
+        record = self._find(task_id)
+        if record is None:
+            return
+        record.execution.attempted = 0
+        self.taskProgressChanged.emit(task_id, 0, record.definition.total)
 
     # ── 内部转换 ─────────────────────────────────────────
 

@@ -81,9 +81,9 @@ class SendPipeline:
             logger.exception("发送流水线异常中止")
             ctx.fatal_error_occurred = True
             ctx.fatal_error_msg = str(e)
-            # 调度器尚未处理任何弹幕时，整批按未发出登记
+            # 调度器尚未处理任何弹幕时，断点之后的整批按未发出登记（之前的上一轮已结算）
             if not (ctx.attempted_count or ctx.skipped_count or ctx.unsent_records):
-                ctx.add_unsent(job.danmakus, f"异常中断: {e}")
+                ctx.add_unsent(job.danmakus[job.start_index:], f"异常中断: {e}")
 
         # 补充生命周期状态
         ctx.is_manually_stopped = job.stop_event.is_set()

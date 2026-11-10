@@ -1,6 +1,7 @@
 """DelayManager 单元测试"""
 from threading import Event
-from unittest.mock import MagicMock, patch
+from unittest.mock import MagicMock
+
 from danmaku_sender.service.sender.delay_manager import DelayManager
 
 
@@ -87,7 +88,6 @@ class TestWaitAndCheckStop:
         dm = DelayManager(normal_min=8.0, normal_max=8.5, burst_enabled=True, burst_size=2, rest_min=40.0, rest_max=45.0)
         stop = Event()
 
-        delays = []
         monkeypatch.setattr("random.uniform", lambda a, b: b)
         stop.wait = MagicMock(return_value=False)
 

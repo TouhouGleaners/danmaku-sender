@@ -24,6 +24,7 @@ class SendJob:
         config (TaskConfig): 本任务的发送节奏。
         queue_config (SenderConfig.QueueConfig): 整队的调度与查重规则。
         stop_event (Event): 中止信号。
+        start_index (int): 断点续传的起点（弹幕下标，0 = 从头发）。
         progress_callback (Callable[[int, int], None] | None): 进度回调，收已发数与总数。
         result_callback (Callable[[Danmaku, DanmakuSendResult], None] | None): 单条结果回调。
     """
@@ -33,6 +34,9 @@ class SendJob:
     config: TaskConfig
     queue_config: SenderConfig.QueueConfig
     stop_event: Event
+
+    # 断点续传的起点（弹幕下标）。启动队列时按快照游标定好再传进来，流水线不回头读策略。
+    start_index: int = 0
 
     progress_callback: Callable[[int, int], None] | None = None
     result_callback: Callable[[Danmaku, DanmakuSendResult], None] | None = None

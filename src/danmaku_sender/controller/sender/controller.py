@@ -163,6 +163,14 @@ class SenderController(QObject):
         """重置队列：移除已完成，失败任务转待发。"""
         self.state.workspace.queue_state.reset_queue()
 
+    def reset_progress(self, task_id: str) -> None:
+        """清零任务的发送进度游标，下次启动从头再发。
+
+        Args:
+            task_id: 任务 ID。
+        """
+        self.state.workspace.queue_state.reset_progress(task_id)
+
     # endregion
 
     # region Queue
@@ -253,8 +261,7 @@ class SenderController(QObject):
     @Slot(str, int)
     def _on_task_started(self, task_id: str, idx: int):
         self.state.workspace.queue_state.update_task_status(task_id, TaskStatus.RUNNING)
-        if task := self.state.workspace.queue_state.get_task_by_id(task_id):
-            self.state.workspace.queue_state.update_task_progress(task_id, 0, task.total)
+        # 进度不清零：游标是断点续传的起点，任务行继续从原位置显示
         self.state.workspace.queue_state.current_index = idx
         self._persist_task_record(task_id, TaskStatus.RUNNING)
         self.queueTaskStarted.emit(task_id)
