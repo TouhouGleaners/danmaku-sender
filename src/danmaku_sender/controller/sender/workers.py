@@ -160,6 +160,7 @@ class QueueSendWorker(WorkerThread):
                 config=definition.config,
                 queue_config=self.queue_config,
                 stop_event=self.stop_event,
+                allow_duplicates=definition.allow_duplicates,
                 start_index=snap.attempted,
             )
             ctx = pipeline.execute(job, progress_emitter=progress_emitter)
@@ -203,14 +204,14 @@ class QueueSendWorker(WorkerThread):
                 # 查重关闭时计划不做跳过判定，也就无需查询账本
                 db_counts = (
                     {}
-                    if self.queue_config.allow_duplicates
+                    if snap.definition.allow_duplicates
                     else self.history_manager.count_records_grouped(snap.definition.target)
                 )
                 plan = SendPlan(
                     snap.definition.danmakus,
                     snap.attempted,
                     snap.definition.config,
-                    self.queue_config.allow_duplicates,
+                    snap.definition.allow_duplicates,
                     db_counts,
                 )
                 eta += plan.remaining_eta()

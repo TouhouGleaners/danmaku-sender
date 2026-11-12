@@ -132,6 +132,16 @@ class TestAccounting:
         assert ctx.success_count == 1
         assert ctx.unsent_records == []
 
+    def test_allow_duplicates_skips_dedup_entirely(self, hm):
+        """任务声明允许重复发送时不查重：账本里已有也照发"""
+        dms = make_dms("a", "b")
+        hm.record_danmaku("t1", TARGET, dms[0], "d0")
+        executor = StubExecutor([ok_response("d1"), ok_response("d2")])
+        ctx = run(make_scheduler(hm, executor), build_job(dms, allow_duplicates=True))
+
+        assert len(executor.calls) == 2
+        assert ctx.skipped_count == 0
+
     def test_nonfatal_failure_goes_to_unsent_and_loop_continues(self, hm):
         """非致命失败记入未发出清单，循环继续"""
         executor = StubExecutor([failed_response("限流中"), ok_response("d2")])

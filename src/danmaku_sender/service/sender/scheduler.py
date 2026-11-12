@@ -124,14 +124,13 @@ class DanmakuScheduler:
         pending_from = min(max(0, job.start_index), ctx.total)
 
         try:
-            allow_duplicates = job.queue_config.allow_duplicates
             # 查重关闭、或清单已处理完时，计划不做跳过判定，也就无需查询账本
             db_counts = (
                 {}
-                if allow_duplicates or pending_from >= ctx.total
+                if job.allow_duplicates or pending_from >= ctx.total
                 else self.history_manager.count_records_grouped(job.target)
             )
-            plan = SendPlan(job.danmakus, pending_from, job.config, allow_duplicates, db_counts)
+            plan = SendPlan(job.danmakus, pending_from, job.config, job.allow_duplicates, db_counts)
             if pending_from:
                 self.logger.info(f"📌 断点续传：从第 {pending_from + 1} 条继续（前 {pending_from} 条已处理）")
 

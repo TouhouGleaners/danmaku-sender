@@ -349,22 +349,6 @@ class SettingsPage(QWidget):
             )
         )
 
-        body.addSpacing(6)
-        danger_heading = QLabel("危险区")
-        danger_heading.setObjectName("settingsSectionTitle")
-        body.addWidget(danger_heading)
-
-        self.allow_duplicates_toggle = ToggleSwitch()
-        self.allow_duplicates_toggle.setAccessibleName("允许重复发送")
-        body.addWidget(
-            self._row(
-                "允许重复发送",
-                "开启后，发送将不再比对数据库。已经发出的弹幕会允许再次发送，视频内会出现重复。",
-                SvgIcon.CONTENT_COPY,
-                self.allow_duplicates_toggle,
-                danger=True,
-            )
-        )
         body.addStretch()
         return page
 
@@ -425,7 +409,6 @@ class SettingsPage(QWidget):
         # 整队规则（一次队列运行共享，不随单个任务走）
         queue = self.settings.sender_config.queue
         LiveFormBinder.bind(self.delay_between, queue, "delay_between_tasks", after_write=self._on_config_written)
-        LiveFormBinder.bind(self.allow_duplicates_toggle, queue, "allow_duplicates", after_write=self._on_config_written)
 
     def showEvent(self, event):
         """打开页面时从状态重读控件值（无隐式同步）"""

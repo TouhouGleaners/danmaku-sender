@@ -19,8 +19,9 @@ class SendJob:
         target (VideoTarget): 发送目标。
         danmakus (Sequence[Danmaku]): 待发弹幕。
         config (TaskConfig): 本任务的发送节奏。
-        queue_config (SenderConfig.QueueConfig): 整队的调度与查重规则。
+        queue_config (SenderConfig.QueueConfig): 整队的调度规则。
         stop_event (Event): 中止信号。
+        allow_duplicates (bool): 允许重复发送；为 True 时本任务不查重，清单照发。
         start_index (int): 断点续传的起点（弹幕下标，0 = 从头发）。
         progress_callback (Callable[[int, int, float], None] | None): 进度回调，收已发数、总数与剩余秒数。
         result_callback (Callable[[Danmaku, DanmakuSendResult], None] | None): 单条结果回调。
@@ -31,6 +32,7 @@ class SendJob:
     config: TaskConfig
     queue_config: SenderConfig.QueueConfig
     stop_event: Event
+    allow_duplicates: bool = False
 
     # 断点续传的起点（弹幕下标）。启动队列时按快照游标定好再传进来，流水线不回头读策略。
     start_index: int = 0

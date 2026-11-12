@@ -69,6 +69,7 @@ class TaskDefinition:
     meta: TaskMeta = field(default_factory=TaskMeta)
     danmakus: tuple[Danmaku, ...] = ()
     config: TaskConfig
+    allow_duplicates: bool = False
 
     @property
     def total(self) -> int:
@@ -163,6 +164,11 @@ class TaskView:
         return self._task.definition.config
 
     @property
+    def allow_duplicates(self) -> bool:
+        """允许重复发送；为 True 时本任务不查重，清单照发。"""
+        return self._task.definition.allow_duplicates
+
+    @property
     def total(self) -> int:
         return self._task.definition.total
 
@@ -201,6 +207,7 @@ class TaskView:
             meta=replace(definition.meta),
             danmakus=list(definition.danmakus),
             config=definition.config,
+            allow_duplicates=definition.allow_duplicates,
             task_id=definition.task_id,
             status=execution.status,
             error_msg=execution.error_msg,
@@ -227,6 +234,7 @@ class TaskDraft:
     meta: TaskMeta = field(default_factory=TaskMeta)
     danmakus: list[Danmaku] = field(default_factory=list)
     config: TaskConfig
+    allow_duplicates: bool = False
     task_id: str = field(default_factory=lambda: uuid.uuid4().hex)
     status: TaskStatus = TaskStatus.PENDING
     error_msg: str = ""
@@ -269,4 +277,5 @@ class TaskDraft:
             meta=replace(self.meta),
             danmakus=tuple(self.danmakus),
             config=self.config,
+            allow_duplicates=self.allow_duplicates,
         )

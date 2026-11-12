@@ -161,7 +161,6 @@ class TestSenderConfig:
         cfg = SenderConfig()
         assert cfg.mode is not None
         assert cfg.queue.delay_between_tasks == 30.0
-        assert cfg.queue.allow_duplicates is False
 
     def test_pacing_and_queue_are_separate(self):
         """节奏与整队规则各归各的字段，互不覆盖"""
@@ -356,6 +355,18 @@ class TestQueueState:
         qs.update_task_progress(t.task_id, 5, 10)
         snap = qs.snapshots({TaskStatus.PENDING})[0]
         assert snap.attempted == 5
+
+    def test_allow_duplicates_rides_the_task(self):
+        """允许重复发送是任务级声明，随工单走到执行侧"""
+        qs = QueueState()
+        t = make_task(1)
+        t.allow_duplicates = True
+        qs.add_task(t)
+
+        view = qs.get_task_by_id(t.task_id)
+        assert view is not None
+        assert view.allow_duplicates is True
+        assert view.to_draft().allow_duplicates is True
 
     def test_assign_danmakus_resets_cursor_on_new_list(self):
         """换弹幕列表必须归零游标，否则游标会指进新列表的中段"""
