@@ -14,7 +14,7 @@ from danmaku_sender.types.models.common import (
     TaskSearchHit,
     VideoTarget,
 )
-from danmaku_sender.types.models.danmaku import Danmaku
+from danmaku_sender.types.models.danmaku import Danmaku, DanmakuFingerprint
 from danmaku_sender.types.models.queue import TaskDefinition, TaskStatus
 
 from .migrations import LegacyBackfill, SchemaMigration
@@ -465,6 +465,52 @@ class HistoryManager:
                     .count()
             )
 
+        except Exception as e:
+            logger.exception("查重失败")
+            raise HistoryStorageError(f"查重查询失败，无法判断弹幕是否已发送: {e}", original_error=e) from e
+
+    def count_records_grouped(self, target: VideoTarget) -> dict[DanmakuFingerprint, int]:
+        """一次统计目标下各内容特征签名的已发记录数，供查重取齐。
+
+        与 count_records 同一口径：只计 PENDING 与 VERIFIED 状态的记录；
+        返回的键与 Danmaku.fingerprint 同序，可直接与弹幕的签名对照。
+
+        Args:
+            target (VideoTarget): 发送目标。
+
+        Returns:
+            dict[DanmakuFingerprint, int]: 各内容特征签名对应的记录数。
+
+        Raises:
+            HistoryStorageError: 查询失败。
+        """
+        try:
+            query = (
+                SentDanmaku
+                .select(
+                    SentDanmaku.msg,
+                    SentDanmaku.progress,
+                    SentDanmaku.mode,
+                    SentDanmaku.fontsize,
+                    SentDanmaku.color,
+                    fn.COUNT(SentDanmaku.dmid).alias("n"),
+                )
+                .where(
+                    (SentDanmaku.cid == target.cid)
+                    & SentDanmaku.status.in_([DanmakuStatus.PENDING.value, DanmakuStatus.VERIFIED.value])
+                )
+                .group_by(
+                    SentDanmaku.msg,
+                    SentDanmaku.progress,
+                    SentDanmaku.mode,
+                    SentDanmaku.fontsize,
+                    SentDanmaku.color,
+                )
+            )
+            return {
+                (row.msg, row.progress, row.mode, row.fontsize, row.color): row.n  # type: ignore[attr-defined]
+                for row in query
+            }
         except Exception as e:
             logger.exception("查重失败")
             raise HistoryStorageError(f"查重查询失败，无法判断弹幕是否已发送: {e}", original_error=e) from e

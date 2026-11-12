@@ -2,6 +2,7 @@ from pathlib import Path
 
 from PySide6.QtCore import Slot
 from PySide6.QtWidgets import (
+    QCheckBox,
     QComboBox,
     QDialog,
     QFileDialog,
@@ -110,6 +111,11 @@ class TaskBuilderDialog(QDialog):
         file_row.addWidget(self._file_input, stretch=1)
         file_row.addWidget(self._file_btn)
         form.addRow("弹幕文件:", file_row)
+
+        # 查重
+        self._allow_dup_cb = QCheckBox("允许重复发送（不查重）")
+        self._allow_dup_cb.setToolTip("不比对数据库，清单照发；已发出的弹幕可能重复出现在视频里。")
+        form.addRow(self._allow_dup_cb)
 
         layout.addWidget(group)
 
@@ -247,6 +253,7 @@ class TaskBuilderDialog(QDialog):
             ),
             danmakus=danmakus,
             config=self.settings.sender_config.pacing.to_task_config(),
+            allow_duplicates=self._allow_dup_cb.isChecked(),
         )
         task.status = task.initial_status
 

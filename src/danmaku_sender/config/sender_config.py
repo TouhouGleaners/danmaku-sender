@@ -19,7 +19,7 @@ class SenderConfig(AtomicModel):
     Attributes:
         mode (SendMode): 整轮运行的方式——仅发送，还是发送并监视。
         pacing (PacingConfig): 单个任务内的发送节奏。
-        queue (QueueConfig): 整队的调度与查重规则。
+        queue (QueueConfig): 整队的调度规则。
     """
 
     class PacingConfig(AtomicModel):
@@ -63,14 +63,12 @@ class SenderConfig(AtomicModel):
             return cls.model_validate(asdict(cfg))
 
     class QueueConfig(AtomicModel):
-        """整队的调度与查重规则。
+        """整队的调度规则。
 
         Attributes:
-            allow_duplicates (bool): 允许重复发送；为 True 时发送前不比对账本。
             delay_between_tasks (float): 相邻两个任务之间的间隔（秒）。
         """
 
-        allow_duplicates: bool = False
         delay_between_tasks: float = Field(default=30.0, ge=0.0)
 
     mode: SendMode = SendMode.SEND_AND_MONITOR

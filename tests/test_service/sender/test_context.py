@@ -46,12 +46,6 @@ class TestSendingContext:
         assert len(sending_context.unsent_records) == 2
         assert all(r['reason'] == "频率限制" for r in sending_context.unsent_records)
 
-    def test_local_counter_default(self, sending_context: SendingContext):
-        assert sending_context.local_counter == {}
-
-    def test_db_count_cache_default(self, sending_context: SendingContext):
-        assert sending_context.db_count_cache == {}
-
 
 class TestSendJob:
     def test_creation(self):

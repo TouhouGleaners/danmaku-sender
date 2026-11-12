@@ -9,9 +9,14 @@ from danmaku_sender.config import ApiAuthConfig, NetworkPolicy, SenderConfig
 from danmaku_sender.controller.concurrency import WorkerThread
 from danmaku_sender.infra.persistence.history_manager import HistoryManager
 from danmaku_sender.infra.platform import KeepSystemAwake
-from danmaku_sender.service.sender import SendingContext, SendJob, SendPipeline
-from danmaku_sender.service.sender.delay_manager import DelayManager
-from danmaku_sender.types.models.queue import TaskConfig, TaskSnapshot, TaskStatus
+from danmaku_sender.service.sender import (
+    SendingContext,
+    SendJob,
+    SendPipeline,
+    SendPlan,
+)
+from danmaku_sender.types.exceptions.exceptions import HistoryStorageError
+from danmaku_sender.types.models.queue import TaskSnapshot, TaskStatus
 
 logger = logging.getLogger(__name__)
 
@@ -95,7 +100,12 @@ class QueueSendWorker(WorkerThread):
                         stopped_early = True
                         break
 
-                    if not self.stop_event.is_set() and idx < total - 1:
+                    # 任务间隔只在后面还有活干的任务时才有意义（游标走满的空任务不算）
+                    has_later_pending = any(
+                        s.status is TaskStatus.PENDING and s.attempted < s.definition.total
+                        for s in tasks[idx + 1:]
+                    )
+                    if not self.stop_event.is_set() and has_later_pending:
                         delay = self.queue_config.delay_between_tasks
                         if delay > 0:
                             self.stop_event.wait(delay)
@@ -134,28 +144,30 @@ class QueueSendWorker(WorkerThread):
         self.taskStarted.emit(task_id, idx)
         logger.info(f"[{idx + 1}/{total}] 开始发送: {definition.display_string}")
 
-        future_tasks = self.tasks[idx + 1:]
-
-        def progress_emitter(attempted: int, task_total: int, eta: float):
-            queue_eta = self._calc_queue_eta(attempted, task_total, definition.config, future_tasks, self.queue_config)
-            self.queueProgressUpdated.emit(idx, total, queue_eta)
-            self.taskProgressUpdated.emit(task_id, attempted, task_total, eta)
-
         ctx = SendingContext(total=len(definition.danmakus), target=definition.target)
         try:
+            tail_eta = self._tail_eta(self.tasks[idx + 1:])
+
+            def progress_emitter(attempted: int, task_total: int, eta: float):
+                self.queueProgressUpdated.emit(idx, total, eta + tail_eta)
+                self.taskProgressUpdated.emit(task_id, attempted, task_total, eta)
+
             pipeline = SendPipeline(self.auth, self.network, self.history_manager)
             job = SendJob(
                 task_id=definition.task_id,
                 target=definition.target,
-                danmakus=list(definition.danmakus),  # Danmaku 不可变，无需克隆
+                danmakus=definition.danmakus,
                 config=definition.config,
                 queue_config=self.queue_config,
                 stop_event=self.stop_event,
+                allow_duplicates=definition.allow_duplicates,
                 start_index=snap.attempted,
             )
             ctx = pipeline.execute(job, progress_emitter=progress_emitter)
 
             if ctx.fatal_error_occurred:
+                # 致命失败中止整队，后续任务不再执行——队列剩余时间归零
+                self.queueProgressUpdated.emit(idx, total, 0.0)
                 self.taskFailed.emit(task_id, ctx.fatal_error_msg, ctx)
                 logger.error(f"致命错误，队列中止于: {definition.display_string} - {ctx.fatal_error_msg}")
                 return False
@@ -170,47 +182,40 @@ class QueueSendWorker(WorkerThread):
             logger.error(f"[{idx + 1}/{total}] 发送失败: {definition.display_string} - {e}")
             return True  # 单任务异常不阻断队列，继续下一个
 
-    @staticmethod
-    def _calc_queue_eta(
-        current_attempted: int,
-        current_total: int,
-        current_config: TaskConfig,
-        future_tasks: tuple[TaskSnapshot, ...],
-        queue_config: SenderConfig.QueueConfig,
-    ) -> float:
-        """计算整个队列的剩余 ETA（秒）。
+    def _tail_eta(self, future_tasks: tuple[TaskSnapshot, ...]) -> float:
+        """当前任务之后的队列尾部预计时长：每个还有剩余条目的待发任务，任务间隔与计划剩余等待之和。
 
-        合计 = 当前任务剩余 ETA + 后续每个待发任务的「任务间隔 + 任务自身 ETA」。
+        计划在估算时生成；轮到该任务执行时会重新生成一份。
+        估算失败按 0 计，估算不阻断发送。
 
         Args:
-            current_attempted (int): 当前任务已尝试发包的数量。
-            current_total (int): 当前任务的弹幕总数。
-            current_config (TaskConfig): 当前任务的发送节奏。
             future_tasks (tuple[TaskSnapshot, ...]): 后续任务快照。
-            queue_config (SenderConfig.QueueConfig): 整队的调度与查重规则。
 
         Returns:
-            float: 剩余秒数。
+            float: 秒数。
         """
-        def _task_eta(attempted: int, total: int, config: TaskConfig) -> float:
-            avg_normal = (config.min_delay + config.max_delay) / 2
-            avg_rest = (config.rest_min + config.rest_max) / 2
-            return DelayManager.calc_eta(
-                attempted=attempted,
-                total=total,
-                burst_enabled=config.burst_enabled,
-                burst_size=config.burst_size,
-                avg_normal=avg_normal,
-                avg_rest=avg_rest,
-            )
-
-        queue_eta = _task_eta(current_attempted, current_total, current_config)
-        pending_future = [s for s in future_tasks if s.status == TaskStatus.PENDING]
-
-        for s in pending_future:
-            # 与上一个任务之间的间隔
-            queue_eta += queue_config.delay_between_tasks
-            # 断点续传下后续任务也可能带着游标，从它接着估，不是从 0
-            queue_eta += _task_eta(s.attempted, s.definition.total, s.definition.config)
-
-        return queue_eta
+        eta = 0.0
+        try:
+            for snap in future_tasks:
+                # 游标走满的空任务没有发送，不值得等任务间隔
+                if snap.status is not TaskStatus.PENDING or snap.attempted >= snap.definition.total:
+                    continue
+                eta += self.queue_config.delay_between_tasks
+                # 查重关闭时计划不做跳过判定，也就无需查询账本
+                db_counts = (
+                    {}
+                    if snap.definition.allow_duplicates
+                    else self.history_manager.count_records_grouped(snap.definition.target)
+                )
+                plan = SendPlan(
+                    snap.definition.danmakus,
+                    snap.attempted,
+                    snap.definition.config,
+                    snap.definition.allow_duplicates,
+                    db_counts,
+                )
+                eta += plan.remaining_eta()
+        except HistoryStorageError:
+            logger.exception("队列尾部时长估算失败")
+            return 0.0
+        return eta

@@ -19,10 +19,10 @@ class TestConfigLoad:
         ConfigStorage().load(settings)
 
         assert settings.sender_config.pacing.min_delay == 9.5
-        assert settings.sender_config.queue.allow_duplicates is False
+        assert settings.sender_config.queue.delay_between_tasks == 30.0
 
     def test_load_reads_nested_sender_section(self, tmp_path, monkeypatch):
-        """sender 段的 pacing / queue 子结构应被读取。"""
+        """sender 段的 pacing / queue 子结构应被读取，残留的旧键被忽略。"""
         data = {
             "sender": {
                 "mode": "send_only",
@@ -39,7 +39,6 @@ class TestConfigLoad:
 
         assert settings.sender_config.mode is SendMode.SEND_ONLY
         assert (settings.sender_config.pacing.min_delay, settings.sender_config.pacing.max_delay) == (3.0, 9.0)
-        assert settings.sender_config.queue.allow_duplicates is True
         assert settings.sender_config.queue.delay_between_tasks == 12.5
 
     def test_legacy_flat_sender_is_not_migrated(self, tmp_path, monkeypatch):
@@ -60,7 +59,6 @@ class TestConfigLoad:
 
         assert settings.sender_config.pacing.min_delay == 9.5
         assert settings.sender_config.queue.delay_between_tasks == 30.0
-        assert settings.sender_config.queue.allow_duplicates is False
 
 
 class TestConfigSave:
@@ -95,5 +93,5 @@ class TestConfigSave:
         assert set(data["sender"]["pacing"]) == {
             "min_delay", "max_delay", "burst_enabled", "burst_size", "rest_min", "rest_max",
         }
-        assert set(data["sender"]["queue"]) == {"allow_duplicates", "delay_between_tasks"}
+        assert set(data["sender"]["queue"]) == {"delay_between_tasks"}
         assert "send_policy" not in data

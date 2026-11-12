@@ -347,6 +347,8 @@ class TaskDetailDialog(QDialog):
                 QMessageBox.warning(self, "配置错误", rest[0])
             return
 
+        self.editing.allow_duplicates = self._allow_dup_cb.isChecked()
+
         # 由调用方通过 QueueState 应用修改
         self.accept()
 
@@ -455,6 +457,12 @@ class TaskDetailDialog(QDialog):
         self._burst_controls: list[QWidget] = [self._burst_size, self._rest_min, self._rest_max]
         layout.addWidget(delay_group)
 
+        # --- 查重 ---
+        self._allow_dup_cb = QCheckBox("允许重复发送（不查重）")
+        self._allow_dup_cb.setToolTip("不比对数据库，清单照发；已发出的弹幕可能重复出现在视频里。")
+        self._allow_dup_cb.setChecked(self.editing.allow_duplicates)
+        layout.addWidget(self._allow_dup_cb)
+
         return group
 
     def _on_burst_toggled(self, checked: bool):
@@ -474,6 +482,7 @@ class TaskDetailDialog(QDialog):
             self._min_delay, self._max_delay,
             self._burst_cb, self._burst_size,
             self._rest_min, self._rest_max,
+            self._allow_dup_cb,
         ]
         for widget in config_widgets:
             widget.setEnabled(False)

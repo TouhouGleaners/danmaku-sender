@@ -7,10 +7,8 @@ from dataclasses import replace
 from danmaku_sender.config import ApiAuthConfig, NetworkPolicy
 from danmaku_sender.infra.bilibili.bili_api_client import BiliApiClient
 from danmaku_sender.infra.persistence.history_manager import HistoryManager
-from danmaku_sender.types.models.queue import TaskConfig
 
 from .context import SendingContext, SendJob
-from .delay_manager import DelayManager
 from .executor import DanmakuExecutor
 from .scheduler import DanmakuScheduler
 
@@ -51,7 +49,7 @@ class SendPipeline:
         Args:
             job (SendJob): 发送任务工单。
             progress_emitter (Callable[[int, int, float], None] | None): 进度发射器，
-                收已发数、总数与 ETA 秒数。
+                收已发数、总数与剩余秒数。
 
         Returns:
             SendingContext: 运行记录。
@@ -66,12 +64,11 @@ class SendPipeline:
 
                 outer_progress_callback = job.progress_callback
 
-                def on_progress(attempted: int, total: int):
-                    eta_sec = self._calc_eta(attempted, total, job.config)
+                def on_progress(attempted: int, total: int, eta_sec: float):
                     if progress_emitter:
                         progress_emitter(attempted, total, eta_sec)
                     if outer_progress_callback:
-                        outer_progress_callback(attempted, total)
+                        outer_progress_callback(attempted, total, eta_sec)
 
                 wrapped_job = replace(job, progress_callback=on_progress)
 
@@ -92,29 +89,6 @@ class SendPipeline:
         except Exception:
             logger.exception("发送摘要输出失败")
         return ctx
-
-    def _calc_eta(self, attempted: int, total: int, config: TaskConfig) -> float:
-        """按任务节奏计算剩余 ETA（秒）。
-
-        Args:
-            attempted (int): 已尝试发包的数量。
-            total (int): 弹幕总数。
-            config (TaskConfig): 本任务的发送节奏。
-
-        Returns:
-            float: 剩余秒数。
-        """
-        cfg = config
-        avg_normal = (cfg.min_delay + cfg.max_delay) / 2
-        avg_rest = (cfg.rest_min + cfg.rest_max) / 2
-        return DelayManager.calc_eta(
-            attempted=attempted,
-            total=total,
-            burst_enabled=cfg.burst_enabled,
-            burst_size=cfg.burst_size,
-            avg_normal=avg_normal,
-            avg_rest=avg_rest,
-        )
 
     @staticmethod
     def _log_summary(ctx: SendingContext):
