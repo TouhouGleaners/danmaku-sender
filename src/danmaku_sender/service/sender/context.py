@@ -1,5 +1,5 @@
 import time
-from collections.abc import Callable
+from collections.abc import Callable, Sequence
 from dataclasses import dataclass, field
 from threading import Event
 
@@ -9,9 +9,6 @@ from danmaku_sender.types.models.danmaku import Danmaku
 from danmaku_sender.types.models.queue import TaskConfig
 from danmaku_sender.types.models.result import DanmakuSendResult
 
-# 弹幕指纹：(内容, 进度, 模式, 字号, 颜色)
-DanmakuFingerprint = tuple[str, int, int, int, int]
-
 
 @dataclass
 class SendJob:
@@ -20,17 +17,17 @@ class SendJob:
     Attributes:
         task_id (str): 归属任务。
         target (VideoTarget): 发送目标。
-        danmakus (list[Danmaku]): 待发弹幕。
+        danmakus (Sequence[Danmaku]): 待发弹幕。
         config (TaskConfig): 本任务的发送节奏。
         queue_config (SenderConfig.QueueConfig): 整队的调度与查重规则。
         stop_event (Event): 中止信号。
         start_index (int): 断点续传的起点（弹幕下标，0 = 从头发）。
-        progress_callback (Callable[[int, int], None] | None): 进度回调，收已发数与总数。
+        progress_callback (Callable[[int, int, float], None] | None): 进度回调，收已发数、总数与剩余秒数。
         result_callback (Callable[[Danmaku, DanmakuSendResult], None] | None): 单条结果回调。
     """
     task_id: str
     target: VideoTarget
-    danmakus: list[Danmaku]
+    danmakus: Sequence[Danmaku]
     config: TaskConfig
     queue_config: SenderConfig.QueueConfig
     stop_event: Event
@@ -38,7 +35,7 @@ class SendJob:
     # 断点续传的起点（弹幕下标）。启动队列时按快照游标定好再传进来，流水线不回头读策略。
     start_index: int = 0
 
-    progress_callback: Callable[[int, int], None] | None = None
+    progress_callback: Callable[[int, int, float], None] | None = None
     result_callback: Callable[[Danmaku, DanmakuSendResult], None] | None = None
 
 
@@ -58,8 +55,6 @@ class SendingContext:
         is_manually_stopped (bool): 是否被用户手动停止。
         unsent_records (list[UnsentDanmakusRecord]): 未发出的弹幕及原因。
         evidence_failures (list[tuple[Danmaku, str]]): 已发出但未入账的弹幕及原因。
-        local_counter (dict[DanmakuFingerprint, int]): 各指纹在本次发送中出现的次数。
-        db_count_cache (dict[DanmakuFingerprint, int]): 各指纹在账本中的记录次数。
     """
     total: int
     target: VideoTarget
@@ -76,9 +71,6 @@ class SendingContext:
     unsent_records: list[UnsentDanmakusRecord] = field(default_factory=list)
     evidence_failures: list[tuple[Danmaku, str]] = field(default_factory=list)
 
-    local_counter: dict[DanmakuFingerprint, int] = field(default_factory=dict)
-    db_count_cache: dict[DanmakuFingerprint, int] = field(default_factory=dict)
-
     @property
     def elapsed_minutes(self) -> float:
         """已运行的分钟数。
@@ -88,11 +80,11 @@ class SendingContext:
         """
         return (time.time() - self.start_time) / 60
 
-    def add_unsent(self, danmakus: Danmaku | list[Danmaku], reason: str) -> None:
+    def add_unsent(self, danmakus: Danmaku | Sequence[Danmaku], reason: str) -> None:
         """记录未发出的弹幕及原因。
 
         Args:
-            danmakus (Danmaku | list[Danmaku]): 单条或多条未发出的弹幕。
+            danmakus (Danmaku | Sequence[Danmaku]): 单条或多条未发出的弹幕。
             reason (str): 未发出的原因。
         """
         if isinstance(danmakus, Danmaku):

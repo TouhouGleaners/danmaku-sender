@@ -12,6 +12,7 @@ import pytest
 from danmaku_sender.config import SenderConfig
 from danmaku_sender.infra.persistence.history_manager import HistoryManager
 from danmaku_sender.service.sender.context import SendingContext, SendJob
+from danmaku_sender.service.sender.executor import SendAttempt
 from danmaku_sender.service.sender.scheduler import DanmakuScheduler
 from danmaku_sender.types.exceptions.api_errors import BiliDmErrorCode
 from danmaku_sender.types.exceptions.exceptions import HistoryStorageError
@@ -29,11 +30,11 @@ class StubExecutor:
         self.script = list(script)
         self.calls: list[Danmaku] = []
 
-    def execute(self, target, danmaku, stop_event) -> BiliSendResponse:
+    def send(self, target, danmaku, attempt_no) -> SendAttempt:
         self.calls.append(danmaku)
         if len(self.script) > 1:
-            return self.script.pop(0)
-        return self.script[0]
+            return SendAttempt(response=self.script.pop(0))
+        return SendAttempt(response=self.script[0])
 
 
 class FailingExecutor:
@@ -43,11 +44,13 @@ class FailingExecutor:
         self.fail_on_call = fail_on_call
         self.calls = 0
 
-    def execute(self, target, danmaku, stop_event) -> BiliSendResponse:
+    def send(self, target, danmaku, attempt_no) -> SendAttempt:
         self.calls += 1
         if self.calls - 1 == self.fail_on_call:
             raise RuntimeError("执行器异常")
-        return BiliSendResponse(code=0, is_success=True, msg="ok", hint="弹幕发送成功。", dmid=f"dm{self.calls}")
+        return SendAttempt(response=BiliSendResponse(
+            code=0, is_success=True, msg="ok", hint="弹幕发送成功。", dmid=f"dm{self.calls}",
+        ))
 
 
 def ok_response(dmid: str = "dm-ok") -> BiliSendResponse:
@@ -265,7 +268,7 @@ class TestDedupReadFailure:
         def raise_query_error(*args, **kwargs):
             raise HistoryStorageError("查重查询失败")
 
-        monkeypatch.setattr(hm, "count_records", raise_query_error)
+        monkeypatch.setattr(hm, "count_records_grouped", raise_query_error)
         executor = StubExecutor([ok_response("d1"), ok_response("d2")])
         ctx = run(make_scheduler(hm, executor), build_job(make_dms("a", "b")))
 
@@ -294,7 +297,7 @@ class TestResume:
         job = build_job(
             make_dms("a", "b", "c", "d"),
             start_index=2,
-            progress_callback=lambda a, t: reported.append((a, t)),
+            progress_callback=lambda a, t, eta: reported.append((a, t)),
         )
         run(make_scheduler(hm, executor), job)
 
@@ -305,13 +308,13 @@ class TestResume:
         order: list[str] = []
 
         class RecordingExecutor:
-            def execute(self, target, danmaku, stop_event):
+            def send(self, target, danmaku, attempt_no):
                 order.append(f"send:{danmaku.msg}")
-                return ok_response("dm-ok")
+                return SendAttempt(response=ok_response("dm-ok"))
 
         job = build_job(
             make_dms("a", "b"),
-            progress_callback=lambda a, t: order.append(f"progress:{a}"),
+            progress_callback=lambda a, t, eta: order.append(f"progress:{a}"),
         )
         run(make_scheduler(hm, RecordingExecutor()), job)
 
@@ -323,7 +326,7 @@ class TestResume:
         executor = StubExecutor([failed_response("限流中"), ok_response("d2")])
         job = build_job(
             make_dms("a", "b"),
-            progress_callback=lambda a, t: reported.append(a),
+            progress_callback=lambda a, t, eta: reported.append(a),
         )
         ctx = run(make_scheduler(hm, executor), job)
 
@@ -351,6 +354,20 @@ class TestResume:
         assert len(executor.calls) == 0
         assert ctx.success_count == 0
         assert ctx.unsent_records == []
+
+    def test_finished_cursor_needs_no_ledger(self, hm, monkeypatch):
+        """游标已到末尾的任务直接完成，查不到账本也不影响"""
+
+        def boom(*args, **kwargs):
+            raise HistoryStorageError("查重查询失败")
+
+        monkeypatch.setattr(hm, "count_records_grouped", boom)
+        executor = StubExecutor([ok_response("d1")])
+        job = build_job(make_dms("a", "b"), start_index=2)
+        ctx = run(make_scheduler(hm, executor), job)
+
+        assert ctx.fatal_error_occurred is False
+        assert len(executor.calls) == 0
 
 
 class TestBurstPhase:
@@ -387,3 +404,95 @@ class TestBurstPhase:
 
         # 从第 4 条起发 d/e/f：e 后是第 2 个真发 → 爆发休息；相位若接着断点（3）走则两次都是普通间隔
         assert timeouts == [8.5, 45.0]
+
+
+class TestRetryLoop:
+    """重试循环由调度器驱动：按发包结论等待，中止按未发出处理"""
+
+    def test_retry_advice_is_followed(self, hm):
+        """发包器给出重试建议时先等待再发，第二次的结论透传"""
+        attempts = [SendAttempt(retry_delay=5.0), SendAttempt(response=ok_response("d1"))]
+
+        class ScriptedExecutor:
+            def __init__(self):
+                self.calls: list[int] = []
+
+            def send(self, target, danmaku, attempt_no):
+                self.calls.append(attempt_no)
+                return attempts[min(attempt_no, len(attempts) - 1)]
+
+        job = build_job(make_dms("a"))
+        job.stop_event.wait = MagicMock(return_value=False)
+        executor = ScriptedExecutor()
+        ctx = run(make_scheduler(hm, executor), job)
+
+        assert executor.calls == [0, 1]
+        job.stop_event.wait.assert_called_once_with(timeout=5.0)
+        assert ctx.success_count == 1
+
+    def test_interrupt_during_retry_wait_is_unsent_not_error(self, hm):
+        """重试等待被停止打断：本条按未发出处理，游标不推进，不记作错误"""
+        class InfiniteRetryExecutor:
+            def send(self, target, danmaku, attempt_no):
+                return SendAttempt(retry_delay=10.0)
+
+        reported: list[int] = []
+        job = build_job(
+            make_dms("a", "b"),
+            progress_callback=lambda a, t, eta: reported.append(a),
+        )
+        job.stop_event.wait = MagicMock(return_value=True)
+        ctx = run(make_scheduler(hm, InfiniteRetryExecutor()), job)
+
+        assert ctx.fatal_error_occurred is False
+        assert [r['dm'].msg for r in ctx.unsent_records] == ["a", "b"]
+        assert {r['reason'] for r in ctx.unsent_records} == {"任务手动停止"}
+        assert reported == [0], "游标停在未发出的那条之前，续传会重试"
+
+
+class TestPlanEta:
+    """ETA 为计划剩余等待之和，随计划步走完递减"""
+
+    def test_progress_reports_plan_eta(self, hm, monkeypatch):
+        monkeypatch.setattr("random.uniform", lambda a, b: b)
+        reported: list[tuple[int, float]] = []
+        executor = StubExecutor([ok_response(f"d{i}") for i in range(4)])
+        job = build_job(
+            make_dms("a", "b", "c", "d"),
+            config=SenderConfig.PacingConfig(
+                min_delay=8.0, max_delay=8.5,
+                burst_enabled=True, burst_size=2,
+                rest_min=40.0, rest_max=45.0,
+            ).to_task_config(),
+            progress_callback=lambda a, t, eta: reported.append((a, eta)),
+        )
+        job.stop_event.wait = MagicMock(return_value=False)
+        run(make_scheduler(hm, executor), job)
+
+        # 计划等待依次为 8.5 / 45 / 8.5 / 0；每条发送完毕那一刻它自己的等待还没发生
+        assert reported == [(0, 62.0), (1, 62.0), (2, 53.5), (3, 8.5), (4, 0.0)]
+
+    def test_fatal_report_carries_zero_eta(self, hm):
+        """致命失败的上报不带剩余时间：队列已中止，不会再有等待"""
+        reported: list[tuple[int, float]] = []
+        executor = StubExecutor([failed_response("致命", fatal=True)])
+        job = build_job(
+            make_dms("a", "b"),
+            progress_callback=lambda a, t, eta: reported.append((a, eta)),
+        )
+        run(make_scheduler(hm, executor), job)
+
+        assert reported[-1] == (1, 0.0)
+
+    def test_stop_closes_with_zero_eta(self, hm):
+        """中止收尾归零剩余时间：界面不再挂着过时的预计"""
+        reported: list[tuple[int, float]] = []
+        job = build_job(
+            make_dms("a", "b"),
+            progress_callback=lambda a, t, eta: reported.append((a, eta)),
+        )
+        job.stop_event.set()
+        run(make_scheduler(hm, StubExecutor([ok_response("d1")])), job)
+
+        # 初始上报一次（计划等待 0.1），中止收尾归零一次
+        assert reported == [(0, 0.1), (0, 0.0)]

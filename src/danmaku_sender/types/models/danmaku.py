@@ -3,6 +3,9 @@ from dataclasses import dataclass, replace
 from enum import IntEnum
 from typing import Any, Self
 
+# 内容特征签名: (内容, 进度, 模式, 字号, 颜色)，内容与样式完全相同的两条弹幕签名相同
+DanmakuFingerprint = tuple[str, int, int, int, int]
+
 
 @dataclass(frozen=True)
 class Danmaku:
@@ -42,6 +45,11 @@ class Danmaku:
     @property
     def progress_sec(self) -> float:
         return self.progress / 1000.0
+
+    @property
+    def fingerprint(self) -> DanmakuFingerprint:
+        """内容特征签名：(内容, 进度, 模式, 字号, 颜色)，完全相同的两条弹幕签名相同。"""
+        return (self.msg, self.progress, self.mode, self.fontsize, self.color)
 
     def replace(self, **changes: Any) -> Self:
         """生成改过字段的新对象（换值，不是原地改）"""

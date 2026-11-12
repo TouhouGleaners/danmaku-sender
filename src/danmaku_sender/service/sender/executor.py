@@ -1,5 +1,7 @@
+"""弹幕发包执行器：单次发包并给出结论，等待与重试循环由调度器驱动。"""
+
 import logging
-from threading import Event
+from dataclasses import dataclass
 
 from danmaku_sender.infra.bilibili.bili_api_client import BiliApiClient
 from danmaku_sender.types.exceptions.api_errors import BiliDmErrorCode
@@ -9,50 +11,76 @@ from danmaku_sender.types.models.danmaku import Danmaku
 from danmaku_sender.types.models.result import BiliSendResponse
 
 
-class DanmakuExecutor:
-    """
-    弹幕发送执行器 (Executor)
+@dataclass(frozen=True)
+class SendAttempt:
+    """一次发包尝试的结论。
 
-    网络发包层。剥离了所有与“业务流转”、“耗时计算”相关的逻辑。
-    职责：接收一条弹幕 -> 请求 B 站 API -> 标准化返回结果。
+    Attributes:
+        response (BiliSendResponse | None): 最终响应；按策略还可再试时为 None。
+        retry_delay (float): 再试之前建议等待的秒数；没有最终响应时才使用。
     """
-    def __init__(self, api_client: BiliApiClient):
+
+    response: BiliSendResponse | None = None
+    retry_delay: float = 0.0
+
+    def __post_init__(self) -> None:
+        """校验结论完整：没有最终响应时，重试建议必须是正数。
+
+        Raises:
+            ValueError: 既无响应又无等待时长；调用方拿到会零等待空转。
+        """
+        if self.response is None and self.retry_delay <= 0:
+            raise ValueError("没有最终响应时，retry_delay 必须为正数")
+
+
+class DanmakuExecutor:
+    """弹幕发包执行器：执行一次发包并给出重试建议，不做等待、不做重试。
+
+    重试策略（最大重试次数、限流罚时、网络退避）在本类给出；等待与重试循环由调用方驱动。
+
+    Attributes:
+        MAX_RETRIES (int): 单条弹幕发包失败后的最大重试次数。
+    """
+
+    MAX_RETRIES = 3
+
+    def __init__(self, api_client: BiliApiClient) -> None:
+        """初始化执行器。
+
+        Args:
+            api_client (BiliApiClient): B 站接口客户端。
+        """
         self.api_client = api_client
         self.logger = logging.getLogger(__name__)
 
-    def execute(self, target: VideoTarget, danmaku: Danmaku, stop_event: Event) -> BiliSendResponse:
-        """
-        执行单次发送，并内聚处理所有底层的 HTTP / 业务异常, 提供重试
+    def send(self, target: VideoTarget, danmaku: Danmaku, attempt_no: int) -> SendAttempt:
+        """执行一次发包并给出结论；不等待、不重试。
 
         Args:
-            target(VideoTarget): 包含 cid 和 bvid 的视频目标
-            danmaku(Danmaku): 待发送的实体数据
-            stop_event(Event): 发送过程中可监听的中断事件
+            target (VideoTarget): 包含 cid 与 bvid 的视频目标。
+            danmaku (Danmaku): 待发送的弹幕。
+            attempt_no (int): 本条弹幕此前已失败的尝试次数；首次发包为 0。
+
+        Returns:
+            SendAttempt: 本次尝试的结论；还可再试时给出建议等待秒数。
+        """
+        try:
+            return SendAttempt(response=self._post(target, danmaku))
+        except BiliApiError as e:
+            return self._api_error_attempt(e, attempt_no)
+        except BiliNetworkError as e:
+            return self._network_error_attempt(e, attempt_no)
+
+    def _post(self, target: VideoTarget, danmaku: Danmaku) -> BiliSendResponse:
+        """向接口发一次包；本方法不捕获异常。
+
+        Args:
+            target (VideoTarget): 包含 cid 与 bvid 的视频目标。
+            danmaku (Danmaku): 待发送的弹幕。
 
         Returns:
             BiliSendResponse: 标准化的远端响应。
         """
-        attempt = 0
-        max_retries = 3
-
-        while True:
-            try:
-                return self._send(target, danmaku)
-
-            except BiliApiError as e:
-                # 业务异常: 若返回结果则终止；若返回 None 则代表休眠完毕，继续重试
-                if result := self._handle_api_error(e, attempt, max_retries, stop_event):
-                    return result
-
-            except BiliNetworkError as e:
-                # 网络异常: 若返回结果则终止；若返回 None 则代表休眠完毕，继续重试
-                if result := self._handle_network_error(e, attempt, max_retries, stop_event):
-                    return result
-
-            attempt += 1
-
-    def _send(self, target: VideoTarget, danmaku: Danmaku) -> BiliSendResponse:
-        """内部发包: 不捕获异常"""
         bvid, cid = target.bvid, target.cid
         if bvid is None or cid is None:
             raise ValueError("发包需要已指定的目标（bvid 与 cid 都在）")
@@ -68,65 +96,50 @@ class DanmakuExecutor:
 
         return result
 
-    def _handle_api_error(self, e: BiliApiError, attempt: int, max_retries: int, stop_event: Event) -> BiliSendResponse | None:
-        """
-        处理业务异常
+    def _api_error_attempt(self, e: BiliApiError, attempt_no: int) -> SendAttempt:
+        """按业务异常给出结论：非限流立即失败；限流在重试额度内建议罚时后再试。
 
-        非限流错误直接阻断 | 限流错误给予固定罚时重试
+        Args:
+            e (BiliApiError): 业务异常。
+            attempt_no (int): 本条弹幕此前已失败的尝试次数。
+
+        Returns:
+            SendAttempt: 本次尝试的结论。
         """
         if e.code != BiliDmErrorCode.FREQ_LIMIT.code:
             self.logger.error(f"❌ 请求被拒: {e.message}")
-            return BiliSendResponse(
-                code=e.code,
-                is_success=False,
-                msg=e.message,
-                hint=BiliDmErrorCode.from_code(e.code).description
-            )
+            return SendAttempt(response=BiliSendResponse(
+                code=e.code, is_success=False, msg=e.message,
+                hint=BiliDmErrorCode.from_code(e.code).description,
+            ))
 
-        if attempt >= max_retries:
-            self.logger.error(f"❌ 频繁触发风控，重试 {max_retries} 次后放弃: {e.message}")
-            return BiliSendResponse(
-                code=e.code,
-                is_success=False,
-                msg=e.message,
-                hint=BiliDmErrorCode.from_code(e.code).description
-            )
+        if attempt_no >= self.MAX_RETRIES:
+            self.logger.error(f"❌ 频繁触发风控，重试 {self.MAX_RETRIES} 次后放弃: {e.message}")
+            return SendAttempt(response=BiliSendResponse(
+                code=e.code, is_success=False, msg=e.message,
+                hint=BiliDmErrorCode.from_code(e.code).description,
+            ))
 
-        delay = 10.0
-        self.logger.warning(f"⚠️ 触发风控限流！进入 {delay} 秒惩罚等待 ({attempt + 1}/{max_retries})...")
-        return self._sleep_with_interrupt(delay, stop_event)
+        self.logger.warning(f"⚠️ 触发风控限流！建议 10 秒后重试 ({attempt_no + 1}/{self.MAX_RETRIES})...")
+        return SendAttempt(retry_delay=10.0)
 
-    def _handle_network_error(self, e: BiliNetworkError, attempt: int, max_retries: int, stop_event: Event) -> BiliSendResponse | None:
+    def _network_error_attempt(self, e: BiliNetworkError, attempt_no: int) -> SendAttempt:
+        """按网络异常给出结论：重试额度内建议指数退避后再试，额度用尽则失败。
+
+        Args:
+            e (BiliNetworkError): 网络异常。
+            attempt_no (int): 本条弹幕此前已失败的尝试次数。
+
+        Returns:
+            SendAttempt: 本次尝试的结论。
         """
-        处理物理网络异常
+        if attempt_no >= self.MAX_RETRIES:
+            self.logger.error(f"❌ 网络异常! 重试 {self.MAX_RETRIES} 次后彻底失败: {e.message}")
+            return SendAttempt(response=BiliSendResponse(
+                code=BiliDmErrorCode.NETWORK_ERROR.code, is_success=False, msg=str(e),
+                hint=BiliDmErrorCode.NETWORK_ERROR.description,
+            ))
 
-        基于指数退避计算重试延迟
-        """
-        if attempt >= max_retries:
-            self.logger.error(f"❌ 网络异常! 重试 {max_retries} 次后彻底失败: {e.message}")
-            return BiliSendResponse(
-                code=BiliDmErrorCode.NETWORK_ERROR.code,
-                is_success=False,
-                msg=str(e),
-                hint=BiliDmErrorCode.NETWORK_ERROR.description
-            )
-
-        delay = 2.0 * (2 ** attempt)  # 指数退避: 2s, 4s, 8s
-        self.logger.warning(f"⚠️ 网络波动 ({e.message})。将在 {delay} 秒后重试 ({attempt + 1}/{max_retries})...")
-        return self._sleep_with_interrupt(delay, stop_event)
-
-    def _sleep_with_interrupt(self, delay: float, stop_event: Event) -> BiliSendResponse | None:
-        """
-        支持中断的休眠器
-
-        如果被人工打断，返回终止结果；否则返回 None 以继续流转
-        """
-        if stop_event.wait(delay):
-            self.logger.info("重试等待期间接收到停止指令，放弃发送。")
-            return BiliSendResponse(
-                code=BiliDmErrorCode.CLIENT_RUNTIME_ERROR.code,
-                is_success=False,
-                msg="用户中断",
-                hint="发送任务已被手动停止"
-            )
-        return None
+        delay = 2.0 * (2 ** attempt_no)  # 指数退避: 2s, 4s, 8s
+        self.logger.warning(f"⚠️ 网络波动 ({e.message})。建议 {delay} 秒后重试 ({attempt_no + 1}/{self.MAX_RETRIES})...")
+        return SendAttempt(retry_delay=delay)

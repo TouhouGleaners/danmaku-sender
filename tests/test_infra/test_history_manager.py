@@ -193,6 +193,18 @@ class TestStatsAndDedup:
         hm.mark_as_lost(1001, ["dm1"])                # dm2 被标记丢失
         assert hm.count_records(target, dm) == 1      # LOST 不计入（只剩 VERIFIED 的 dm1）
 
+    def test_count_records_grouped_matches_single(self, hm, target):
+        """批量计数与逐条 count_records 同一口径，键即弹幕的内容特征签名"""
+        dm = Danmaku(msg="重复弹幕", progress=1000)
+        other = Danmaku(msg="另一条", progress=1000)
+        _record(hm, target, "dm1", msg="重复弹幕")
+        _record(hm, target, "dm2", msg="重复弹幕")
+        _record(hm, target, "dm3", msg="另一条")
+
+        counts = hm.count_records_grouped(target)
+        assert counts[dm.fingerprint] == hm.count_records(target, dm) == 2
+        assert counts[other.fingerprint] == hm.count_records(target, other) == 1
+
 
 class TestTaskRecord:
     """任务记录：身份与运行态落账，供任务级历史对账"""
