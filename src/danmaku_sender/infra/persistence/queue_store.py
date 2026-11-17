@@ -7,12 +7,19 @@
 - ``queue_item``：弹幕载荷行，只存载荷、不存状态——状态由游标与失败行表达，不记第二本账；
 - ``queue_failure``：失败行（哪一条、为什么）。
 
-写入分家：``save_task`` 只写结构 / 顺序 / 载荷，``update_state`` 只写热列——
-进度落账不会把刚改的配置盖回去，改配置也不会碰进度。
-每次写入都在事务里；失败一律抛 :class:`QueueStorageError`，不吞错、不装成功。
+写入分家，各成事务：
+
+- ``save_task`` 只写结构 / 顺序，运行账热列保持库中现值——过期的结构保存不会让进度倒退；
+- ``replace_items`` 换载荷即重新入账：载荷、游标、爆发相位、失败账同事务归零；
+- ``settle`` 逐条结算：热列与该条的失败账同事务落定，成功即清掉旧失败；
+- ``update_state`` 只写热列（暂停 / 终止 / 重置这类不针对单条的变更）。
+
+失败一律抛 :class:`QueueStorageError`，不吞错、不装成功。同一进程只允许打开一个队列库；
+所有操作先验活体，关闭或易主后的旧句柄一律拒绝。
 """
 
 import logging
+import threading
 from collections.abc import Sequence
 from dataclasses import dataclass
 from pathlib import Path
@@ -33,6 +40,11 @@ from danmaku_sender.types.exceptions.exceptions import QueueStorageError
 logger = logging.getLogger(__name__)
 
 queue_db = DatabaseProxy()
+
+_LIVE_LOCK = threading.Lock()
+
+# insert_many 的参数上限按 SQLite 绑定数留余量：每行 7 个参数，每批 100 行
+_INSERT_BATCH = 100
 
 
 class _QueueTask(Model):
@@ -177,12 +189,9 @@ class TaskRow:
 
 
 class QueueStore:
-    """queue.db 的行存取入口。
+    """queue.db 的行存取入口；同一进程一个库、一个活实例。
 
-    同一进程只允许打开一个队列库（模块级连接与 history_manager 同款姿势）：
-    第二个不同路径的实例会被拒绝，防止两条连接互写同一个代理。
-    只有主线程写入（CLAUDE.md Rule 6）：状态写不存在乱序覆盖，
-    过期的热列更新不会追上新的检查点。
+    所有写入只有主线程调用（CLAUDE.md Rule 6）：状态写不存在乱序覆盖。
     """
 
     _live_path: str | None = None
@@ -196,33 +205,37 @@ class QueueStore:
         Raises:
             QueueStorageError: 已有另一个队列库处于打开状态，或初始化失败。
         """
-        self.db_path = db_path
-        if QueueStore._live_path is not None:
-            raise QueueStorageError(
-                f"同一进程只允许打开一个队列库：已有 [{QueueStore._live_path}] 处于打开状态"
-            )
-        try:
-            queue_db.initialize(SqliteDatabase(str(db_path)))
-            queue_db.connect(reuse_if_open=True)
-            queue_db.create_tables([_QueueTask, _QueueItem, _QueueFailure], safe=True)
-        except Exception as e:
-            logger.exception("队列库初始化失败 [%s]", db_path)
-            raise QueueStorageError(f"队列库初始化失败 [{db_path}]", original_error=e) from e
-        QueueStore._live_path = str(db_path)
+        self.db_path = str(db_path)
+        with _LIVE_LOCK:
+            if QueueStore._live_path is not None:
+                raise QueueStorageError(f"同一进程只允许打开一个队列库：已有 [{QueueStore._live_path}] 处于打开状态")
+            try:
+                queue_db.initialize(SqliteDatabase(self.db_path))
+                queue_db.connect(reuse_if_open=True)
+                queue_db.create_tables([_QueueTask, _QueueItem, _QueueFailure], safe=True)
+            except Exception as e:
+                logger.exception("队列库初始化失败 [%s]", self.db_path)
+                raise QueueStorageError(f"队列库初始化失败 [{self.db_path}]", original_error=e) from e
+            QueueStore._live_path = self.db_path
 
-    def save_task(self, row: TaskRow, items: Sequence[ItemRow]) -> None:
-        """整任务的结构写入（入队 / 编辑 / 换清单）：一行 + 整份载荷，单事务。
+    def _ensure_live(self) -> None:
+        """确认本实例仍是活实例：关闭或易主后的旧句柄一律拒绝。"""
+        if QueueStore._live_path != self.db_path:
+            raise QueueStorageError(f"队列库句柄已失效 [{self.db_path}]")
 
-        只写结构 / 顺序 / 载荷，运行账热列保持库中现值——过期的结构保存
-        不会让进度倒退。同 task_id 覆盖；换清单即整份替换载荷行。
+    def save_task(self, row: TaskRow) -> None:
+        """整任务的结构写入（入队 / 编辑配置 / 调序），只写结构与顺序。
+
+        运行账热列只在新建行时落初值；覆盖已有行时保持库中现值——
+        过期的结构保存不会让进度倒退。换弹幕清单走 :meth:`replace_items`。
 
         Args:
-            row (TaskRow): 任务行（status / cursor / burst_count / error 仅在新建行时落初值）。
-            items (Sequence[ItemRow]): 弹幕载荷行，按下标写入。
+            row (TaskRow): 任务行（status / cursor / burst_count / error 仅新建行时生效）。
 
         Raises:
-            QueueStorageError: 写入失败。
+            QueueStorageError: 写入失败，或句柄已失效。
         """
+        self._ensure_live()
         try:
             with queue_db.atomic():
                 values = {
@@ -244,39 +257,121 @@ class QueueStore:
                 }
                 (
                     _QueueTask
-                    .insert(
-                        task_id=row.task_id,
-                        status=row.status,
-                        cursor=row.cursor,
-                        burst_count=row.burst_count,
-                        error=row.error,
-                        **values,
-                    )
-                    .on_conflict(
-                        conflict_target=[_QueueTask.task_id],
-                        update=values,
-                    )
-                    .execute()
+                        .insert(
+                            task_id=row.task_id,
+                            status=row.status,
+                            cursor=row.cursor,
+                            burst_count=row.burst_count,
+                            error=row.error,
+                            **values,
+                        )
+                        .on_conflict(
+                            conflict_target=[_QueueTask.task_id],
+                            update=values,
+                        )
+                        .execute()
                 )
-                _QueueItem.delete().where(_QueueItem.task_id == row.task_id).execute()
-                if items:
-                    _QueueItem.insert_many(
-                        [
-                            {
-                                "task_id": row.task_id,
-                                "idx": it.idx,
-                                "msg": it.msg,
-                                "progress": it.progress,
-                                "mode": it.mode,
-                                "fontsize": it.fontsize,
-                                "color": it.color,
-                            }
-                            for it in items
-                        ]
-                    ).execute()
         except Exception as e:
             logger.exception("队列任务写入失败 [task_id=%s]", row.task_id)
             raise QueueStorageError(f"队列任务写入失败 [{row.task_id}]", original_error=e) from e
+
+    def replace_items(self, task_id: str, items: Sequence[ItemRow]) -> None:
+        """整份换入弹幕载荷：载荷、游标、爆发相位、失败账同事务归零（换清单即重新入账）。
+
+        Args:
+            task_id (str): 任务标识。
+            items (Sequence[ItemRow]): 新的载荷行，按下标写入。
+
+        Raises:
+            QueueStorageError: 写入失败，或没有该任务的行。
+        """
+        self._ensure_live()
+        try:
+            with queue_db.atomic():
+                updated = (
+                    _QueueTask
+                        .update(cursor=0, burst_count=0)
+                        .where(_QueueTask.task_id == task_id)
+                        .execute()
+                )
+                if updated == 0:
+                    raise QueueStorageError(f"载荷换入跳过：没有任务 [{task_id}] 的行")
+                _QueueItem.delete().where(_QueueItem.task_id == task_id).execute()
+                _QueueFailure.delete().where(_QueueFailure.task_id == task_id).execute()
+                self._insert_items(task_id, items)
+
+        except QueueStorageError:
+            raise
+
+        except Exception as e:
+            logger.exception("弹幕载荷换入失败 [task_id=%s]", task_id)
+            raise QueueStorageError(f"弹幕载荷换入失败 [{task_id}]", original_error=e) from e
+
+    def settle(
+        self,
+        task_id: str,
+        idx: int,
+        *,
+        status: str,
+        cursor: int,
+        burst_count: int,
+        error: str | None,
+        failure_reason: str | None,
+    ) -> None:
+        """逐条结算：热列与该条的失败账同事务落定。
+
+        failure_reason 为 None 表示该条已发成或被跳过——若它曾有失败账，一并清掉；
+        为字符串则记为该条的失败原因（同下标覆盖）。
+
+        Args:
+            task_id (str): 任务标识。
+            idx (int): 本次结算的弹幕下标。
+            status (str): 运行状态名。
+            cursor (int): 续传游标。
+            burst_count (int): 爆发相位计数。
+            error (str | None): 失败或中止原因；显式传 None 即清空。
+            failure_reason (str | None): 该条的失败原因；None 即清掉该条失败账。
+
+        Raises:
+            QueueStorageError: 写入失败，或没有该任务的行。
+        """
+        self._ensure_live()
+        try:
+            with queue_db.atomic():
+                updated = (
+                    _QueueTask
+                        .update(status=status, cursor=cursor, burst_count=burst_count, error=error)
+                        .where(_QueueTask.task_id == task_id)
+                        .execute()
+                )
+                if updated == 0:
+                    raise QueueStorageError(f"结算落账跳过：没有任务 [{task_id}] 的行")
+                if failure_reason is None:
+                    (
+                        _QueueFailure
+                            .delete()
+                            .where(
+                                (_QueueFailure.task_id == task_id) & (_QueueFailure.idx == idx)
+                            )
+                            .execute()
+                    )
+                else:
+                    (
+                        _QueueFailure
+                            .insert(task_id=task_id, idx=idx, reason=failure_reason)
+                            .on_conflict(
+                                conflict_target=[_QueueFailure.task_id, _QueueFailure.idx],
+                                update={_QueueFailure.reason: failure_reason},
+                            )
+                            .execute()
+                    )
+
+        except QueueStorageError:
+            raise
+
+        except Exception as e:
+            logger.exception("结算落账失败 [task_id=%s]", task_id)
+            raise QueueStorageError(f"结算落账失败 [{task_id}]", original_error=e) from e
 
     def update_state(
         self,
@@ -287,7 +382,7 @@ class QueueStore:
         burst_count: int,
         error: str | None,
     ) -> None:
-        """只写运行账热列（逐条结算 / 状态变更用），结构与载荷原样不动。
+        """只写运行账热列（暂停 / 终止 / 重置这类不针对单条的变更）。
 
         四个热列全为必填、无默认值：要清空 error 就显式传 None，
         不会出现「没传的字段被默认值冲掉」。
@@ -302,45 +397,23 @@ class QueueStore:
         Raises:
             QueueStorageError: 写入失败，或没有该任务的行。
         """
+        self._ensure_live()
         try:
             updated = (
                 _QueueTask
-                .update(status=status, cursor=cursor, burst_count=burst_count, error=error)
-                .where(_QueueTask.task_id == task_id)
-                .execute()
+                    .update(status=status, cursor=cursor, burst_count=burst_count, error=error)
+                    .where(_QueueTask.task_id == task_id)
+                    .execute()
             )
             if updated == 0:
                 raise QueueStorageError(f"热列写入跳过：没有任务 [{task_id}] 的行")
+
         except QueueStorageError:
             raise
+
         except Exception as e:
             logger.exception("队列热列写入失败 [task_id=%s]", task_id)
             raise QueueStorageError(f"队列热列写入失败 [{task_id}]", original_error=e) from e
-
-    def add_failure(self, task_id: str, failure: FailureRow) -> None:
-        """记一条失败账（逐条结算用）；同下标覆盖。
-
-        Args:
-            task_id (str): 任务标识。
-            failure (FailureRow): 失败行。
-
-        Raises:
-            QueueStorageError: 写入失败。
-        """
-        try:
-            with queue_db.atomic():
-                (
-                    _QueueFailure
-                    .insert(task_id=task_id, idx=failure.idx, reason=failure.reason)
-                    .on_conflict(
-                        conflict_target=[_QueueFailure.task_id, _QueueFailure.idx],
-                        update={_QueueFailure.reason: failure.reason},
-                    )
-                    .execute()
-                )
-        except Exception as e:
-            logger.exception("失败账写入失败 [task_id=%s]", task_id)
-            raise QueueStorageError(f"失败账写入失败 [{task_id}]", original_error=e) from e
 
     def load_tasks(self) -> list[TaskRow]:
         """按队列顺序读出全部任务行。
@@ -349,8 +422,9 @@ class QueueStore:
             list[TaskRow]: position 升序的任务行。
 
         Raises:
-            QueueStorageError: 读取失败。
+            QueueStorageError: 读取失败，或句柄已失效。
         """
+        self._ensure_live()
         try:
             rows = _QueueTask.select().order_by(_QueueTask.position, _QueueTask.task_id)
             return [
@@ -392,8 +466,9 @@ class QueueStore:
             list[ItemRow]: 载荷行列表。
 
         Raises:
-            QueueStorageError: 读取失败。
+            QueueStorageError: 读取失败，或句柄已失效。
         """
+        self._ensure_live()
         try:
             rows = _QueueItem.select().where(_QueueItem.task_id == task_id).order_by(_QueueItem.idx)
             return [
@@ -414,8 +489,9 @@ class QueueStore:
             list[FailureRow]: 失败行列表。
 
         Raises:
-            QueueStorageError: 读取失败。
+            QueueStorageError: 读取失败，或句柄已失效。
         """
+        self._ensure_live()
         try:
             rows = _QueueFailure.select().where(_QueueFailure.task_id == task_id).order_by(_QueueFailure.idx)
             return [FailureRow(idx=r.idx, reason=r.reason) for r in rows]
@@ -424,14 +500,18 @@ class QueueStore:
             raise QueueStorageError(f"失败账读取失败 [{task_id}]", original_error=e) from e
 
     def reorder(self, task_ids: Sequence[str]) -> None:
-        """整队重排：按下标顺序重写 position，单事务。
+        """整队重排：按下标顺序重写 position，单事务；入参必须是当前队列的全排列。
 
         Args:
             task_ids (Sequence[str]): 重排后的 task_id 全排列。
 
         Raises:
-            QueueStorageError: 重排失败。
+            QueueStorageError: 入参不是全排列，或重排失败。
         """
+        self._ensure_live()
+        current = {r.task_id for r in _QueueTask.select(_QueueTask.task_id)}
+        if len(task_ids) != len(current) or set(task_ids) != current:
+            raise QueueStorageError("队列重排拒绝：task_id 列表不是当前队列的全排列")
         try:
             with queue_db.atomic():
                 for position, task_id in enumerate(task_ids):
@@ -447,8 +527,9 @@ class QueueStore:
             task_id (str): 任务标识。
 
         Raises:
-            QueueStorageError: 删除失败。
+            QueueStorageError: 删除失败，或句柄已失效。
         """
+        self._ensure_live()
         try:
             with queue_db.atomic():
                 _QueueTask.delete().where(_QueueTask.task_id == task_id).execute()
@@ -459,7 +540,30 @@ class QueueStore:
             raise QueueStorageError(f"队列任务删除失败 [{task_id}]", original_error=e) from e
 
     def close(self) -> None:
-        """关闭数据库连接并释放单实例占用。"""
-        if not queue_db.is_closed():
-            queue_db.close()
-        QueueStore._live_path = None
+        """关闭数据库连接并释放单实例占用；非活实例调用无效果。"""
+        with _LIVE_LOCK:
+            if QueueStore._live_path != self.db_path:
+                return
+            if not queue_db.is_closed():
+                queue_db.close()
+            QueueStore._live_path = None
+
+    @staticmethod
+    def _insert_items(task_id: str, items: Sequence[ItemRow]) -> None:
+        """分批写入载荷行（每批有限行数，避开 SQLite 绑定参数上限）。"""
+        for start in range(0, len(items), _INSERT_BATCH):
+            chunk = items[start:start + _INSERT_BATCH]
+            _QueueItem.insert_many(
+                [
+                    {
+                        "task_id": task_id,
+                        "idx": it.idx,
+                        "msg": it.msg,
+                        "progress": it.progress,
+                        "mode": it.mode,
+                        "fontsize": it.fontsize,
+                        "color": it.color,
+                    }
+                    for it in chunk
+                ]
+            ).execute()
