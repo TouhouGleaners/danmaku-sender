@@ -123,15 +123,15 @@ class TestStructureSave:
 
 
 class TestItemsWrite:
-    def test_items_reset_run_state(self, store):
-        """换清单即重新入账：载荷、游标、爆发相位、失败账同事务归零"""
+    def test_items_write_takes_row_state(self, store):
+        """换清单即重新入账：载荷整换、失败账清空，运行账整行听本次传入"""
         store.save_task(make_task("t1", 0), make_items("a", "b"))
-        store.settle("t1", 0, status=TaskStatus.FAILED, cursor=1, burst_count=3, error="网络异常", failure_reason="网络异常")
+        store.settle("t1", 0, status=TaskStatus.FAILED, cursor=1, burst_count=3, error="账号被封停", failure_reason="网络异常")
 
-        store.save_task(make_task("t1", 0), make_items("x", "y", "z"))
+        store.save_task(make_task("t1", 0, status=TaskStatus.PENDING, error=None), make_items("x", "y", "z"))
 
         row = store.load_tasks()[0]
-        assert (row.cursor, row.burst_count) == (0, 0)
+        assert (row.status, row.cursor, row.burst_count, row.error) == (TaskStatus.PENDING, 0, 0, None)
         assert store.load_failures("t1") == []
         assert [it.msg for it in store.load_items("t1")] == ["x", "y", "z"]
 

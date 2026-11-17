@@ -18,6 +18,7 @@
 所有操作先验活体（身份比较），关闭或易主后的旧句柄一律拒绝。
 """
 
+import contextlib
 import logging
 import threading
 from collections.abc import Sequence
@@ -214,10 +215,18 @@ class QueueStore:
                     f"同一进程只允许打开一个队列库：已有 [{QueueStore._live_owner.db_path}] 处于打开状态"
                 )
             try:
-                queue_db.initialize(SqliteDatabase(self.db_path))
+                # check_same_thread=True（默认）：SQLite 层锁死本线程专用，
+                # 与 Rule 6 的主线程单写者互为保险
+                queue_db.initialize(
+                    SqliteDatabase(self.db_path, pragmas={"journal_mode": "wal"}, check_same_thread=True)
+                )
                 queue_db.connect(reuse_if_open=True)
                 queue_db.create_tables([_QueueTask, _QueueItem, _QueueFailure], safe=True)
             except Exception as e:
+                # 清理半开的连接；清理失败不得掩盖原始错误
+                with contextlib.suppress(Exception):
+                    if not queue_db.is_closed():
+                        queue_db.close()
                 logger.exception("队列库初始化失败 [%s]", self.db_path)
                 raise QueueStorageError(f"队列库初始化失败 [{self.db_path}]", original_error=e) from e
             QueueStore._live_owner = self
@@ -230,12 +239,17 @@ class QueueStore:
     def save_task(self, row: TaskRow, items: Sequence[ItemRow] | None = None) -> None:
         """整任务写入（入队 / 编辑 / 换清单），结构与载荷同事务。
 
-        只换结构时运行账热列保持库中现值——过期的结构保存不会让进度倒退。
-        带 items 即换清单（重新入账）：载荷整份替换，游标、爆发相位、失败账
-        同事务归零；仅在清单确实更换时传入 items，纯配置修改不要带。
+        两种契约，由 items 在不在场定：
+
+        - **不带 items**：只换结构与顺序，运行账热列保持库中现值
+          ——过期的结构保存不会让进度倒退；
+        - **带 items**：换清单即重新入账——载荷整份替换、失败账清空，
+          运行账按本次传入整写（游标归零、错误清空等由调用方在 row 上定好）。
+
+        仅在清单确实更换时传入 items，纯配置修改不要带。
 
         Args:
-            row (TaskRow): 任务行（status / cursor / burst_count / error 仅新建行时生效）。
+            row (TaskRow): 任务行；带 items 时其热列即目标状态，否则热列被忽略。
             items (Sequence[ItemRow] | None): 新的载荷行；None 表示不动载荷。
 
         Raises:
@@ -246,7 +260,7 @@ class QueueStore:
             raise QueueStorageError("目标半配：bvid 与 cid 必须成对有值或成对为空")
         try:
             with queue_db.atomic():
-                values = {
+                structure = {
                     "position": row.position,
                     "bvid": row.bvid,
                     "cid": row.cid,
@@ -263,24 +277,24 @@ class QueueStore:
                     "rest_max": row.rest_max,
                     "allow_duplicates": int(row.allow_duplicates),
                 }
+                hot = {
+                    "status": row.status.name,
+                    "cursor": row.cursor,
+                    "burst_count": row.burst_count,
+                    "error": row.error,
+                }
+                # 带 items = 重新入账：热列随本次传入整写；否则热列不进更新集
+                update_values = {**structure, **hot} if items is not None else structure
                 (
                     _QueueTask
-                        .insert(
-                            task_id=row.task_id,
-                            status=row.status.name,
-                            cursor=row.cursor,
-                            burst_count=row.burst_count,
-                            error=row.error,
-                            **values,
-                        )
+                        .insert(task_id=row.task_id, **structure, **hot)
                         .on_conflict(
                             conflict_target=[_QueueTask.task_id],
-                            update=values,
+                            update=update_values,
                         )
                         .execute()
                 )
                 if items is not None:
-                    _QueueTask.update(cursor=0, burst_count=0).where(_QueueTask.task_id == row.task_id).execute()
                     _QueueItem.delete().where(_QueueItem.task_id == row.task_id).execute()
                     _QueueFailure.delete().where(_QueueFailure.task_id == row.task_id).execute()
                     self._insert_items(row.task_id, items)
