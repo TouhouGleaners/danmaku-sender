@@ -31,3 +31,15 @@ class HistoryStorageError(Exception):
     def __init__(self, message: str, original_error: Exception | None = None):
         super().__init__(message)
         self.original_error = original_error
+
+
+class QueueStorageError(Exception):
+    """队列落盘读写失败。
+
+    Attributes:
+        original_error (Exception | None): 底层异常。
+    """
+
+    def __init__(self, message: str, original_error: Exception | None = None):
+        super().__init__(message)
+        self.original_error = original_error
