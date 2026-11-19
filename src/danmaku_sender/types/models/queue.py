@@ -27,7 +27,7 @@ class TaskStatus(Enum):
 
 @dataclass(frozen=True)
 class TaskConfig:
-    """任务工单的发送节奏参数（入队后不可变）。
+    """任务的发送节奏参数（入队后不可变）。
 
     描述**单个任务**（一个视频）内弹幕的发送方式：延迟、爆发、休息。
     队列级策略（跳过已发送、任务间隔）作用于**整个任务队列**，
@@ -57,12 +57,12 @@ class TaskConfig:
 
 @dataclass(frozen=True, kw_only=True)
 class TaskDefinition:
-    """不可变任务工单。
+    """不可变任务定义。
 
     Worker 只持有 TaskDefinition / TaskSnapshot，不持有 TaskExecution。
     config 是入队时固定的发送节奏，冻结类型，无需防御性拷贝。
     danmakus 为 tuple，结构上不可替换；发送管线须持有自己的 Danmaku 副本
-    （见 SendJob 构造处的 clone），不得回填 dmid 写穿本工单。
+    （见 SendJob 构造处的 clone），不得回填 dmid 写穿本任务定义。
     """
     task_id: str
     target: VideoTarget
@@ -109,7 +109,7 @@ class TaskExecution:
 
 @dataclass
 class Task:
-    """队列里的一项：不可变工单 + 可变运行时"""
+    """队列里的一项：不可变任务定义 + 可变运行时"""
     definition: TaskDefinition
     execution: TaskExecution
 
@@ -138,7 +138,7 @@ class TaskView:
 
     @property
     def definition(self) -> TaskDefinition:
-        """不可变工单（冻结，直接给出即可）。"""
+        """不可变任务定义（冻结，直接给出即可）。"""
         return self._task.definition
 
     @property
@@ -262,7 +262,7 @@ class TaskDraft:
         return TaskStatus.PENDING if self.is_config_complete else TaskStatus.UNCONFIGURED
 
     def to_definition(self) -> TaskDefinition:
-        """打成不可变工单（target/meta 拷贝，config 本就冻结，弹幕收成 tuple）"""
+        """打成不可变任务定义（target/meta 拷贝，config 本就冻结，弹幕收成 tuple）"""
         return TaskDefinition(
             task_id=self.task_id,
             target=replace(self.target),

@@ -1,6 +1,6 @@
 """HistoryManager 单元测试 — 存证/核销/标记丢失/统计
 
-包含 2026-09 存证静默丢失事故的回归测试：发送成功后记录必须真实落库可查。
+包含 2026-09 存证静默丢失事故的回归测试：发送成功后记录必须真实写入可查。
 """
 import sqlite3
 
@@ -64,7 +64,7 @@ def _task_definition(
 
 
 class TestRecordDanmaku:
-    """存证回归：发送成功后记录必须真实落库"""
+    """存证回归：发送成功后记录必须真实写入"""
 
     def test_record_persists_row(self, hm, target):
         _record(hm, target, "dm1", task_id="t7")

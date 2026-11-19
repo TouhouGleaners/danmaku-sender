@@ -149,7 +149,7 @@ class DanmakuScheduler:
         """执行发送控制循环，结果填入 ctx。
 
         Args:
-            job (SendJob): 发送任务工单。
+            job (SendJob): 发送任务。
             ctx (SendingContext): 由调用方持有并传入，异常时结果仍在其中。
         """
         self.logger.info(f"🚀 启动调度流水线... 目标: {job.target.bvid or "未指定"} (CID: {job.target.cid})")
