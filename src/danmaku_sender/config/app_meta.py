@@ -23,6 +23,7 @@ class AppInfo:
         # 用户数据目录（可写）
         DATA = _DATA_DIR
         HISTORY_DB = _DATA_DIR / "history.db"
+        QUEUE_DB = _DATA_DIR / "queue.db"
         CONFIG = _DATA_DIR / "config.json"
         LOGS = _DATA_DIR / "logs"
         ACCOUNTS = _DATA_DIR / "accounts.json"

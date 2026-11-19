@@ -45,6 +45,7 @@ from PySide6.QtWidgets import (
 from danmaku_sender.config import Settings
 from danmaku_sender.controller.sender import SenderController
 from danmaku_sender.infra.persistence.history_manager import HistoryManager
+from danmaku_sender.infra.persistence.queue_store import QueueStore
 from danmaku_sender.infra.platform import send_windows_notification
 from danmaku_sender.service.danmaku_xml import DanmakuXml
 from danmaku_sender.service.sender import SendingContext
@@ -114,6 +115,7 @@ class SenderPage(QWidget):
         state: AppState,
         settings: Settings,
         history_manager: HistoryManager,
+        queue_store: QueueStore,
     ):
         """初始化发射器页。
 
@@ -121,12 +123,13 @@ class SenderPage(QWidget):
             state (AppState): 状态树聚合根。
             settings (Settings): 配置容器。
             history_manager (HistoryManager): 本地账本。
+            queue_store (QueueStore): 队列存储。
         """
         super().__init__()
         self.state = state
         self.settings = settings
         self.logger = logging.getLogger(__name__)
-        self.sender_controller = SenderController(state, settings, history_manager, self)
+        self.sender_controller = SenderController(state, settings, history_manager, queue_store, self)
 
         self._queue_total = 0
         self._queue_current = 0
@@ -293,6 +296,9 @@ class SenderPage(QWidget):
         self.sender_controller.queueCompleted.connect(self._on_queue_completed)
         self.sender_controller.queueAborted.connect(self._on_queue_aborted)
         self.sender_controller.queueReady.connect(lambda: self._update_queue_ui(running=False))
+        self.sender_controller.queueStoreError.connect(
+            lambda message: Notification.error(title="队列落库失败", message=message)
+        )
 
         self.sender_controller.queueProgressUpdated.connect(self._on_queue_progress)
         # 任务进度由 Controller 落账 QueueState，页面只听 taskProgressChanged
@@ -368,7 +374,7 @@ class SenderPage(QWidget):
 
     def _edit_danmakus(self, task: TaskView):
         """编辑任务的弹幕数据（打开编辑器弹窗）"""
-        dialog = EditorDialog(task, self.state, self.settings, self)
+        dialog = EditorDialog(task, self.sender_controller, self.settings, self)
         if dialog.exec() == QDialog.DialogCode.Accepted:
             # 编辑器内部已通过 assign_danmakus 通知 QueueState，表格自动刷新
             self.logger.info(f"已编辑弹幕: {task.display_string} ({task.total} 条)")

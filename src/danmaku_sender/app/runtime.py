@@ -6,8 +6,11 @@ from PySide6.QtCore import QObject, QTimer
 from danmaku_sender.config import Settings
 from danmaku_sender.config.app_meta import AppInfo
 from danmaku_sender.infra.persistence.history_manager import HistoryManager
+from danmaku_sender.infra.persistence.queue_store import QueueStore
 from danmaku_sender.infra.storage import AccountStorage, ConfigStorage
 from danmaku_sender.state import AppState
+from danmaku_sender.types.exceptions.exceptions import QueueStorageError
+from danmaku_sender.types.models.queue import TaskStatus
 
 logger = logging.getLogger(__name__)
 
@@ -54,6 +57,7 @@ class Runtime(QObject):
 
         # === 数据库 ===
         self.history_manager = HistoryManager(AppInfo.Paths.HISTORY_DB)
+        self.queue_store = self._open_queue_store()
 
         try:
             self._activate_saved_accounts()
@@ -66,10 +70,43 @@ class Runtime(QObject):
         self.app_state.configChanged.connect(self._config_save_timer.start)
 
     def shutdown(self) -> None:
-        """退出前强制落盘配置与凭据。"""
+        """退出前强制落盘配置与凭据，关闭队列库。"""
         self._config_save_timer.stop()
         self._save_config()
         self._save_credentials()
+        self.queue_store.close()
+
+    def _open_queue_store(self) -> QueueStore:
+        """打开队列数据库并将任务恢复至状态树。
+
+        若存在上次异常退出残留的 RUNNING 任务，则修正为 PAUSED 并保留其游标，以便用户继续发送。
+
+        Returns:
+            QueueStore: 已完成初始化与恢复的队列存储实例。
+        """
+        store = QueueStore.open_with_recovery(AppInfo.Paths.QUEUE_DB)
+        recovered = store.load_all()
+        paused = 0
+        for task in recovered:
+            if task.execution.status is not TaskStatus.RUNNING:
+                continue
+            task.execution.status = TaskStatus.PAUSED
+            paused += 1
+            try:
+                store.update_task_state(
+                    task.definition.task_id,
+                    status=TaskStatus.PAUSED,
+                    cursor=task.execution.attempted,
+                    burst_count=0,
+                    error=task.execution.error_msg or None,
+                )
+            except QueueStorageError:
+                logger.exception(f"启动纠偏落库失败 [task_id={task.definition.task_id}]")
+        if paused:
+            logger.info(f"启动纠偏: {paused} 个残留发送中的任务转为已暂停")
+        if recovered:
+            self.app_state.workspace.queue_state.restore_tasks(recovered)
+        return store
 
     def _activate_saved_accounts(self) -> None:
         """加载已保存账号并激活第一个。"""

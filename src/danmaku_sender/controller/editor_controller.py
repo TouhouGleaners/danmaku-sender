@@ -5,9 +5,9 @@ from pathlib import Path
 from PySide6.QtCore import QObject, Signal
 
 from danmaku_sender.config import Settings
+from danmaku_sender.controller.sender.controller import SenderController
 from danmaku_sender.service.danmaku_xml import DanmakuXml
 from danmaku_sender.service.editor_session import EditorSession
-from danmaku_sender.state import AppState
 from danmaku_sender.types.models.common import RelativePosition
 from danmaku_sender.types.models.danmaku import Danmaku
 from danmaku_sender.types.models.editor_types import ViewItem
@@ -17,27 +17,26 @@ from .concurrency import PoolTask
 
 
 class EditorController(QObject):
-    """
-    编辑器业务控制器 (Mediator / ViewModel)
+    """编辑器业务控制器 (Mediator / ViewModel)
 
     负责桥接 UI、TaskView 与 EditorSession。
-    编辑器作为发射器的附属弹窗，读取任务弹幕、保存时经 QueueState.assign_danmakus 写回。
+    作为发射器的附属弹窗，读取任务弹幕并在保存时经 SenderController.assign_danmakus 同步写回队列。
     """
     dataChanged = Signal()
 
-    def __init__(self, task: TaskView, state: AppState, settings: Settings, parent=None):
+    def __init__(self, task: TaskView, sender_controller: SenderController, settings: Settings, parent=None):
         """初始化控制器。
 
         Args:
             task: 被编辑的任务只读视图。
-            state: 状态树聚合根，保存时经 ``state.workspace`` 写回队列。
-            settings: 配置容器，取校验关键字。
+            sender_controller: 发射器控制器，保存修改时经其同步更新队列数据库与内存状态。
+            settings: 配置容器，用于获取校验关键字。
             parent: Qt 父对象。
         """
         super().__init__(parent)
         self.logger = logging.getLogger(__name__)
         self.task = task
-        self.state = state
+        self.sender_controller = sender_controller
         self.settings = settings
         self.session = EditorSession()
 
@@ -153,12 +152,12 @@ class EditorController(QObject):
         ]
 
     def save_danmakus(self, danmakus: list[Danmaku]) -> None:
-        """把编辑后的弹幕写回队列。
+        """将编辑后的弹幕列表经发射器控制器写回队列。
 
         Args:
             danmakus: 编辑后的弹幕列表。
         """
-        self.state.workspace.queue_state.assign_danmakus(self.task.task_id, danmakus)
+        self.sender_controller.assign_danmakus(self.task.task_id, danmakus)
 
     def run_validation(self):
         """执行校验：自动向沙盒注入最新的校验参数
