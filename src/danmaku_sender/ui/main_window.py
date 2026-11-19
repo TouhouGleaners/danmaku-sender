@@ -30,6 +30,7 @@ from danmaku_sender.controller.auth_controller import AuthController
 from danmaku_sender.controller.monitor import MonitorController
 from danmaku_sender.controller.system_controller import SystemController
 from danmaku_sender.infra.persistence.history_manager import HistoryManager
+from danmaku_sender.infra.persistence.queue_store import QueueStore
 from danmaku_sender.state import AppState
 from danmaku_sender.types.models.common import MonitorStats
 from danmaku_sender.types.models.user import UserProfile
@@ -55,6 +56,7 @@ class MainWindow(QMainWindow):
         state: AppState,
         settings: Settings,
         history_manager: HistoryManager,
+        queue_store: QueueStore,
     ):
         """初始化主窗口。
 
@@ -62,11 +64,13 @@ class MainWindow(QMainWindow):
             state: 状态树聚合根。
             settings: 配置容器。
             history_manager: 本地账本。
+            queue_store: 队列存储。
         """
         super().__init__()
         self.state = state
         self.settings = settings
         self.history_manager = history_manager
+        self.queue_store = queue_store
         self.logger = logging.getLogger(__name__)
 
         self.setWindowTitle(UI.MAIN_WINDOW_TITLE)
@@ -204,7 +208,7 @@ class MainWindow(QMainWindow):
     def _init_pages(self):
         """初始化页面并绑定导航"""
         self.page_settings = SettingsPage(self.state, self.settings)
-        self.page_sender = SenderPage(self.state, self.settings, self.history_manager)
+        self.page_sender = SenderPage(self.state, self.settings, self.history_manager, self.queue_store)
         self.page_monitor = MonitorPage(self.state, self.settings, self.history_manager, self.monitor_controller)
         self.page_history = HistoryPage(self.state, self.settings, self.history_manager)
 

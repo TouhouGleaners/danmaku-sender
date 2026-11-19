@@ -57,7 +57,7 @@ def main(argv=None):
     rt = Runtime()
     rt.bootstrap()
 
-    window = MainWindow(rt.app_state, rt.settings, rt.history_manager)
+    window = MainWindow(rt.app_state, rt.settings, rt.history_manager, rt.queue_store)
     window.show()
 
     # 退出前强制落盘配置与凭据

@@ -163,7 +163,92 @@ class QueueState(QObject):
         index = self._find_index(task_id)
         return self._tasks[index] if index is not None else None
 
+    def insert_index_for(self, ref_task_id: str, position: RelativePosition) -> int:
+        """计算相对参考任务的插入索引；参考任务不存在时返回队列末尾索引。
+
+        该方法只读不改状态，供持久化与内存插入共用同一定位规则。
+
+        Args:
+            ref_task_id (str): 参考任务标识。
+            position (RelativePosition): 插入在参考任务的上方或下方。
+
+        Returns:
+            int: 计算得到的 0-based 插入索引。
+
+        Raises:
+            ValueError: ``position`` 不是 ABOVE 或 BELOW。
+        """
+        match position:
+            case RelativePosition.ABOVE:
+                offset = 0
+            case RelativePosition.BELOW:
+                offset = 1
+            case _:
+                raise ValueError(f"未知的相对位置: {position!r}")
+        ref_index = self._find_index(ref_task_id)
+        return len(self._tasks) if ref_index is None else ref_index + offset
+
+    def order_with_move(self, task_id: str, toward: RelativePosition) -> list[str] | None:
+        """计算上下移动指定任务后的全队列 task_id 顺序；不可移动时返回 None。
+
+        该方法只读不改状态，供持久化与内存移动共用同一校验与重排规则（需自身与相邻任务均处于可编辑状态，且目标位置不越界）。
+
+        Args:
+            task_id (str): 待移动的任务标识。
+            toward (RelativePosition): 移动方向，ABOVE 为上移，BELOW 为下移。
+
+        Returns:
+            list[str] | None: 移动后的 task_id 顺序列表；无法移动时返回 None。
+
+        Raises:
+            ValueError: ``toward`` 不是 ABOVE 或 BELOW。
+        """
+        match toward:
+            case RelativePosition.ABOVE:
+                offset = -1
+            case RelativePosition.BELOW:
+                offset = 1
+            case _:
+                raise ValueError(f"未知的相对位置: {toward!r}")
+
+        index = self._find_index(task_id)
+        if index is None:
+            logger.warning(f"移动任务失败: 找不到任务 [{task_id}]")
+            return None
+
+        if not self._tasks[index].execution.status.is_editable:
+            logger.warning(f"移动任务失败: 任务 [{task_id}] 状态为 {self._tasks[index].execution.status.value}，不可编辑。")
+            return None
+
+        new_index = index + offset
+        if not (0 <= new_index < len(self._tasks)):
+            logger.warning(f"移动任务失败: 任务 [{task_id}] 已在队列最{toward.value}。")
+            return None
+
+        adjacent_task = self._tasks[new_index]
+        if not adjacent_task.execution.status.is_editable:
+            logger.warning(f"移动任务失败: 相邻任务 [{adjacent_task.definition.task_id}] 状态为 {adjacent_task.execution.status.value}，不可编辑。")
+            return None
+
+        order = [r.definition.task_id for r in self._tasks]
+        order[index], order[new_index] = order[new_index], order[index]
+        return order
+
     # ── 结构变更（发射 tasksChanged）──────────────────────
+
+    def restore_tasks(self, tasks: list[Task]):
+        """批量恢复持久化任务到队列，覆盖现有内容并发射一次 tasksChanged。
+
+        恢复时将按配置完整性重新对齐待运行状态，运行中/已暂停状态与游标保持原值。
+
+        Args:
+            tasks (list[Task]): 按队列顺序排列的待恢复任务列表。
+        """
+        self._tasks = list(tasks)
+        for record in self._tasks:
+            self._reconcile_config_status(record)
+        self.tasksChanged.emit()
+        logger.info(f"队列已恢复: {len(self._tasks)} 个任务")
 
     def add_task(self, task: TaskDraft):
         """添加任务到队列末尾（入队瞬间拆成 Spec + Runtime）。
@@ -183,7 +268,7 @@ class QueueState(QObject):
     def insert_task(self, task: TaskDraft, ref_task_id: str, position: RelativePosition = RelativePosition.BELOW):
         """在参考任务上方/下方插入；参考不存在时追加到末尾。
 
-        这是队列插入的唯一公开入口，调用方不接触绝对下标。
+        这是队列插入的唯一公开入口，调用方不接触绝对索引。
         入队时按配置完整性对齐状态，不信任草稿自带的 status。
 
         Args:
@@ -197,22 +282,7 @@ class QueueState(QObject):
         record = self._to_task(task)
         self._reconcile_config_status(record)
 
-        match position:
-            case RelativePosition.ABOVE:
-                offset = 0
-            case RelativePosition.BELOW:
-                offset = 1
-            case _:
-                raise ValueError(f"未知的相对位置: {position!r}")
-
-        # 查找参考任务索引
-        ref_index = self._find_index(ref_task_id)
-
-        # 计算实际插入位置
-        insert_index = len(self._tasks) if ref_index is None else ref_index + offset
-
-        # 执行插入
-        self._tasks.insert(insert_index, record)
+        self._tasks.insert(self.insert_index_for(ref_task_id, position), record)
 
         self.tasksChanged.emit()
         logger.info(
@@ -246,40 +316,11 @@ class QueueState(QObject):
             task_id (str): 要移动的任务标识。
             toward (RelativePosition): 移向参考项的哪一侧，ABOVE 为上移，BELOW 为下移。
         """
-        match toward:
-            case RelativePosition.ABOVE:
-                offset = -1
-            case RelativePosition.BELOW:
-                offset = 1
-            case _:
-                raise ValueError(f"未知的相对位置: {toward!r}")
-
-        # 目标任务索引
-        index = self._find_index(task_id)
-
-        # 目标任务不存在
-        if index is None:
-            logger.warning(f"移动任务失败: 找不到任务 [{task_id}]")
+        order = self.order_with_move(task_id, toward)
+        if order is None:
             return
-
-        # 目标任务不可编辑
-        if not self._tasks[index].execution.status.is_editable:
-            logger.warning(f"移动任务失败: 任务 [{task_id}] 状态为 {self._tasks[index].execution.status.value}，不可编辑。")
-            return
-
-        # 校验目标位置是否越界
-        new_index = index + offset
-        if not (0 <= new_index < len(self._tasks)):
-            logger.warning(f"移动任务失败: 任务 [{task_id}] 已在队列最{toward.value}。")
-            return
-
-        # 校验相邻任务是否可编辑
-        adjacent_task = self._tasks[new_index]
-        if not adjacent_task.execution.status.is_editable:
-            logger.warning(f"移动任务失败: 相邻任务 [{adjacent_task.definition.task_id}] 状态为 {adjacent_task.execution.status.value}，不可编辑。")
-            return
-
-        self._tasks[index], self._tasks[new_index] = self._tasks[new_index], self._tasks[index]
+        by_id = {r.definition.task_id: r for r in self._tasks}
+        self._tasks = [by_id[tid] for tid in order]
         self.tasksChanged.emit()
 
     def reorder_tasks(self, task_ids: list[str]):
@@ -363,13 +404,13 @@ class QueueState(QObject):
         self.taskDataChanged.emit(task_id)
         logger.info(f"已分配弹幕: {task_id} ({record.definition.total} 条)")
 
-    def apply_edit(self, task_id: str, source: TaskDraft):
-        """全量应用来自详情弹窗沙盒的修改结果（换新 Spec）。
+    def apply_edit(self, task_id: str, source: TaskDraft, new_id: str | None = None):
+        """应用任务详情弹窗的修改结果。
 
-        发送中等非可编辑状态拒绝并记警告，队列保持原样。
-        已指定的目标被改动视为换一份工单，换发新 task_id：同一 task_id 不得跨目标，
-        否则先发出的存证会被后写的任务记录归到错误的视频上。
-        换了弹幕列表则游标归零——旧游标会指进新列表的中段。
+        若任务处于不可编辑状态则忽略修改并记录警告。
+        当原有的已指定目标发生变更时，将换发新的 task_id 以避免历史发送记录错配；
+        外部持久化已预先生成 ``new_id`` 时直接沿用，未传入则在内部生成。
+        若更换了 task_id 或弹幕列表，游标将同步归零。
         """
         record = self._find(task_id)
         if record is None:
@@ -382,9 +423,10 @@ class QueueState(QObject):
         old_target = record.definition.target
         # 未指定目标时填上是补配置，不换工单；其余情况以队列中的 task_id 为准
         reissued = old_target.is_assigned and source.target != old_target
-        new_id = uuid.uuid4().hex if reissued else task_id
+        if new_id is None:
+            new_id = uuid.uuid4().hex if reissued else task_id
         new_definition = replace(source.to_definition(), task_id=new_id)
-        if reissued or new_definition.danmakus != record.definition.danmakus:
+        if new_id != task_id or new_definition.danmakus != record.definition.danmakus:
             # 换工单或换弹幕列表，旧游标都不再指得准：前者换了目标视频，后者会指进新列表的中段
             record.execution.attempted = 0
         record.definition = new_definition
@@ -394,14 +436,37 @@ class QueueState(QObject):
 
         if record.execution.status != old_status:
             self.taskStatusChanged.emit(new_id, record.execution.status)
+        if new_id != task_id:
+            # 换号后表格行的任务标识要整体刷新
+            self.tasksChanged.emit()
         self.taskDataChanged.emit(new_id)
+
+    @staticmethod
+    def reconciled_status(status: TaskStatus, error_msg: str, complete: bool) -> tuple[TaskStatus, str]:
+        """根据配置完整性对齐待运行任务的预备状态。
+
+        配置齐备的 UNCONFIGURED / SKIPPED 任务自动转为 PENDING 并清空错误说明；
+        配置不再齐备的 PENDING 任务回退为 UNCONFIGURED，其余状态保持不变。
+        持久化层与内存状态树共用此规则，确保两端状态一致。
+
+        Args:
+            status (TaskStatus): 对齐前的任务状态。
+            error_msg (str): 对齐前的错误说明。
+            complete (bool): 目标与弹幕配置是否均已齐备。
+
+        Returns:
+            tuple[TaskStatus, str]: 对齐后的 (状态, 错误说明)。
+        """
+        if complete and status in (TaskStatus.UNCONFIGURED, TaskStatus.SKIPPED):
+            return TaskStatus.PENDING, ""
+        if not complete and status is TaskStatus.PENDING:
+            return TaskStatus.UNCONFIGURED, error_msg
+        return status, error_msg
 
     def _reconcile_config_status(self, record: Task) -> bool:
         """按配置完整性对齐预运行状态；返回状态是否变化。
 
-        配置齐备（弹幕 + 视频目标）的 UNCONFIGURED / SKIPPED 转回 PENDING；
-        配置被拆掉的 PENDING 降回 UNCONFIGURED。终态与运行态不在此处理
-        ——结构编辑有 is_editable 闸门，本方法只在配置变更后调用。
+        终态与运行态不在此处理——结构编辑有 is_editable 闸门，本方法只在配置变更后调用。
 
         Args:
             record: 待对齐的队列存储单元，就地修改其运行时状态。
@@ -409,17 +474,15 @@ class QueueState(QObject):
         Returns:
             bool: 状态发生变化返回 True。
         """
-        status = record.execution.status
-        complete = record.definition.is_config_complete
-
-        if complete and status in (TaskStatus.UNCONFIGURED, TaskStatus.SKIPPED):
-            record.execution.status = TaskStatus.PENDING
-            record.execution.error_msg = ""
-            return True
-        if not complete and status is TaskStatus.PENDING:
-            record.execution.status = TaskStatus.UNCONFIGURED
-            return True
-        return False
+        status, error_msg = self.reconciled_status(
+            record.execution.status,
+            record.execution.error_msg,
+            record.definition.is_config_complete,
+        )
+        changed = status is not record.execution.status
+        record.execution.status = status
+        record.execution.error_msg = error_msg
+        return changed
 
     # ── 状态变更（发射 taskStatusChanged）─────────────────
 

@@ -22,7 +22,8 @@ from PySide6.QtWidgets import (
 
 from danmaku_sender.config import Settings
 from danmaku_sender.controller.editor_controller import EditorController
-from danmaku_sender.state import AppState
+from danmaku_sender.controller.sender.controller import SenderController
+from danmaku_sender.types.exceptions.exceptions import QueueStorageError
 from danmaku_sender.types.models.common import RelativePosition
 from danmaku_sender.types.models.editor_types import EditorField
 from danmaku_sender.types.models.queue import TaskView
@@ -37,10 +38,11 @@ from .dialogs import ArrayGeneratorDialog, EditDanmakuDialog, TimeOffsetDialog
 class EditorDialog(QDialog):
     """编辑器弹窗 - 用于编辑单个任务的弹幕数据"""
 
-    def __init__(self, task: TaskView, state: AppState, settings: Settings, parent=None):
+    def __init__(self, task: TaskView, sender_controller: SenderController, settings: Settings, parent=None):
         super().__init__(parent)
         self.task = task
-        self.controller = EditorController(task, state, settings, self)
+        self.sender_controller = sender_controller
+        self.controller = EditorController(task, sender_controller, settings, self)
         self.logger = logging.getLogger(__name__)
 
         self.current_item_id: str | None = None
@@ -137,7 +139,7 @@ class EditorDialog(QDialog):
         main_layout.addLayout(toolbar_layout)
 
         # --- 规则管理区 ---
-        self.rules_group = ValidationRulesGroup(self.controller.state, self.controller.settings)
+        self.rules_group = ValidationRulesGroup(self.sender_controller.state, self.controller.settings)
         main_layout.addWidget(self.rules_group)
 
         # --- 核心区 ---
@@ -454,7 +456,11 @@ class EditorDialog(QDialog):
         final_list = self.controller.get_working_danmakus()
 
         # 通过 Controller 写回队列（自动处理状态转换 + 信号通知）
-        self.controller.save_danmakus(final_list)
+        try:
+            self.controller.save_danmakus(final_list)
+        except QueueStorageError:
+            QMessageBox.warning(self, "保存失败", "队列落库失败，修改未保存，请重试。")
+            return
 
         self.logger.info(f"已保存 {len(final_list)} 条弹幕到任务")
         QMessageBox.information(
