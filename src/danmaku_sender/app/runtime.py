@@ -79,33 +79,37 @@ class Runtime(QObject):
     def _open_queue_store(self) -> QueueStore:
         """打开队列数据库并将任务恢复至状态树。
 
-        若存在上次异常退出残留的 RUNNING 任务，则修正为 PAUSED 并保留其游标，以便用户继续发送。
+        若存在上次异常退出残留的 RUNNING 任务，则修正为 PAUSED 并保留其游标，以便用户继续发送；
+        恢复时按配置完整性对齐出的状态修正同样写回数据库，保证数据库与内存一致。
 
         Returns:
             QueueStore: 已完成初始化与恢复的队列存储实例。
         """
         store = QueueStore.open_with_recovery(AppInfo.Paths.QUEUE_DB)
         recovered = store.load_all()
-        paused = 0
+        stored_status = {task.definition.task_id: task.execution.status for task in recovered}
+        if recovered:
+            self.app_state.workspace.queue_state.restore_tasks(recovered)
+
+        fixed = 0
         for task in recovered:
-            if task.execution.status is not TaskStatus.RUNNING:
+            if task.execution.status is TaskStatus.RUNNING:
+                task.execution.status = TaskStatus.PAUSED
+            if task.execution.status is stored_status[task.definition.task_id]:
                 continue
-            task.execution.status = TaskStatus.PAUSED
-            paused += 1
+            fixed += 1
             try:
                 store.update_task_state(
                     task.definition.task_id,
-                    status=TaskStatus.PAUSED,
+                    status=task.execution.status,
                     cursor=task.execution.attempted,
                     burst_count=0,
                     error=task.execution.error_msg or None,
                 )
             except QueueStorageError:
                 logger.exception(f"启动纠偏落库失败 [task_id={task.definition.task_id}]")
-        if paused:
-            logger.info(f"启动纠偏: {paused} 个残留发送中的任务转为已暂停")
-        if recovered:
-            self.app_state.workspace.queue_state.restore_tasks(recovered)
+        if fixed:
+            logger.info(f"启动纠偏: {fixed} 个任务状态已修正并落库")
         return store
 
     def _activate_saved_accounts(self) -> None:

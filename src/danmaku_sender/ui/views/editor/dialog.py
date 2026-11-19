@@ -23,6 +23,7 @@ from PySide6.QtWidgets import (
 from danmaku_sender.config import Settings
 from danmaku_sender.controller.editor_controller import EditorController
 from danmaku_sender.controller.sender.controller import SenderController
+from danmaku_sender.types.exceptions.exceptions import QueueStorageError
 from danmaku_sender.types.models.common import RelativePosition
 from danmaku_sender.types.models.editor_types import EditorField
 from danmaku_sender.types.models.queue import TaskView
@@ -454,7 +455,11 @@ class EditorDialog(QDialog):
         final_list = self.controller.get_working_danmakus()
 
         # 通过 Controller 写回队列（自动处理状态转换 + 信号通知）
-        self.controller.save_danmakus(final_list)
+        try:
+            self.controller.save_danmakus(final_list)
+        except QueueStorageError:
+            QMessageBox.warning(self, "保存失败", "队列落库失败，修改未保存，请重试。")
+            return
 
         self.logger.info(f"已保存 {len(final_list)} 条弹幕到任务")
         QMessageBox.information(

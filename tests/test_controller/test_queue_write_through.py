@@ -4,6 +4,8 @@
 关库重开再水合，队列原样回来。
 """
 
+from pathlib import Path
+
 import pytest
 
 from danmaku_sender.config import SenderConfig, Settings
@@ -143,13 +145,21 @@ class TestEditWriteThrough:
         assert store.load_items("t1") == []
         assert [it.msg for it in store.load_items(rows[0].task_id)] == ["a", "b"]
 
-    def test_assign_same_list_keeps_items(self, env):
+    def test_assign_same_list_keeps_payload_and_failures(self, env):
+        """清单没变时弹幕与失败记录原样保留，来源文件的修改照常落库"""
         _, store, controller = env
         controller.add_task(make_draft("t1"))
+        store.record_result("t1", 0, status=TaskStatus.FAILED, cursor=1, burst_count=0, error="网络错误", failure_reason="网络错误")
 
-        controller.assign_danmakus("t1", [Danmaku(msg="a", progress=0), Danmaku(msg="b", progress=1000)])
+        controller.assign_danmakus(
+            "t1",
+            [Danmaku(msg="a", progress=0), Danmaku(msg="b", progress=1000)],
+            xml_path=Path("new.xml"),
+        )
 
+        assert store.load_tasks()[0].source_path == "new.xml", "来源文件的修改要落库"
         assert [it.msg for it in store.load_items("t1")] == ["a", "b"]
+        assert store.load_failures("t1"), "清单没变，失败记录不得被清掉"
 
     def test_assign_new_list_replaces_items(self, env):
         _, store, controller = env
@@ -176,21 +186,19 @@ class TestEditWriteThrough:
 
 
 class TestStoreFailure:
-    def test_write_failure_keeps_memory_untouched_and_reports(self, env, monkeypatch):
-        """写库失败不动内存，并通知界面原因"""
+    def test_write_failure_raises_and_keeps_memory_untouched(self, env, monkeypatch):
+        """写库失败向上抛出异常，内存保持原样"""
         state, store, controller = env
 
         def boom(task):
             raise QueueStorageError("磁盘写满")
 
         monkeypatch.setattr(store, "add_task", boom)
-        reported: list[str] = []
-        controller.queueStoreError.connect(reported.append)
 
-        controller.add_task(make_draft("t1"))
+        with pytest.raises(QueueStorageError):
+            controller.add_task(make_draft("t1"))
 
         assert state.workspace.queue_state.is_empty
-        assert reported
 
 
 class TestRunStateWriteThrough:

@@ -379,29 +379,35 @@ class TestOpenWithRecovery:
         assert len(list(tmp_path.glob("queue.db.corrupt-*"))) == 2
         second.close()
 
-    def test_unreadable_db_closes_connection_before_backup(self, tmp_path, monkeypatch):
-        """建连成功但读不动的库：先关连接再备份，否则 Windows 上改名会撞句柄"""
+    def test_unreadable_but_valid_db_is_not_clobbered(self, tmp_path, monkeypatch):
+        """文件头完好却读不动的库按临时故障处理：保留原文件并向上抛出，不备份不重建"""
         db_path = tmp_path / "queue.db"
         first = QueueStore(db_path)
         first.add_task(make_task("t1"))
         first.close()
 
-        original = QueueStore.load_all
-        calls = {"n": 0}
-
         def flaky_load_all(self):
-            calls["n"] += 1
-            if calls["n"] == 1:
-                raise QueueStorageError("读不动")
-            return original(self)
+            raise QueueStorageError("临时锁定")
 
         monkeypatch.setattr(QueueStore, "load_all", flaky_load_all)
 
-        recovered = QueueStore.open_with_recovery(db_path)
+        with pytest.raises(QueueStorageError):
+            QueueStore.open_with_recovery(db_path)
 
-        assert recovered.load_all() == []
-        assert list(tmp_path.glob("queue.db.corrupt-*"))
-        recovered.close()
+        assert not list(tmp_path.glob("queue.db.corrupt-*"))
+        assert db_path.exists()
+
+    def test_backup_failure_raises_instead_of_reopening_corrupt(self, tmp_path, monkeypatch):
+        """坏库挪不走时不得重开原路径，显式报错"""
+        db_path = tmp_path / "queue.db"
+        db_path.write_bytes(b"garbage")
+        monkeypatch.setattr(
+            "danmaku_sender.infra.persistence.queue_store.backup_corrupt_file",
+            lambda path, suffix=".corrupt": None,
+        )
+
+        with pytest.raises(QueueStorageError):
+            QueueStore.open_with_recovery(db_path)
 
     def test_backup_takes_wal_and_shm_along(self, tmp_path):
         """备份要连 -wal / -shm 一起改名，否则重建时 SQLite 会重放旧 WAL"""

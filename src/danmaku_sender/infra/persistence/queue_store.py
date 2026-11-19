@@ -243,11 +243,32 @@ class QueueStore:
             store.load_all()
             return store
         except QueueStorageError:
-            logger.exception("队列库不可用，备份后以空库启动 [%s]", db_path)
             if store is not None:
                 store.close()
+            if not cls._looks_corrupt(db_path):
+                raise
+            logger.exception("队列库已损坏，备份后以空库启动 [%s]", db_path)
             cls._backup_corrupt(db_path)
             return cls(db_path)
+
+    @staticmethod
+    def _looks_corrupt(db_path: Path) -> bool:
+        """判断库文件是否已不是 SQLite 格式（被截断或覆盖写坏）。
+
+        文件头是 SQLite 格式的不在此列——读不动更可能是临时锁定或 IO 故障，
+        这种情况保留原文件并向上抛出，不按损坏处理。
+
+        Args:
+            db_path (Path): queue.db 的文件路径。
+
+        Returns:
+            bool: 文件存在且不是 SQLite 格式时返回 True。
+        """
+        try:
+            with open(db_path, "rb") as fh:
+                return fh.read(16) != b"SQLite format 3\x00"
+        except OSError:
+            return False
 
     @staticmethod
     def _backup_corrupt(db_path: Path) -> None:
@@ -258,10 +279,15 @@ class QueueStore:
 
         Args:
             db_path (Path): queue.db 的文件路径。
+
+        Raises:
+            QueueStorageError: 任一待备份文件仍在原地（改名失败），无法安全重建。
         """
         stamp = f"{time.strftime('%Y%m%d-%H%M%S')}-{time.time_ns()}"
         for suffix in ("", "-wal", "-shm"):
-            backup_corrupt_file(db_path.parent / f"{db_path.name}{suffix}", suffix=f".corrupt-{stamp}")
+            path = db_path.parent / f"{db_path.name}{suffix}"
+            if path.exists() and backup_corrupt_file(path, suffix=f".corrupt-{stamp}") is None:
+                raise QueueStorageError(f"无法备份损坏的队列库 [{path}]")
 
     def add_task(self, task: Task) -> None:
         """将新任务追加至队列末尾，连同弹幕数据一并写入，单事务执行。
@@ -669,6 +695,28 @@ class QueueStore:
         except Exception as e:
             logger.exception("队列进度归零失败")
             raise QueueStorageError("队列进度归零失败", original_error=e) from e
+
+    def reset_queue(self, remove_ids: Sequence[str], revive_ids: Sequence[str]) -> None:
+        """重置队列：删除 remove_ids 任务，revive_ids 清零进度并转待发，单事务执行。
+
+        转待发的任务状态写 PENDING、错误清空、失败记录清空；两步要么都生效要么都不生效。
+
+        Args:
+            remove_ids (Sequence[str]): 待删除的任务标识序列。
+            revive_ids (Sequence[str]): 待转待发的任务标识序列。
+
+        Raises:
+            QueueStorageError: 数据库写入失败。
+        """
+        try:
+            with queue_db.atomic():
+                self.delete_tasks(remove_ids)
+                self.reset_tasks(revive_ids, status=TaskStatus.PENDING, error=None)
+        except QueueStorageError:
+            raise
+        except Exception as e:
+            logger.exception("队列重置失败")
+            raise QueueStorageError("队列重置失败", original_error=e) from e
 
     def clear_all(self) -> None:
         """清空全部任务、弹幕与失败记录，单事务执行。

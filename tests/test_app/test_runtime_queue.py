@@ -1,4 +1,4 @@
-"""Runtime 的队列启动恢复：崩溃残留纠偏与任务水合。"""
+"""Runtime 的队列启动恢复：崩溃残留纠偏、状态对齐落库与任务水合。"""
 
 import pytest
 
@@ -19,6 +19,9 @@ from danmaku_sender.types.models.queue import (
 @pytest.fixture
 def queue_db(tmp_path, monkeypatch):
     monkeypatch.setattr(AppInfo.Paths, "QUEUE_DB", tmp_path / "queue.db")
+    monkeypatch.setattr(AppInfo.Paths, "HISTORY_DB", tmp_path / "history.db")
+    monkeypatch.setattr("danmaku_sender.infra.storage.config_storage.CONFIG_PATH", tmp_path / "config.json")
+    monkeypatch.setattr("danmaku_sender.infra.storage.account_storage.ACCOUNTS_PATH", tmp_path / "accounts.json")
     return tmp_path / "queue.db"
 
 
@@ -38,27 +41,28 @@ def _seed_running_row(store: QueueStore) -> None:
 
 
 def test_startup_pauses_residual_running_and_restores(qapp, queue_db):
-    """强杀残留的 RUNNING 纠成可续状态，游标保留，任务装回内存"""
+    """强杀残留的 RUNNING 纠成可续状态，游标保留，任务装回内存且修正已落库"""
     store = QueueStore(queue_db)
     _seed_running_row(store)
     store.close()
 
     rt = Runtime()
-    opened = rt._open_queue_store()
+    rt.bootstrap()
 
     views = rt.app_state.workspace.queue_state.tasks
     assert len(views) == 1
     assert views[0].status is TaskStatus.PAUSED
     assert views[0].attempted == 7
     assert [dm.msg for dm in views[0].danmakus] == ["a"]
-    opened.close()
+    persisted = rt.queue_store.load_all()[0]
+    assert persisted.execution.status is TaskStatus.PAUSED, "修正过的状态要写回数据库"
+    assert persisted.execution.attempted == 7
 
 
 def test_startup_without_tasks_leaves_queue_empty(qapp, queue_db):
     rt = Runtime()
-    opened = rt._open_queue_store()
+    rt.bootstrap()
     assert rt.app_state.workspace.queue_state.is_empty
-    opened.close()
 
 
 def test_corrupt_db_starts_empty_with_backup(qapp, queue_db):
@@ -66,8 +70,7 @@ def test_corrupt_db_starts_empty_with_backup(qapp, queue_db):
     queue_db.write_bytes(b"this is not a database")
 
     rt = Runtime()
-    opened = rt._open_queue_store()
+    rt.bootstrap()
 
     assert rt.app_state.workspace.queue_state.is_empty
     assert list(queue_db.parent.glob("queue.db.corrupt-*"))
-    opened.close()

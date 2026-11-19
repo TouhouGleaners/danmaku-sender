@@ -52,7 +52,6 @@ class SenderController(QObject):
     queueReady = Signal()                               # Worker 清理完毕，可重新启动
     queueProgressUpdated = Signal(int, int, float)      # (current_idx_0based, total, eta)
     taskProgressUpdated = Signal(str, int, int, float)  # (task_id, attempted, task_total, eta)
-    queueStoreError = Signal(str)                       # 队列持久化失败信号，携带错误说明
 
     def __init__(
         self,
@@ -103,8 +102,7 @@ class SenderController(QObject):
         Args:
             task: 任务草稿。
         """
-        if not self._store_ok(lambda: self.queue_store.add_task(self._built_task(task))):
-            return
+        self.queue_store.add_task(self._built_task(task))
         self.state.workspace.queue_state.add_task(task)
 
     def insert_task(
@@ -122,8 +120,7 @@ class SenderController(QObject):
         """
         queue_state = self.state.workspace.queue_state
         at = queue_state.insert_index_for(ref_task_id, position)
-        if not self._store_ok(lambda: self.queue_store.insert_task(self._built_task(task), at)):
-            return
+        self.queue_store.insert_task(self._built_task(task), at)
         queue_state.insert_task(task, ref_task_id, position)
 
     def remove_task(self, task_id: str) -> None:
@@ -136,8 +133,7 @@ class SenderController(QObject):
         # 与 QueueState.remove_task 同一闸门：发送中的任务不移除
         if view is None or view.status is TaskStatus.RUNNING:
             return
-        if not self._store_ok(lambda: self.queue_store.delete_tasks([task_id])):
-            return
+        self.queue_store.delete_tasks([task_id])
         self.state.workspace.queue_state.remove_task(task_id)
 
     def move_task(self, task_id: str, toward: RelativePosition) -> None:
@@ -151,8 +147,7 @@ class SenderController(QObject):
         order = queue_state.order_with_move(task_id, toward)
         if order is None:
             return
-        if not self._store_ok(lambda: self.queue_store.reorder_tasks(order)):
-            return
+        self.queue_store.reorder_tasks(order)
         queue_state.move_task(task_id, toward)
 
     def reorder_tasks(self, task_ids: list[str]) -> None:
@@ -161,8 +156,7 @@ class SenderController(QObject):
         Args:
             task_ids: 当前队列的全排列。
         """
-        if not self._store_ok(lambda: self.queue_store.reorder_tasks(task_ids)):
-            return
+        self.queue_store.reorder_tasks(task_ids)
         self.state.workspace.queue_state.reorder_tasks(task_ids)
 
     def apply_edit(self, task_id: str, source: TaskDraft) -> None:
@@ -192,11 +186,9 @@ class SenderController(QObject):
             0 if (reissued or list_changed) else view.attempted,
         )
         if reissued:
-            ok = self._store_ok(lambda: self.queue_store.reissue_task(task_id, built))
+            self.queue_store.reissue_task(task_id, built)
         else:
-            ok = self._store_ok(lambda: self.queue_store.update_task(built, items_replaced=list_changed))
-        if not ok:
-            return
+            self.queue_store.update_task(built, items_replaced=list_changed)
         queue_state.apply_edit(task_id, source, new_id=new_id)
 
     def assign_danmakus(
@@ -229,14 +221,12 @@ class SenderController(QObject):
             view.error_msg,
             0 if list_changed else view.attempted,
         )
-        if not self._store_ok(lambda: self.queue_store.update_task(built, items_replaced=list_changed)):
-            return
+        self.queue_store.update_task(built, items_replaced=list_changed)
         queue_state.assign_danmakus(task_id, danmakus, xml_path=xml_path)
 
     def clear_all(self) -> None:
         """清空队列中的全部任务，先落库再刷内存。"""
-        if not self._store_ok(self.queue_store.clear_all):
-            return
+        self.queue_store.clear_all()
         self.state.workspace.queue_state.clear_all()
 
     def reset_queue(self) -> None:
@@ -244,13 +234,8 @@ class SenderController(QObject):
         queue_state = self.state.workspace.queue_state
         remove_ids = [view.task_id for view in queue_state.tasks if view.status is TaskStatus.COMPLETED]
         revive_ids = [view.task_id for view in queue_state.tasks if view.status is TaskStatus.FAILED]
-
-        def _reset() -> None:
-            self.queue_store.delete_tasks(remove_ids)
-            self.queue_store.reset_tasks(revive_ids, status=TaskStatus.PENDING, error=None)
-
-        if (remove_ids or revive_ids) and not self._store_ok(_reset):
-            return
+        if remove_ids or revive_ids:
+            self.queue_store.reset_queue(remove_ids, revive_ids)
         queue_state.reset_queue()
 
     def reset_progress(self, task_id: str) -> None:
@@ -262,10 +247,7 @@ class SenderController(QObject):
         view = self.state.workspace.queue_state.get_task_by_id(task_id)
         if view is None:
             return
-        if not self._store_ok(
-            lambda: self.queue_store.reset_tasks([task_id], status=view.status, error=view.error_msg or None)
-        ):
-            return
+        self.queue_store.reset_tasks([task_id], status=view.status, error=view.error_msg or None)
         self.state.workspace.queue_state.reset_progress(task_id)
 
     # endregion
@@ -304,23 +286,6 @@ class SenderController(QObject):
             Task: 转换后的任务对象。
         """
         return cls._built(draft.to_definition(), draft.status, draft.error_msg, draft.attempted)
-
-    def _store_ok(self, write: Callable[[], None]) -> bool:
-        """执行队列持久化写入；失败时记录异常并向界面发射错误通知。
-
-        Args:
-            write: 待执行的数据库写入操作。
-
-        Returns:
-            bool: 写入成功返回 True，失败返回 False。
-        """
-        try:
-            write()
-        except QueueStorageError:
-            logger.exception("队列落库失败，本次操作未生效")
-            self.queueStoreError.emit("队列落库失败，本次操作未生效")
-            return False
-        return True
 
     # endregion
 
