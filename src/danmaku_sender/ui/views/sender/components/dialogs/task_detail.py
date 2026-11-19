@@ -337,7 +337,7 @@ class TaskDetailDialog(QDialog):
         self._apply_danmaku_changes()
 
         # 读取控件值并构造 PacingConfig（pydantic 校验，含跨字段规则），
-        # 再冻结成工单参数快照
+        # 再冻结成任务参数快照
         try:
             collected = DraftFormBinder.collect(self, SenderConfig.PacingConfig)
             self.editing.config = collected.to_task_config()

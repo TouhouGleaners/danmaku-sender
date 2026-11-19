@@ -90,7 +90,7 @@ class HistoryManager:
 
         Raises:
             ValueError: dmid 缺失，或目标未指定。
-            HistoryStorageError: 落库失败。
+            HistoryStorageError: 写入失败。
         """
         if not dmid:
             raise ValueError("存证必须提供有效的 dmid")
@@ -120,7 +120,7 @@ class HistoryManager:
                     .execute()
             )
         except Exception as e:
-            logger.exception(f"存证落库失败 [dmid={dmid}]")
+            logger.exception(f"存证写入失败 [dmid={dmid}]")
             raise HistoryStorageError(f"弹幕存证写入失败 [dmid={dmid}]: {e}", original_error=e) from e
 
     def upsert_task(self, definition: TaskDefinition, status: TaskStatus) -> None:
@@ -129,8 +129,8 @@ class HistoryManager:
         发送开始时调用；已写入的记录不删除，仅更新任务状态。
 
         Args:
-            definition (TaskDefinition): 任务工单，提供身份与描述。
-            status (TaskStatus): 当前任务状态，按 ``TaskStatus.name`` 落库。
+            definition (TaskDefinition): 任务定义，提供身份与描述。
+            status (TaskStatus): 当前任务状态，按 ``TaskStatus.name`` 写入。
         """
         meta = definition.meta
         try:

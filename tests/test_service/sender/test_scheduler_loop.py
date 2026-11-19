@@ -192,10 +192,10 @@ class TestDegradedAccounting:
         assert ctx.evidence_failures[0][0].msg == "a"
 
     def test_storage_failure_is_degraded_not_success(self, hm, monkeypatch):
-        """落库失败时判为降级并记入 evidence_failures"""
+        """写入失败时判为降级并记入 evidence_failures"""
 
         def raise_storage_error(*args, **kwargs):
-            raise HistoryStorageError("落库异常")
+            raise HistoryStorageError("写入异常")
 
         monkeypatch.setattr(hm, "record_danmaku", raise_storage_error)
         executor = StubExecutor([ok_response("d1")])
@@ -249,7 +249,7 @@ class TestDiagnostics:
         ctx = SendingContext(total=1, target=job.target)
         make_scheduler(hm, executor).run_pipeline(job, ctx)
 
-        assert ledger_at_callback == [1], "回调运行时存证尚未落库"
+        assert ledger_at_callback == [1], "回调运行时存证尚未写入"
         assert seen == [("a", True)]
         assert ctx.success_count == 1
         assert hm.count_records(TARGET, Danmaku(msg="a", progress=1000)) == 1, "回调抛异常丢了存证"

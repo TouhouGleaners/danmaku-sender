@@ -1,6 +1,6 @@
-"""SenderController 的队列写穿：结构变更与运行状态先落库再刷内存。
+"""SenderController 的队列写穿：结构变更与运行状态先写入数据库再更新内存状态。
 
-每条结构命令落库后，queue.db 里的行、弹幕与顺序都要与内存一致；
+每条结构命令写入后，queue.db 里的行、弹幕与顺序都要与内存一致；
 关库重开再水合，队列原样回来。
 """
 
@@ -138,7 +138,7 @@ class TestEditWriteThrough:
         controller.apply_edit("t1", draft)
 
         rows = store.load_tasks()
-        assert len(rows) == 1, "旧工单不得在库里留成僵尸"
+        assert len(rows) == 1, "旧任务不得残留在库里"
         assert rows[0].task_id != "t1"
         assert (rows[0].bvid, rows[0].cid) == ("BV2xx411c7mD", 2002)
         assert rows[0].cursor == 0
@@ -146,7 +146,7 @@ class TestEditWriteThrough:
         assert [it.msg for it in store.load_items(rows[0].task_id)] == ["a", "b"]
 
     def test_assign_same_list_keeps_payload_and_failures(self, env):
-        """清单没变时弹幕与失败记录原样保留，来源文件的修改照常落库"""
+        """清单没变时弹幕与失败记录原样保留，来源文件的修改照常写入数据库"""
         _, store, controller = env
         controller.add_task(make_draft("t1"))
         store.record_result("t1", 0, status=TaskStatus.FAILED, cursor=1, burst_count=0, error="网络错误", failure_reason="网络错误")
@@ -157,7 +157,7 @@ class TestEditWriteThrough:
             xml_path=Path("new.xml"),
         )
 
-        assert store.load_tasks()[0].source_path == "new.xml", "来源文件的修改要落库"
+        assert store.load_tasks()[0].source_path == "new.xml", "来源文件的修改要写入数据库"
         assert [it.msg for it in store.load_items("t1")] == ["a", "b"]
         assert store.load_failures("t1"), "清单没变，失败记录不得被清掉"
 

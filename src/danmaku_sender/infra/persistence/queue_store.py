@@ -758,7 +758,7 @@ class QueueStore:
         execution = task.execution
         meta = definition.meta
         if (definition.target.bvid is None) != (definition.target.cid is None):
-            raise QueueStorageError("目标半配：bvid 与 cid 必须成对有值或成对为空")
+            raise QueueStorageError("目标字段不成对：bvid 与 cid 必须成对有值或成对为空")
         return {
             "task_id": definition.task_id,
             "position": position,

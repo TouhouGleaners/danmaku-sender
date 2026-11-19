@@ -459,7 +459,7 @@ class EditorDialog(QDialog):
         try:
             self.controller.save_danmakus(final_list)
         except QueueStorageError:
-            QMessageBox.warning(self, "保存失败", "队列落库失败，修改未保存，请重试。")
+            QMessageBox.warning(self, "保存失败", "写入队列数据库失败，修改未保存，请重试。")
             return
 
         self.logger.info(f"已保存 {len(final_list)} 条弹幕到任务")

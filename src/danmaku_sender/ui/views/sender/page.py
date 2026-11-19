@@ -980,9 +980,9 @@ class SenderPage(QWidget):
         self._queue_model.set_tasks(self.state.workspace.queue_state.tasks)
 
     def _notify_store_failure(self) -> None:
-        """落库失败的统一提示：记异常并弹通知，本次操作不生效。"""
-        self.logger.exception("队列落库失败，本次操作未生效")
-        Notification.error(title="队列落库失败", message="本次操作未生效，详见运行日志")
+        """队列写入失败的统一提示：记异常并弹通知，本次操作不生效。"""
+        self.logger.exception("队列写入失败，本次操作未生效")
+        Notification.error(title="队列写入失败", message="本次操作未生效，详见运行日志")
 
     @Slot()
     def _on_queue_changed(self):

@@ -49,9 +49,9 @@ class TestPacingConfig:
         assert cfg.max_delay == 10.0
 
     def test_to_task_config_is_snapshot(self):
-        """入队后修改节奏配置不得影响已派生的工单参数。
+        """入队后修改节奏配置不得影响已派生的任务参数。
 
-        工单参数在入队时定死；改全局发送节奏只对新建任务生效。
+        任务参数在入队时定死；改全局发送节奏只对新建任务生效。
         """
         cfg = SenderConfig.PacingConfig(min_delay=8.0, max_delay=8.5)
         snapshot = cfg.to_task_config()
@@ -60,7 +60,7 @@ class TestPacingConfig:
         cfg.min_delay = 10.0
 
         assert (cfg.min_delay, cfg.max_delay) == (10.0, 10.5), "全局设置应已更新"
-        assert (snapshot.min_delay, snapshot.max_delay) == (8.0, 8.5), "工单参数不受影响"
+        assert (snapshot.min_delay, snapshot.max_delay) == (8.0, 8.5), "任务参数不受影响"
 
     def test_min_delay_too_small(self):
         with pytest.raises(ValidationError):
@@ -130,7 +130,7 @@ def make_task(
 ) -> TaskDraft:
     """构造一条任务。默认带弹幕，是配置齐备的正常任务。
 
-    配置残缺的任务会被 QueueState 纠状态，所以要构造「缺弹幕」的用例
+    配置残缺的任务会被 QueueState 对齐状态，所以要构造「缺弹幕」的用例
     必须显式传 ``danmaku_count=0``，别指望草稿自带的 status 能蒙混过关。
     """
     return TaskDraft(
@@ -396,7 +396,7 @@ class TestQueueState:
         assert view.attempted == 0
 
     def test_apply_edit_retarget_resets_cursor(self):
-        """换目标换发新工单，旧视频的进度不得带进新视频"""
+        """换目标另立新任务，旧视频的进度不得带进新视频"""
         qs = QueueState()
         t = make_task(1)
         qs.add_task(t)
@@ -406,7 +406,7 @@ class TestQueueState:
         draft = view.to_draft()
         draft.target = VideoTarget(bvid="BV999", cid=999)
         qs.apply_edit(t.task_id, draft)
-        new_view = qs.tasks[0]  # 换目标换发新 task_id，按新工单查
+        new_view = qs.tasks[0]  # 换目标换发新 task_id，按新任务查
         assert new_view.task_id != t.task_id
         assert new_view.attempted == 0
 
@@ -477,7 +477,7 @@ class TestQueueState:
         assert view.task_id == t.task_id  # id 不被沙盒覆盖
 
     def test_apply_edit_reassigning_target_renews_id(self):
-        """改目标即换工单：换发新 id，旧 id 不再代表改过目标的任务"""
+        """改目标即换任务：换发新 id，旧 id 不再代表改过目标的任务"""
         qs = QueueState()
         t = make_task(1)
         qs.add_task(t)
@@ -509,7 +509,7 @@ class TestQueueState:
         assert [v.target.cid for v in qs.tasks] == [1]
 
     def test_view_config_is_frozen(self):
-        """工单参数是冻结类型：经 TaskView.config 改写在类型层就不可能"""
+        """任务参数是冻结类型：经 TaskView.config 改写在类型层就不可能"""
         qs = QueueState()
         t = make_task(1)
         qs.add_task(t)
@@ -616,7 +616,7 @@ class TestQueueState:
         draft = view.to_draft()
         draft.target = VideoTarget()
         qs.apply_edit(t.task_id, draft)
-        # 拆掉已指定的目标也算换工单，task_id 已换发
+        # 拆掉已指定的目标也算换任务，task_id 已换发
         view = qs.tasks[0]
         assert view.status is TaskStatus.UNCONFIGURED
 
@@ -732,7 +732,7 @@ class TestQueueState:
         for status in (TaskStatus.COMPLETED, TaskStatus.FAILED):
             qs.add_task(make_task(1, status))
         # SKIPPED / UNCONFIGURED 要留在原状态，得是缺配置的——
-        # 配置齐备的会在入队时被纠回待发
+        # 配置齐备的会在入队时对齐为待发
         for status in (TaskStatus.SKIPPED, TaskStatus.UNCONFIGURED):
             qs.add_task(make_task(1, status, danmaku_count=0))
         assert qs.has_startable_tasks is False

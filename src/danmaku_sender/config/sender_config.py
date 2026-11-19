@@ -54,12 +54,12 @@ class SenderConfig(AtomicModel):
             return self
 
         def to_task_config(self) -> TaskConfig:
-            """派生工单参数快照（入队后不可变）。"""
+            """派生任务参数快照（入队后不可变）。"""
             return TaskConfig(**self.model_dump())
 
         @classmethod
         def from_task_config(cls, cfg: TaskConfig) -> "SenderConfig.PacingConfig":
-            """从工单参数还原为可编辑的配置（供表单编辑）。"""
+            """从任务参数还原为可编辑的配置（供表单编辑）。"""
             return cls.model_validate(asdict(cfg))
 
     class QueueConfig(AtomicModel):

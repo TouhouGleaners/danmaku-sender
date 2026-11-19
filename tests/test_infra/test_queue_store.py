@@ -1,4 +1,4 @@
-"""QueueStore 存取测试 — 领域对象落库、写入分家与事务语义"""
+"""QueueStore 存取测试 — 领域对象持久化、写入分家与事务语义"""
 
 from pathlib import Path
 
@@ -18,7 +18,7 @@ from danmaku_sender.types.models.queue import (
 
 
 def make_danmakus(*msgs: str) -> tuple[Danmaku, ...]:
-    """按顺序构造弹幕清单；出现时间按下标递增。"""
+    """按顺序构造弹幕清单；出现时间按索引递增。"""
     return tuple(Danmaku(msg=m, progress=idx * 1000) for idx, m in enumerate(msgs))
 
 
@@ -182,7 +182,7 @@ class TestTaskStateUpdate:
     def test_update_state_is_explicit_and_complete(self, store):
         store.add_task(make_task("t1"))
         store.update_task_state("t1", status=TaskStatus.RUNNING, cursor=4, burst_count=2, error="账号被封停")
-        assert store.load_tasks()[0].error == "账号被封停", "非空错误确实落库"
+        assert store.load_tasks()[0].error == "账号被封停", "非空错误确实写入"
 
         store.update_task_state("t1", status=TaskStatus.FAILED, cursor=5, burst_count=0, error=None)
         row = store.load_tasks()[0]
@@ -310,7 +310,7 @@ class TestReissue:
         assert store.load_items("t1") == []
 
     def test_reissue_clears_failures(self, store):
-        """换工单就是新的一趟，失败记录不随旧行带走"""
+        """换任务后失败记录不随旧行带走"""
         store.add_task(make_task("t1", msgs=("a",)))
         store.record_result("t1", 0, status=TaskStatus.FAILED, cursor=1, burst_count=0, error="网络异常", failure_reason="网络异常")
 
