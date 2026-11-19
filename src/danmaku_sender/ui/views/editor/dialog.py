@@ -41,6 +41,7 @@ class EditorDialog(QDialog):
     def __init__(self, task: TaskView, sender_controller: SenderController, settings: Settings, parent=None):
         super().__init__(parent)
         self.task = task
+        self.sender_controller = sender_controller
         self.controller = EditorController(task, sender_controller, settings, self)
         self.logger = logging.getLogger(__name__)
 
@@ -138,7 +139,7 @@ class EditorDialog(QDialog):
         main_layout.addLayout(toolbar_layout)
 
         # --- 规则管理区 ---
-        self.rules_group = ValidationRulesGroup(self.controller.state, self.controller.settings)
+        self.rules_group = ValidationRulesGroup(self.sender_controller.state, self.controller.settings)
         main_layout.addWidget(self.rules_group)
 
         # --- 核心区 ---
