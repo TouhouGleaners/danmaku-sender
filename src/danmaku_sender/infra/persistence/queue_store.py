@@ -311,7 +311,7 @@ class QueueStore:
 
         Args:
             task (Task): 待入队的任务。
-            at (int): 插入位置（0-based 下标）；等于当前队列长度时等价于追加至末尾。
+            at (int): 插入位置（0-based 索引）；等于当前队列长度时等价于追加至末尾。
 
         Raises:
             QueueStorageError: 目标字段不成对或数据库写入失败。
@@ -372,7 +372,7 @@ class QueueStore:
             with queue_db.atomic():
                 old = _QueueTask.get_or_none(_QueueTask.task_id == old_task_id)
                 if old is None:
-                    raise QueueStorageError(f"工单换发跳过：没有任务 [{old_task_id}] 的行")
+                    raise QueueStorageError(f"任务替换跳过：没有任务 [{old_task_id}] 的行")
                 _QueueTask.delete().where(_QueueTask.task_id == old_task_id).execute()
                 _QueueItem.delete().where(_QueueItem.task_id == old_task_id).execute()
                 _QueueFailure.delete().where(_QueueFailure.task_id == old_task_id).execute()
@@ -381,8 +381,8 @@ class QueueStore:
         except QueueStorageError:
             raise
         except Exception as e:
-            logger.exception("工单换发失败 [task_id=%s]", old_task_id)
-            raise QueueStorageError(f"工单换发失败 [{old_task_id}]", original_error=e) from e
+            logger.exception("任务替换失败 [task_id=%s]", old_task_id)
+            raise QueueStorageError(f"任务替换失败 [{old_task_id}]", original_error=e) from e
 
     def record_result(
         self,
@@ -397,12 +397,12 @@ class QueueStore:
     ) -> None:
         """在单事务内更新任务运行进度并记录单条弹幕的处理结果。
 
-        当 ``failure_reason`` 为 None 时，表示该条已发送成功或被跳过，若此前存在同下标的失败记录则一并删除；
+        当 ``failure_reason`` 为 None 时，表示该条已发送成功或被跳过，若此前存在同索引的失败记录则一并删除；
         否则按 ``idx`` 写入或覆盖对应的失败原因。
 
         Args:
             task_id (str): 任务唯一标识。
-            idx (int): 本次处理对应的弹幕 0-based 下标。
+            idx (int): 本次处理对应的弹幕 0-based 索引。
             status (TaskStatus): 更新后的任务状态。
             cursor (int): 更新后的续传游标。
             burst_count (int): 更新后的爆发计数。
