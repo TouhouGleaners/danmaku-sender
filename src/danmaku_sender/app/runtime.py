@@ -107,9 +107,9 @@ class Runtime(QObject):
                     error=task.execution.error_msg or None,
                 )
             except QueueStorageError:
-                logger.exception(f"启动纠偏写入失败 [task_id={task.definition.task_id}]")
+                logger.exception(f"启动修正写入失败 [task_id={task.definition.task_id}]")
         if fixed:
-            logger.info(f"启动纠偏: {fixed} 个任务状态已修正并写回数据库")
+            logger.info(f"启动时已修正 {fixed} 个任务状态并写回数据库")
         return store
 
     def _activate_saved_accounts(self) -> None:

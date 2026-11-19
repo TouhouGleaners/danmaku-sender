@@ -130,7 +130,7 @@ def make_task(
 ) -> TaskDraft:
     """构造一条任务。默认带弹幕，是配置齐备的正常任务。
 
-    配置残缺的任务会被 QueueState 纠状态，所以要构造「缺弹幕」的用例
+    配置残缺的任务会被 QueueState 对齐状态，所以要构造「缺弹幕」的用例
     必须显式传 ``danmaku_count=0``，别指望草稿自带的 status 能蒙混过关。
     """
     return TaskDraft(
@@ -732,7 +732,7 @@ class TestQueueState:
         for status in (TaskStatus.COMPLETED, TaskStatus.FAILED):
             qs.add_task(make_task(1, status))
         # SKIPPED / UNCONFIGURED 要留在原状态，得是缺配置的——
-        # 配置齐备的会在入队时被纠回待发
+        # 配置齐备的会在入队时对齐为待发
         for status in (TaskStatus.SKIPPED, TaskStatus.UNCONFIGURED):
             qs.add_task(make_task(1, status, danmaku_count=0))
         assert qs.has_startable_tasks is False

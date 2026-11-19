@@ -1,4 +1,4 @@
-"""Runtime 的队列启动恢复：崩溃残留纠偏、状态对齐写回与任务水合。"""
+"""Runtime 的队列启动恢复：崩溃残留修正、状态对齐写回与任务水合。"""
 
 import pytest
 
@@ -41,7 +41,7 @@ def _seed_running_row(store: QueueStore) -> None:
 
 
 def test_startup_pauses_residual_running_and_restores(qapp, queue_db):
-    """强杀残留的 RUNNING 纠成可续状态，游标保留，任务装回内存且修正已写回数据库"""
+    """强杀残留的 RUNNING 改为可续状态，游标保留，任务装回内存且修正已写回数据库"""
     store = QueueStore(queue_db)
     _seed_running_row(store)
     store.close()
