@@ -117,10 +117,10 @@ class SettingsRow(Card):
 
 
 class NavRow(SettingsRow):
-    """可点设置行，左键按压时发出登记的目标下标。
+    """可点设置行，左键按压时发出登记的目标索引。
 
     Attributes:
-        activated (Signal(int)): 点击时发射，参数为构造时登记的目标下标。
+        activated (Signal(int)): 点击时发射，参数为构造时登记的目标索引。
     """
 
     activated = Signal(int)
@@ -139,7 +139,7 @@ class NavRow(SettingsRow):
         Args:
             title (str): 名称文本。
             subtitle (str): 说明文本，超长自动换行。
-            target (int): 点击时经 ``activated`` 报出的目标下标。
+            target (int): 点击时经 ``activated`` 报出的目标索引。
             trailing (QWidget | None): 尾部控件。
             icon (QWidget | None): 图标控件；省略则不显示图标列。
             parent (QWidget | None): 父控件。
@@ -149,7 +149,7 @@ class NavRow(SettingsRow):
         self.setHoverable(True)
 
     def mousePressEvent(self, event: QMouseEvent) -> None:
-        """左键按压时发出目标下标。"""
+        """左键按压时发出目标索引。"""
         if event.button() == Qt.MouseButton.LeftButton:
             self.activated.emit(self._target)
         super().mousePressEvent(event)

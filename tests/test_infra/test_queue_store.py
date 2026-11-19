@@ -18,7 +18,7 @@ from danmaku_sender.types.models.queue import (
 
 
 def make_danmakus(*msgs: str) -> tuple[Danmaku, ...]:
-    """按顺序构造弹幕清单；出现时间按下标递增。"""
+    """按顺序构造弹幕清单；出现时间按索引递增。"""
     return tuple(Danmaku(msg=m, progress=idx * 1000) for idx, m in enumerate(msgs))
 
 
