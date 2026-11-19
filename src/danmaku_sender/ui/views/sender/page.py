@@ -45,10 +45,12 @@ from PySide6.QtWidgets import (
 from danmaku_sender.config import Settings
 from danmaku_sender.controller.sender import SenderController
 from danmaku_sender.infra.persistence.history_manager import HistoryManager
+from danmaku_sender.infra.persistence.queue_store import QueueStore
 from danmaku_sender.infra.platform import send_windows_notification
 from danmaku_sender.service.danmaku_xml import DanmakuXml
 from danmaku_sender.service.sender import SendingContext
 from danmaku_sender.state import AppState
+from danmaku_sender.types.exceptions.exceptions import QueueStorageError
 from danmaku_sender.types.models.common import (
     RelativePosition,
     SendMode,
@@ -114,6 +116,7 @@ class SenderPage(QWidget):
         state: AppState,
         settings: Settings,
         history_manager: HistoryManager,
+        queue_store: QueueStore,
     ):
         """初始化发射器页。
 
@@ -121,12 +124,13 @@ class SenderPage(QWidget):
             state (AppState): 状态树聚合根。
             settings (Settings): 配置容器。
             history_manager (HistoryManager): 本地账本。
+            queue_store (QueueStore): 队列存储。
         """
         super().__init__()
         self.state = state
         self.settings = settings
         self.logger = logging.getLogger(__name__)
-        self.sender_controller = SenderController(state, settings, history_manager, self)
+        self.sender_controller = SenderController(state, settings, history_manager, queue_store, self)
 
         self._queue_total = 0
         self._queue_current = 0
@@ -363,12 +367,15 @@ class SenderPage(QWidget):
                 self.logger.warning("发送进行中，已忽略任务详情编辑结果。")
                 return
             # 通过 Controller 应用编辑结果（自动发射 taskDataChanged）
-            self.sender_controller.apply_edit(task.task_id, dialog.editing)
-            self.logger.info(f"已更新任务: {task.display_string}")
+            try:
+                self.sender_controller.apply_edit(task.task_id, dialog.editing)
+                self.logger.info(f"已更新任务: {task.display_string}")
+            except QueueStorageError:
+                self._notify_store_failure()
 
     def _edit_danmakus(self, task: TaskView):
         """编辑任务的弹幕数据（打开编辑器弹窗）"""
-        dialog = EditorDialog(task, self.state, self.settings, self)
+        dialog = EditorDialog(task, self.sender_controller, self.settings, self)
         if dialog.exec() == QDialog.DialogCode.Accepted:
             # 编辑器内部已通过 assign_danmakus 通知 QueueState，表格自动刷新
             self.logger.info(f"已编辑弹幕: {task.display_string} ({task.total} 条)")
@@ -380,15 +387,24 @@ class SenderPage(QWidget):
             task_id: 要移动的任务标识。
             toward: 移向参考项的哪一侧，ABOVE 为上移，BELOW 为下移。
         """
-        self.sender_controller.move_task(task_id, toward)
+        try:
+            self.sender_controller.move_task(task_id, toward)
+        except QueueStorageError:
+            self._notify_store_failure()
 
     def _reset_progress(self, task_id: str):
         """清零任务的发送进度游标，下次启动从头发。"""
-        self.sender_controller.reset_progress(task_id)
-        self.logger.info("已重置进度，该任务下次从第 1 条开始发")
+        try:
+            self.sender_controller.reset_progress(task_id)
+            self.logger.info("已重置进度，该任务下次从第 1 条开始发")
+        except QueueStorageError:
+            self._notify_store_failure()
 
     def _remove_task(self, task_id: str):
-        self.sender_controller.remove_task(task_id)
+        try:
+            self.sender_controller.remove_task(task_id)
+        except QueueStorageError:
+            self._notify_store_failure()
 
     @Slot()
     def _delete_selected_task(self):
@@ -420,7 +436,10 @@ class SenderPage(QWidget):
             QMessageBox.StandardButton.No,
         )
         if reply == QMessageBox.StandardButton.Yes:
-            self.sender_controller.clear_all()
+            try:
+                self.sender_controller.clear_all()
+            except QueueStorageError:
+                self._notify_store_failure()
 
     # region 导出未发送成功
 
@@ -741,15 +760,22 @@ class SenderPage(QWidget):
             QMessageBox.StandardButton.No,
         )
         if reply == QMessageBox.StandardButton.Yes:
-            self.sender_controller.reset_queue()
-            self.logger.info("队列已重置")
+            try:
+                self.sender_controller.reset_queue()
+                self.logger.info("队列已重置")
+            except QueueStorageError:
+                self._notify_store_failure()
 
     # endregion
     # region Slots Queue
 
     def _on_queue_reorder(self, task_ids: list[str]):
         """拖拽排序后按 task_id 顺序同步 QueueState"""
-        self.sender_controller.reorder_tasks(task_ids)
+        try:
+            self.sender_controller.reorder_tasks(task_ids)
+        except QueueStorageError:
+            self._notify_store_failure()
+            self._refresh_table()
 
     def eventFilter(self, obj, event: QDragEnterEvent | QDragMoveEvent | QDropEvent) -> bool:
         """处理拖放到队列表格上的外部 XML 文件"""
@@ -910,8 +936,13 @@ class SenderPage(QWidget):
                 self.logger.error(problem)
                 problems.append(problem)
                 continue
-            self.sender_controller.add_task(task)
-            created += 1
+            try:
+                self.sender_controller.add_task(task)
+                created += 1
+            except QueueStorageError as e:
+                problem = f"导入 {file_path} 失败：{e}"
+                self.logger.error(problem)
+                problems.append(problem)
 
         if created:
             self.logger.info(f"已从 XML 创建 {created} 个任务，请补上视频目标后发送")
@@ -934,14 +965,24 @@ class SenderPage(QWidget):
             self.logger.error(problem)
             return problem
 
-        self.sender_controller.assign_danmakus(
-            task.task_id, list(loaded.danmakus), xml_path=file_path
-        )
+        try:
+            self.sender_controller.assign_danmakus(
+                task.task_id, list(loaded.danmakus), xml_path=file_path
+            )
+        except QueueStorageError as e:
+            problem = f"导入 {file_path} 失败：{e}"
+            self.logger.error(problem)
+            return problem
         return None
 
     def _refresh_table(self):
         """将队列任务同步进表格模型。"""
         self._queue_model.set_tasks(self.state.workspace.queue_state.tasks)
+
+    def _notify_store_failure(self) -> None:
+        """落库失败的统一提示：记异常并弹通知，本次操作不生效。"""
+        self.logger.exception("队列落库失败，本次操作未生效")
+        Notification.error(title="队列落库失败", message="本次操作未生效，详见运行日志")
 
     @Slot()
     def _on_queue_changed(self):

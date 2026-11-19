@@ -19,6 +19,7 @@ from danmaku_sender.controller.sender import SenderController
 from danmaku_sender.controller.video_controller import VideoController
 from danmaku_sender.service.danmaku_xml import DanmakuXml
 from danmaku_sender.state import AppState
+from danmaku_sender.types.exceptions.exceptions import QueueStorageError
 from danmaku_sender.types.models.common import RelativePosition, TaskMeta, VideoTarget
 from danmaku_sender.types.models.queue import TaskDraft
 from danmaku_sender.types.models.video import VideoInfo
@@ -250,13 +251,20 @@ class TaskBuilderDialog(QDialog):
         )
         task.status = task.initial_status
 
+        try:
+            if self._ref_task_id is None:
+                self._sender_controller.add_task(task)
+            else:
+                self._sender_controller.insert_task(task, self._ref_task_id, self._insert_position)
+        except QueueStorageError:
+            QMessageBox.warning(self, "添加失败", "队列落库失败，任务未添加，请重试。")
+            return
+
         if self._ref_task_id is None:
-            self._sender_controller.add_task(task)
             # 追加模式：允许连建，弹窗保持打开
             self._selected_files = []
             self._file_input.clear()
             return
 
         # 相对插入：写入后关闭
-        self._sender_controller.insert_task(task, self._ref_task_id, self._insert_position)
         self.accept()

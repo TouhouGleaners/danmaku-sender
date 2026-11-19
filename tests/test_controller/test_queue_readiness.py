@@ -6,6 +6,7 @@
 from danmaku_sender.config import Settings
 from danmaku_sender.controller.sender import SenderController
 from danmaku_sender.infra.persistence.history_manager import HistoryManager
+from danmaku_sender.infra.persistence.queue_store import QueueStore
 from danmaku_sender.state import AppState
 from danmaku_sender.types.models.common import StartReadiness, VideoTarget
 from danmaku_sender.types.models.queue import TaskDraft, TaskStatus
@@ -23,7 +24,9 @@ def _task(status: TaskStatus) -> TaskDraft:
 def _controller(tmp_path) -> tuple[SenderController, AppState]:
     state = AppState()
     settings = Settings()
-    return SenderController(state, settings, HistoryManager(tmp_path / "history.db")), state
+    history = HistoryManager(tmp_path / "history.db")
+    store = QueueStore(tmp_path / "queue.db")
+    return SenderController(state, settings, history, store), state
 
 
 def test_missing_credentials(tmp_path):

@@ -10,6 +10,7 @@ from danmaku_sender.config import SenderConfig, Settings
 from danmaku_sender.controller.sender import controller as sender_controller_mod
 from danmaku_sender.controller.sender.controller import SenderController
 from danmaku_sender.infra.persistence.history_manager import HistoryManager
+from danmaku_sender.infra.persistence.queue_store import QueueStore
 from danmaku_sender.service.sender.context import SendingContext
 from danmaku_sender.state import AppState
 from danmaku_sender.types.models.common import TaskMeta, VideoTarget
@@ -54,11 +55,12 @@ def env(tmp_path, monkeypatch):
     state.session.bili_jct = "csrf"
     settings = Settings()
     hm = HistoryManager(tmp_path / "history.db")
-    controller = SenderController(state, settings, hm)
+    store = QueueStore(tmp_path / "queue.db")
+    controller = SenderController(state, settings, hm, store)
     return state, hm, controller
 
 
-def _enqueue(state: AppState, task_id: str) -> str:
+def _enqueue(controller: SenderController, task_id: str) -> str:
     draft = TaskDraft(
         target=TARGET,
         meta=TaskMeta(video_title="标题"),
@@ -66,7 +68,7 @@ def _enqueue(state: AppState, task_id: str) -> str:
         config=SenderConfig.PacingConfig(min_delay=0.1, max_delay=0.1).to_task_config(),
         task_id=task_id,
     )
-    state.workspace.queue_state.add_task(draft)
+    controller.add_task(draft)
     return task_id
 
 
@@ -86,8 +88,8 @@ def _task_record(hm: HistoryManager, task_id: str) -> dict:
 
 class TestTaskRecordLifecycle:
     def test_start_writes_running(self, env):
-        state, hm, controller = env
-        _enqueue(state, "任务-A")
+        _, hm, controller = env
+        _enqueue(controller, "任务-A")
         _start_round(controller)
 
         controller._on_task_started("任务-A", 0)
@@ -98,8 +100,8 @@ class TestTaskRecordLifecycle:
         assert row["video_title"] == "标题"
 
     def test_completed_updates_status(self, env):
-        state, hm, controller = env
-        task_id = _enqueue(state, "任务-A")
+        _, hm, controller = env
+        task_id = _enqueue(controller, "任务-A")
         _start_round(controller)
         controller._on_task_started(task_id, 0)
 
@@ -108,8 +110,8 @@ class TestTaskRecordLifecycle:
         assert _task_record(hm, task_id)["status"] == "COMPLETED"
 
     def test_paused_when_manually_stopped(self, env):
-        state, hm, controller = env
-        task_id = _enqueue(state, "任务-A")
+        _, hm, controller = env
+        task_id = _enqueue(controller, "任务-A")
         _start_round(controller)
         controller._on_task_started(task_id, 0)
 
@@ -120,8 +122,8 @@ class TestTaskRecordLifecycle:
         assert _task_record(hm, task_id)["status"] == "PAUSED"
 
     def test_failed_writes_terminal_status(self, env):
-        state, hm, controller = env
-        task_id = _enqueue(state, "任务-失败")
+        _, hm, controller = env
+        task_id = _enqueue(controller, "任务-失败")
         _start_round(controller)
 
         controller._on_task_started(task_id, 0)
@@ -131,8 +133,8 @@ class TestTaskRecordLifecycle:
 
     def test_skipped_writes_no_record(self, env):
         """SKIPPED 从未发包、无存证可对账，不写任务记录"""
-        state, hm, controller = env
-        task_id = _enqueue(state, "任务-跳过")
+        _, hm, controller = env
+        task_id = _enqueue(controller, "任务-跳过")
 
         controller._on_task_skipped(task_id, "未指定视频目标")
 
@@ -140,8 +142,8 @@ class TestTaskRecordLifecycle:
 
     def test_skipped_keeps_existing_record(self, env):
         """跑过后来被跳过的任务，保留原终态，不覆盖成 SKIPPED"""
-        state, hm, controller = env
-        task_id = _enqueue(state, "任务-A")
+        _, hm, controller = env
+        task_id = _enqueue(controller, "任务-A")
         _start_round(controller)
         controller._on_task_started(task_id, 0)
         controller._on_task_completed(task_id, SendingContext(total=1, target=TARGET))
@@ -153,18 +155,18 @@ class TestTaskRecordLifecycle:
     def test_retarget_leaves_prior_record_intact(self, env):
         """失败后重置并改目标重跑：旧记录保持原目标，不被新目标覆盖"""
         state, hm, controller = env
-        task_id = _enqueue(state, "任务-A")
+        task_id = _enqueue(controller, "任务-A")
         _start_round(controller)
         controller._on_task_started(task_id, 0)
         controller._on_task_failed(task_id, "网络错误", SendingContext(total=1, target=TARGET))
         assert _task_record(hm, task_id)["cid"] == 1001
 
-        state.workspace.queue_state.reset_queue()
+        controller.reset_queue()
         view = state.workspace.queue_state.get_task_by_id(task_id)
         assert view is not None
         draft = view.to_draft()
         draft.target = VideoTarget(bvid="BV2xx", cid=2002)
-        state.workspace.queue_state.apply_edit(task_id, draft)
+        controller.apply_edit(task_id, draft)
         new_id = state.workspace.queue_state.tasks[0].task_id
         assert new_id != task_id, "改目标应换发新 task_id"
 
