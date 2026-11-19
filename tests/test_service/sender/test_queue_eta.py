@@ -14,7 +14,7 @@ from danmaku_sender.types.models.queue import (
 
 
 def _definition(task_id: str, total: int = 2) -> TaskDefinition:
-    """构造最小可用的工单。
+    """构造最小可用的任务。
 
     弹幕数默认 2：DelayManager.calc_eta 的契约是「最后一条发完不产生延时」，
     只有 1 条时任务自身 ETA 为 0，无法区分「间隔」与「任务耗时」。

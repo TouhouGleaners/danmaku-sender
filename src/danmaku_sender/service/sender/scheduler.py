@@ -58,7 +58,7 @@ class DanmakuScheduler:
         Args:
             ctx (SendingContext): 运行记录，持有指纹计数缓存。
             danmakus (list[Danmaku]): 整份弹幕列表。
-            start_index (int): 断点续传的起点下标。
+            start_index (int): 断点续传的起点索引。
         """
         for dm in danmakus[:start_index]:
             fingerprint = cls._get_fingerprint(dm)
@@ -149,7 +149,7 @@ class DanmakuScheduler:
         """执行发送控制循环，结果填入 ctx。
 
         Args:
-            job (SendJob): 发送任务工单。
+            job (SendJob): 发送任务。
             ctx (SendingContext): 由调用方持有并传入，异常时结果仍在其中。
         """
         self.logger.info(f"🚀 启动调度流水线... 目标: {job.target.bvid or "未指定"} (CID: {job.target.cid})")
@@ -173,7 +173,7 @@ class DanmakuScheduler:
         if job.progress_callback:
             job.progress_callback(start_index, ctx.total)
 
-        # 待处理的弹幕下标，其后的尚未发包
+        # 待处理的弹幕索引，其后的尚未发包
         pending_from = start_index
 
         try:

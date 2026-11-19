@@ -257,7 +257,7 @@ class TaskBuilderDialog(QDialog):
             else:
                 self._sender_controller.insert_task(task, self._ref_task_id, self._insert_position)
         except QueueStorageError:
-            QMessageBox.warning(self, "添加失败", "队列落库失败，任务未添加，请重试。")
+            QMessageBox.warning(self, "添加失败", "写入队列数据库失败，任务未添加，请重试。")
             return
 
         if self._ref_task_id is None:

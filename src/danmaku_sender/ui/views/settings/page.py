@@ -28,7 +28,7 @@ from danmaku_sender.ui.framework.wrap_layout import WrapLayout
 
 
 class Subpage(IntEnum):
-    """设置页子页，取值即栈下标。
+    """设置页子页，取值即栈索引。
 
     Attributes:
         DIRECTORY: 目录页，列出全部分类。

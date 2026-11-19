@@ -27,7 +27,7 @@ class BreadcrumbBar(QWidget):
     """路径式导航条。
 
     Attributes:
-        itemActivated (Signal(int)): 点击可回溯段时发射，参数为段下标。
+        itemActivated (Signal(int)): 点击可回溯段时发射，参数为段索引。
     """
 
     itemActivated = Signal(int)
@@ -50,7 +50,7 @@ class BreadcrumbBar(QWidget):
         """一个绘制单元。
 
         Attributes:
-            index (int | None): 段下标；分隔槽为 ``None``。
+            index (int | None): 段索引；分隔槽为 ``None``。
             rect (QRectF): 命中矩形。
         """
 
@@ -149,13 +149,13 @@ class BreadcrumbBar(QWidget):
         return font
 
     def _hit(self, pos: QPointF) -> int | None:
-        """返回可回溯段的下标。
+        """返回可回溯段的索引。
 
         Args:
             pos (QPointF): 控件坐标系下的指针位置。
 
         Returns:
-            int | None: 落在可回溯段内时为该段下标，否则为 ``None``。
+            int | None: 落在可回溯段内时为该段索引，否则为 ``None``。
         """
         last = len(self._items) - 1
         for record in self._records:
@@ -264,7 +264,7 @@ class BreadcrumbBar(QWidget):
         """记录悬停段并在变化时触发重绘。
 
         Args:
-            index (int | None): 悬停段下标；无悬停段时为 ``None``。
+            index (int | None): 悬停段索引；无悬停段时为 ``None``。
         """
         if self._hovered == index:
             return

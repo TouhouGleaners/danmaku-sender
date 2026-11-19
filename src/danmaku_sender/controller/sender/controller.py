@@ -67,7 +67,7 @@ class SenderController(QObject):
             state: 状态树聚合根，取活动会话与队列。
             settings: 配置容器，取发送策略与传输策略。
             history_manager: 本地账本。
-            queue_store: 队列存储，结构变更与运行状态的落库入口。
+            queue_store: 队列存储，结构变更与运行状态的持久化入口。
             parent: Qt 父对象。
         """
         super().__init__(parent)
@@ -77,7 +77,7 @@ class SenderController(QObject):
         self.queue_store = queue_store
         self._queue_worker: QueueSendWorker | None = None
         self._stop_event = threading.Event()
-        self._task_definitions: dict[str, TaskDefinition] = {}  # 本轮队列的工单快照，落账取此而非实时队列
+        self._task_definitions: dict[str, TaskDefinition] = {}  # 本轮队列的任务定义快照，落账取此而非实时队列
 
     @property
     def queue_readiness(self) -> StartReadiness:
@@ -94,10 +94,10 @@ class SenderController(QObject):
             return StartReadiness.NO_RUNNABLE_TASKS
         return StartReadiness.READY
 
-    # region 队列结构命令（UI 只发命令，先写库再刷内存）
+    # region 队列结构命令（UI 只发命令，先写入数据库再更新内存状态）
 
     def add_task(self, task: TaskDraft) -> None:
-        """把任务追加到队列末尾，先落库再刷内存。
+        """追加任务至队列末尾，先写入数据库再更新内存状态。
 
         Args:
             task: 任务草稿。
@@ -111,7 +111,7 @@ class SenderController(QObject):
         ref_task_id: str,
         position: RelativePosition = RelativePosition.BELOW,
     ) -> None:
-        """在参考任务上方/下方插入任务，先落库再刷内存；参考不存在时追加到末尾。
+        """在参考任务上方/下方插入任务，先写入数据库再更新内存状态；参考不存在时追加到末尾。
 
         Args:
             task: 任务草稿。
@@ -124,7 +124,7 @@ class SenderController(QObject):
         queue_state.insert_task(task, ref_task_id, position)
 
     def remove_task(self, task_id: str) -> None:
-        """移除指定任务，先落库再刷内存。
+        """移除指定任务，先写入数据库再更新内存状态。
 
         Args:
             task_id: 任务标识。
@@ -137,7 +137,7 @@ class SenderController(QObject):
         self.state.workspace.queue_state.remove_task(task_id)
 
     def move_task(self, task_id: str, toward: RelativePosition) -> None:
-        """上下移动一个任务，先落库再刷内存。
+        """上下移动一个任务，先写入数据库再更新内存状态。
 
         Args:
             task_id: 任务标识。
@@ -151,7 +151,7 @@ class SenderController(QObject):
         queue_state.move_task(task_id, toward)
 
     def reorder_tasks(self, task_ids: list[str]) -> None:
-        """按给定顺序重排任务，先落库再刷内存。
+        """按给定顺序重排任务，先写入数据库再更新内存状态。
 
         Args:
             task_ids: 当前队列的全排列。
@@ -174,7 +174,7 @@ class SenderController(QObject):
         # 与 QueueState.apply_edit 同一闸门：不可编辑的状态拒绝结构编辑
         if view is None or not view.status.is_editable:
             return
-        # 未指定目标时填上是补配置，不换工单；改掉已指定的目标即换一份工单
+        # 未指定目标时填上是补配置，不算换任务；改掉已指定的目标即另立新任务
         reissued = view.target.is_assigned and source.target != view.target
         new_id = uuid.uuid4().hex if reissued else task_id
         list_changed = tuple(source.danmakus) != view.danmakus
@@ -197,7 +197,7 @@ class SenderController(QObject):
         danmakus: list[Danmaku],
         xml_path: Path | None = None,
     ) -> None:
-        """为任务分配或更新弹幕列表，先落库再刷内存。
+        """为任务分配或更新弹幕列表，先写入数据库再更新内存状态。
 
         Args:
             task_id: 任务标识。
@@ -225,12 +225,12 @@ class SenderController(QObject):
         queue_state.assign_danmakus(task_id, danmakus, xml_path=xml_path)
 
     def clear_all(self) -> None:
-        """清空队列中的全部任务，先落库再刷内存。"""
+        """清空队列中的全部任务，先写入数据库再更新内存状态。"""
         self.queue_store.clear_all()
         self.state.workspace.queue_state.clear_all()
 
     def reset_queue(self) -> None:
-        """重置队列：移除已完成，失败任务转待发，先落库再刷内存。"""
+        """重置队列：移除已完成，失败任务转待发，先写入数据库再更新内存状态。"""
         queue_state = self.state.workspace.queue_state
         remove_ids = [view.task_id for view in queue_state.tasks if view.status is TaskStatus.COMPLETED]
         revive_ids = [view.task_id for view in queue_state.tasks if view.status is TaskStatus.FAILED]
@@ -259,7 +259,7 @@ class SenderController(QObject):
         """按配置完整性对齐任务状态，组装待持久化的 Task 对象。
 
         Args:
-            definition: 不可变任务规格。
+            definition: 不可变任务定义。
             status: 对齐前的任务状态。
             error_msg: 对齐前的错误说明。
             cursor: 断点续传游标。
@@ -444,12 +444,12 @@ class SenderController(QObject):
                 error=view.error_msg or None,
             )
         except QueueStorageError:
-            logger.exception(f"运行状态落库失败 [task_id={task_id}]")
+            logger.exception(f"运行状态写入失败 [task_id={task_id}]")
 
     def _persist_task_record(self, task_id: str, status: TaskStatus) -> None:
         """把任务身份与当前状态写入账本，供任务级历史对账。
 
-        身份取启动时固化的工单快照，不回查实时队列
+        身份取启动时固化的任务定义快照，不回查实时队列
         ——终态信号到达时队列可能已被清理，用实时数据会让存证失去归属。
         任务身份属元数据，落账失败只记日志、不阻断发送；弹幕存证另有独立入账路径。
 
@@ -462,7 +462,7 @@ class SenderController(QObject):
         """
         definition = self._task_definitions.get(task_id)
         if definition is None:
-            logger.warning(f"任务记录落账跳过：没有任务 [{task_id}] 的工单快照")
+            logger.warning(f"任务记录落账跳过：没有任务 [{task_id}] 的任务定义快照")
             return
         try:
             self.history_manager.upsert_task(definition, status)

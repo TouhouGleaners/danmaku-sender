@@ -178,7 +178,7 @@ class TestTaskRecordLifecycle:
         assert _task_record(hm, new_id)["cid"] == 2002
 
     def test_missing_task_skips_write(self, env):
-        """没有工单快照的任务跳过落账，不抛异常"""
+        """没有任务定义快照的任务跳过落账，不抛异常"""
         _, hm, controller = env
         controller._persist_task_record("ghost", TaskStatus.RUNNING)
         assert hm.get_task("ghost") is None

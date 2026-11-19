@@ -49,7 +49,7 @@ class SendPipeline:
         """执行一次完整的发送任务。
 
         Args:
-            job (SendJob): 发送任务工单。
+            job (SendJob): 发送任务。
             progress_emitter (Callable[[int, int, float], None] | None): 进度发射器，
                 收已发数、总数与 ETA 秒数。
 

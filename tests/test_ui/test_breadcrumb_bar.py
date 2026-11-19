@@ -58,14 +58,14 @@ class TestBreadcrumbPath:
 
 class TestBreadcrumbActivation:
     def test_ancestor_segment_reports_index(self, bar):
-        """点击上级段发回溯信号并带上段下标"""
+        """点击上级段发回溯信号并带上段索引"""
         fired = []
         bar.itemActivated.connect(fired.append)
         _press(bar, bar._records[0].rect.x() + 5, bar.ROW_HEIGHT / 2)
         assert fired == [0]
 
     def test_each_ancestor_reports_its_own_index(self, bar):
-        """中间段点击报出自身下标"""
+        """中间段点击报出自身索引"""
         fired = []
         bar.itemActivated.connect(fired.append)
         middle = bar._records[2].rect
@@ -107,7 +107,7 @@ class TestBreadcrumbActivation:
 
 class TestBreadcrumbHitTest:
     def test_ancestor_hit_reports_index(self, bar):
-        """上级段上返回段下标"""
+        """上级段上返回段索引"""
         assert bar._hit(QPointF(bar._records[0].rect.x() + 5, 10)) == 0
 
     def test_last_hit_reports_none(self, bar):

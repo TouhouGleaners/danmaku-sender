@@ -29,7 +29,7 @@ class QueueState(QObject):
     所有任务数据变更必须通过本类的方法进行，
     以确保信号正确发射，所有观察者（发射器、监视器等）自动同步。
 
-    内部存 Task = TaskDefinition(不可变工单) + TaskExecution(可变运行时)。
+    内部存 Task = TaskDefinition(不可变任务定义) + TaskExecution(可变运行时)。
     对外只暴露 TaskView 只读门面。
 
     只允许主线程访问；给 Worker 数据用 snapshots() 取不可变拷贝。
@@ -164,7 +164,7 @@ class QueueState(QObject):
         return self._tasks[index] if index is not None else None
 
     def insert_index_for(self, ref_task_id: str, position: RelativePosition) -> int:
-        """计算相对参考任务的插入索引；参考任务不存在时返回队列末尾索引。
+        """计算相对参考任务的插入位置索引；参考任务不存在时返回队列末尾索引。
 
         该方法只读不改状态，供持久化与内存插入共用同一定位规则。
 
@@ -173,7 +173,7 @@ class QueueState(QObject):
             position (RelativePosition): 插入在参考任务的上方或下方。
 
         Returns:
-            int: 计算得到的 0-based 插入索引。
+            int: 计算得到的 0-based 插入位置索引。
 
         Raises:
             ValueError: ``position`` 不是 ABOVE 或 BELOW。
@@ -272,7 +272,7 @@ class QueueState(QObject):
         入队时按配置完整性对齐状态，不信任草稿自带的 status。
 
         Args:
-            task (TaskDraft): 任务草稿，入队时拆成不可变工单与可变运行时。
+            task (TaskDraft): 任务草稿，入队时拆成不可变任务定义与可变运行时。
             ref_task_id (str): 参考任务标识。
             position (RelativePosition): 插在参考任务的哪一侧，默认 BELOW。
 
@@ -346,7 +346,7 @@ class QueueState(QObject):
 
         SKIPPED / UNCONFIGURED 保留——它们缺配置，转待发没有意义；
         PENDING / PAUSED / RUNNING 不动。转待发清零进度与错误信息，
-        失败任务按工单从头再发。
+        失败任务按任务定义从头再发。
         """
         revived: list[str] = []
         removed = 0
@@ -421,13 +421,13 @@ class QueueState(QObject):
 
         old_status = record.execution.status
         old_target = record.definition.target
-        # 未指定目标时填上是补配置，不换工单；其余情况以队列中的 task_id 为准
+        # 未指定目标时填上是补配置，不算换任务；其余情况以队列中的 task_id 为准
         reissued = old_target.is_assigned and source.target != old_target
         if new_id is None:
             new_id = uuid.uuid4().hex if reissued else task_id
         new_definition = replace(source.to_definition(), task_id=new_id)
         if new_id != task_id or new_definition.danmakus != record.definition.danmakus:
-            # 换工单或换弹幕列表，旧游标都不再指得准：前者换了目标视频，后者会指进新列表的中段
+            # 换任务或换弹幕列表，旧游标都不再指得准：前者换了目标视频，后者会指进新列表的中段
             record.execution.attempted = 0
         record.definition = new_definition
         record.execution.status = source.status
