@@ -11,7 +11,7 @@ from danmaku_sender.infra.persistence.history_manager import HistoryManager
 from danmaku_sender.infra.platform import KeepSystemAwake
 from danmaku_sender.service.sender import SendingContext, SendJob, SendPipeline
 from danmaku_sender.service.sender.delay_manager import DelayManager
-from danmaku_sender.types.models.queue import TaskConfig, TaskSnapshot, TaskStatus
+from danmaku_sender.types.models.queue import Task, TaskConfig, TaskStatus
 
 logger = logging.getLogger(__name__)
 
@@ -19,7 +19,7 @@ logger = logging.getLogger(__name__)
 class QueueSendWorker(WorkerThread):
     """队列发送 Worker。
 
-    启动时接收不可变的 TaskSnapshot 采样，逐个执行发送管线并通过信号发回结果；
+    启动时接收不可变的任务值拷贝，逐个执行发送管线并通过信号发回结果；
     不写 QueueState，状态落账由 SenderController 在主线程完成。
     """
 
@@ -35,7 +35,7 @@ class QueueSendWorker(WorkerThread):
 
     def __init__(
         self,
-        tasks: tuple[TaskSnapshot, ...],
+        tasks: tuple[Task, ...],
         auth: ApiAuthConfig,
         network: NetworkPolicy,
         queue_config: SenderConfig.QueueConfig,
@@ -75,21 +75,21 @@ class QueueSendWorker(WorkerThread):
 
         try:
             with KeepSystemAwake(self.prevent_sleep):
-                for idx, snap in enumerate(tasks):
+                for idx, task in enumerate(tasks):
                     if self.stop_event.is_set():
                         stopped_early = True
                         break
 
-                    if snap.status not in (TaskStatus.PENDING, TaskStatus.UNCONFIGURED):
+                    if task.status not in (TaskStatus.PENDING, TaskStatus.UNCONFIGURED):
                         continue
 
-                    if snap.status == TaskStatus.UNCONFIGURED:
-                        handled.add(snap.definition.task_id)
-                        self.taskSkipped.emit(snap.definition.task_id, snap.definition.missing_config_text)
+                    if task.status == TaskStatus.UNCONFIGURED:
+                        handled.add(task.definition.task_id)
+                        self.taskSkipped.emit(task.definition.task_id, task.definition.missing_config_text)
                         continue
 
-                    should_continue = self._execute_task(snap, idx, total)
-                    handled.add(snap.definition.task_id)
+                    should_continue = self._execute_task(task, idx, total)
+                    handled.add(task.definition.task_id)
 
                     if not should_continue:
                         stopped_early = True
@@ -101,11 +101,11 @@ class QueueSendWorker(WorkerThread):
                             self.stop_event.wait(delay)
 
             if stopped_early and not self.stop_event.is_set():
-                for snap in tasks:
-                    if snap.definition.task_id in handled:
+                for task in tasks:
+                    if task.definition.task_id in handled:
                         continue
-                    if snap.status == TaskStatus.PENDING:
-                        self.taskSkipped.emit(snap.definition.task_id, "致命错误，队列中止")
+                    if task.status == TaskStatus.PENDING:
+                        self.taskSkipped.emit(task.definition.task_id, "致命错误，队列中止")
 
         except Exception:
             stopped_early = True
@@ -118,18 +118,18 @@ class QueueSendWorker(WorkerThread):
                 self.queueCompleted.emit()
             self.ending.emit(self)
 
-    def _execute_task(self, snap: TaskSnapshot, idx: int, total: int) -> bool:
+    def _execute_task(self, task: Task, idx: int, total: int) -> bool:
         """执行单个队列任务。
 
         Args:
-            snap (TaskSnapshot): 任务快照。
+            task (Task): 要跑的任务值。
             idx (int): 任务在队列中的序号。
             total (int): 队列任务总数。
 
         Returns:
             bool: 可继续返回 True，致命错误需中止队列返回 False。
         """
-        definition = snap.definition
+        definition = task.definition
         task_id = definition.task_id
         self.taskStarted.emit(task_id, idx)
         logger.info(f"[{idx + 1}/{total}] 开始发送: {definition.display_string}")
@@ -151,7 +151,7 @@ class QueueSendWorker(WorkerThread):
                 config=definition.config,
                 queue_config=self.queue_config,
                 stop_event=self.stop_event,
-                start_index=snap.attempted,
+                start_index=task.attempted,
             )
             ctx = pipeline.execute(job, progress_emitter=progress_emitter)
 
@@ -175,7 +175,7 @@ class QueueSendWorker(WorkerThread):
         current_attempted: int,
         current_total: int,
         current_config: TaskConfig,
-        future_tasks: tuple[TaskSnapshot, ...],
+        future_tasks: tuple[Task, ...],
         queue_config: SenderConfig.QueueConfig,
     ) -> float:
         """计算整个队列的剩余 ETA（秒）。
@@ -186,7 +186,7 @@ class QueueSendWorker(WorkerThread):
             current_attempted (int): 当前任务已尝试发包的数量。
             current_total (int): 当前任务的弹幕总数。
             current_config (TaskConfig): 当前任务的发送节奏。
-            future_tasks (tuple[TaskSnapshot, ...]): 后续任务快照。
+            future_tasks (tuple[Task, ...]): 后续任务。
             queue_config (SenderConfig.QueueConfig): 整队的调度与查重规则。
 
         Returns:

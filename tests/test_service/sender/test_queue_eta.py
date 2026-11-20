@@ -6,9 +6,10 @@ from danmaku_sender.controller.sender.workers import QueueSendWorker
 from danmaku_sender.types.models.common import VideoTarget
 from danmaku_sender.types.models.danmaku import Danmaku
 from danmaku_sender.types.models.queue import (
+    Task,
     TaskConfig,
     TaskDefinition,
-    TaskSnapshot,
+    TaskExecution,
     TaskStatus,
 )
 
@@ -32,7 +33,11 @@ def _definition(task_id: str, total: int = 2) -> TaskDefinition:
     )
 
 
-def _eta(future: tuple[TaskSnapshot, ...], queue_config: SenderConfig.QueueConfig) -> float:
+def _task(definition: TaskDefinition, status: TaskStatus, attempted: int = 0) -> Task:
+    return Task(definition=definition, execution=TaskExecution(status=status, attempted=attempted))
+
+
+def _eta(future: tuple[Task, ...], queue_config: SenderConfig.QueueConfig) -> float:
     return QueueSendWorker._calc_queue_eta(0, 1, _definition("t1").config, future, queue_config)
 
 
@@ -44,9 +49,9 @@ class TestCalcQueueEta:
         """
         queue_config = SenderConfig.QueueConfig(delay_between_tasks=100.0)
         future = (
-            TaskSnapshot(definition=_definition("t2"), status=TaskStatus.COMPLETED),
-            TaskSnapshot(definition=_definition("t3"), status=TaskStatus.FAILED),
-            TaskSnapshot(definition=_definition("t4"), status=TaskStatus.SKIPPED),
+            _task(definition=_definition("t2"), status=TaskStatus.COMPLETED),
+            _task(definition=_definition("t3"), status=TaskStatus.FAILED),
+            _task(definition=_definition("t4"), status=TaskStatus.SKIPPED),
         )
         assert _eta(future, queue_config) == _eta((), queue_config)
 
@@ -57,17 +62,17 @@ class TestCalcQueueEta:
         """
         queue_config = SenderConfig.QueueConfig(delay_between_tasks=100.0)
         trailing_done = (
-            TaskSnapshot(definition=_definition("t2"), status=TaskStatus.PENDING),
-            TaskSnapshot(definition=_definition("t3"), status=TaskStatus.COMPLETED),
+            _task(definition=_definition("t2"), status=TaskStatus.PENDING),
+            _task(definition=_definition("t3"), status=TaskStatus.COMPLETED),
         )
-        only_pending = (TaskSnapshot(definition=_definition("t2"), status=TaskStatus.PENDING),)
+        only_pending = (_task(definition=_definition("t2"), status=TaskStatus.PENDING),)
         assert _eta(trailing_done, queue_config) == _eta(only_pending, queue_config)
 
     def test_one_gap_per_pending_task(self):
         """每个待发任务前算一次间隔：每多一个待发任务，增量相同。"""
         queue_config = SenderConfig.QueueConfig(delay_between_tasks=100.0)
-        first = TaskSnapshot(definition=_definition("t2"), status=TaskStatus.PENDING)
-        second = TaskSnapshot(definition=_definition("t3"), status=TaskStatus.PENDING)
+        first = _task(definition=_definition("t2"), status=TaskStatus.PENDING)
+        second = _task(definition=_definition("t3"), status=TaskStatus.PENDING)
 
         base = _eta((), queue_config)
         one = _eta((first,), queue_config)
@@ -80,8 +85,8 @@ class TestCalcQueueEta:
     def test_future_task_eta_resumes_from_cursor(self):
         """续传后待发任务也可能带着游标，ETA 从游标起估，不算前半段。"""
         queue_config = SenderConfig.QueueConfig(delay_between_tasks=0.0)
-        fresh = TaskSnapshot(definition=_definition("t2", total=4), status=TaskStatus.PENDING)
-        resumed = TaskSnapshot(definition=_definition("t2", total=4), status=TaskStatus.PENDING, attempted=2)
+        fresh = _task(definition=_definition("t2", total=4), status=TaskStatus.PENDING)
+        resumed = _task(definition=_definition("t2", total=4), status=TaskStatus.PENDING, attempted=2)
 
         # total=4：从 0 起还剩 3 次延时，从游标 2 起只剩 2 次
         assert _eta((fresh,), queue_config) == pytest.approx(3.0)

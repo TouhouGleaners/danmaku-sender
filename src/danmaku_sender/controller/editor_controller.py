@@ -11,7 +11,7 @@ from danmaku_sender.service.editor_session import EditorSession
 from danmaku_sender.types.models.common import RelativePosition
 from danmaku_sender.types.models.danmaku import Danmaku
 from danmaku_sender.types.models.editor_types import ViewItem
-from danmaku_sender.types.models.queue import TaskView
+from danmaku_sender.types.models.queue import Task
 
 from .concurrency import PoolTask
 
@@ -19,12 +19,12 @@ from .concurrency import PoolTask
 class EditorController(QObject):
     """编辑器业务控制器 (Mediator / ViewModel)
 
-    负责桥接 UI、TaskView 与 EditorSession。
+    负责桥接 UI、Task 与 EditorSession。
     作为发射器的附属弹窗，读取任务弹幕并在保存时经 SenderController.assign_danmakus 同步写回队列。
     """
     dataChanged = Signal()
 
-    def __init__(self, task: TaskView, sender_controller: SenderController, settings: Settings, parent=None):
+    def __init__(self, task: Task, sender_controller: SenderController, settings: Settings, parent=None):
         """初始化控制器。
 
         Args:

@@ -12,7 +12,7 @@ from PySide6.QtWidgets import (
     QTableView,
 )
 
-from danmaku_sender.types.models.queue import TaskStatus, TaskView
+from danmaku_sender.types.models.queue import Task, TaskStatus
 
 
 class QueueCol(IntEnum):
@@ -28,7 +28,7 @@ class ProgressBarDelegate(QStyledItemDelegate):
     """在表格单元格中绘制进度条"""
 
     def paint(self, painter: QPainter, option: QStyleOptionViewItem, index: QModelIndex):
-        task: TaskView | None = index.data(Qt.ItemDataRole.UserRole)
+        task: Task | None = index.data(Qt.ItemDataRole.UserRole)
         if task is None:
             return super().paint(painter, option, index)
 
@@ -89,11 +89,11 @@ class QueueTableModel(QAbstractTableModel):
 
     def __init__(self, parent=None):
         super().__init__(parent)
-        self._tasks: list[TaskView] = []
+        self._tasks: list[Task] = []
         self.on_reorder: Callable[[list[str]], None] | None = None
         self.queue_running: bool = False
 
-    def set_tasks(self, tasks: list[TaskView]):
+    def set_tasks(self, tasks: list[Task]):
         self.beginResetModel()
         self._tasks = tasks
         self.endResetModel()
@@ -104,6 +104,20 @@ class QueueTableModel(QAbstractTableModel):
             left = self.index(row, 0)
             right = self.index(row, len(self.HEADERS) - 1)
             self.dataChanged.emit(left, right)
+
+    def update_task(self, task: Task) -> None:
+        """用最新的任务值替换对应行并通知视图重绘。
+
+        任务值全冻结，QueueState 每次变更都换新实例；
+        只调 refresh_row 只会重绘旧值，必须先把行里的对象换掉。
+
+        Args:
+            task (Task): 最新的任务值。
+        """
+        row = self.get_row_by_id(task.task_id)
+        if row >= 0:
+            self._tasks[row] = task
+            self.refresh_row(row)
 
     def refresh(self):
         """通知视图全量数据已变更"""
@@ -116,7 +130,7 @@ class QueueTableModel(QAbstractTableModel):
                 return i
         return -1
 
-    def get_task_at(self, row: int) -> TaskView | None:
+    def get_task_at(self, row: int) -> Task | None:
         if 0 <= row < len(self._tasks):
             return self._tasks[row]
         return None
@@ -156,7 +170,7 @@ class QueueTableModel(QAbstractTableModel):
 
         return None
 
-    def _get_display(self, task: TaskView, col: int, row: int) -> str:
+    def _get_display(self, task: Task, col: int, row: int) -> str:
         match col:
             case QueueCol.INDEX:
                 return str(row + 1)
@@ -175,7 +189,7 @@ class QueueTableModel(QAbstractTableModel):
                 return task.status.value
         return ""
 
-    def _get_color(self, task: TaskView, col: int):
+    def _get_color(self, task: Task, col: int):
         if col == QueueCol.STATUS:
             return QBrush({
                 TaskStatus.PENDING: QColor("#f39c12"),
@@ -188,7 +202,7 @@ class QueueTableModel(QAbstractTableModel):
             }.get(task.status, QColor("#f39c12")))
         return None
 
-    def _get_tooltip(self, task: TaskView, col: int):
+    def _get_tooltip(self, task: Task, col: int):
         if col != QueueCol.STATUS:
             return None
         if task.error_msg:

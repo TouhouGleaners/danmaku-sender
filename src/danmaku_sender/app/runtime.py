@@ -1,5 +1,6 @@
 """装配总线：构造各层、接线应用级行为、管理生命周期。"""
 import logging
+from dataclasses import replace
 
 from PySide6.QtCore import QObject, QTimer
 
@@ -88,13 +89,17 @@ class Runtime(QObject):
         store = QueueStore.open_with_recovery(AppInfo.Paths.QUEUE_DB)
         recovered = store.load_all()
         stored_status = {task.definition.task_id: task.execution.status for task in recovered}
-        if recovered:
-            self.app_state.workspace.queue_state.restore_tasks(recovered)
+        # 崩溃残留的 RUNNING 是上次强杀留下的，转为可续的 PAUSED 并保留其游标
+        recovered = [
+            replace(task, execution=replace(task.execution, status=TaskStatus.PAUSED))
+            if task.execution.status is TaskStatus.RUNNING
+            else task
+            for task in recovered
+        ]
+        self.app_state.workspace.queue_state.restore_tasks(recovered)
 
         fixed = 0
-        for task in recovered:
-            if task.execution.status is TaskStatus.RUNNING:
-                task.execution.status = TaskStatus.PAUSED
+        for task in self.app_state.workspace.queue_state.tasks:
             if task.execution.status is stored_status[task.definition.task_id]:
                 continue
             fixed += 1
