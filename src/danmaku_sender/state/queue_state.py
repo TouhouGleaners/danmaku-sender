@@ -449,11 +449,13 @@ class QueueState(QObject):
         Returns:
             tuple[TaskStatus, str]: 对齐后的 (状态, 错误说明)。
         """
-        if complete and status in (TaskStatus.UNCONFIGURED, TaskStatus.SKIPPED):
-            return TaskStatus.PENDING, ""
-        if not complete and status is TaskStatus.PENDING:
-            return TaskStatus.UNCONFIGURED, error_msg
-        return status, error_msg
+        match (status, complete):
+            case (TaskStatus.UNCONFIGURED | TaskStatus.SKIPPED, True):
+                return TaskStatus.PENDING, ""
+            case (TaskStatus.PENDING, False):
+                return TaskStatus.UNCONFIGURED, error_msg
+            case _:
+                return status, error_msg
 
     def _sync_config_status(self, record: Task) -> Task:
         """按配置完整性对齐预运行状态，返回对齐后的任务。
