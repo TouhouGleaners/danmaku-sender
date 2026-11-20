@@ -359,7 +359,7 @@ class TestOpenWithRecovery:
         db_path = tmp_path / "queue.db"
         db_path.write_bytes(b"this is not a database")
 
-        store = QueueStore.open_with_recovery(db_path)
+        store = QueueStore.open(db_path)
 
         assert store.load_all() == []
         assert list(tmp_path.glob("queue.db.corrupt-*"))
@@ -369,11 +369,11 @@ class TestOpenWithRecovery:
         """第二次损坏照样备份重开：备份名不与旧备份相撞"""
         db_path = tmp_path / "queue.db"
         db_path.write_bytes(b"garbage one")
-        first = QueueStore.open_with_recovery(db_path)
+        first = QueueStore.open(db_path)
         first.close()
         db_path.write_bytes(b"garbage two")
 
-        second = QueueStore.open_with_recovery(db_path)
+        second = QueueStore.open(db_path)
 
         assert second.load_all() == []
         assert len(list(tmp_path.glob("queue.db.corrupt-*"))) == 2
@@ -392,7 +392,7 @@ class TestOpenWithRecovery:
         monkeypatch.setattr(QueueStore, "load_all", flaky_load_all)
 
         with pytest.raises(QueueStorageError):
-            QueueStore.open_with_recovery(db_path)
+            QueueStore.open(db_path)
 
         assert not list(tmp_path.glob("queue.db.corrupt-*"))
         assert db_path.exists()
@@ -407,7 +407,7 @@ class TestOpenWithRecovery:
         )
 
         with pytest.raises(QueueStorageError):
-            QueueStore.open_with_recovery(db_path)
+            QueueStore.open(db_path)
 
     def test_backup_takes_wal_and_shm_along(self, tmp_path):
         """备份要连 -wal / -shm 一起改名，否则重建时 SQLite 会重放旧 WAL"""

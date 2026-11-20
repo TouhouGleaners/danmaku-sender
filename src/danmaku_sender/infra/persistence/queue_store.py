@@ -222,7 +222,7 @@ class QueueStore:
             raise QueueStorageError(f"队列库初始化失败 [{self.db_path}]", original_error=e) from e
 
     @classmethod
-    def open_with_recovery(cls, db_path: Path) -> "QueueStore":
+    def open(cls, db_path: Path) -> "QueueStore":
         """打开队列数据库并执行一次全量读取校验。
 
         若数据库文件损坏或无法读取，先关闭连接并将主库及 WAL 附属文件备份，随后创建空库重新打开；
@@ -241,6 +241,12 @@ class QueueStore:
         try:
             store = cls(db_path)
             store.load_all()
+            # 开机自愈：残留的 RUNNING 是上次强杀留下的，纠为可续的 PAUSED
+            (_QueueTask
+                .update(status=TaskStatus.PAUSED.name)
+                .where(_QueueTask.status == TaskStatus.RUNNING.name)
+                .execute()
+            )
             return store
         except QueueStorageError:
             if store is not None:
