@@ -26,7 +26,7 @@ from danmaku_sender.controller.sender.controller import SenderController
 from danmaku_sender.types.exceptions.exceptions import QueueStorageError
 from danmaku_sender.types.models.common import RelativePosition
 from danmaku_sender.types.models.editor_types import EditorField
-from danmaku_sender.types.models.queue import TaskView
+from danmaku_sender.types.models.queue import Task
 from danmaku_sender.ui.framework.drag_drop import DropOverlay, XmlDropFilter
 from danmaku_sender.ui.framework.empty_state import EmptyStateHint
 from danmaku_sender.ui.framework.icons import SvgIcon
@@ -38,7 +38,7 @@ from .dialogs import ArrayGeneratorDialog, EditDanmakuDialog, TimeOffsetDialog
 class EditorDialog(QDialog):
     """编辑器弹窗 - 用于编辑单个任务的弹幕数据"""
 
-    def __init__(self, task: TaskView, sender_controller: SenderController, settings: Settings, parent=None):
+    def __init__(self, task: Task, sender_controller: SenderController, settings: Settings, parent=None):
         super().__init__(parent)
         self.task = task
         self.sender_controller = sender_controller

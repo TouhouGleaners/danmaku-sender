@@ -59,7 +59,7 @@ class TaskConfig:
 class TaskDefinition:
     """不可变任务定义。
 
-    Worker 只持有 TaskDefinition / TaskSnapshot，不持有 TaskExecution。
+    Worker 只持有任务值的冻结拷贝，与主线程的后续变更隔离。
     config 是入队时固定的发送节奏，冻结类型，无需防御性拷贝。
     danmakus 为 tuple，结构上不可替换；发送管线须持有自己的 Danmaku 副本
     （见 SendJob 构造处的 clone），不得回填 dmid 写穿本任务定义。
@@ -99,103 +99,89 @@ class TaskDefinition:
         return "，且".join(parts)
 
 
-@dataclass
+@dataclass(frozen=True)
 class TaskExecution:
-    """任务运行时（仅主线程 QueueState 可写）"""
+    """任务运行时（仅主线程 QueueState 可写）
+
+    Attributes:
+        status (TaskStatus): 当前任务状态。
+        error_msg (str): 失败或中止原因；空字符串表示没有错误。
+        attempted (int): 续传游标，已结算的条数（含失败与查重跳过）。
+    """
     status: TaskStatus = TaskStatus.PENDING
     error_msg: str = ""
     attempted: int = 0
 
 
-@dataclass
+@dataclass(frozen=True)
 class Task:
-    """队列里的一项：不可变任务定义 + 可变运行时"""
+    """队列里的一项：不可变任务定义 + 不可变运行时。
+
+    整体是冻结值对象：QueueState 每次变更都换新实例，表格等持有方要把行里
+    的对象换成新值，只通知重绘会画出旧值；跨线程取走即隔离，无需再采样。
+    """
     definition: TaskDefinition
     execution: TaskExecution
 
-
-@dataclass(frozen=True)
-class TaskSnapshot:
-    """Worker 启动时的一次性采样：status 在采样时固定，与后续主线程落账隔离。
-
-    attempted 是续传游标：已结算的条数（含失败与查重跳过），断点续传以它为起点。
-    """
-    definition: TaskDefinition
-    status: TaskStatus
-    attempted: int = 0
-
-
-class TaskView:
-    """任务只读视图（live 门面）。
-
-    属性实时读自 Task，表格 refresh_row 无需换对象即可看到新值。
-    禁止缓存字段值做业务判断，更禁止经此写入——变更一律走 QueueState API。
-    """
-    __slots__ = ("_task",)
-
-    def __init__(self, task: Task) -> None:
-        self._task = task
-
-    @property
-    def definition(self) -> TaskDefinition:
-        """不可变任务定义（冻结，直接给出即可）。"""
-        return self._task.definition
+    # ── 任务定义的快捷读法 ───────────────────────────
 
     @property
     def task_id(self) -> str:
-        return self._task.definition.task_id
+        return self.definition.task_id
 
     @property
     def target(self) -> VideoTarget:
-        return self._task.definition.target
+        return self.definition.target
 
     @property
     def meta(self) -> TaskMeta:
-        return self._task.definition.meta
+        return self.definition.meta
 
     @property
     def danmakus(self) -> tuple[Danmaku, ...]:
-        return self._task.definition.danmakus
+        return self.definition.danmakus
 
     @property
     def config(self) -> TaskConfig:
         """发送节奏参数（冻结，直接给出即可）。"""
-        return self._task.definition.config
+        return self.definition.config
 
     @property
     def total(self) -> int:
-        return self._task.definition.total
+        return self.definition.total
 
     @property
     def display_string(self) -> str:
-        return self._task.definition.display_string
+        return self.definition.display_string
 
     @property
     def is_config_complete(self) -> bool:
         """配置是否齐备可发：弹幕与视频目标都在。"""
-        return self._task.definition.is_config_complete
+        return self.definition.is_config_complete
 
     @property
     def missing_config_text(self) -> str:
         """缺失配置项的一句话说明；齐备时返回空字符串。"""
-        return self._task.definition.missing_config_text
+        return self.definition.missing_config_text
+
+    # ── 运行时的快捷读法 ───────────────────────────
 
     @property
     def status(self) -> TaskStatus:
-        return self._task.execution.status
+        return self.execution.status
 
     @property
     def error_msg(self) -> str:
-        return self._task.execution.error_msg
+        return self.execution.error_msg
 
     @property
     def attempted(self) -> int:
-        return self._task.execution.attempted
+        return self.execution.attempted
 
     def to_draft(self) -> "TaskDraft":
         """拷贝为可变编辑沙盒（详情弹窗 / 构建弹窗用）"""
-        definition = self._task.definition
-        execution = self._task.execution
+        definition = self.definition
+        execution = self.execution
         return TaskDraft(
             target=replace(definition.target),
             meta=replace(definition.meta),
@@ -205,14 +191,6 @@ class TaskView:
             status=execution.status,
             error_msg=execution.error_msg,
             attempted=execution.attempted,
-        )
-
-    def snapshot(self) -> TaskSnapshot:
-        """固定当前 status 与游标的不可变采样（供 Worker / 跨线程读取）"""
-        return TaskSnapshot(
-            definition=self._task.definition,
-            status=self._task.execution.status,
-            attempted=self._task.execution.attempted,
         )
 
 

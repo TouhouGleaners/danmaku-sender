@@ -15,9 +15,7 @@ from danmaku_sender.types.models.queue import (
     Task,
     TaskDraft,
     TaskExecution,
-    TaskSnapshot,
     TaskStatus,
-    TaskView,
 )
 
 logger = logging.getLogger(__name__)
@@ -29,8 +27,8 @@ class QueueState(QObject):
     所有任务数据变更必须通过本类的方法进行，
     以确保信号正确发射，所有观察者（发射器、监视器等）自动同步。
 
-    内部存 Task = TaskDefinition(不可变任务定义) + TaskExecution(可变运行时)。
-    对外只暴露 TaskView 只读门面。
+    内部存 Task = TaskDefinition(不可变任务定义) + TaskExecution(不可变运行时)，
+    整体是冻结值对象：变更一律换新实例，经信号把新值交给观察者。
 
     只允许主线程访问；给 Worker 数据用 snapshots() 取不可变拷贝。
     """
@@ -50,20 +48,16 @@ class QueueState(QObject):
     # ── 只读访问 ──────────────────────────────────────────
 
     @property
-    def tasks(self) -> list[TaskView]:
-        """只读视图列表。元素是 live 门面，可反复读到新值；禁止经此写入。"""
-        return [TaskView(r) for r in self._tasks]
+    def tasks(self) -> list[Task]:
+        """任务值列表（元素全冻结，仅供读取；要新值就重取，别等原地更新）。"""
+        return list(self._tasks)
 
     def snapshots(
         self,
         statuses: Collection[TaskStatus],
-    ) -> tuple[TaskSnapshot, ...]:
-        """定死 status 的不可变采样，交给 Worker 后与后续变更隔离。"""
-        return tuple(
-            TaskSnapshot(definition=r.definition, status=r.execution.status, attempted=r.execution.attempted)
-            for r in self._tasks
-            if r.execution.status in statuses
-        )
+    ) -> tuple[Task, ...]:
+        """取定状态的不可变拷贝，交给 Worker 后与后续变更隔离。"""
+        return tuple(r for r in self._tasks if r.execution.status in statuses)
 
     @property
     def current_index(self) -> int:
@@ -132,10 +126,9 @@ class QueueState(QObject):
 
     # ── 查询 ─────────────────────────────────────────────
 
-    def get_task_by_id(self, task_id: str) -> TaskView | None:
-        """按 ID 查找任务"""
-        record = self._find(task_id)
-        return TaskView(record) if record else None
+    def get_task_by_id(self, task_id: str) -> Task | None:
+        """按 ID 查找任务值"""
+        return self._find(task_id)
 
     def _find_index(self, task_id: str) -> int | None:
         """按 task_id 查找索引；不存在返回 None。
@@ -244,9 +237,7 @@ class QueueState(QObject):
         Args:
             tasks (list[Task]): 按队列顺序排列的待恢复任务列表。
         """
-        self._tasks = list(tasks)
-        for record in self._tasks:
-            self._reconcile_config_status(record)
+        self._tasks = [self._reconciled(record) for record in tasks]
         self.tasksChanged.emit()
         logger.info(f"队列已恢复: {len(self._tasks)} 个任务")
 
@@ -256,8 +247,7 @@ class QueueState(QObject):
         入队时按配置完整性对齐状态，
         不信任草稿自带的 status——配置残缺的任务不可能以待发进队。
         """
-        record = self._to_task(task)
-        self._reconcile_config_status(record)
+        record = self._reconciled(self._to_task(task))
         self._tasks.append(record)
         self.tasksChanged.emit()
         logger.info(
@@ -279,8 +269,7 @@ class QueueState(QObject):
         Raises:
             ValueError: position 不是 ABOVE / BELOW。
         """
-        record = self._to_task(task)
-        self._reconcile_config_status(record)
+        record = self._reconciled(self._to_task(task))
 
         self._tasks.insert(self.insert_index_for(ref_task_id, position), record)
 
@@ -356,9 +345,7 @@ class QueueState(QObject):
                 removed += 1
                 continue
             if record.execution.status is TaskStatus.FAILED:
-                record.execution.status = TaskStatus.PENDING
-                record.execution.error_msg = ""
-                record.execution.attempted = 0
+                record = replace(record, execution=TaskExecution(status=TaskStatus.PENDING))
                 revived.append(record.definition.task_id)
             kept.append(record)
         self._tasks = kept
@@ -379,27 +366,32 @@ class QueueState(QObject):
         弹幕与视频目标**都**齐备才会转待发，只有弹幕仍停在未配置。
         换了弹幕列表则游标归零——旧游标会指进新列表的中段。
         """
-        record = self._find(task_id)
-        if record is None:
+        index = self._find_index(task_id)
+        if index is None:
             return
 
+        record = self._tasks[index]
         if not record.execution.status.is_editable:
             return
 
         new_danmakus = tuple(danmakus)
+        execution = record.execution
         if new_danmakus != record.definition.danmakus:
-            record.execution.attempted = 0
+            execution = replace(execution, attempted=0)
 
-        record.definition = replace(
+        definition = replace(
             record.definition,
-            danmakus=tuple(danmakus),
+            danmakus=new_danmakus,
             meta=replace(
                 record.definition.meta,
                 xml_path=xml_path if xml_path is not None else record.definition.meta.xml_path,
             ),
         )
-        if self._reconcile_config_status(record):
-            self.taskStatusChanged.emit(record.definition.task_id, record.execution.status)
+        old_status = record.execution.status
+        record = self._reconciled(replace(record, definition=definition, execution=execution))
+        self._tasks[index] = record
+        if record.execution.status != old_status:
+            self.taskStatusChanged.emit(task_id, record.execution.status)
 
         self.taskDataChanged.emit(task_id)
         logger.info(f"已分配弹幕: {task_id} ({record.definition.total} 条)")
@@ -412,9 +404,10 @@ class QueueState(QObject):
         外部持久化已预先生成 ``new_id`` 时直接沿用，未传入则在内部生成。
         若更换了 task_id 或弹幕列表，游标将同步归零。
         """
-        record = self._find(task_id)
-        if record is None:
+        index = self._find_index(task_id)
+        if index is None:
             return
+        record = self._tasks[index]
         if not record.execution.status.is_editable:
             logger.warning(f"任务 [{task_id}] 处于 {record.execution.status.value}，已忽略编辑结果。")
             return
@@ -426,13 +419,12 @@ class QueueState(QObject):
         if new_id is None:
             new_id = uuid.uuid4().hex if reissued else task_id
         new_definition = replace(source.to_definition(), task_id=new_id)
+        execution = replace(record.execution, status=source.status, error_msg=source.error_msg)
         if new_id != task_id or new_definition.danmakus != record.definition.danmakus:
             # 换任务或换弹幕列表，旧游标都不再指得准：前者换了目标视频，后者会指进新列表的中段
-            record.execution.attempted = 0
-        record.definition = new_definition
-        record.execution.status = source.status
-        record.execution.error_msg = source.error_msg
-        self._reconcile_config_status(record)
+            execution = replace(execution, attempted=0)
+        record = self._reconciled(replace(record, definition=new_definition, execution=execution))
+        self._tasks[index] = record
 
         if record.execution.status != old_status:
             self.taskStatusChanged.emit(new_id, record.execution.status)
@@ -463,53 +455,54 @@ class QueueState(QObject):
             return TaskStatus.UNCONFIGURED, error_msg
         return status, error_msg
 
-    def _reconcile_config_status(self, record: Task) -> bool:
-        """按配置完整性对齐预运行状态；返回状态是否变化。
+    def _reconciled(self, record: Task) -> Task:
+        """按配置完整性对齐预运行状态，返回对齐后的任务值。
 
         终态与运行态不在此处理——结构编辑有 is_editable 闸门，本方法只在配置变更后调用。
 
         Args:
-            record: 待对齐的队列存储单元，就地修改其运行时状态。
+            record: 待对齐的任务值。
 
         Returns:
-            bool: 状态发生变化返回 True。
+            Task: 对齐后的任务值。
         """
         status, error_msg = self.reconciled_status(
             record.execution.status,
             record.execution.error_msg,
             record.definition.is_config_complete,
         )
-        changed = status is not record.execution.status
-        record.execution.status = status
-        record.execution.error_msg = error_msg
-        return changed
+        return replace(record, execution=replace(record.execution, status=status, error_msg=error_msg))
 
     # ── 状态变更（发射 taskStatusChanged）─────────────────
 
     def update_task_status(self, task_id: str, status: TaskStatus, error_msg: str = ""):
         """更新任务状态"""
-        record = self._find(task_id)
-        if record is None:
+        index = self._find_index(task_id)
+        if index is None:
             return
-        record.execution.status = status
-        record.execution.error_msg = error_msg
+        record = self._tasks[index]
+        self._tasks[index] = replace(
+            record, execution=replace(record.execution, status=status, error_msg=error_msg)
+        )
         self.taskStatusChanged.emit(task_id, status)
 
     def update_task_progress(self, task_id: str, attempted: int, total: int):
         """更新发送进度并通知观察者（total 以 Spec 为准，入参仅作展示一致校验）"""
-        record = self._find(task_id)
-        if record is None:
+        index = self._find_index(task_id)
+        if index is None:
             return
-        record.execution.attempted = attempted
+        record = self._tasks[index]
+        self._tasks[index] = replace(record, execution=replace(record.execution, attempted=attempted))
         actual_total = record.definition.total or total
         self.taskProgressChanged.emit(task_id, attempted, actual_total)
 
     def reset_progress(self, task_id: str):
         """清零任务的发送进度游标，下次启动从头发。"""
-        record = self._find(task_id)
-        if record is None:
+        index = self._find_index(task_id)
+        if index is None:
             return
-        record.execution.attempted = 0
+        record = self._tasks[index]
+        self._tasks[index] = replace(record, execution=replace(record.execution, attempted=0))
         self.taskProgressChanged.emit(task_id, 0, record.definition.total)
 
     # ── 内部转换 ─────────────────────────────────────────

@@ -26,7 +26,7 @@ from danmaku_sender.controller.video_controller import VideoController
 from danmaku_sender.service.danmaku_xml import DanmakuXml
 from danmaku_sender.state import AppState
 from danmaku_sender.types.models.common import VideoTarget
-from danmaku_sender.types.models.queue import TaskView
+from danmaku_sender.types.models.queue import Task
 from danmaku_sender.types.models.video import VideoInfo
 from danmaku_sender.ui.framework.form_binder import DraftFormBinder
 from danmaku_sender.ui.framework.number_box import DoubleNumberBox, NumberBox
@@ -48,7 +48,7 @@ class TaskDetailDialog(QDialog):
 
     def __init__(
         self,
-        task: TaskView,
+        task: Task,
         state: AppState,
         settings: Settings,
         queue_active: bool = False,

@@ -319,16 +319,23 @@ class TestQueueState:
         assert qs.current_index == 2
         assert fired == [2]
 
-    def test_view_is_live_facade(self):
-        """TaskView 读到的是当前值，落账后无需换对象"""
+    def test_get_task_by_id_reads_current_value(self):
+        """查询读到的是当前任务值；落账换新实例，要新值就重取
+
+        语义等价改写：旧 TaskView 是 live 门面、原地见新值，该类型已随冻结值对象退役；
+        新契约是「落账换新实例」，本用例验证重取即见新状态、旧对象不再更新。
+        """
         qs = QueueState()
         t = make_task(1)
         qs.add_task(t)
-        view = qs.get_task_by_id(t.task_id)
-        assert view is not None
-        assert view.status == TaskStatus.PENDING
+        before = qs.get_task_by_id(t.task_id)
+        assert before is not None
+        assert before.status == TaskStatus.PENDING
         qs.update_task_status(t.task_id, TaskStatus.RUNNING)
-        assert view.status == TaskStatus.RUNNING
+        after = qs.get_task_by_id(t.task_id)
+        assert after is not None
+        assert after.status == TaskStatus.RUNNING
+        assert after is not before, "落账换新实例，旧对象不再更新"
 
     def test_snapshot_freezes_status(self):
         """快照采样后，主线程落账不再影响已发出的快照"""

@@ -57,7 +57,7 @@ from danmaku_sender.types.models.common import (
     StartReadiness,
     UnsentDanmakusRecord,
 )
-from danmaku_sender.types.models.queue import TaskStatus, TaskView
+from danmaku_sender.types.models.queue import Task, TaskStatus
 from danmaku_sender.ui.framework.drag_drop import DropOverlay, xml_files_from_drop
 from danmaku_sender.ui.framework.empty_state import EmptyStateHint
 from danmaku_sender.ui.framework.icons import SvgIcon
@@ -359,7 +359,7 @@ class SenderPage(QWidget):
 
         menu.exec(self._queue_table.mapToGlobal(pos))
 
-    def _show_task_detail(self, task: TaskView):
+    def _show_task_detail(self, task: Task):
         """查看/编辑任务详情和配置"""
         dialog = TaskDetailDialog(task, self.state, self.settings, self.state.workspace.sender_is_active, self)
         if dialog.exec() == QDialog.DialogCode.Accepted:
@@ -373,7 +373,7 @@ class SenderPage(QWidget):
             except QueueStorageError:
                 self._notify_store_failure()
 
-    def _edit_danmakus(self, task: TaskView):
+    def _edit_danmakus(self, task: Task):
         """编辑任务的弹幕数据（打开编辑器弹窗）"""
         dialog = EditorDialog(task, self.sender_controller, self.settings, self)
         if dialog.exec() == QDialog.DialogCode.Accepted:
@@ -808,7 +808,7 @@ class SenderPage(QWidget):
         """
         return self._queue_table.viewport().mapFrom(receiver, event.position().toPoint())
 
-    def _drop_hit_task(self, receiver: QWidget, event) -> tuple[int, TaskView] | None:
+    def _drop_hit_task(self, receiver: QWidget, event) -> tuple[int, Task] | None:
         """命中行上的任务，返回 (行号, 任务)；空白处或表头返回 None。
 
         表头是「新建」的指定落点：行把可视区填满时没有空白可用，
@@ -950,7 +950,7 @@ class SenderPage(QWidget):
             Notification.warning(title="导入失败", message="\n".join(problems))
         return created
 
-    def _assign_file_to_task(self, task: TaskView, file_path: Path) -> str | None:
+    def _assign_file_to_task(self, task: Task, file_path: Path) -> str | None:
         """将 XML 文件中的弹幕分配给指定任务。
 
         解析失败或文件中没有弹幕时不动任务。
@@ -984,6 +984,16 @@ class SenderPage(QWidget):
         self.logger.exception("队列写入失败，本次操作未生效")
         Notification.error(title="队列写入失败", message="本次操作未生效，详见运行日志")
 
+    def _sync_task_row(self, task_id: str) -> None:
+        """把最新任务值同步进表格对应行。
+
+        任务值全冻结，QueueState 每次变更都换新实例，
+        行里必须换上新对象，只通知重绘会画出旧值。
+        """
+        task = self.state.workspace.queue_state.get_task_by_id(task_id)
+        if task is not None:
+            self._queue_model.update_task(task)
+
     @Slot()
     def _on_queue_changed(self):
         """队列变更信号的处理。"""
@@ -992,23 +1002,17 @@ class SenderPage(QWidget):
     @Slot(str)
     def _on_queue_task_updated(self, task_id: str):
         """QueueState 通知任务数据变更，刷新对应行"""
-        row = self._queue_model.get_row_by_id(task_id)
-        if row >= 0:
-            self._queue_model.refresh_row(row)
+        self._sync_task_row(task_id)
 
     @Slot(str, int, int)
     def _on_queue_task_progress(self, task_id: str, attempted: int, total: int):
         """QueueState 通知进度变更，刷新对应行 + 底部进度条"""
-        row = self._queue_model.get_row_by_id(task_id)
-        if row >= 0:
-            self._queue_model.refresh_row(row)
+        self._sync_task_row(task_id)
         self._update_bottom_bar(attempted, total)
 
     @Slot(str, object)
     def _on_queue_task_status_changed(self, task_id: str, status: TaskStatus):
-        row = self._queue_model.get_row_by_id(task_id)
-        if row >= 0:
-            self._queue_model.refresh_row(row)
+        self._sync_task_row(task_id)
 
     @Slot(str)
     def _on_queue_task_started(self, task_id: str):
@@ -1057,7 +1061,7 @@ class SenderPage(QWidget):
             self.logger.info(f"未发送成功 {len(ctx.unsent_records)} 条，右键任务可导出")
 
     @staticmethod
-    def _unsent_label(task: TaskView) -> str:
+    def _unsent_label(task: Task) -> str:
         """导出文件名的主体：优先用导入的 XML 文件名，其次视频标题"""
         xml_path = task.meta.xml_path
         return xml_path.stem if xml_path is not None else task.display_string
