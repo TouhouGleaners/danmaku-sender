@@ -1,4 +1,4 @@
-"""队列发送 Worker：在后台线程执行发送管线并把结果发回主线程。"""
+"""队列发送 Worker：在后台线程执行发送流程并把结果发回主线程。"""
 
 import logging
 import threading
@@ -33,7 +33,7 @@ class RunOutcome(Enum):
 class QueueSendWorker(WorkerThread):
     """队列发送 Worker。
 
-    启动时接收不可变的任务副本，逐个执行发送管线并通过信号发回结果；
+    启动时接收不可变的任务副本，逐个执行发送流程并通过信号发回结果；
     不写 QueueState，状态落账由 SenderController 在主线程完成。
     """
 

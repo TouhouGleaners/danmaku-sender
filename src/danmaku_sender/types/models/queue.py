@@ -61,7 +61,7 @@ class TaskDefinition:
 
     Worker 只持有任务副本，与主线程的后续变更隔离。
     config 是入队时固定的发送节奏，冻结类型，无需防御性拷贝。
-    danmakus 为 tuple，结构上不可替换；发送管线须持有自己的 Danmaku 副本
+    danmakus 为 tuple，结构上不可替换；发送流程须持有自己的 Danmaku 副本
     （见 SendJob 构造处的 clone），不得回填 dmid 写穿本任务定义。
     """
     task_id: str

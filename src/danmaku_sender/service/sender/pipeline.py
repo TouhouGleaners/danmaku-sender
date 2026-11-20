@@ -1,4 +1,4 @@
-"""发送流水线：组装客户端与调度器，执行一条发送任务并返回运行记录。"""
+"""发送流程：组装客户端与调度器，执行一条发送任务并返回运行记录。"""
 
 import logging
 from collections.abc import Callable
@@ -18,7 +18,7 @@ logger = logging.getLogger(__name__)
 
 
 class SendPipeline:
-    """发送流水线。
+    """发送流程。
 
     组建 BiliApiClient、DanmakuExecutor 与 DanmakuScheduler，执行发送循环，
     汇总 SendingContext 并输出摘要日志。
@@ -78,7 +78,7 @@ class SendPipeline:
                 scheduler.run_pipeline(wrapped_job, ctx)
 
         except Exception as e:
-            logger.exception("发送流水线异常中止")
+            logger.exception("发送流程异常中止")
             ctx.fatal_error_occurred = True
             ctx.fatal_error_msg = str(e)
             # 调度器尚未处理任何弹幕时，断点之后的整批按未发出登记（之前的上一轮已结算）

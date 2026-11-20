@@ -123,7 +123,7 @@ class ThemeService(QObject):
 
     themeChanged = Signal(Palette)
 
-    # 全局当前生效的调色板快照，供无上下文的静态表面（如 Card 底色）快速查阅
+    # 全局当前生效的调色板快照，供拿不到状态树的静态表面（如 Card 底色）快速查阅
     tokens: ClassVar[Palette]
 
     def __init__(self, parent=None):
