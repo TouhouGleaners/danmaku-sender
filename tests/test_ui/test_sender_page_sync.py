@@ -1,6 +1,6 @@
-"""SenderPage 表格行与任务值的同步。
+"""SenderPage 表格行与任务副本的同步。
 
-任务值全冻结：QueueState 每次变更都换新实例，行里必须换上新值；
+任务副本全冻结：QueueState 每次变更都换新实例，行里必须换上新值；
 只通知重绘会画出旧值，查详情也会打开旧快照。
 """
 
@@ -42,7 +42,7 @@ def _enqueue(page: SenderPage) -> str:
 
 class TestRowSync:
     def test_progress_update_swaps_row_value(self, page):
-        """进度变更后行里是新任务值——冻结任务换实例，只重绘会画旧值"""
+        """进度变更后行里是新任务副本——冻结任务换实例，只重绘会画旧值"""
         task_id = _enqueue(page)
         row = page._queue_model.get_row_by_id(task_id)
         before = page._queue_model.get_task_at(row)

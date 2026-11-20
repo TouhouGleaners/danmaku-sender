@@ -2,6 +2,7 @@
 
 import logging
 import threading
+from enum import Enum
 
 from PySide6.QtCore import Signal
 
@@ -16,10 +17,23 @@ from danmaku_sender.types.models.queue import Task, TaskConfig, TaskStatus
 logger = logging.getLogger(__name__)
 
 
+class RunOutcome(Enum):
+    """队列一轮执行的结束原因。
+
+    Attributes:
+        COMPLETED (str): 全部任务处理完毕。
+        STOPPED (str): 用户手动停止。
+        FATAL (str): 致命错误或未预期异常中断。
+    """
+    COMPLETED = "completed"
+    STOPPED = "stopped"
+    FATAL = "fatal"
+
+
 class QueueSendWorker(WorkerThread):
     """队列发送 Worker。
 
-    启动时接收不可变的任务值拷贝，逐个执行发送管线并通过信号发回结果；
+    启动时接收不可变的任务副本，逐个执行发送管线并通过信号发回结果；
     不写 QueueState，状态落账由 SenderController 在主线程完成。
     """
 
@@ -66,63 +80,59 @@ class QueueSendWorker(WorkerThread):
         self.prevent_sleep = prevent_sleep
 
     def run(self):
-        """遍历任务快照逐个执行。启动后添加的任务不会被处理。"""
+        """遍历任务逐个执行。启动后添加的任务不会被处理。"""
+        outcome, unhandled = self._run_all()
+        if outcome is RunOutcome.FATAL and not self.stop_event.is_set():
+            for task in unhandled:
+                if task.status is TaskStatus.PENDING:
+                    self.taskSkipped.emit(task.definition.task_id, "致命错误，队列中止")
+        if outcome is not RunOutcome.COMPLETED or self.stop_event.is_set():
+            self.queueAborted.emit()
+        else:
+            self.queueCompleted.emit()
+        self.ending.emit(self)
+
+    def _run_all(self) -> tuple[RunOutcome, tuple[Task, ...]]:
+        """顺序执行任务清单，返回结束原因与尚未处理的任务。
+
+        Returns:
+            tuple[RunOutcome, tuple[Task, ...]]: 结束原因；尚未处理到的任务（含中断时正在处理的那个）。
+        """
         tasks = self.tasks
         total = len(tasks)
-        stopped_early = False
-        # 本线程已发出终态信号的任务
-        handled: set[str] = set()
-
+        unhandled: tuple[Task, ...] = tuple(tasks)
         try:
             with KeepSystemAwake(self.prevent_sleep):
                 for idx, task in enumerate(tasks):
+                    unhandled = tuple(tasks[idx:])
                     if self.stop_event.is_set():
-                        stopped_early = True
-                        break
+                        return RunOutcome.STOPPED, unhandled
 
-                    if task.status not in (TaskStatus.PENDING, TaskStatus.UNCONFIGURED):
-                        continue
-
-                    if task.status == TaskStatus.UNCONFIGURED:
-                        handled.add(task.definition.task_id)
+                    if task.status is TaskStatus.UNCONFIGURED:
                         self.taskSkipped.emit(task.definition.task_id, task.definition.missing_config_text)
                         continue
 
-                    should_continue = self._execute_task(task, idx, total)
-                    handled.add(task.definition.task_id)
+                    if task.status is not TaskStatus.PENDING:
+                        continue
 
-                    if not should_continue:
-                        stopped_early = True
-                        break
+                    if not self._execute_task(task, idx, total):
+                        return RunOutcome.FATAL, tuple(tasks[idx + 1:])
 
-                    if not self.stop_event.is_set() and idx < total - 1:
+                    unhandled = tuple(tasks[idx + 1:])
+                    if idx < total - 1 and not self.stop_event.is_set():
                         delay = self.queue_config.delay_between_tasks
                         if delay > 0:
                             self.stop_event.wait(delay)
-
-            if stopped_early and not self.stop_event.is_set():
-                for task in tasks:
-                    if task.definition.task_id in handled:
-                        continue
-                    if task.status == TaskStatus.PENDING:
-                        self.taskSkipped.emit(task.definition.task_id, "致命错误，队列中止")
-
+                return RunOutcome.COMPLETED, ()
         except Exception:
-            stopped_early = True
             logger.exception("队列执行发生未预期异常")
-
-        finally:
-            if stopped_early or self.stop_event.is_set():
-                self.queueAborted.emit()
-            else:
-                self.queueCompleted.emit()
-            self.ending.emit(self)
+            return RunOutcome.FATAL, unhandled
 
     def _execute_task(self, task: Task, idx: int, total: int) -> bool:
         """执行单个队列任务。
 
         Args:
-            task (Task): 要跑的任务值。
+            task (Task): 要发送的任务。
             idx (int): 任务在队列中的序号。
             total (int): 队列任务总数。
 

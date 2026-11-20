@@ -49,7 +49,7 @@ class QueueState(QObject):
 
     @property
     def tasks(self) -> list[Task]:
-        """任务值列表（元素全冻结，仅供读取；要新值就重取，别等原地更新）。"""
+        """任务列表（元素全冻结，仅供读取；要新值就重取，别等原地更新）。"""
         return list(self._tasks)
 
     def snapshots(
@@ -127,7 +127,7 @@ class QueueState(QObject):
     # ── 查询 ─────────────────────────────────────────────
 
     def get_task_by_id(self, task_id: str) -> Task | None:
-        """按 ID 查找任务值"""
+        """按 ID 查找任务"""
         return self._find(task_id)
 
     def _find_index(self, task_id: str) -> int | None:
@@ -237,7 +237,7 @@ class QueueState(QObject):
         Args:
             tasks (list[Task]): 按队列顺序排列的待恢复任务列表。
         """
-        self._tasks = [self._reconciled(record) for record in tasks]
+        self._tasks = [self._sync_config_status(record) for record in tasks]
         self.tasksChanged.emit()
         logger.info(f"队列已恢复: {len(self._tasks)} 个任务")
 
@@ -247,7 +247,7 @@ class QueueState(QObject):
         入队时按配置完整性对齐状态，
         不信任草稿自带的 status——配置残缺的任务不可能以待发进队。
         """
-        record = self._reconciled(self._to_task(task))
+        record = self._sync_config_status(self._to_task(task))
         self._tasks.append(record)
         self.tasksChanged.emit()
         logger.info(
@@ -269,7 +269,7 @@ class QueueState(QObject):
         Raises:
             ValueError: position 不是 ABOVE / BELOW。
         """
-        record = self._reconciled(self._to_task(task))
+        record = self._sync_config_status(self._to_task(task))
 
         self._tasks.insert(self.insert_index_for(ref_task_id, position), record)
 
@@ -388,7 +388,7 @@ class QueueState(QObject):
             ),
         )
         old_status = record.execution.status
-        record = self._reconciled(replace(record, definition=definition, execution=execution))
+        record = self._sync_config_status(replace(record, definition=definition, execution=execution))
         self._tasks[index] = record
         if record.execution.status != old_status:
             self.taskStatusChanged.emit(task_id, record.execution.status)
@@ -423,7 +423,7 @@ class QueueState(QObject):
         if new_id != task_id or new_definition.danmakus != record.definition.danmakus:
             # 换任务或换弹幕列表，旧游标都不再指得准：前者换了目标视频，后者会指进新列表的中段
             execution = replace(execution, attempted=0)
-        record = self._reconciled(replace(record, definition=new_definition, execution=execution))
+        record = self._sync_config_status(replace(record, definition=new_definition, execution=execution))
         self._tasks[index] = record
 
         if record.execution.status != old_status:
@@ -455,16 +455,16 @@ class QueueState(QObject):
             return TaskStatus.UNCONFIGURED, error_msg
         return status, error_msg
 
-    def _reconciled(self, record: Task) -> Task:
-        """按配置完整性对齐预运行状态，返回对齐后的任务值。
+    def _sync_config_status(self, record: Task) -> Task:
+        """按配置完整性对齐预运行状态，返回对齐后的任务。
 
         终态与运行态不在此处理——结构编辑有 is_editable 闸门，本方法只在配置变更后调用。
 
         Args:
-            record: 待对齐的任务值。
+            record: 待对齐的任务。
 
         Returns:
-            Task: 对齐后的任务值。
+            Task: 对齐后的任务。
         """
         status, error_msg = self.reconciled_status(
             record.execution.status,
