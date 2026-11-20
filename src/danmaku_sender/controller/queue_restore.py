@@ -37,7 +37,7 @@ class QueueRestorer:
             if before.status is TaskStatus.RUNNING:
                 status, error = TaskStatus.PAUSED, before.error_msg
             else:
-                status, error = QueueState.reconciled_status(
+                status, error = QueueState.aligned_status(
                     before.status, before.error_msg, task.definition.is_config_complete
                 )
             normalized.append(replace(task, execution=replace(before, status=status, error_msg=error)))

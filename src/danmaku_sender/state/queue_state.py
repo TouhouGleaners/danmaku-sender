@@ -434,7 +434,7 @@ class QueueState(QObject):
         self.taskDataChanged.emit(new_id)
 
     @staticmethod
-    def reconciled_status(status: TaskStatus, error_msg: str, complete: bool) -> tuple[TaskStatus, str]:
+    def aligned_status(status: TaskStatus, error_msg: str, complete: bool) -> tuple[TaskStatus, str]:
         """根据配置完整性对齐待运行任务的预备状态。
 
         配置齐备的 UNCONFIGURED / SKIPPED 任务自动转为 PENDING 并清空错误说明；
@@ -466,7 +466,7 @@ class QueueState(QObject):
         Returns:
             Task: 对齐后的任务。
         """
-        status, error_msg = self.reconciled_status(
+        status, error_msg = self.aligned_status(
             record.execution.status,
             record.execution.error_msg,
             record.definition.is_config_complete,
