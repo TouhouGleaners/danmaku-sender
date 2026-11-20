@@ -985,10 +985,9 @@ class SenderPage(QWidget):
         Notification.error(title="队列写入失败", message="本次操作未生效，详见运行日志")
 
     def _sync_task_row(self, task_id: str) -> None:
-        """把最新任务副本同步进表格对应行。
+        """将最新的 Task 实例同步至表格对应行。
 
-        任务副本全冻结，QueueState 每次变更都换新实例，
-        行里必须换上新对象，只通知重绘会画出旧值。
+        Task 为不可变对象，状态或进度变更后须替换表格行内的对象引用再触发刷新。
         """
         task = self.state.workspace.queue_state.get_task_by_id(task_id)
         if task is not None:

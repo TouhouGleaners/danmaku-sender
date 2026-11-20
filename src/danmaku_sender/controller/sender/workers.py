@@ -18,12 +18,12 @@ logger = logging.getLogger(__name__)
 
 
 class RunOutcome(Enum):
-    """队列一轮执行的结束原因。
+    """队列单轮执行的结束原因。
 
     Attributes:
-        COMPLETED (str): 全部任务处理完毕。
-        STOPPED (str): 用户手动停止。
-        FATAL (str): 致命错误或未预期异常中断。
+        COMPLETED (str): 全部可执行任务处理完毕。
+        STOPPED (str): 被用户手动停止。
+        FATAL (str): 因致命错误或未预期异常中止。
     """
     COMPLETED = "completed"
     STOPPED = "stopped"
@@ -80,7 +80,10 @@ class QueueSendWorker(WorkerThread):
         self.prevent_sleep = prevent_sleep
 
     def run(self):
-        """遍历任务逐个执行。启动后添加的任务不会被处理。"""
+        """顺序执行队列任务
+
+        执行期间新加入的任务不纳入本轮执行。
+        """
         outcome, unhandled = self._run_all()
         if outcome is RunOutcome.FATAL and not self.stop_event.is_set():
             for task in unhandled:
@@ -93,10 +96,10 @@ class QueueSendWorker(WorkerThread):
         self.ending.emit(self)
 
     def _run_all(self) -> tuple[RunOutcome, tuple[Task, ...]]:
-        """顺序执行任务清单，返回结束原因与尚未处理的任务。
+        """顺序执行当前队列快照中的任务，返回结束原因及未处理任务。
 
         Returns:
-            tuple[RunOutcome, tuple[Task, ...]]: 结束原因；尚未处理到的任务（含中断时正在处理的那个）。
+            tuple[RunOutcome, tuple[Task, ...]]: 结束原因与尚未处理的任务元组（手动停止或异常时包含当前中断的任务）。
         """
         tasks = self.tasks
         total = len(tasks)
@@ -133,7 +136,7 @@ class QueueSendWorker(WorkerThread):
 
         Args:
             task (Task): 要发送的任务。
-            idx (int): 任务在队列中的序号。
+            idx (int): 任务在队列中的 0-based 索引。
             total (int): 队列任务总数。
 
         Returns:

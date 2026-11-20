@@ -18,10 +18,10 @@ logger = logging.getLogger(__name__)
 
 
 class SendPipeline:
-    """发送流程。
+    """发送执行编排器。
 
-    组建 BiliApiClient、DanmakuExecutor 与 DanmakuScheduler，执行发送循环，
-    汇总 SendingContext 并输出摘要日志。
+    负责初始化 BiliApiClient、DanmakuExecutor 与 DanmakuScheduler，
+    驱动单条任务的发送循环、汇总 SendingContext 并输出结束摘要。
     """
 
     def __init__(

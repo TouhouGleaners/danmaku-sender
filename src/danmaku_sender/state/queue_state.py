@@ -49,7 +49,10 @@ class QueueState(QObject):
 
     @property
     def tasks(self) -> list[Task]:
-        """任务列表（元素全冻结，仅供读取；要新值就重取，别等原地更新）。"""
+        """只读任务列表
+
+        Task 为不可变对象，状态变更后需重新获取以读取最新实例。
+        """
         return list(self._tasks)
 
     def snapshots(
