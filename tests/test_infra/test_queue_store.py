@@ -415,17 +415,20 @@ class TestOpenWithRecovery:
             QueueStore.open(db_path)
 
     def test_backup_takes_wal_and_shm_along(self, tmp_path):
-        """备份要连 -wal / -shm 一起改名，否则重建时 SQLite 会重放旧 WAL"""
-        for suffix in ("", "-wal", "-shm"):
-            (tmp_path / f"queue.db{suffix}").write_bytes(b"junk")
+        """备份要连 -wal / -shm 一起改名，且内容原样留存——否则重建时 SQLite 会重放旧 WAL"""
+        payloads = {"": b"main", "-wal": b"wal", "-shm": b"shm"}
+        for suffix, payload in payloads.items():
+            (tmp_path / f"queue.db{suffix}").write_bytes(payload)
 
         _QueueRecovery.backup_corrupt(tmp_path / "queue.db")
 
         remaining = sorted(p.name for p in tmp_path.iterdir())
         assert len(remaining) == 3
-        for suffix in ("", "-wal", "-shm"):
+        for suffix, payload in payloads.items():
             assert not (tmp_path / f"queue.db{suffix}").exists()
-            assert any(name.startswith(f"queue.db{suffix}.corrupt") for name in remaining), remaining
+            backups = [name for name in remaining if name.startswith(f"queue.db{suffix}.corrupt")]
+            assert len(backups) == 1, remaining
+            assert (tmp_path / backups[0]).read_bytes() == payload
 
 
 class TestStartupSelfHeal:
