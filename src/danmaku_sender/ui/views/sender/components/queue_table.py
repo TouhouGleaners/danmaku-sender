@@ -106,13 +106,13 @@ class QueueTableModel(QAbstractTableModel):
             self.dataChanged.emit(left, right)
 
     def update_task(self, task: Task) -> None:
-        """用最新的任务值替换对应行并通知视图重绘。
+        """以最新的 Task 实例替换对应行并通知视图刷新。
 
-        任务值全冻结，QueueState 每次变更都换新实例；
-        只调 refresh_row 只会重绘旧值，必须先把行里的对象换掉。
+        Task 为不可变对象，QueueState 每次变更都会生成新实例；
+        仅调用 refresh_row 无法反映新数据，须先更新行内持有的对象引用。
 
         Args:
-            task (Task): 最新的任务值。
+            task (Task): 最新的任务实例。
         """
         row = self.get_row_by_id(task.task_id)
         if row >= 0:

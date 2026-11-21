@@ -1,17 +1,15 @@
 """装配总线：构造各层、接线应用级行为、管理生命周期。"""
 import logging
-from dataclasses import replace
 
 from PySide6.QtCore import QObject, QTimer
 
 from danmaku_sender.config import Settings
 from danmaku_sender.config.app_meta import AppInfo
+from danmaku_sender.controller.queue_restore import QueueRestorer
 from danmaku_sender.infra.persistence.history_manager import HistoryManager
 from danmaku_sender.infra.persistence.queue_store import QueueStore
 from danmaku_sender.infra.storage import AccountStorage, ConfigStorage
 from danmaku_sender.state import AppState
-from danmaku_sender.types.exceptions.exceptions import QueueStorageError
-from danmaku_sender.types.models.queue import TaskStatus
 
 logger = logging.getLogger(__name__)
 
@@ -86,35 +84,8 @@ class Runtime(QObject):
         Returns:
             QueueStore: 已完成初始化与恢复的队列存储实例。
         """
-        store = QueueStore.open_with_recovery(AppInfo.Paths.QUEUE_DB)
-        recovered = store.load_all()
-        stored_status = {task.definition.task_id: task.execution.status for task in recovered}
-        # 崩溃残留的 RUNNING 是上次强杀留下的，转为可续的 PAUSED 并保留其游标
-        recovered = [
-            replace(task, execution=replace(task.execution, status=TaskStatus.PAUSED))
-            if task.execution.status is TaskStatus.RUNNING
-            else task
-            for task in recovered
-        ]
-        self.app_state.workspace.queue_state.restore_tasks(recovered)
-
-        fixed = 0
-        for task in self.app_state.workspace.queue_state.tasks:
-            if task.execution.status is stored_status[task.definition.task_id]:
-                continue
-            fixed += 1
-            try:
-                store.update_task_state(
-                    task.definition.task_id,
-                    status=task.execution.status,
-                    cursor=task.execution.attempted,
-                    burst_count=0,
-                    error=task.execution.error_msg or None,
-                )
-            except QueueStorageError:
-                logger.exception(f"启动修正写入失败 [task_id={task.definition.task_id}]")
-        if fixed:
-            logger.info(f"启动时已修正 {fixed} 个任务状态并写回数据库")
+        store = QueueStore.open(AppInfo.Paths.QUEUE_DB)
+        QueueRestorer.restore(store, self.app_state.workspace.queue_state)
         return store
 
     def _activate_saved_accounts(self) -> None:

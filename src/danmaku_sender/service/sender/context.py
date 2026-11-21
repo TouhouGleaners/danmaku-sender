@@ -35,7 +35,7 @@ class SendJob:
     queue_config: SenderConfig.QueueConfig
     stop_event: Event
 
-    # 断点续传的起点（弹幕索引）。启动队列时按快照游标定好再传进来，流水线不回头读策略。
+    # 断点续传起点（弹幕索引）；启动队列时由快照游标确定，执行期间不再回查队列状态
     start_index: int = 0
 
     progress_callback: Callable[[int, int], None] | None = None

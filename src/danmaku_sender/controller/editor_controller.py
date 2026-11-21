@@ -54,7 +54,7 @@ class EditorController(QObject):
 
     @property
     def has_video_context(self) -> bool:
-        """是否拥有关联的视频上下文（BVID/CID）"""
+        """是否拥有关联的视频目标（BVID/CID）"""
         return self.task.target.is_assigned
 
     @property
@@ -91,7 +91,7 @@ class EditorController(QObject):
         """
         异步导入 XML 文件到工作区：解析在后台线程执行，状态更新在 UI 线程回调。
 
-        注意: 导入弹幕会替换当前工作区的内容，但保留任务的视频上下文。
+        注意: 导入弹幕会替换当前工作区的内容，但保留任务的视频目标。
 
         Args:
             file_path: XML 文件路径
@@ -107,7 +107,7 @@ class EditorController(QObject):
 
     def _apply_parsed_to_workspace(self, parsed_dms: list[Danmaku] | None) -> int:
         """
-        将已解析的弹幕列表写入工作区（不清除视频上下文）。
+        将已解析的弹幕列表写入工作区（不清除视频目标）。
 
         Returns:
             int: 成功解析的弹幕数量
@@ -162,7 +162,7 @@ class EditorController(QObject):
     def run_validation(self):
         """执行校验：自动向沙盒注入最新的校验参数
 
-        如果任务有关联的视频上下文，使用视频时长进行时间越界检查；
+        如果任务有关联的视频目标，使用视频时长进行时间越界检查；
         否则跳过时间检查。
         """
         duration = self.task.meta.part_duration_ms
