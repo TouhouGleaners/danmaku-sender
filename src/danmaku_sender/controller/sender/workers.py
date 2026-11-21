@@ -17,17 +17,19 @@ from danmaku_sender.types.models.queue import Task, TaskConfig, TaskStatus
 logger = logging.getLogger(__name__)
 
 
-class RunOutcome(Enum):
+class _RunOutcome(Enum):
     """队列单轮执行的结束原因。
 
     Attributes:
         COMPLETED (str): 全部可执行任务处理完毕。
         STOPPED (str): 被用户手动停止。
-        FATAL (str): 因致命错误或未预期异常中止。
+        ABORTED (str): 因致命错误中止，未执行的任务补标中止。
+        CRASHED (str): 因未预期异常中止，未执行的任务保持待发、可重试。
     """
     COMPLETED = "completed"
     STOPPED = "stopped"
-    FATAL = "fatal"
+    ABORTED = "aborted"
+    CRASHED = "crashed"
 
 
 class QueueSendWorker(WorkerThread):
@@ -79,27 +81,32 @@ class QueueSendWorker(WorkerThread):
         self.stop_event = stop_event
         self.prevent_sleep = prevent_sleep
 
-    def run(self):
-        """顺序执行队列任务
+    def run(self) -> None:
+        """顺序执行队列任务。
 
         执行期间新加入的任务不纳入本轮执行。
+        终局信号（queueAborted / queueCompleted）与 ending 一律在 finally 里发出：
+        BaseException 逃逸时不发 ending，控制器会永久锁住队列。
         """
-        outcome, unhandled = self._run_all()
-        if outcome is RunOutcome.FATAL and not self.stop_event.is_set():
-            for task in unhandled:
-                if task.status is TaskStatus.PENDING:
-                    self.taskSkipped.emit(task.definition.task_id, "致命错误，队列中止")
-        if outcome is not RunOutcome.COMPLETED or self.stop_event.is_set():
-            self.queueAborted.emit()
-        else:
-            self.queueCompleted.emit()
-        self.ending.emit(self)
+        outcome: _RunOutcome | None = None
+        try:
+            outcome, unhandled = self._run_all()
+            if outcome is _RunOutcome.ABORTED and not self.stop_event.is_set():
+                for task in unhandled:
+                    if task.status is TaskStatus.PENDING:
+                        self.taskSkipped.emit(task.definition.task_id, "致命错误，队列中止")
+        finally:
+            if outcome is not _RunOutcome.COMPLETED or self.stop_event.is_set():
+                self.queueAborted.emit()
+            else:
+                self.queueCompleted.emit()
+            self.ending.emit(self)
 
-    def _run_all(self) -> tuple[RunOutcome, tuple[Task, ...]]:
+    def _run_all(self) -> tuple[_RunOutcome, tuple[Task, ...]]:
         """顺序执行当前队列快照中的任务，返回结束原因及未处理任务。
 
         Returns:
-            tuple[RunOutcome, tuple[Task, ...]]: 结束原因与尚未处理的任务元组（手动停止或异常时包含当前中断的任务）。
+            tuple[_RunOutcome, tuple[Task, ...]]: 结束原因与尚未处理的任务元组（手动停止或异常时包含当前中断的任务）。
         """
         tasks = self.tasks
         total = len(tasks)
@@ -109,7 +116,7 @@ class QueueSendWorker(WorkerThread):
                 for idx, task in enumerate(tasks):
                     unhandled = tuple(tasks[idx:])
                     if self.stop_event.is_set():
-                        return RunOutcome.STOPPED, unhandled
+                        return _RunOutcome.STOPPED, unhandled
 
                     if task.status is TaskStatus.UNCONFIGURED:
                         self.taskSkipped.emit(task.definition.task_id, task.definition.missing_config_text)
@@ -119,17 +126,17 @@ class QueueSendWorker(WorkerThread):
                         continue
 
                     if not self._execute_task(task, idx, total):
-                        return RunOutcome.FATAL, tuple(tasks[idx + 1:])
+                        return _RunOutcome.ABORTED, tuple(tasks[idx + 1:])
 
                     unhandled = tuple(tasks[idx + 1:])
                     if idx < total - 1 and not self.stop_event.is_set():
                         delay = self.queue_config.delay_between_tasks
                         if delay > 0:
                             self.stop_event.wait(delay)
-                return RunOutcome.COMPLETED, ()
+                return _RunOutcome.COMPLETED, ()
         except Exception:
             logger.exception("队列执行发生未预期异常")
-            return RunOutcome.FATAL, unhandled
+            return _RunOutcome.CRASHED, unhandled
 
     def _execute_task(self, task: Task, idx: int, total: int) -> bool:
         """执行单个队列任务。
