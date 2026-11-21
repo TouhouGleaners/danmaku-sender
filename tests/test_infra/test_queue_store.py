@@ -4,7 +4,11 @@ from pathlib import Path
 
 import pytest
 
-from danmaku_sender.infra.persistence.queue_store import FailureRow, QueueStore
+from danmaku_sender.infra.persistence.queue_store import (
+    FailureRow,
+    QueueStore,
+    _QueueTask,
+)
 from danmaku_sender.types.exceptions.exceptions import QueueStorageError
 from danmaku_sender.types.models.common import TaskMeta, VideoTarget
 from danmaku_sender.types.models.danmaku import Danmaku
@@ -359,7 +363,7 @@ class TestOpenWithRecovery:
         db_path = tmp_path / "queue.db"
         db_path.write_bytes(b"this is not a database")
 
-        store = QueueStore.open_with_recovery(db_path)
+        store = QueueStore.open(db_path)
 
         assert store.load_all() == []
         assert list(tmp_path.glob("queue.db.corrupt-*"))
@@ -369,11 +373,11 @@ class TestOpenWithRecovery:
         """第二次损坏照样备份重开：备份名不与旧备份相撞"""
         db_path = tmp_path / "queue.db"
         db_path.write_bytes(b"garbage one")
-        first = QueueStore.open_with_recovery(db_path)
+        first = QueueStore.open(db_path)
         first.close()
         db_path.write_bytes(b"garbage two")
 
-        second = QueueStore.open_with_recovery(db_path)
+        second = QueueStore.open(db_path)
 
         assert second.load_all() == []
         assert len(list(tmp_path.glob("queue.db.corrupt-*"))) == 2
@@ -392,7 +396,7 @@ class TestOpenWithRecovery:
         monkeypatch.setattr(QueueStore, "load_all", flaky_load_all)
 
         with pytest.raises(QueueStorageError):
-            QueueStore.open_with_recovery(db_path)
+            QueueStore.open(db_path)
 
         assert not list(tmp_path.glob("queue.db.corrupt-*"))
         assert db_path.exists()
@@ -407,7 +411,7 @@ class TestOpenWithRecovery:
         )
 
         with pytest.raises(QueueStorageError):
-            QueueStore.open_with_recovery(db_path)
+            QueueStore.open(db_path)
 
     def test_backup_takes_wal_and_shm_along(self, tmp_path):
         """备份要连 -wal / -shm 一起改名，否则重建时 SQLite 会重放旧 WAL"""
@@ -421,3 +425,40 @@ class TestOpenWithRecovery:
         for suffix in ("", "-wal", "-shm"):
             assert not (tmp_path / f"queue.db{suffix}").exists()
             assert any(name.startswith(f"queue.db{suffix}.corrupt") for name in remaining), remaining
+
+
+class TestStartupSelfHeal:
+    def test_residual_running_paused_keeps_cursor_clears_burst_count(self, tmp_path):
+        """残留 RUNNING 纠为可续的 PAUSED：游标保留，爆发计数清零"""
+        db_path = tmp_path / "queue.db"
+        store = QueueStore(db_path)
+        store.add_task(make_task("t1", msgs=("a",)))
+        store.update_task_state("t1", status=TaskStatus.RUNNING, cursor=7, burst_count=3, error=None)
+        store.close()
+
+        reopened = QueueStore.open(db_path)
+
+        row = reopened.load_tasks()[0]
+        assert (row.status, row.cursor, row.burst_count) == (TaskStatus.PAUSED, 7, 0)
+        reopened.close()
+
+    def test_heal_write_failure_still_opens(self, tmp_path, monkeypatch, caplog):
+        """自愈写不进去只记日志：照常打开、不走损坏备份，库里原样"""
+        db_path = tmp_path / "queue.db"
+        store = QueueStore(db_path)
+        store.add_task(make_task("t1", msgs=("a",)))
+        store.update_task_state("t1", status=TaskStatus.RUNNING, cursor=5, burst_count=2, error=None)
+        store.close()
+
+        def failing_update(**kwargs):
+            raise RuntimeError("database is locked")
+
+        monkeypatch.setattr(_QueueTask, "update", failing_update)
+
+        reopened = QueueStore.open(db_path)
+
+        assert not list(tmp_path.glob("queue.db.corrupt-*"))
+        row = reopened.load_tasks()[0]
+        assert (row.status, row.cursor, row.burst_count) == (TaskStatus.RUNNING, 5, 2), "写失败就保持原样"
+        assert "启动自愈写入失败" in caplog.text
+        reopened.close()

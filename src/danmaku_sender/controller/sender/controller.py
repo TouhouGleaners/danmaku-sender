@@ -267,7 +267,7 @@ class SenderController(QObject):
         Returns:
             Task: 状态已对齐的待持久化任务对象。
         """
-        aligned_status, aligned_error = QueueState.reconciled_status(
+        aligned_status, aligned_error = QueueState.aligned_status(
             status, error_msg, definition.is_config_complete
         )
         return Task(

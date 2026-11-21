@@ -38,6 +38,7 @@ def _seed_running_row(store: QueueStore) -> None:
             execution=TaskExecution(status=TaskStatus.RUNNING, attempted=7),
         )
     )
+    store.update_task_state("t1", status=TaskStatus.RUNNING, cursor=7, burst_count=3, error=None)
 
 
 def test_startup_pauses_residual_running_and_restores(qapp, queue_db):
@@ -54,9 +55,10 @@ def test_startup_pauses_residual_running_and_restores(qapp, queue_db):
     assert views[0].status is TaskStatus.PAUSED
     assert views[0].attempted == 7
     assert [dm.msg for dm in views[0].danmakus] == ["a"]
-    persisted = rt.queue_store.load_all()[0]
-    assert persisted.execution.status is TaskStatus.PAUSED, "修正过的状态要写回数据库"
-    assert persisted.execution.attempted == 7
+    persisted = rt.queue_store.load_tasks()[0]
+    assert persisted.status is TaskStatus.PAUSED, "修正过的状态要写回数据库"
+    assert persisted.cursor == 7
+    assert persisted.burst_count == 0, "爆发计数不能带着过期值恢复"
 
 
 def test_startup_without_tasks_leaves_queue_empty(qapp, queue_db):

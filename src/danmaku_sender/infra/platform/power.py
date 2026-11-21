@@ -90,7 +90,7 @@ class KeepSystemAwake:
     """上下文管理器：在代码块执行期间阻止系统休眠（仅限 Windows）。
 
     Attributes:
-        enabled: 是否启用阻止休眠；为 False 时上下文为空操作。
+        enabled: 是否启用阻止休眠；为 False 时整个 with 为空操作。
     """
 
     def __init__(self, enabled: bool = True) -> None:
@@ -102,12 +102,12 @@ class KeepSystemAwake:
         self.enabled = enabled
 
     def __enter__(self) -> "KeepSystemAwake":
-        """进入上下文并申请阻止休眠。"""
+        """进入时申请阻止休眠。"""
         if self.enabled:
             PowerManagement.prevent_sleep()
         return self
 
     def __exit__(self, exc_type, exc_value, traceback) -> None:
-        """退出上下文并释放阻止休眠申请。"""
+        """退出时释放阻止休眠申请。"""
         if self.enabled:
             PowerManagement.allow_sleep()

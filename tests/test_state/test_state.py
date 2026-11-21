@@ -320,10 +320,9 @@ class TestQueueState:
         assert fired == [2]
 
     def test_get_task_by_id_reads_current_value(self):
-        """查询读到的是当前任务值；落账换新实例，要新值就重取
+        """查询始终返回当前最新任务
 
-        语义等价改写：旧 TaskView 是 live 门面、原地见新值，该类型已随冻结值对象退役；
-        新契约是「落账换新实例」，本用例验证重取即见新状态、旧对象不再更新。
+        状态变更会生成新实例，调用方需重新获取以读取新状态。
         """
         qs = QueueState()
         t = make_task(1)

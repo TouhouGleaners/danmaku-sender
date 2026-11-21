@@ -494,7 +494,7 @@ class EditorDialog(QDialog):
 
     @Slot(QPoint)
     def _open_context_menu(self, pos: QPoint):
-        """打开表格右键上下文菜单"""
+        """打开表格右键菜单"""
         index = self.table.indexAt(pos)
         if not index.isValid():
             return
@@ -560,7 +560,7 @@ class EditorDialog(QDialog):
                 self._edit_row(row_idx)
 
     def _shift_selected_items_time(self):
-        """上下文菜单：平移用户选中的弹幕"""
+        """右键菜单：平移用户选中的弹幕"""
         selected_rows = self.table.selectionModel().selectedRows()
         if not selected_rows:
             return

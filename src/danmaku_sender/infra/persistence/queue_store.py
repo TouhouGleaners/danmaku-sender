@@ -222,11 +222,12 @@ class QueueStore:
             raise QueueStorageError(f"队列库初始化失败 [{self.db_path}]", original_error=e) from e
 
     @classmethod
-    def open_with_recovery(cls, db_path: Path) -> "QueueStore":
+    def open(cls, db_path: Path) -> "QueueStore":
         """打开队列数据库并执行一次全量读取校验。
 
         若数据库文件损坏或无法读取，先关闭连接并将主库及 WAL 附属文件备份，随后创建空库重新打开；
         若重建后仍无法打开，则向上抛出异常。
+        若存在异常退出残留的 RUNNING 任务，则重置为可续的 PAUSED（见 :meth:`_pause_residual_running`）。
 
         Args:
             db_path (Path): queue.db 的文件路径。
@@ -240,8 +241,7 @@ class QueueStore:
         store: QueueStore | None = None
         try:
             store = cls(db_path)
-            store.load_all()
-            return store
+            loaded = store.load_all()
         except QueueStorageError:
             if store is not None:
                 store.close()
@@ -250,6 +250,10 @@ class QueueStore:
             logger.exception("队列库已损坏，备份后以空库启动 [%s]", db_path)
             cls._backup_corrupt(db_path)
             return cls(db_path)
+
+        if any(t.status is TaskStatus.RUNNING for t in loaded):
+            store._pause_residual_running()
+        return store
 
     @staticmethod
     def _looks_corrupt(db_path: Path) -> bool:
@@ -288,6 +292,21 @@ class QueueStore:
             path = db_path.parent / f"{db_path.name}{suffix}"
             if path.exists() and backup_corrupt_file(path, suffix=f".corrupt-{stamp}") is None:
                 raise QueueStorageError(f"无法备份损坏的队列库 [{path}]")
+
+    def _pause_residual_running(self) -> None:
+        """开机自愈：把异常退出残留的 RUNNING 修正为可续的 PAUSED，并清零过期的爆发计数。
+
+        游标照旧保留，任务从上次已结算的位置续跑。
+        写入失败仅记录日志、不阻断启动，避免把暂时锁定的正常库误判为损坏。
+        """
+        try:
+            (_QueueTask
+                .update(status=TaskStatus.PAUSED.name, burst_count=0)
+                .where(_QueueTask.status == TaskStatus.RUNNING.name)
+                .execute()
+            )
+        except Exception:
+            logger.exception("启动自愈写入失败")
 
     def add_task(self, task: Task) -> None:
         """将新任务追加至队列末尾，连同弹幕数据一并写入，单事务执行。

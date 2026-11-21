@@ -59,10 +59,10 @@ class TaskConfig:
 class TaskDefinition:
     """不可变任务定义。
 
-    Worker 只持有任务值的冻结拷贝，与主线程的后续变更隔离。
-    config 是入队时固定的发送节奏，冻结类型，无需防御性拷贝。
-    danmakus 为 tuple，结构上不可替换；发送管线须持有自己的 Danmaku 副本
-    （见 SendJob 构造处的 clone），不得回填 dmid 写穿本任务定义。
+    Worker 仅持有不可变任务副本，与主线程的后续变更隔离。
+    config 为入队时固化的发送节奏，无需防御性拷贝。
+    danmakus 为不可变元组；
+    SendPipeline 需持有独立副本（见 SendJob 构造），不得向本对象回填 dmid。
     """
     task_id: str
     target: VideoTarget
@@ -115,10 +115,9 @@ class TaskExecution:
 
 @dataclass(frozen=True)
 class Task:
-    """队列里的一项：不可变任务定义 + 不可变运行时。
+    """队列任务条目：由不可变任务定义与不可变运行状态组成。
 
-    整体是冻结值对象：QueueState 每次变更都换新实例，表格等持有方要把行里
-    的对象换成新值，只通知重绘会画出旧值；跨线程取走即隔离，无需再采样。
+    全字段只读，所有变更均通过构造新实例替换；跨线程传递时天然隔离，无需额外拷贝。
     """
     definition: TaskDefinition
     execution: TaskExecution

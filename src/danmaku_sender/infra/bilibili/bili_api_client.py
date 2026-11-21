@@ -84,7 +84,7 @@ class BiliApiClient:
     @contextmanager
     def _network_guards(self, url: str) -> Generator[None, None, None]:
         """
-        统一的网络异常捕获上下文。
+        统一的网络异常捕获。
         负责将 requests 的各种异常精准映射为 BiliApiError | BiliNetworkError。
         """
         try:

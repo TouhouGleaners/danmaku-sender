@@ -152,7 +152,7 @@ class DanmakuScheduler:
             job (SendJob): 发送任务。
             ctx (SendingContext): 由调用方持有并传入，异常时结果仍在其中。
         """
-        self.logger.info(f"🚀 启动调度流水线... 目标: {job.target.bvid or "未指定"} (CID: {job.target.cid})")
+        self.logger.info(f"🚀 启动发送调度... 目标: {job.target.bvid or "未指定"} (CID: {job.target.cid})")
 
         if not job.danmakus:
             return
