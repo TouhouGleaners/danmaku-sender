@@ -12,7 +12,7 @@
 import contextlib
 import logging
 import time
-from collections.abc import Sequence
+from collections.abc import Iterator, Sequence
 from dataclasses import dataclass
 from pathlib import Path
 
@@ -190,6 +190,139 @@ class TaskRow:
     error: str | None = None
 
 
+class _QueueMapper:
+    """领域任务与数据表之间的双向翻译，不执行任何数据库操作。"""
+
+    @staticmethod
+    def to_row_values(task: Task, position: int) -> dict:
+        """将领域任务转换为 queue_task 表的列字典。
+
+        注：``allow_duplicates`` 与 ``burst_count`` 尚未接入当前任务模型，暂默认写入 0。
+
+        Args:
+            task (Task): 待转换的领域任务对象。
+            position (int): 队列中的 0-based 索引。
+
+        Returns:
+            dict: 对应数据库表列的键值映射。
+
+        Raises:
+            QueueStorageError: 目标字段不成对（bvid 与 cid 未同时存在或同时为空）。
+        """
+        definition = task.definition
+        execution = task.execution
+        meta = definition.meta
+        if (definition.target.bvid is None) != (definition.target.cid is None):
+            raise QueueStorageError("目标字段不成对：bvid 与 cid 必须成对有值或成对为空")
+        return {
+            "task_id": definition.task_id,
+            "position": position,
+            "bvid": definition.target.bvid,
+            "cid": definition.target.cid,
+            "video_title": meta.video_title,
+            "part_page": meta.part_page,
+            "part_title": meta.part_title,
+            "duration_ms": meta.part_duration_ms,
+            "source_path": str(meta.xml_path) if meta.xml_path else None,
+            "min_delay": definition.config.min_delay,
+            "max_delay": definition.config.max_delay,
+            "burst_enabled": int(definition.config.burst_enabled),
+            "burst_size": definition.config.burst_size,
+            "rest_min": definition.config.rest_min,
+            "rest_max": definition.config.rest_max,
+            "allow_duplicates": 0,
+            "status": execution.status.name,
+            "cursor": execution.attempted,
+            "burst_count": 0,
+            "error": execution.error_msg or None,
+        }
+
+    @staticmethod
+    def to_item_batches(task_id: str, items: Sequence[Danmaku]) -> Iterator[list[dict]]:
+        """将弹幕序列按批次切分为 queue_item 表的行字典列表。
+
+        每批不超过 ``_INSERT_BATCH`` 行，避免单次 SQLite 参数数量超出绑定上限。
+
+        Args:
+            task_id (str): 归属的任务唯一标识。
+            items (Sequence[Danmaku]): 待写入的弹幕序列。
+
+        Yields:
+            list[dict]: 单批弹幕行字典列表。
+        """
+        for start in range(0, len(items), _INSERT_BATCH):
+            chunk = items[start:start + _INSERT_BATCH]
+            yield [
+                {
+                    "task_id": task_id,
+                    "idx": start + offset,
+                    "msg": dm.msg,
+                    "progress": dm.progress,
+                    "mode": int(dm.mode),
+                    "fontsize": dm.fontsize,
+                    "color": dm.color,
+                }
+                for offset, dm in enumerate(chunk)
+            ]
+
+    @staticmethod
+    def to_danmaku(row: _QueueItem) -> Danmaku:
+        """将弹幕行记录转换为单条弹幕对象。
+
+        Args:
+            row (_QueueItem): queue_item 表行记录。
+
+        Returns:
+            Danmaku: 转换后的弹幕对象。
+        """
+        return Danmaku(
+            msg=row.msg,
+            progress=row.progress,
+            mode=Danmaku.Mode(row.mode),
+            fontsize=row.fontsize,
+            color=row.color,
+        )
+
+    @staticmethod
+    def to_task(row: _QueueTask, danmakus: Sequence[Danmaku]) -> Task:
+        """将任务行记录与弹幕序列组装为领域任务对象。
+
+        Args:
+            row (_QueueTask): queue_task 表行记录。
+            danmakus (Sequence[Danmaku]): 关联的弹幕序列，按原始索引升序排列。
+
+        Returns:
+            Task: 组装完成的领域任务对象。
+        """
+        return Task(
+            definition=TaskDefinition(
+                task_id=row.task_id,
+                target=VideoTarget(bvid=row.bvid, cid=row.cid),
+                meta=TaskMeta(
+                    video_title=row.video_title,
+                    part_page=row.part_page,
+                    part_title=row.part_title,
+                    part_duration_ms=row.duration_ms,
+                    xml_path=Path(row.source_path) if row.source_path else None,
+                ),
+                danmakus=tuple(danmakus),
+                config=TaskConfig(
+                    min_delay=row.min_delay,
+                    max_delay=row.max_delay,
+                    burst_enabled=bool(row.burst_enabled),
+                    burst_size=row.burst_size,
+                    rest_min=row.rest_min,
+                    rest_max=row.rest_max,
+                ),
+            ),
+            execution=TaskExecution(
+                status=TaskStatus[row.status],
+                error_msg=row.error or "",
+                attempted=row.cursor,
+            ),
+        )
+
+
 class QueueStore:
     """queue.db 的数据访问入口。
 
@@ -227,7 +360,7 @@ class QueueStore:
 
         若数据库文件损坏或无法读取，先关闭连接并将主库及 WAL 附属文件备份，随后创建空库重新打开；
         若重建后仍无法打开，则向上抛出异常。
-        若存在异常退出残留的 RUNNING 任务，则重置为可续的 PAUSED（见 :meth:`_pause_residual_running`）。
+        若存在异常退出残留的 RUNNING 任务，则重置为 PAUSED（见 :meth:`_QueueRecovery.pause_stale_running`）。
 
         Args:
             db_path (Path): queue.db 的文件路径。
@@ -245,68 +378,15 @@ class QueueStore:
         except QueueStorageError:
             if store is not None:
                 store.close()
-            if not cls._looks_corrupt(db_path):
+            if not _QueueRecovery.is_corrupt(db_path):
                 raise
             logger.exception("队列库已损坏，备份后以空库启动 [%s]", db_path)
-            cls._backup_corrupt(db_path)
+            _QueueRecovery.backup_corrupt(db_path)
             return cls(db_path)
 
         if any(t.status is TaskStatus.RUNNING for t in loaded):
-            store._pause_residual_running()
+            _QueueRecovery.pause_stale_running()
         return store
-
-    @staticmethod
-    def _looks_corrupt(db_path: Path) -> bool:
-        """判断库文件是否已不是 SQLite 格式（被截断或覆盖写坏）。
-
-        文件头是 SQLite 格式的不在此列——读不动更可能是临时锁定或 IO 故障，
-        这种情况保留原文件并向上抛出，不按损坏处理。
-
-        Args:
-            db_path (Path): queue.db 的文件路径。
-
-        Returns:
-            bool: 文件存在且不是 SQLite 格式时返回 True。
-        """
-        try:
-            with open(db_path, "rb") as fh:
-                return fh.read(16) != b"SQLite format 3\x00"
-        except OSError:
-            return False
-
-    @staticmethod
-    def _backup_corrupt(db_path: Path) -> None:
-        """备份损坏的数据库文件及其 WAL / SHM 附属文件。
-
-        备份后缀包含精确时间戳，避免多次损坏时与既有备份文件冲突，
-        同时防止新建同路径数据库时重放遗留的 WAL 日志。
-
-        Args:
-            db_path (Path): queue.db 的文件路径。
-
-        Raises:
-            QueueStorageError: 任一待备份文件仍在原地（改名失败），无法安全重建。
-        """
-        stamp = f"{time.strftime('%Y%m%d-%H%M%S')}-{time.time_ns()}"
-        for suffix in ("", "-wal", "-shm"):
-            path = db_path.parent / f"{db_path.name}{suffix}"
-            if path.exists() and backup_corrupt_file(path, suffix=f".corrupt-{stamp}") is None:
-                raise QueueStorageError(f"无法备份损坏的队列库 [{path}]")
-
-    def _pause_residual_running(self) -> None:
-        """开机自愈：把异常退出残留的 RUNNING 修正为可续的 PAUSED，并清零过期的爆发计数。
-
-        游标照旧保留，任务从上次已结算的位置续跑。
-        写入失败仅记录日志、不阻断启动，避免把暂时锁定的正常库误判为损坏。
-        """
-        try:
-            (_QueueTask
-                .update(status=TaskStatus.PAUSED.name, burst_count=0)
-                .where(_QueueTask.status == TaskStatus.RUNNING.name)
-                .execute()
-            )
-        except Exception:
-            logger.exception("启动自愈写入失败")
 
     def add_task(self, task: Task) -> None:
         """将新任务追加至队列末尾，连同弹幕数据一并写入，单事务执行。
@@ -319,8 +399,11 @@ class QueueStore:
         """
         try:
             with queue_db.atomic():
-                _QueueTask.insert(**self._row_values(task, self._next_position())).execute()
-                self._insert_items(task.definition.task_id, task.definition.danmakus)
+                current = _QueueTask.select(fn.MAX(_QueueTask.position)).scalar()
+                at = 0 if current is None else current + 1
+                _QueueTask.insert(**_QueueMapper.to_row_values(task, at)).execute()
+                for batch in _QueueMapper.to_item_batches(task.definition.task_id, task.definition.danmakus):
+                    _QueueItem.insert_many(batch).execute()
         except Exception as e:
             logger.exception("队列任务写入失败 [task_id=%s]", task.definition.task_id)
             raise QueueStorageError(f"队列任务写入失败 [{task.definition.task_id}]", original_error=e) from e
@@ -339,8 +422,9 @@ class QueueStore:
             with queue_db.atomic():
                 for r in _QueueTask.select().where(_QueueTask.position >= at):
                     _QueueTask.update(position=r.position + 1).where(_QueueTask.task_id == r.task_id).execute()
-                _QueueTask.insert(**self._row_values(task, at)).execute()
-                self._insert_items(task.definition.task_id, task.definition.danmakus)
+                _QueueTask.insert(**_QueueMapper.to_row_values(task, at)).execute()
+                for batch in _QueueMapper.to_item_batches(task.definition.task_id, task.definition.danmakus):
+                    _QueueItem.insert_many(batch).execute()
         except Exception as e:
             logger.exception("队列任务插入失败 [task_id=%s]", task.definition.task_id)
             raise QueueStorageError(f"队列任务插入失败 [{task.definition.task_id}]", original_error=e) from e
@@ -364,11 +448,12 @@ class QueueStore:
                 old = _QueueTask.get_or_none(_QueueTask.task_id == task_id)
                 if old is None:
                     raise QueueStorageError(f"任务更新跳过：没有任务 [{task_id}] 的行")
-                _QueueTask.update(**self._row_values(task, old.position)).where(_QueueTask.task_id == task_id).execute()
+                _QueueTask.update(**_QueueMapper.to_row_values(task, old.position)).where(_QueueTask.task_id == task_id).execute()
                 if items_replaced:
                     _QueueItem.delete().where(_QueueItem.task_id == task_id).execute()
                     _QueueFailure.delete().where(_QueueFailure.task_id == task_id).execute()
-                    self._insert_items(task_id, task.definition.danmakus)
+                    for batch in _QueueMapper.to_item_batches(task_id, task.definition.danmakus):
+                        _QueueItem.insert_many(batch).execute()
         except QueueStorageError:
             raise
         except Exception as e:
@@ -395,8 +480,9 @@ class QueueStore:
                 _QueueTask.delete().where(_QueueTask.task_id == old_task_id).execute()
                 _QueueItem.delete().where(_QueueItem.task_id == old_task_id).execute()
                 _QueueFailure.delete().where(_QueueFailure.task_id == old_task_id).execute()
-                _QueueTask.insert(**self._row_values(task, old.position)).execute()
-                self._insert_items(task.definition.task_id, task.definition.danmakus)
+                _QueueTask.insert(**_QueueMapper.to_row_values(task, old.position)).execute()
+                for batch in _QueueMapper.to_item_batches(task.definition.task_id, task.definition.danmakus):
+                    _QueueItem.insert_many(batch).execute()
         except QueueStorageError:
             raise
         except Exception as e:
@@ -598,43 +684,9 @@ class QueueStore:
         try:
             items_by_task: dict[str, list[Danmaku]] = {}
             for r in _QueueItem.select().order_by(_QueueItem.task_id, _QueueItem.idx):
-                items_by_task.setdefault(r.task_id, []).append(
-                    Danmaku(
-                        msg=r.msg,
-                        progress=r.progress,
-                        mode=Danmaku.Mode(r.mode),
-                        fontsize=r.fontsize,
-                        color=r.color,
-                    )
-                )
+                items_by_task.setdefault(r.task_id, []).append(_QueueMapper.to_danmaku(r))
             return [
-                Task(
-                    definition=TaskDefinition(
-                        task_id=r.task_id,
-                        target=VideoTarget(bvid=r.bvid, cid=r.cid),
-                        meta=TaskMeta(
-                            video_title=r.video_title,
-                            part_page=r.part_page,
-                            part_title=r.part_title,
-                            part_duration_ms=r.duration_ms,
-                            xml_path=Path(r.source_path) if r.source_path else None,
-                        ),
-                        danmakus=tuple(items_by_task.get(r.task_id, ())),
-                        config=TaskConfig(
-                            min_delay=r.min_delay,
-                            max_delay=r.max_delay,
-                            burst_enabled=bool(r.burst_enabled),
-                            burst_size=r.burst_size,
-                            rest_min=r.rest_min,
-                            rest_max=r.rest_max,
-                        ),
-                    ),
-                    execution=TaskExecution(
-                        status=TaskStatus[r.status],
-                        error_msg=r.error or "",
-                        attempted=r.cursor,
-                    ),
-                )
+                _QueueMapper.to_task(r, items_by_task.get(r.task_id, ()))
                 for r in _QueueTask.select().order_by(_QueueTask.position, _QueueTask.task_id)
             ]
         except Exception as e:
@@ -757,81 +809,61 @@ class QueueStore:
         if not queue_db.is_closed():
             queue_db.close()
 
-    @staticmethod
-    def _row_values(task: Task, position: int) -> dict:
-        """将领域任务转换为 queue_task 表的列字典。
 
-        注：``allow_duplicates`` 与 ``burst_count`` 尚未接入当前任务模型，暂按 0 写入。
+class _QueueRecovery:
+    """queue.db 的启动恢复协调器
+
+    负责损坏判定、备份隔离与残留运行态恢复。
+    """
+
+    @staticmethod
+    def is_corrupt(db_path: Path) -> bool:
+        """判断库文件是否已失去 SQLite 文件格式（如被截断或覆盖写坏）。
+
+        若文件头仍为有效的 SQLite 格式，读取失败更可能源于临时锁定或 I/O 故障，此时保留原文件并向上抛出异常，不按损坏处理。
 
         Args:
-            task (Task): 待转换的领域任务对象。
-            position (int): 队列中的 0-based 位置。
+            db_path (Path): queue.db 的文件路径。
 
         Returns:
-            dict: 对应数据库表列的键值映射。
+            bool: 文件存在且文件头非 SQLite 格式时返回 True。
+        """
+        try:
+            with open(db_path, "rb") as fh:
+                return fh.read(16) != b"SQLite format 3\x00"
+        except OSError:
+            return False
+
+    @staticmethod
+    def backup_corrupt(db_path: Path) -> None:
+        """备份损坏的数据库文件及其 WAL / SHM 附属文件。
+
+        备份后缀附加精确时间戳，避免重复损坏时与既有备份冲突，同时防止重建同路径数据库时重放遗留的 WAL 日志。
+
+        Args:
+            db_path (Path): queue.db 的文件路径。
 
         Raises:
-            QueueStorageError: 目标字段不成对（bvid 与 cid 未同时存在或同时为空）。
+            QueueStorageError: 任一待备份文件重命名失败，无法安全重建数据库。
         """
-        definition = task.definition
-        execution = task.execution
-        meta = definition.meta
-        if (definition.target.bvid is None) != (definition.target.cid is None):
-            raise QueueStorageError("目标字段不成对：bvid 与 cid 必须成对有值或成对为空")
-        return {
-            "task_id": definition.task_id,
-            "position": position,
-            "bvid": definition.target.bvid,
-            "cid": definition.target.cid,
-            "video_title": meta.video_title,
-            "part_page": meta.part_page,
-            "part_title": meta.part_title,
-            "duration_ms": meta.part_duration_ms,
-            "source_path": str(meta.xml_path) if meta.xml_path else None,
-            "min_delay": definition.config.min_delay,
-            "max_delay": definition.config.max_delay,
-            "burst_enabled": int(definition.config.burst_enabled),
-            "burst_size": definition.config.burst_size,
-            "rest_min": definition.config.rest_min,
-            "rest_max": definition.config.rest_max,
-            "allow_duplicates": 0,
-            "status": execution.status.name,
-            "cursor": execution.attempted,
-            "burst_count": 0,
-            "error": execution.error_msg or None,
-        }
+        stamp = f"{time.strftime('%Y%m%d-%H%M%S')}-{time.time_ns()}"
+        for suffix in ("", "-wal", "-shm"):
+            path = db_path.parent / f"{db_path.name}{suffix}"
+            if path.exists() and backup_corrupt_file(path, suffix=f".corrupt-{stamp}") is None:
+                raise QueueStorageError(f"无法备份损坏的队列库 [{path}]")
 
     @staticmethod
-    def _next_position() -> int:
-        """返回下一个可追加的队列位置（空队列时返回 0）。
+    def pause_stale_running() -> None:
+        """将异常退出残留的 RUNNING 任务重置为 PAUSED，并清零过期爆发计数。
 
-        Returns:
-            int: 末尾位置序号。
+        续传游标保持不变，以便任务从上次记录的进度位置继续发送。
+        写入失败仅记录日志、不阻断启动，避免将暂时锁定的正常数据库误判为损坏。
         """
-        current = _QueueTask.select(fn.MAX(_QueueTask.position)).scalar()
-        return 0 if current is None else current + 1
-
-    @staticmethod
-    def _insert_items(task_id: str, items: Sequence[Danmaku]) -> None:
-        """分批写入弹幕数据，避免单次 SQLite 参数数量超出绑定上限。
-
-        Args:
-            task_id (str): 归属的任务唯一标识。
-            items (Sequence[Danmaku]): 待插入的弹幕序列。
-        """
-        for start in range(0, len(items), _INSERT_BATCH):
-            chunk = items[start:start + _INSERT_BATCH]
-            _QueueItem.insert_many(
-                [
-                    {
-                        "task_id": task_id,
-                        "idx": start + offset,
-                        "msg": dm.msg,
-                        "progress": dm.progress,
-                        "mode": int(dm.mode),
-                        "fontsize": dm.fontsize,
-                        "color": dm.color,
-                    }
-                    for offset, dm in enumerate(chunk)
-                ]
-            ).execute()
+        try:
+            (_QueueTask
+                .update(status=TaskStatus.PAUSED.name, burst_count=0)
+                .where(_QueueTask.status == TaskStatus.RUNNING.name)
+                .execute()
+            )
+        except Exception:
+            logger.exception("启动自愈写入失败")

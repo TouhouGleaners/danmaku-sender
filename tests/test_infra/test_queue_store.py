@@ -7,6 +7,7 @@ import pytest
 from danmaku_sender.infra.persistence.queue_store import (
     FailureRow,
     QueueStore,
+    _QueueRecovery,
     _QueueTask,
 )
 from danmaku_sender.types.exceptions.exceptions import QueueStorageError
@@ -418,7 +419,7 @@ class TestOpenWithRecovery:
         for suffix in ("", "-wal", "-shm"):
             (tmp_path / f"queue.db{suffix}").write_bytes(b"junk")
 
-        QueueStore._backup_corrupt(tmp_path / "queue.db")
+        _QueueRecovery.backup_corrupt(tmp_path / "queue.db")
 
         remaining = sorted(p.name for p in tmp_path.iterdir())
         assert len(remaining) == 3
