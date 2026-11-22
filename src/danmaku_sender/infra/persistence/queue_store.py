@@ -13,7 +13,6 @@ import contextlib
 import logging
 import time
 from collections.abc import Iterator, Sequence
-from dataclasses import dataclass
 from pathlib import Path
 
 from peewee import (
@@ -108,90 +107,8 @@ class _QueueFailure(Model):
         indexes = ((("task_id",), False),)
 
 
-@dataclass(frozen=True)
-class ItemRow:
-    """queue_item 的只读行数据：单条弹幕的发送参数。
-
-    Attributes:
-        idx (int): 在任务清单中的 0-based 索引。
-        msg (str): 弹幕文本内容。
-        progress (int): 弹幕出现时间（毫秒）。
-        mode (int): 弹幕模式。
-        fontsize (int): 弹幕字号。
-        color (int): 弹幕十进制颜色值。
-    """
-    idx: int
-    msg: str
-    progress: int
-    mode: int
-    fontsize: int
-    color: int
-
-
-@dataclass(frozen=True)
-class FailureRow:
-    """queue_failure 的只读行数据：单条弹幕的发送失败记录。
-
-    Attributes:
-        idx (int): 在任务清单中的 0-based 索引。
-        reason (str): 发送失败的原因说明。
-    """
-    idx: int
-    reason: str
-
-
-@dataclass(frozen=True)
-class TaskRow:
-    """queue_task 的只读行数据：任务配置、目标信息、排序与运行状态。
-
-    作为数据表行的扁平映射类型使用，待队列领域模型统一后由领域类型直接替代。
-
-    Attributes:
-        task_id (str): 任务唯一标识。
-        position (int): 队列顺序，数值越小越靠前。
-        bvid (str | None): 目标视频 BVID；须与 cid 成对有值或同为 None。
-        cid (int | None): 目标分P CID；须与 bvid 成对有值或同为 None。
-        video_title (str): 视频标题。
-        part_page (int | None): 分P序号（1-based）；未指定时为 None。
-        part_title (str): 分P标题。
-        duration_ms (int | None): 分P总时长（毫秒）；未知时为 None。
-        source_path (str | None): 导入的弹幕文件路径；无文件来源时为 None。
-        min_delay (float): 发送最小间隔（秒）。
-        max_delay (float): 发送最大间隔（秒）。
-        burst_enabled (bool): 是否启用爆发模式。
-        burst_size (int): 爆发模式下每轮连续发送的条数。
-        rest_min (float): 爆发模式每轮之间的最短休息时间（秒）。
-        rest_max (float): 爆发模式每轮之间的最长休息时间（秒）。
-        allow_duplicates (bool): 是否允许重复发送（为 True 时跳过查重）。
-        status (TaskStatus): 当前任务状态；持久化时按枚举名存储。
-        cursor (int): 断点续传游标，指向下一条待处理的弹幕索引。
-        burst_count (int): 当前爆发周期内的已发条数计数。
-        error (str | None): 任务失败或中止的原因；无错误时为 None。
-    """
-    task_id: str
-    position: int
-    bvid: str | None
-    cid: int | None
-    video_title: str = ""
-    part_page: int | None = None
-    part_title: str = ""
-    duration_ms: int | None = None
-    source_path: str | None = None
-    min_delay: float = 0.0
-    max_delay: float = 0.0
-    burst_enabled: bool = False
-    burst_size: int = 0
-    rest_min: float = 0.0
-    rest_max: float = 0.0
-    allow_duplicates: bool = False
-    status: TaskStatus = TaskStatus.PENDING
-    cursor: int = 0
-    burst_count: int = 0
-    error: str | None = None
-
-
 class _QueueMapper:
-    """领域任务与数据表之间的双向翻译，不执行任何数据库操作。"""
+    """领域任务与数据表之间的双向映射，不执行任何数据库操作。"""
 
     @staticmethod
     def to_row_values(task: Task, position: int) -> dict:
@@ -460,7 +377,7 @@ class QueueStore:
             logger.exception("队列任务更新失败 [task_id=%s]", task_id)
             raise QueueStorageError(f"队列任务更新失败 [{task_id}]", original_error=e) from e
 
-    def reissue_task(self, old_task_id: str, task: Task) -> None:
+    def replace_task(self, old_task_id: str, task: Task) -> None:
         """以新任务替换旧任务并保留其原队列位置（允许变更 task_id），单事务执行。
 
         旧任务及其关联的弹幕数据、失败记录将被一并删除，新任务按传入内容重新写入。
@@ -588,87 +505,6 @@ class QueueStore:
         except Exception as e:
             logger.exception("队列状态写入失败 [task_id=%s]", task_id)
             raise QueueStorageError(f"队列状态写入失败 [{task_id}]", original_error=e) from e
-
-    def load_tasks(self) -> list[TaskRow]:
-        """按队列顺序读取全部任务行。
-
-        Returns:
-            list[TaskRow]: 按 position 升序排列的任务行列表。
-
-        Raises:
-            QueueStorageError: 数据库读取或状态解析失败。
-        """
-        try:
-            rows = _QueueTask.select().order_by(_QueueTask.position, _QueueTask.task_id)
-            return [
-                TaskRow(
-                    task_id=r.task_id,
-                    position=r.position,
-                    bvid=r.bvid,
-                    cid=r.cid,
-                    video_title=r.video_title,
-                    part_page=r.part_page,
-                    part_title=r.part_title,
-                    duration_ms=r.duration_ms,
-                    source_path=r.source_path,
-                    min_delay=r.min_delay,
-                    max_delay=r.max_delay,
-                    burst_enabled=bool(r.burst_enabled),
-                    burst_size=r.burst_size,
-                    rest_min=r.rest_min,
-                    rest_max=r.rest_max,
-                    allow_duplicates=bool(r.allow_duplicates),
-                    status=TaskStatus[r.status],
-                    cursor=r.cursor,
-                    burst_count=r.burst_count,
-                    error=r.error,
-                )
-                for r in rows
-            ]
-        except Exception as e:
-            logger.exception("队列任务读取失败")
-            raise QueueStorageError("队列任务读取失败", original_error=e) from e
-
-    def load_items(self, task_id: str) -> list[ItemRow]:
-        """读取指定任务的全部弹幕数据，按原始索引升序排列。
-
-        Args:
-            task_id (str): 任务唯一标识。
-
-        Returns:
-            list[ItemRow]: 弹幕数据行列表。
-
-        Raises:
-            QueueStorageError: 数据库读取失败。
-        """
-        try:
-            rows = _QueueItem.select().where(_QueueItem.task_id == task_id).order_by(_QueueItem.idx)
-            return [
-                ItemRow(idx=r.idx, msg=r.msg, progress=r.progress, mode=r.mode, fontsize=r.fontsize, color=r.color)
-                for r in rows
-            ]
-        except Exception as e:
-            logger.exception("弹幕数据读取失败 [task_id=%s]", task_id)
-            raise QueueStorageError(f"弹幕数据读取失败 [{task_id}]", original_error=e) from e
-
-    def load_failures(self, task_id: str) -> list[FailureRow]:
-        """读取指定任务的发送失败记录，按弹幕索引升序排列。
-
-        Args:
-            task_id (str): 任务唯一标识。
-
-        Returns:
-            list[FailureRow]: 失败记录行列表。
-
-        Raises:
-            QueueStorageError: 数据库读取失败。
-        """
-        try:
-            rows = _QueueFailure.select().where(_QueueFailure.task_id == task_id).order_by(_QueueFailure.idx)
-            return [FailureRow(idx=r.idx, reason=r.reason) for r in rows]
-        except Exception as e:
-            logger.exception("失败记录读取失败 [task_id=%s]", task_id)
-            raise QueueStorageError(f"失败记录读取失败 [{task_id}]", original_error=e) from e
 
     def load_all(self) -> list[Task]:
         """按队列顺序读取全部任务并组装为完整的任务对象（含弹幕列表）。

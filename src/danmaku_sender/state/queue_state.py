@@ -403,7 +403,7 @@ class QueueState(QObject):
         """应用任务详情弹窗的修改结果。
 
         若任务处于不可编辑状态则忽略修改并记录警告。
-        当原有的已指定目标发生变更时，将换发新的 task_id 以避免历史发送记录错配；
+        当原有的已指定目标发生变更时，将另立新的 task_id 以避免历史发送记录错配；
         外部持久化已预先生成 ``new_id`` 时直接沿用，未传入则在内部生成。
         若更换了 task_id 或弹幕列表，游标将同步归零。
         """
@@ -418,9 +418,9 @@ class QueueState(QObject):
         old_status = record.execution.status
         old_target = record.definition.target
         # 未指定目标时填上是补配置，不算换任务；其余情况以队列中的 task_id 为准
-        reissued = old_target.is_assigned and source.target != old_target
+        replaced = old_target.is_assigned and source.target != old_target
         if new_id is None:
-            new_id = uuid.uuid4().hex if reissued else task_id
+            new_id = uuid.uuid4().hex if replaced else task_id
         new_definition = replace(source.to_definition(), task_id=new_id)
         execution = replace(record.execution, status=source.status, error_msg=source.error_msg)
         if new_id != task_id or new_definition.danmakus != record.definition.danmakus:
