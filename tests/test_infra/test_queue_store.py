@@ -10,13 +10,15 @@ from danmaku_sender.infra.persistence.queue_store import (
     _QueueTask,
 )
 from danmaku_sender.types.exceptions.exceptions import QueueStorageError
-from danmaku_sender.types.models.common import TaskMeta, VideoTarget
+from danmaku_sender.types.models.common import VideoTarget
 from danmaku_sender.types.models.danmaku import Danmaku
 from danmaku_sender.types.models.queue import (
+    DanmakuPack,
+    SendOptions,
+    TargetSlot,
     Task,
     TaskConfig,
-    TaskDefinition,
-    TaskExecution,
+    TaskState,
     TaskStatus,
 )
 from tests.conftest import queue_failure_rows, queue_item_count, queue_task_rows
@@ -44,18 +46,20 @@ def make_task(
 ) -> Task:
     """构造领域任务，弹幕清单随 ``msgs`` 带入。"""
     return Task(
-        definition=TaskDefinition(
-            task_id=task_id,
+        task_id=task_id,
+        slot=None if bvid is None and cid is None else TargetSlot(
             target=VideoTarget(bvid=bvid, cid=cid),
-            meta=TaskMeta(
-                video_title=title,
-                part_page=part_page,
-                part_title=part_title,
-                part_duration_ms=duration_ms,
-                xml_path=Path(source_path) if source_path else None,
-            ),
-            danmakus=make_danmakus(*msgs),
-            config=TaskConfig(
+            video_title=title,
+            part_page=part_page,
+            part_title=part_title,
+            duration_ms=duration_ms,
+        ),
+        pack=DanmakuPack(
+            items=make_danmakus(*msgs),
+            source_path=Path(source_path) if source_path else None,
+        ),
+        options=SendOptions(
+            pacing=TaskConfig(
                 min_delay=9.5,
                 max_delay=10.5,
                 burst_enabled=True,
@@ -64,7 +68,7 @@ def make_task(
                 rest_max=35.0,
             ),
         ),
-        execution=TaskExecution(status=status, error_msg=error, attempted=cursor),
+        state=TaskState(status=status, cursor=cursor, error_msg=error),
     )
 
 
