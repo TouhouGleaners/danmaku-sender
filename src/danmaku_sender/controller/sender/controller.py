@@ -175,18 +175,18 @@ class SenderController(QObject):
         if view is None or not view.status.is_editable:
             return
         # 未指定目标时填上是补配置，不算换任务；改掉已指定的目标即另立新任务
-        reissued = view.target.is_assigned and source.target != view.target
-        new_id = uuid.uuid4().hex if reissued else task_id
+        replaced = view.target.is_assigned and source.target != view.target
+        new_id = uuid.uuid4().hex if replaced else task_id
         list_changed = tuple(source.danmakus) != view.danmakus
         definition = replace(source.to_definition(), task_id=new_id)
         built = self._built(
             definition,
             source.status,
             source.error_msg,
-            0 if (reissued or list_changed) else view.attempted,
+            0 if (replaced or list_changed) else view.attempted,
         )
-        if reissued:
-            self.queue_store.reissue_task(task_id, built)
+        if replaced:
+            self.queue_store.replace_task(task_id, built)
         else:
             self.queue_store.update_task(built, items_replaced=list_changed)
         queue_state.apply_edit(task_id, source, new_id=new_id)
