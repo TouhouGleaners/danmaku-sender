@@ -17,6 +17,7 @@ from danmaku_sender.types.exceptions.exceptions import QueueStorageError
 from danmaku_sender.types.models.common import RelativePosition, TaskMeta, VideoTarget
 from danmaku_sender.types.models.danmaku import Danmaku
 from danmaku_sender.types.models.queue import TaskDraft, TaskStatus
+from tests.conftest import queue_failure_rows, queue_item_count, queue_task_rows
 
 TARGET = VideoTarget(bvid="BV1xx411c7mD", cid=1001)
 OTHER_TARGET = VideoTarget(bvid="BV2xx411c7mD", cid=2002)
@@ -48,9 +49,9 @@ class TestStructureWriteThrough:
         _, store, controller = env
         controller.add_task(make_draft("t1"))
 
-        row = store.load_tasks()[0]
-        assert (row.task_id, row.video_title, row.status) == ("t1", "标题", TaskStatus.PENDING)
-        assert [it.msg for it in store.load_items("t1")] == ["a", "b"]
+        task = store.load_all()[0]
+        assert (task.task_id, task.meta.video_title, task.status) == ("t1", "标题", TaskStatus.PENDING)
+        assert [dm.msg for dm in task.danmakus] == ["a", "b"]
 
     def test_insert_lands_in_slot(self, env):
         _, store, controller = env
@@ -59,9 +60,8 @@ class TestStructureWriteThrough:
 
         controller.insert_task(make_draft("t2", msgs=("b",)), ref_task_id="t1", position=RelativePosition.BELOW)
 
-        rows = store.load_tasks()
-        assert [r.task_id for r in rows] == ["t1", "t2", "t3"]
-        assert [r.position for r in rows] == [0, 1, 2]
+        assert [t.task_id for t in store.load_all()] == ["t1", "t2", "t3"]
+        assert [r.position for r in queue_task_rows()] == [0, 1, 2]
 
     def test_move_and_reorder_persist_order(self, env):
         _, store, controller = env
@@ -69,10 +69,10 @@ class TestStructureWriteThrough:
             controller.add_task(make_draft(task_id, msgs=(task_id,)))
 
         controller.move_task("t1", RelativePosition.BELOW)
-        assert [r.task_id for r in store.load_tasks()] == ["t2", "t1", "t3"]
+        assert [t.task_id for t in store.load_all()] == ["t2", "t1", "t3"]
 
         controller.reorder_tasks(["t3", "t2", "t1"])
-        assert [r.task_id for r in store.load_tasks()] == ["t3", "t2", "t1"]
+        assert [t.task_id for t in store.load_all()] == ["t3", "t2", "t1"]
 
     def test_remove_deletes_rows(self, env):
         _, store, controller = env
@@ -81,9 +81,8 @@ class TestStructureWriteThrough:
 
         controller.remove_task("t1")
 
-        rows = store.load_tasks()
-        assert [r.task_id for r in rows] == ["t2"]
-        assert store.load_items("t1") == []
+        assert [t.task_id for t in store.load_all()] == ["t2"]
+        assert queue_item_count("t1") == 0
 
     def test_clear_all_empties_store(self, env):
         _, store, controller = env
@@ -92,7 +91,7 @@ class TestStructureWriteThrough:
 
         controller.clear_all()
 
-        assert store.load_tasks() == []
+        assert store.load_all() == []
 
 
 class TestEditWriteThrough:
@@ -107,10 +106,10 @@ class TestEditWriteThrough:
         draft.meta = TaskMeta(video_title="新标题")
         controller.apply_edit("t1", draft)
 
-        row = store.load_tasks()[0]
-        assert row.video_title == "新标题"
-        assert row.cursor == 1, "清单没变，进度不倒退"
-        assert [it.msg for it in store.load_items("t1")] == ["a", "b"]
+        task = store.load_all()[0]
+        assert task.meta.video_title == "新标题"
+        assert task.attempted == 1, "清单没变，进度不倒退"
+        assert [dm.msg for dm in task.danmakus] == ["a", "b"]
 
     def test_new_list_resets_cursor(self, env):
         state, store, controller = env
@@ -123,11 +122,11 @@ class TestEditWriteThrough:
         draft.danmakus = [Danmaku(msg="x", progress=0)]
         controller.apply_edit("t1", draft)
 
-        row = store.load_tasks()[0]
-        assert row.cursor == 0
-        assert [it.msg for it in store.load_items("t1")] == ["x"]
+        task = store.load_all()[0]
+        assert task.attempted == 0
+        assert [dm.msg for dm in task.danmakus] == ["x"]
 
-    def test_retarget_reissues_row(self, env):
+    def test_retarget_replaces_row(self, env):
         state, store, controller = env
         controller.add_task(make_draft("t1"))
 
@@ -137,13 +136,13 @@ class TestEditWriteThrough:
         draft.target = OTHER_TARGET
         controller.apply_edit("t1", draft)
 
-        rows = store.load_tasks()
-        assert len(rows) == 1, "旧任务不得残留在库里"
-        assert rows[0].task_id != "t1"
-        assert (rows[0].bvid, rows[0].cid) == ("BV2xx411c7mD", 2002)
-        assert rows[0].cursor == 0
-        assert store.load_items("t1") == []
-        assert [it.msg for it in store.load_items(rows[0].task_id)] == ["a", "b"]
+        tasks = store.load_all()
+        assert len(tasks) == 1, "旧任务不得残留在库里"
+        assert tasks[0].task_id != "t1"
+        assert (tasks[0].target.bvid, tasks[0].target.cid) == ("BV2xx411c7mD", 2002)
+        assert tasks[0].attempted == 0
+        assert queue_item_count("t1") == 0
+        assert [dm.msg for dm in tasks[0].danmakus] == ["a", "b"]
 
     def test_assign_same_list_keeps_payload_and_failures(self, env):
         """清单没变时弹幕与失败记录原样保留，来源文件的修改照常写入数据库"""
@@ -157,9 +156,10 @@ class TestEditWriteThrough:
             xml_path=Path("new.xml"),
         )
 
-        assert store.load_tasks()[0].source_path == "new.xml", "来源文件的修改要写入数据库"
-        assert [it.msg for it in store.load_items("t1")] == ["a", "b"]
-        assert store.load_failures("t1"), "清单没变，失败记录不得被清掉"
+        task = store.load_all()[0]
+        assert str(task.meta.xml_path) == "new.xml", "来源文件的修改要写入数据库"
+        assert [dm.msg for dm in task.danmakus] == ["a", "b"]
+        assert queue_failure_rows("t1"), "清单没变，失败记录不得被清掉"
 
     def test_assign_new_list_replaces_items(self, env):
         _, store, controller = env
@@ -168,9 +168,9 @@ class TestEditWriteThrough:
 
         controller.assign_danmakus("t1", [Danmaku(msg="x", progress=0)])
 
-        row = store.load_tasks()[0]
-        assert row.cursor == 0
-        assert [it.msg for it in store.load_items("t1")] == ["x"]
+        task = store.load_all()[0]
+        assert task.attempted == 0
+        assert [dm.msg for dm in task.danmakus] == ["x"]
 
     def test_assign_completing_config_keeps_store_in_sync(self, env):
         """补全弹幕后状态翻成待发：库里与内存同一取值"""
@@ -179,9 +179,9 @@ class TestEditWriteThrough:
 
         controller.assign_danmakus("t1", [Danmaku(msg="a", progress=0)])
 
-        row = store.load_tasks()[0]
+        task = store.load_all()[0]
         view = state.workspace.queue_state.get_task_by_id("t1")
-        assert row.status is TaskStatus.PENDING
+        assert task.status is TaskStatus.PENDING
         assert view is not None and view.status is TaskStatus.PENDING
 
 
@@ -209,8 +209,8 @@ class TestRunStateWriteThrough:
         controller._on_task_started("t1", 0)
         controller._on_task_progress("t1", 2, 2, 0.0)
 
-        row = store.load_tasks()[0]
-        assert (row.status, row.cursor) == (TaskStatus.RUNNING, 2)
+        task = store.load_all()[0]
+        assert (task.status, task.attempted) == (TaskStatus.RUNNING, 2)
 
     def test_reset_progress_zeroes_cursor(self, env):
         _, store, controller = env
@@ -219,7 +219,7 @@ class TestRunStateWriteThrough:
 
         controller.reset_progress("t1")
 
-        assert store.load_tasks()[0].cursor == 0
+        assert store.load_all()[0].attempted == 0
 
     def test_reset_queue_removes_completed_and_revives_failed(self, env):
         _, store, controller = env
@@ -232,9 +232,9 @@ class TestRunStateWriteThrough:
 
         controller.reset_queue()
 
-        rows = store.load_tasks()
-        assert [r.task_id for r in rows] == ["t2"]
-        assert (rows[0].status, rows[0].cursor, rows[0].error) == (TaskStatus.PENDING, 0, None)
+        tasks = store.load_all()
+        assert [t.task_id for t in tasks] == ["t2"]
+        assert (tasks[0].status, tasks[0].attempted, tasks[0].error_msg) == (TaskStatus.PENDING, 0, "")
 
 
 class TestRestartRoundTrip:

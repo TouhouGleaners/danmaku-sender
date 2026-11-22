@@ -5,7 +5,6 @@ from pathlib import Path
 import pytest
 
 from danmaku_sender.infra.persistence.queue_store import (
-    FailureRow,
     QueueStore,
     _QueueRecovery,
     _QueueTask,
@@ -20,6 +19,7 @@ from danmaku_sender.types.models.queue import (
     TaskExecution,
     TaskStatus,
 )
+from tests.conftest import queue_failure_rows, queue_item_count, queue_task_rows
 
 
 def make_danmakus(*msgs: str) -> tuple[Danmaku, ...]:
@@ -88,7 +88,7 @@ class TestRoundTrip:
 
     def test_status_round_trips_as_enum(self, store):
         store.add_task(make_task("t1", status=TaskStatus.PAUSED))
-        assert store.load_tasks()[0].status is TaskStatus.PAUSED
+        assert store.load_all()[0].status is TaskStatus.PAUSED
 
     def test_half_target_is_rejected(self, store):
         with pytest.raises(QueueStorageError):
@@ -98,16 +98,12 @@ class TestRoundTrip:
     def test_items_round_trip_in_order(self, store):
         store.add_task(make_task("t1", msgs=("c", "a", "b")))
         assert [dm.msg for dm in store.load_all()[0].definition.danmakus] == ["c", "a", "b"]
-        assert [it.msg for it in store.load_items("t1")] == ["c", "a", "b"]
 
     def test_failures_round_trip(self, store):
         store.add_task(make_task("t1", msgs=("a", "b")))
         store.record_result("t1", 1, status=TaskStatus.RUNNING, cursor=2, burst_count=0, error=None, failure_reason="限流")
         store.record_result("t1", 0, status=TaskStatus.RUNNING, cursor=1, burst_count=0, error=None, failure_reason="网络异常")
-        assert store.load_failures("t1") == [
-            FailureRow(idx=0, reason="网络异常"),
-            FailureRow(idx=1, reason="限流"),
-        ]
+        assert queue_failure_rows("t1") == [(0, "网络异常"), (1, "限流")]
 
     def test_reopen_reads_back(self, tmp_path):
         db_path = tmp_path / "queue.db"
@@ -133,9 +129,9 @@ class TestUpdateTask:
 
         store.update_task(make_task("t1", title="新标题", status=TaskStatus.PAUSED, cursor=3))
 
-        row = store.load_tasks()[0]
-        assert row.video_title == "新标题"
-        assert (row.status, row.cursor) == (TaskStatus.PAUSED, 3), "状态与进度按新值写入"
+        task = store.load_all()[0]
+        assert task.meta.video_title == "新标题"
+        assert (task.status, task.attempted) == (TaskStatus.PAUSED, 3), "状态与进度按新值写入"
 
     def test_update_without_replace_keeps_payload_and_failures(self, store):
         store.add_task(make_task("t1", msgs=("a", "b")))
@@ -143,8 +139,8 @@ class TestUpdateTask:
 
         store.update_task(make_task("t1", title="新标题", msgs=("a", "b")))
 
-        assert [it.msg for it in store.load_items("t1")] == ["a", "b"]
-        assert store.load_failures("t1") == [FailureRow(idx=0, reason="网络异常")]
+        assert [dm.msg for dm in store.load_all()[0].danmakus] == ["a", "b"]
+        assert queue_failure_rows("t1") == [(0, "网络异常")]
 
     def test_replacing_items_resets_run(self, store):
         """换清单即新的一趟：载荷整换、失败记录清空，状态与进度听本次传入"""
@@ -153,10 +149,11 @@ class TestUpdateTask:
 
         store.update_task(make_task("t1", status=TaskStatus.PENDING, msgs=("x", "y", "z")), items_replaced=True)
 
-        row = store.load_tasks()[0]
-        assert (row.status, row.cursor, row.burst_count, row.error) == (TaskStatus.PENDING, 0, 0, None)
-        assert store.load_failures("t1") == []
-        assert [it.msg for it in store.load_items("t1")] == ["x", "y", "z"]
+        task = store.load_all()[0]
+        assert (task.status, task.attempted, task.error_msg) == (TaskStatus.PENDING, 0, "")
+        assert queue_task_rows()[0].burst_count == 0
+        assert queue_failure_rows("t1") == []
+        assert [dm.msg for dm in task.danmakus] == ["x", "y", "z"]
 
     def test_update_missing_row_raises(self, store):
         with pytest.raises(QueueStorageError):
@@ -167,16 +164,16 @@ class TestRecordResult:
     def test_failure_is_recorded_atomically(self, store):
         store.add_task(make_task("t1", msgs=("a",)))
         store.record_result("t1", 0, status=TaskStatus.FAILED, cursor=1, burst_count=0, error="网络异常", failure_reason="网络异常")
-        row = store.load_tasks()[0]
-        assert (row.status, row.cursor, row.error) == (TaskStatus.FAILED, 1, "网络异常")
-        assert store.load_failures("t1") == [FailureRow(idx=0, reason="网络异常")]
+        task = store.load_all()[0]
+        assert (task.status, task.attempted, task.error_msg) == (TaskStatus.FAILED, 1, "网络异常")
+        assert queue_failure_rows("t1") == [(0, "网络异常")]
 
     def test_success_clears_stale_failure(self, store):
         """重试成功即清掉该条的旧失败记录"""
         store.add_task(make_task("t1", msgs=("a",)))
         store.record_result("t1", 0, status=TaskStatus.FAILED, cursor=1, burst_count=0, error="网络异常", failure_reason="网络异常")
         store.record_result("t1", 0, status=TaskStatus.COMPLETED, cursor=1, burst_count=0, error=None, failure_reason=None)
-        assert store.load_failures("t1") == []
+        assert queue_failure_rows("t1") == []
 
     def test_record_result_missing_row_raises(self, store):
         with pytest.raises(QueueStorageError):
@@ -187,18 +184,19 @@ class TestTaskStateUpdate:
     def test_update_state_is_explicit_and_complete(self, store):
         store.add_task(make_task("t1"))
         store.update_task_state("t1", status=TaskStatus.RUNNING, cursor=4, burst_count=2, error="账号被封停")
-        assert store.load_tasks()[0].error == "账号被封停", "非空错误确实写入"
+        assert store.load_all()[0].error_msg == "账号被封停", "非空错误确实写入"
 
         store.update_task_state("t1", status=TaskStatus.FAILED, cursor=5, burst_count=0, error=None)
-        row = store.load_tasks()[0]
-        assert (row.status, row.cursor, row.burst_count) == (TaskStatus.FAILED, 5, 0)
-        assert row.error is None, "显式传 None 即清空错误"
+        task = store.load_all()[0]
+        assert (task.status, task.attempted, task.error_msg) == (TaskStatus.FAILED, 5, ""), "显式传 None 即清空错误"
+        assert queue_task_rows()[0].burst_count == 0
 
     def test_update_state_never_touches_structure(self, store):
         store.add_task(make_task("t1", msgs=("a", "b")))
         store.update_task_state("t1", status=TaskStatus.FAILED, cursor=1, burst_count=0, error="网络异常")
-        assert store.load_tasks()[0].video_title == "标题"
-        assert len(store.load_items("t1")) == 2
+        task = store.load_all()[0]
+        assert task.meta.video_title == "标题"
+        assert len(task.danmakus) == 2
 
     def test_update_state_missing_row_raises(self, store):
         with pytest.raises(QueueStorageError):
@@ -212,9 +210,10 @@ class TestResetTasks:
 
         store.reset_tasks(["t1"], status=TaskStatus.PENDING, error=None)
 
-        row = store.load_tasks()[0]
-        assert (row.status, row.cursor, row.burst_count, row.error) == (TaskStatus.PENDING, 0, 0, None)
-        assert store.load_failures("t1") == []
+        task = store.load_all()[0]
+        assert (task.status, task.attempted, task.error_msg) == (TaskStatus.PENDING, 0, "")
+        assert queue_task_rows()[0].burst_count == 0
+        assert queue_failure_rows("t1") == []
 
     def test_reset_missing_row_raises(self, store):
         with pytest.raises(QueueStorageError):
@@ -226,8 +225,8 @@ class TestQueueOrder:
         for task_id in ("t1", "t2", "t3"):
             store.add_task(make_task(task_id))
         store.reorder_tasks(["t3", "t1", "t2"])
-        assert [r.task_id for r in store.load_tasks()] == ["t3", "t1", "t2"]
-        assert [r.position for r in store.load_tasks()] == [0, 1, 2]
+        assert [t.task_id for t in store.load_all()] == ["t3", "t1", "t2"]
+        assert [r.position for r in queue_task_rows()] == [0, 1, 2]
 
     def test_reorder_rejects_partial_or_unknown_ids(self, store):
         store.add_task(make_task("t1"))
@@ -236,23 +235,23 @@ class TestQueueOrder:
             store.reorder_tasks(["t1"])
         with pytest.raises(QueueStorageError):
             store.reorder_tasks(["t1", "ghost"])
-        assert [r.task_id for r in store.load_tasks()] == ["t1", "t2"], "被拒的重排不得改动队列"
+        assert [t.task_id for t in store.load_all()] == ["t1", "t2"], "被拒的重排不得改动队列"
 
     def test_insert_shifts_following_rows(self, store):
         store.add_task(make_task("t1"))
         store.add_task(make_task("t3"))
         store.insert_task(make_task("t2"), at=1)
-        assert [r.task_id for r in store.load_tasks()] == ["t1", "t2", "t3"]
-        assert [r.position for r in store.load_tasks()] == [0, 1, 2]
+        assert [t.task_id for t in store.load_all()] == ["t1", "t2", "t3"]
+        assert [r.position for r in queue_task_rows()] == [0, 1, 2]
 
     def test_delete_compacts_positions(self, store):
         """删中间任务后顺序压实，追加不会撞位置"""
         for task_id in ("t1", "t2", "t3"):
             store.add_task(make_task(task_id))
         store.delete_tasks(["t2"])
-        assert [r.position for r in store.load_tasks()] == [0, 1]
+        assert [r.position for r in queue_task_rows()] == [0, 1]
         store.add_task(make_task("t4"))
-        assert [r.task_id for r in store.load_tasks()] == ["t1", "t3", "t4"]
+        assert [t.task_id for t in store.load_all()] == ["t1", "t3", "t4"]
 
 
 class TestDelete:
@@ -263,9 +262,9 @@ class TestDelete:
 
         store.delete_tasks(["t1"])
 
-        assert [r.task_id for r in store.load_tasks()] == ["t2"]
-        assert store.load_items("t1") == []
-        assert store.load_failures("t1") == []
+        assert [t.task_id for t in store.load_all()] == ["t2"]
+        assert queue_item_count("t1") == 0
+        assert queue_failure_rows("t1") == []
 
     def test_delete_missing_is_noop(self, store):
         store.delete_tasks(["ghost"])
@@ -300,34 +299,34 @@ class TestLoadAll:
         assert (task.definition.target.bvid, task.definition.target.cid) == (None, None)
 
 
-class TestReissue:
-    def test_reissue_swaps_id_and_keeps_slot(self, store):
+class TestReplace:
+    def test_replace_swaps_id_and_keeps_slot(self, store):
         store.add_task(make_task("t1", title="旧", msgs=("a",)))
         store.add_task(make_task("t2"))
 
-        store.reissue_task("t1", make_task("t9", title="新", msgs=("x", "y")))
+        store.replace_task("t1", make_task("t9", title="新", msgs=("x", "y")))
 
-        rows = store.load_tasks()
-        assert [r.task_id for r in rows] == ["t9", "t2"]
-        assert rows[0].position == 0
-        assert rows[0].video_title == "新"
-        assert [it.msg for it in store.load_items("t9")] == ["x", "y"]
-        assert store.load_items("t1") == []
+        tasks = store.load_all()
+        assert [t.task_id for t in tasks] == ["t9", "t2"]
+        assert queue_task_rows()[0].position == 0
+        assert tasks[0].meta.video_title == "新"
+        assert [dm.msg for dm in tasks[0].danmakus] == ["x", "y"]
+        assert queue_item_count("t1") == 0
 
-    def test_reissue_clears_failures(self, store):
+    def test_replace_clears_failures(self, store):
         """换任务后失败记录不随旧行带走"""
         store.add_task(make_task("t1", msgs=("a",)))
         store.record_result("t1", 0, status=TaskStatus.FAILED, cursor=1, burst_count=0, error="网络异常", failure_reason="网络异常")
 
-        store.reissue_task("t1", make_task("t9", cursor=0, msgs=("a",)))
+        store.replace_task("t1", make_task("t9", cursor=0, msgs=("a",)))
 
-        assert store.load_failures("t1") == []
-        assert store.load_failures("t9") == []
+        assert queue_failure_rows("t1") == []
+        assert queue_failure_rows("t9") == []
 
-    def test_reissue_missing_old_raises(self, store):
+    def test_replace_missing_old_raises(self, store):
         with pytest.raises(QueueStorageError):
-            store.reissue_task("ghost", make_task("t9", msgs=("a",)))
-        assert store.load_all() == [], "被拒的换发不得落任何行"
+            store.replace_task("ghost", make_task("t9", msgs=("a",)))
+        assert store.load_all() == [], "被拒的替换不得落任何行"
 
 
 class TestClearAll:
@@ -338,9 +337,9 @@ class TestClearAll:
 
         store.clear_all()
 
-        assert store.load_tasks() == []
-        assert store.load_items("t1") == []
-        assert store.load_failures("t1") == []
+        assert store.load_all() == []
+        assert queue_item_count("t1") == 0
+        assert queue_failure_rows("t1") == []
 
 
 class TestReopen:
@@ -354,7 +353,7 @@ class TestReopen:
         second = QueueStore(db_path)
         try:
             second.add_task(make_task("t2"))
-            assert [r.task_id for r in second.load_tasks()] == ["t1", "t2"]
+            assert [t.task_id for t in second.load_all()] == ["t1", "t2"]
         finally:
             second.close()
 
@@ -442,8 +441,9 @@ class TestStartupSelfHeal:
 
         reopened = QueueStore.open(db_path)
 
-        row = reopened.load_tasks()[0]
-        assert (row.status, row.cursor, row.burst_count) == (TaskStatus.PAUSED, 7, 0)
+        task = reopened.load_all()[0]
+        assert (task.status, task.attempted) == (TaskStatus.PAUSED, 7)
+        assert queue_task_rows()[0].burst_count == 0
         reopened.close()
 
     def test_heal_write_failure_still_opens(self, tmp_path, monkeypatch, caplog):
@@ -462,7 +462,8 @@ class TestStartupSelfHeal:
         reopened = QueueStore.open(db_path)
 
         assert not list(tmp_path.glob("queue.db.corrupt-*"))
-        row = reopened.load_tasks()[0]
-        assert (row.status, row.cursor, row.burst_count) == (TaskStatus.RUNNING, 5, 2), "写失败就保持原样"
+        task = reopened.load_all()[0]
+        assert (task.status, task.attempted) == (TaskStatus.RUNNING, 5), "写失败就保持原样"
+        assert queue_task_rows()[0].burst_count == 2
         assert "启动自愈写入失败" in caplog.text
         reopened.close()

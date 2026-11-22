@@ -168,7 +168,7 @@ class TestTaskRecordLifecycle:
         draft.target = VideoTarget(bvid="BV2xx", cid=2002)
         controller.apply_edit(task_id, draft)
         new_id = state.workspace.queue_state.tasks[0].task_id
-        assert new_id != task_id, "改目标应换发新 task_id"
+        assert new_id != task_id, "改目标应另立新 task_id"
 
         _start_round(controller)
         controller._on_task_started(new_id, 0)

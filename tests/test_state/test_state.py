@@ -412,7 +412,7 @@ class TestQueueState:
         draft = view.to_draft()
         draft.target = VideoTarget(bvid="BV999", cid=999)
         qs.apply_edit(t.task_id, draft)
-        new_view = qs.tasks[0]  # 换目标换发新 task_id，按新任务查
+        new_view = qs.tasks[0]  # 换目标另立新 task_id，按新任务查
         assert new_view.task_id != t.task_id
         assert new_view.attempted == 0
 
@@ -483,7 +483,7 @@ class TestQueueState:
         assert view.task_id == t.task_id  # id 不被沙盒覆盖
 
     def test_apply_edit_reassigning_target_renews_id(self):
-        """改目标即换任务：换发新 id，旧 id 不再代表改过目标的任务"""
+        """改目标即换任务：另立新 id，旧 id 不再代表改过目标的任务"""
         qs = QueueState()
         t = make_task(1)
         qs.add_task(t)
@@ -495,9 +495,9 @@ class TestQueueState:
         qs.apply_edit(t.task_id, draft)
 
         assert qs.get_task_by_id(t.task_id) is None
-        reissued = qs.tasks[0]
-        assert reissued.task_id != t.task_id
-        assert reissued.target.cid == 2
+        replacement = qs.tasks[0]
+        assert replacement.task_id != t.task_id
+        assert replacement.target.cid == 2
 
     def test_reorder_tasks_by_ids(self):
         qs = QueueState()
@@ -622,7 +622,7 @@ class TestQueueState:
         draft = view.to_draft()
         draft.target = VideoTarget()
         qs.apply_edit(t.task_id, draft)
-        # 拆掉已指定的目标也算换任务，task_id 已换发
+        # 拆掉已指定的目标也算换任务，task_id 已另立
         view = qs.tasks[0]
         assert view.status is TaskStatus.UNCONFIGURED
 
