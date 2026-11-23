@@ -55,11 +55,11 @@ def test_startup_pauses_residual_running_and_restores(qapp, queue_db):
     views = rt.app_state.workspace.queue_state.tasks
     assert len(views) == 1
     assert views[0].status is TaskStatus.PAUSED
-    assert views[0].attempted == 7
+    assert views[0].cursor == 7
     assert [dm.msg for dm in views[0].danmakus] == ["a"]
     persisted = rt.queue_store.load_all()[0]
     assert persisted.status is TaskStatus.PAUSED, "修正过的状态要写回数据库"
-    assert persisted.attempted == 7
+    assert persisted.cursor == 7
     assert queue_task_rows()[0].burst_count == 0, "爆发计数不能带着过期值恢复"
 
 

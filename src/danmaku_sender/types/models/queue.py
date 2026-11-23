@@ -163,6 +163,7 @@ class SendOptions:
     Attributes:
         pacing (TaskConfig): 发送节奏。
         allow_duplicates (bool): 是否允许重复发送（为 True 时发送前不查重）。
+            发送链路尚未接此开关，仍走整队规则；接线归「允许重复发送按任务」切片。
     """
     pacing: TaskConfig
     allow_duplicates: bool = False

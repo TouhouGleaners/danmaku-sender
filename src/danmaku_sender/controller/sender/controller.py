@@ -25,10 +25,7 @@ from danmaku_sender.types.models.common import (
 from danmaku_sender.types.models.danmaku import Danmaku
 from danmaku_sender.types.models.queue import (
     DanmakuPack,
-    SendOptions,
-    TargetSlot,
     Task,
-    TaskDefinition,
     TaskDraft,
     TaskState,
     TaskStatus,
@@ -80,7 +77,7 @@ class SenderController(QObject):
         self.queue_store = queue_store
         self._queue_worker: QueueSendWorker | None = None
         self._stop_event = threading.Event()
-        self._task_definitions: dict[str, TaskDefinition] = {}  # 本轮队列的任务定义快照，落账取此而非实时队列
+        self._task_snapshots: dict[str, Task] = {}  # 本轮队列的任务快照，落账取此而非实时队列
 
     @property
     def queue_readiness(self) -> StartReadiness:
@@ -181,12 +178,12 @@ class SenderController(QObject):
         replaced = view.target.is_assigned and source.target != view.target
         new_id = uuid.uuid4().hex if replaced else task_id
         list_changed = tuple(source.danmakus) != view.danmakus
-        definition = replace(source.to_definition(), task_id=new_id)
+        incoming = replace(source.to_task(), task_id=new_id)
         built = self._built(
-            definition,
+            incoming,
             source.status,
             source.error_msg,
-            0 if (replaced or list_changed) else view.attempted,
+            0 if (replaced or list_changed) else view.cursor,
         )
         if replaced:
             self.queue_store.replace_task(task_id, built)
@@ -213,16 +210,18 @@ class SenderController(QObject):
         if view is None or not view.status.is_editable:
             return
         list_changed = tuple(danmakus) != view.danmakus
-        definition = replace(
-            view.definition,
-            danmakus=tuple(danmakus),
-            meta=replace(view.meta, xml_path=xml_path if xml_path is not None else view.meta.xml_path),
+        incoming = replace(
+            view,
+            pack=DanmakuPack(
+                items=tuple(danmakus),
+                source_path=xml_path if xml_path is not None else view.pack.source_path,
+            ),
         )
         built = self._built(
-            definition,
+            incoming,
             view.status,
             view.error_msg,
-            0 if list_changed else view.attempted,
+            0 if list_changed else view.cursor,
         )
         self.queue_store.update_task(built, items_replaced=list_changed)
         queue_state.assign_danmakus(task_id, danmakus, xml_path=xml_path)
@@ -258,11 +257,11 @@ class SenderController(QObject):
     # region 持久化辅助
 
     @staticmethod
-    def _built(definition: TaskDefinition, status: TaskStatus, error_msg: str, cursor: int) -> Task:
+    def _built(task: Task, status: TaskStatus, error_msg: str, cursor: int) -> Task:
         """按配置完整性对齐任务状态，组装待持久化的 Task 对象。
 
         Args:
-            definition: 不可变任务定义。
+            task: 抽屉已归位的任务。
             status: 对齐前的任务状态。
             error_msg: 对齐前的错误说明。
             cursor: 断点续传游标。
@@ -271,20 +270,10 @@ class SenderController(QObject):
             Task: 状态已对齐的待持久化任务对象。
         """
         aligned_status, aligned_error = QueueState.aligned_status(
-            status, error_msg, definition.is_config_complete
+            status, error_msg, task.is_config_complete
         )
-        meta = definition.meta
-        return Task(
-            task_id=definition.task_id,
-            slot=None if not definition.target.is_assigned else TargetSlot(
-                target=definition.target,
-                video_title=meta.video_title,
-                part_page=meta.part_page,
-                part_title=meta.part_title,
-                duration_ms=meta.part_duration_ms,
-            ),
-            pack=DanmakuPack(items=definition.danmakus, source_path=meta.xml_path),
-            options=SendOptions(pacing=definition.config),
+        return replace(
+            task,
             state=TaskState(status=aligned_status, error_msg=aligned_error, cursor=cursor),
         )
 
@@ -298,7 +287,7 @@ class SenderController(QObject):
         Returns:
             Task: 转换后的任务对象。
         """
-        return cls._built(draft.to_definition(), draft.status, draft.error_msg, draft.attempted)
+        return cls._built(draft.to_task(), draft.status, draft.error_msg, draft.attempted)
 
     # endregion
 
@@ -339,7 +328,7 @@ class SenderController(QObject):
         if not snapshots:
             logger.warning("队列中没有可执行的任务快照。")
             return
-        self._task_definitions = {s.definition.task_id: s.definition for s in snapshots}
+        self._task_snapshots = {s.task_id: s for s in snapshots}
 
         # 整队规则同样取启动时快照：运行期间改设置不影响本次运行，
         # 也避免设置页与 Worker 跨线程共享同一个可变对象。
@@ -452,7 +441,7 @@ class SenderController(QObject):
             self.queue_store.update_task_state(
                 task_id,
                 status=view.status,
-                cursor=view.attempted,
+                cursor=view.cursor,
                 burst_count=0,
                 error=view.error_msg or None,
             )
@@ -473,12 +462,14 @@ class SenderController(QObject):
             task_id (str): 任务标识。
             status (TaskStatus): 落账的任务状态。
         """
-        definition = self._task_definitions.get(task_id)
-        if definition is None:
-            logger.warning(f"任务记录落账跳过：没有任务 [{task_id}] 的任务定义快照")
+        snapshot = self._task_snapshots.get(task_id)
+        if snapshot is None or snapshot.slot is None:
+            logger.warning(f"任务记录落账跳过：没有任务 [{task_id}] 的任务快照")
             return
         try:
-            self.history_manager.upsert_task(definition, status)
+            self.history_manager.upsert_task(
+                snapshot.task_id, snapshot.slot, snapshot.pack.source_path, status
+            )
         except Exception:
             logger.exception(f"任务记录落账失败 [task_id={task_id}]")
 
@@ -490,7 +481,7 @@ class SenderController(QObject):
 
         logger.debug("QueueSendWorker 线程生命周期结束，正在清理控制器引用。")
         self._queue_worker = None
-        self._task_definitions.clear()
+        self._task_snapshots.clear()
         self.state.workspace.sender_is_active = False
         self.queueReady.emit()
 

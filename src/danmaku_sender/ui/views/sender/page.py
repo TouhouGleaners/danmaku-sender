@@ -335,7 +335,7 @@ class SenderPage(QWidget):
         is_editable = idle and task.status.is_editable
         can_remove = idle and task.status is not TaskStatus.RUNNING
         # 重置进度给「想从头再发」的游标：已完成的任务没有再发的语境
-        can_reset_progress = idle and task.attempted > 0 and task.status is not TaskStatus.COMPLETED
+        can_reset_progress = idle and task.cursor > 0 and task.status is not TaskStatus.COMPLETED
 
         menu.addAction(SvgIcon.TUNE, "查看详情/编辑配置", lambda: self._show_task_detail(task))  # 所有状态都能查看
         menu.addAction(SvgIcon.EDIT_DOCUMENT, "编辑弹幕", lambda: self._edit_danmakus(task)).setEnabled(is_editable)

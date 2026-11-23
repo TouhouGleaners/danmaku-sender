@@ -49,7 +49,7 @@ class TestRowSync:
         after = page._queue_model.get_task_at(row)
         assert after is not None
         assert after is not before, "行里必须是换过的新实例"
-        assert after.attempted == 3
+        assert after.cursor == 3
 
     def test_status_update_swaps_row_value(self, page):
         task_id = _enqueue(page)
