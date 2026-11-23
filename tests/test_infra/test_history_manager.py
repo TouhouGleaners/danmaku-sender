@@ -6,13 +6,12 @@ import sqlite3
 
 import pytest
 
-from danmaku_sender.config import SenderConfig
 from danmaku_sender.infra.persistence.history_manager import HistoryManager
 from danmaku_sender.infra.persistence.migrations import SCHEMA_VERSION, LegacyBackfill
 from danmaku_sender.infra.persistence.orm_models import SentDanmaku, TaskRecord
-from danmaku_sender.types.models.common import DanmakuStatus, TaskMeta, VideoTarget
+from danmaku_sender.types.models.common import DanmakuStatus, VideoTarget
 from danmaku_sender.types.models.danmaku import Danmaku
-from danmaku_sender.types.models.queue import TaskDefinition, TaskStatus
+from danmaku_sender.types.models.queue import TargetSlot, TaskStatus
 
 
 @pytest.fixture
@@ -47,19 +46,17 @@ def _orphan(target: VideoTarget, dmid: str, ctime: float) -> None:
     )
 
 
-def _task_definition(
-    task_id: str = "t1",
+def _task_slot(
     bvid: str = "BV1xx",
     cid: int = 1001,
     video_title: str = "标题",
     part_title: str = "分P",
-) -> TaskDefinition:
-    return TaskDefinition(
-        task_id=task_id,
+) -> TargetSlot:
+    return TargetSlot(
         target=VideoTarget(bvid=bvid, cid=cid),
-        meta=TaskMeta(video_title=video_title, part_page=2, part_title=part_title),
-        danmakus=(Danmaku(msg="x", progress=0),),
-        config=SenderConfig.PacingConfig(min_delay=0.1, max_delay=0.2).to_task_config(),
+        video_title=video_title,
+        part_page=2,
+        part_title=part_title,
     )
 
 
@@ -198,8 +195,8 @@ class TestTaskRecord:
     """任务记录：身份与运行态落账，供任务级历史对账"""
 
     def test_upsert_inserts_then_updates(self, hm):
-        definition = _task_definition()
-        hm.upsert_task(definition, TaskStatus.RUNNING)
+        slot = _task_slot()
+        hm.upsert_task("t1", slot, None, TaskStatus.RUNNING)
         row = hm.get_task("t1")
         assert row is not None
         assert row["bvid"] == "BV1xx"
@@ -208,7 +205,7 @@ class TestTaskRecord:
         assert row["part_page"] == 2
         assert row["status"] == "RUNNING"
 
-        hm.upsert_task(definition, TaskStatus.COMPLETED)
+        hm.upsert_task("t1", slot, None, TaskStatus.COMPLETED)
         row = hm.get_task("t1")
         assert row is not None
         assert row["status"] == "COMPLETED"
@@ -220,8 +217,7 @@ class TestTaskRecord:
 
     def test_task_record_and_evidence_share_task_id(self, hm, target):
         """同一条任务：弹幕存证与任务记录靠 task_id 对上"""
-        definition = _task_definition(task_id="任务归属-8f3c")
-        hm.upsert_task(definition, TaskStatus.COMPLETED)
+        hm.upsert_task("任务归属-8f3c", _task_slot(), None, TaskStatus.COMPLETED)
         _record(hm, target, "dm1", task_id="任务归属-8f3c")
 
         assert hm.get_task("任务归属-8f3c") is not None
@@ -249,8 +245,8 @@ class TestTaskQueries:
         conn.close()
 
     def test_list_tasks_orders_by_start_time(self, hm):
-        hm.upsert_task(_task_definition(task_id="t2"), TaskStatus.RUNNING)
-        hm.upsert_task(_task_definition(task_id="t1"), TaskStatus.RUNNING)
+        hm.upsert_task("t2", _task_slot(), None, TaskStatus.RUNNING)
+        hm.upsert_task("t1", _task_slot(), None, TaskStatus.RUNNING)
         self._set_created_at(hm, "t2", 2000.0)
         self._set_created_at(hm, "t1", 1000.0)
 
@@ -296,8 +292,8 @@ class TestTaskQueries:
         assert hm.get_task_stats()["t1"]["total"] == 2
 
     def test_search_by_title_hit(self, hm):
-        hm.upsert_task(_task_definition(task_id="t1", video_title="宝可梦补档"), TaskStatus.COMPLETED)
-        hm.upsert_task(_task_definition(task_id="t2", video_title="无关标题"), TaskStatus.COMPLETED)
+        hm.upsert_task("t1", _task_slot(video_title="宝可梦补档"), None, TaskStatus.COMPLETED)
+        hm.upsert_task("t2", _task_slot(video_title="无关标题"), None, TaskStatus.COMPLETED)
 
         hits = hm.search_tasks("宝可梦")
         assert [h["task_id"] for h in hits] == ["t1"]
@@ -305,14 +301,14 @@ class TestTaskQueries:
         assert hits[0]["msg_hits"] == 0
 
     def test_search_by_bvid_hit(self, hm):
-        hm.upsert_task(_task_definition(task_id="t1", bvid="BV1pkq"), TaskStatus.COMPLETED)
+        hm.upsert_task("t1", _task_slot(bvid="BV1pkq"), None, TaskStatus.COMPLETED)
 
         hits = hm.search_tasks("pkq")
         assert [h["task_id"] for h in hits] == ["t1"]
         assert hits[0]["title_hit"] is True
 
     def test_search_by_msg_counts_hits(self, hm, target):
-        hm.upsert_task(_task_definition(task_id="t1"), TaskStatus.COMPLETED)
+        hm.upsert_task("t1", _task_slot(), None, TaskStatus.COMPLETED)
         _record(hm, target, "dm1", msg="宝可梦真好玩", task_id="t1")
         _record(hm, target, "dm2", msg="宝可梦再来", task_id="t1")
         _record(hm, target, "dm3", msg="无关内容", task_id="t1")
@@ -323,7 +319,7 @@ class TestTaskQueries:
         assert hits[0]["msg_hits"] == 2
 
     def test_search_reports_both_hit_sources(self, hm, target):
-        hm.upsert_task(_task_definition(task_id="t1", video_title="宝可梦补档"), TaskStatus.COMPLETED)
+        hm.upsert_task("t1", _task_slot(video_title="宝可梦补档"), None, TaskStatus.COMPLETED)
         _record(hm, target, "dm1", msg="宝可梦", task_id="t1")
 
         hits = hm.search_tasks("宝可梦")
@@ -332,7 +328,7 @@ class TestTaskQueries:
 
     def test_search_ignores_evidence_without_task(self, hm, target):
         """task_id 为空的旧存证搜不出来"""
-        hm.upsert_task(_task_definition(task_id="t1", video_title="无关标题"), TaskStatus.COMPLETED)
+        hm.upsert_task("t1", _task_slot(video_title="无关标题"), None, TaskStatus.COMPLETED)
         _record(hm, target, "dm1", msg="宝可梦", task_id="t1")
         conn = sqlite3.connect(hm.db_path)
         conn.execute("UPDATE sent_danmaku SET task_id=NULL WHERE dmid='dm1'")
@@ -342,27 +338,27 @@ class TestTaskQueries:
         assert hm.search_tasks("宝可梦") == []
 
     def test_search_empty_keyword_returns_empty(self, hm):
-        hm.upsert_task(_task_definition(task_id="t1"), TaskStatus.COMPLETED)
+        hm.upsert_task("t1", _task_slot(), None, TaskStatus.COMPLETED)
         assert hm.search_tasks("") == []
 
     def test_search_treats_wildcards_literally(self, hm):
         """% 与 _ 按字面匹配，不当通配符"""
-        hm.upsert_task(_task_definition(task_id="t1", video_title="完成度 100%"), TaskStatus.COMPLETED)
-        hm.upsert_task(_task_definition(task_id="t2", video_title="完成度 1000"), TaskStatus.COMPLETED)
+        hm.upsert_task("t1", _task_slot(video_title="完成度 100%"), None, TaskStatus.COMPLETED)
+        hm.upsert_task("t2", _task_slot(video_title="完成度 1000"), None, TaskStatus.COMPLETED)
 
         assert [h["task_id"] for h in hm.search_tasks("100%")] == ["t1"]
 
     def test_search_title_hit_follows_database_collation(self, hm):
         """命中来源与筛选同口径：标题命中由同一条 SQL 条件判定"""
-        hm.upsert_task(_task_definition(task_id="t1", video_title="BV1Pkq 补档"), TaskStatus.COMPLETED)
+        hm.upsert_task("t1", _task_slot(video_title="BV1Pkq 补档"), None, TaskStatus.COMPLETED)
 
         hits = hm.search_tasks("pkq")
         assert [h["task_id"] for h in hits] == ["t1"]
         assert hits[0]["title_hit"] is True
 
     def test_search_orders_by_start_time(self, hm):
-        hm.upsert_task(_task_definition(task_id="t2", video_title="宝可梦"), TaskStatus.COMPLETED)
-        hm.upsert_task(_task_definition(task_id="t1", video_title="宝可梦"), TaskStatus.COMPLETED)
+        hm.upsert_task("t2", _task_slot(video_title="宝可梦"), None, TaskStatus.COMPLETED)
+        hm.upsert_task("t1", _task_slot(video_title="宝可梦"), None, TaskStatus.COMPLETED)
         self._set_created_at(hm, "t2", 2000.0)
         self._set_created_at(hm, "t1", 1000.0)
 

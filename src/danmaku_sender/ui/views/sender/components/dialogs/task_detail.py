@@ -131,7 +131,8 @@ class TaskDetailDialog(QDialog):
         bv_row = QHBoxLayout()
         self._bv_input = QLineEdit()
         self._bv_input.setPlaceholderText("输入BV号或视频链接")
-        self._bv_input.setText(self.origin.target.bvid)
+        target = self.origin.target
+        self._bv_input.setText(target.bvid or "")
         self._fetch_btn = QPushButton("获取视频信息")
         self._fetch_btn.setFixedWidth(100)
         bv_row.addWidget(self._bv_input)
@@ -162,16 +163,17 @@ class TaskDetailDialog(QDialog):
         detail_form = QFormLayout(detail_group)
 
         task = self.origin
-        target_assigned = task.target.is_assigned
+        target = task.target
+        target_assigned = target.is_assigned
         if target_assigned:
             meta = task.meta
-            url = f"https://www.bilibili.com/video/{task.target.bvid}"
+            url = f"https://www.bilibili.com/video/{target.bvid}"
             if meta.part_page is not None:
                 url += f"?p={meta.part_page}"
-            title_text = meta.video_title or task.target.bvid
-            bvid_text = task.target.bvid
+            title_text = meta.video_title or target.bvid
+            bvid_text = target.bvid
             part_text = f"P{meta.part_page} - {meta.part_title}" if meta.part_title else f"P{meta.part_page}"
-            cid_text = str(task.target.cid)
+            cid_text = str(target.cid)
         else:
             url = "—"
             title_text = "未指定视频目标"
@@ -191,7 +193,7 @@ class TaskDetailDialog(QDialog):
         detail_form.addRow("CID:", self._detail_cid)
         detail_form.addRow("链接:", self._detail_url)
         detail_form.addRow("状态:", QLabel(task.status.value))
-        detail_form.addRow("进度:", QLabel(f"{task.attempted}/{task.total}"))
+        detail_form.addRow("进度:", QLabel(f"{task.cursor}/{task.total}"))
         self._detail_dm_count = QLabel(str(len(task.danmakus)))
         detail_form.addRow("弹幕数:", self._detail_dm_count)
         missing_text = task.missing_config_text
@@ -315,9 +317,10 @@ class TaskDetailDialog(QDialog):
         # 从 video_info 中查找对应的 part
         part = next((p for p in self._video_info.parts if p.page == page), None) if self._video_info else None
 
-        cid = part.cid if part else self.origin.target.cid
+        target = self.origin.target
+        cid = part.cid if part else target.cid
         title = self._video_info.title if self._video_info else self.origin.meta.video_title
-        bvid = self._video_info.bvid if self._video_info else self.origin.target.bvid
+        bvid = self._video_info.bvid if self._video_info else target.bvid
         part_text = self._part_combo.currentText()
 
         self._detail_title.setText(title or bvid or "")

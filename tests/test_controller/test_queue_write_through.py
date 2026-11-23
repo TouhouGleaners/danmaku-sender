@@ -108,7 +108,7 @@ class TestEditWriteThrough:
 
         task = store.load_all()[0]
         assert task.meta.video_title == "新标题"
-        assert task.attempted == 1, "清单没变，进度不倒退"
+        assert task.cursor == 1, "清单没变，进度不倒退"
         assert [dm.msg for dm in task.danmakus] == ["a", "b"]
 
     def test_new_list_resets_cursor(self, env):
@@ -123,7 +123,7 @@ class TestEditWriteThrough:
         controller.apply_edit("t1", draft)
 
         task = store.load_all()[0]
-        assert task.attempted == 0
+        assert task.cursor == 0
         assert [dm.msg for dm in task.danmakus] == ["x"]
 
     def test_retarget_replaces_row(self, env):
@@ -140,7 +140,7 @@ class TestEditWriteThrough:
         assert len(tasks) == 1, "旧任务不得残留在库里"
         assert tasks[0].task_id != "t1"
         assert (tasks[0].target.bvid, tasks[0].target.cid) == ("BV2xx411c7mD", 2002)
-        assert tasks[0].attempted == 0
+        assert tasks[0].cursor == 0
         assert queue_item_count("t1") == 0
         assert [dm.msg for dm in tasks[0].danmakus] == ["a", "b"]
 
@@ -169,7 +169,7 @@ class TestEditWriteThrough:
         controller.assign_danmakus("t1", [Danmaku(msg="x", progress=0)])
 
         task = store.load_all()[0]
-        assert task.attempted == 0
+        assert task.cursor == 0
         assert [dm.msg for dm in task.danmakus] == ["x"]
 
     def test_assign_completing_config_keeps_store_in_sync(self, env):
@@ -210,7 +210,7 @@ class TestRunStateWriteThrough:
         controller._on_task_progress("t1", 2, 2, 0.0)
 
         task = store.load_all()[0]
-        assert (task.status, task.attempted) == (TaskStatus.RUNNING, 2)
+        assert (task.status, task.cursor) == (TaskStatus.RUNNING, 2)
 
     def test_reset_progress_zeroes_cursor(self, env):
         _, store, controller = env
@@ -219,7 +219,7 @@ class TestRunStateWriteThrough:
 
         controller.reset_progress("t1")
 
-        assert store.load_all()[0].attempted == 0
+        assert store.load_all()[0].cursor == 0
 
     def test_reset_queue_removes_completed_and_revives_failed(self, env):
         _, store, controller = env
@@ -234,7 +234,7 @@ class TestRunStateWriteThrough:
 
         tasks = store.load_all()
         assert [t.task_id for t in tasks] == ["t2"]
-        assert (tasks[0].status, tasks[0].attempted, tasks[0].error_msg) == (TaskStatus.PENDING, 0, "")
+        assert (tasks[0].status, tasks[0].cursor, tasks[0].error_msg) == (TaskStatus.PENDING, 0, "")
 
 
 class TestRestartRoundTrip:
@@ -260,4 +260,4 @@ class TestRestartRoundTrip:
         views = restored.workspace.queue_state.tasks
         assert [v.task_id for v in views] == ["t1", "t2"]
         assert [dm.msg for dm in views[0].danmakus] == ["a", "b"]
-        assert (views[0].status, views[0].attempted) == (TaskStatus.RUNNING, 1)
+        assert (views[0].status, views[0].cursor) == (TaskStatus.RUNNING, 1)

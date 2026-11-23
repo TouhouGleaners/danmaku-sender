@@ -272,7 +272,7 @@ class TestQueueState:
         view = qs.get_task_by_id(t.task_id)
         assert view is not None
         assert view.status is TaskStatus.PENDING
-        assert view.attempted == 0
+        assert view.cursor == 0
         assert view.error_msg == ""
 
     def test_reset_queue_noop_when_nothing_to_do(self):
@@ -361,7 +361,7 @@ class TestQueueState:
         qs.add_task(t)
         qs.update_task_progress(t.task_id, 5, 10)
         snap = qs.snapshots({TaskStatus.PENDING})[0]
-        assert snap.attempted == 5
+        assert snap.cursor == 5
 
     def test_assign_danmakus_resets_cursor_on_new_list(self):
         """换弹幕列表必须归零游标，否则游标会指进新列表的中段"""
@@ -372,7 +372,7 @@ class TestQueueState:
         qs.assign_danmakus(t.task_id, [Danmaku(msg="x", progress=0)])
         view = qs.get_task_by_id(t.task_id)
         assert view is not None
-        assert view.attempted == 0
+        assert view.cursor == 0
 
     def test_assign_danmakus_keeps_cursor_on_same_list(self):
         """同列表重贴不动游标，断点不丢"""
@@ -384,7 +384,7 @@ class TestQueueState:
         qs.assign_danmakus(t.task_id, dms)
         view = qs.get_task_by_id(t.task_id)
         assert view is not None
-        assert view.attempted == 5
+        assert view.cursor == 5
 
     def test_apply_edit_resets_cursor_on_new_list(self):
         """详情编辑换了弹幕列表同样归零游标"""
@@ -399,7 +399,7 @@ class TestQueueState:
         qs.apply_edit(t.task_id, draft)
         view = qs.get_task_by_id(t.task_id)
         assert view is not None
-        assert view.attempted == 0
+        assert view.cursor == 0
 
     def test_apply_edit_retarget_resets_cursor(self):
         """换目标另立新任务，旧视频的进度不得带进新视频"""
@@ -414,7 +414,7 @@ class TestQueueState:
         qs.apply_edit(t.task_id, draft)
         new_view = qs.tasks[0]  # 换目标另立新 task_id，按新任务查
         assert new_view.task_id != t.task_id
-        assert new_view.attempted == 0
+        assert new_view.cursor == 0
 
     def test_reset_progress_zeroes_cursor(self):
         """重置进度：游标清零并通知观察者"""
@@ -427,7 +427,7 @@ class TestQueueState:
         qs.reset_progress(t.task_id)
         view = qs.get_task_by_id(t.task_id)
         assert view is not None
-        assert view.attempted == 0
+        assert view.cursor == 0
         assert events == [(t.task_id, 0, 1)]
 
     def test_processed_count_sums_all_cursors(self):
@@ -515,7 +515,7 @@ class TestQueueState:
         assert [v.target.cid for v in qs.tasks] == [1]
 
     def test_view_config_is_frozen(self):
-        """任务参数是冻结类型：经 TaskView.config 改写在类型层就不可能"""
+        """任务参数是冻结类型：经 Task.config 改写在类型层就不可能"""
         qs = QueueState()
         t = make_task(1)
         qs.add_task(t)
@@ -526,7 +526,7 @@ class TestQueueState:
             view.config.min_delay = 99.0  # type: ignore[misc]
 
     def test_spec_danmakus_are_frozen(self):
-        """Danmaku 不可变：写穿 TaskDefinition 在类型层就不可能"""
+        """Danmaku 不可变：写穿任务的弹幕清单在类型层就不可能"""
         import dataclasses
 
         qs = QueueState()
@@ -537,7 +537,7 @@ class TestQueueState:
 
         snap = qs.snapshots({TaskStatus.PENDING})[0]
         with pytest.raises(dataclasses.FrozenInstanceError):
-            snap.definition.danmakus[0].msg = "hacked"  # type: ignore[misc]
+            snap.danmakus[0].msg = "hacked"  # type: ignore[misc]
 
     def test_queue_state_has_no_lock(self):
         """QueueState 只允许主线程访问：跨线程读的 RLock 已删除。
