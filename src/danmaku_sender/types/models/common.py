@@ -51,19 +51,16 @@ class SendMode(Enum):
 
 @dataclass(frozen=True, kw_only=True)
 class VideoTarget:
-    """发送/核销的目标：以 BVID+CID 定位的某个分P。未指定的项为 None。
+    """发送/核销的目标：以 BVID+CID 定位的某个分P，纯寻址键。
+
+    字段必填；「未配置目标」由外层的空槽表达（``Task.slot is None``），不造空壳。
 
     Attributes:
-        bvid (str | None): 视频 BVID，未指定为 None。
-        cid (int | None): 分P的 CID，未指定为 None。
+        bvid (str): 视频 BVID。
+        cid (int): 分P的 CID。
     """
-    bvid: str | None = None
-    cid: int | None = None
-
-    @property
-    def is_assigned(self) -> bool:
-        """是否已指定有效目标：BVID 与分P 都在才算。"""
-        return self.bvid is not None and self.cid is not None
+    bvid: str
+    cid: int
 
 
 @dataclass(frozen=True)

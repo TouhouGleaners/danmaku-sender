@@ -415,7 +415,7 @@ class QueueState(QObject):
         old_status = record.status
         old_target = record.target
         # 未指定目标时填上是补配置，不算换任务；其余情况以队列中的 task_id 为准
-        replaced = old_target.is_assigned and source.target != old_target
+        replaced = old_target is not None and source.target != old_target
         if new_id is None:
             new_id = uuid.uuid4().hex if replaced else task_id
         incoming = replace(source.to_task(), task_id=new_id)

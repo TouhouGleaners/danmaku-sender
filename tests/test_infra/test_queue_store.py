@@ -44,10 +44,10 @@ def make_task(
     error: str = "",
     msgs: tuple[str, ...] = (),
 ) -> Task:
-    """构造领域任务，弹幕清单随 ``msgs`` 带入。"""
+    """构造领域任务，弹幕清单随 ``msgs`` 带入；``bvid``/``cid`` 任一为 None 即未配置目标，不建目标槽。"""
     return Task(
         task_id=task_id,
-        slot=None if bvid is None and cid is None else TargetSlot(
+        slot=None if bvid is None or cid is None else TargetSlot(
             target=VideoTarget(bvid=bvid, cid=cid),
             video_title=title,
             part_page=part_page,
@@ -93,11 +93,6 @@ class TestRoundTrip:
     def test_status_round_trips_as_enum(self, store):
         store.add_task(make_task("t1", status=TaskStatus.PAUSED))
         assert store.load_all()[0].status is TaskStatus.PAUSED
-
-    def test_half_target_is_rejected(self, store):
-        with pytest.raises(QueueStorageError):
-            store.add_task(make_task("t1", cid=None))
-        assert store.load_all() == []
 
     def test_items_round_trip_in_order(self, store):
         store.add_task(make_task("t1", msgs=("c", "a", "b")))
@@ -300,7 +295,7 @@ class TestLoadAll:
     def test_load_all_keeps_unassigned_target(self, store):
         store.add_task(make_task("t1", bvid=None, cid=None))
         task = store.load_all()[0]
-        assert (task.target.bvid, task.target.cid) == (None, None)
+        assert task.target is None
 
 
 class TestReplace:

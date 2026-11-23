@@ -2,16 +2,32 @@
 from danmaku_sender.config import SenderConfig
 from danmaku_sender.types.models.common import VideoTarget
 from danmaku_sender.types.models.danmaku import Danmaku
-from danmaku_sender.types.models.queue import Task, TaskDraft, TaskStatus
+from danmaku_sender.types.models.queue import (
+    DanmakuPack,
+    SendOptions,
+    TargetSlot,
+    Task,
+    TaskDraft,
+    TaskState,
+    TaskStatus,
+)
 
 TARGET = VideoTarget(bvid="BV1xx411c7mD", cid=1001)
 
 
-def make_task(danmaku_count: int, target: VideoTarget) -> Task:
-    return make_draft(danmaku_count, target).to_task()
+def make_task(danmaku_count: int, target: VideoTarget | None) -> Task:
+    """构造领域任务，弹幕按条数生成；``target`` 为 None 表示未配置目标。"""
+    return Task(
+        task_id="t1",
+        slot=None if target is None else TargetSlot(target=target),
+        pack=DanmakuPack(items=tuple(Danmaku(msg=f"m{i}", progress=i) for i in range(danmaku_count))),
+        options=SendOptions(pacing=SenderConfig.PacingConfig().to_task_config()),
+        state=TaskState(),
+    )
 
 
-def make_draft(danmaku_count: int, target: VideoTarget) -> TaskDraft:
+def make_draft(danmaku_count: int, target: VideoTarget | None) -> TaskDraft:
+    """构造编辑沙盒，弹幕按条数生成；``target`` 为 None 表示未配置目标。"""
     return TaskDraft(
         target=target,
         danmakus=[Danmaku(msg=f"m{i}", progress=i) for i in range(danmaku_count)],
@@ -33,18 +49,13 @@ class TestMissingConfigText:
 
     def test_no_target(self):
         expected = "未指定视频目标"
-        assert make_task(1, VideoTarget()).missing_config_text == expected
-        assert make_draft(1, VideoTarget()).missing_config_text == expected
+        assert make_task(1, None).missing_config_text == expected
+        assert make_draft(1, None).missing_config_text == expected
 
     def test_neither(self):
         expected = "未导入弹幕，且未指定视频目标"
-        assert make_task(0, VideoTarget()).missing_config_text == expected
-        assert make_draft(0, VideoTarget()).missing_config_text == expected
-
-    def test_bvid_without_cid_is_unassigned(self):
-        """有 BVID 但没选分P 也算未指定，与既有校验口径一致"""
-        half = VideoTarget(bvid="BV1xx411c7mD")
-        assert make_task(1, half).missing_config_text == "未指定视频目标"
+        assert make_task(0, None).missing_config_text == expected
+        assert make_draft(0, None).missing_config_text == expected
 
 
 class TestConfigCompleteness:
@@ -54,10 +65,10 @@ class TestConfigCompleteness:
 
     def test_missing_each(self):
         assert make_task(0, TARGET).is_config_complete is False
-        assert make_task(1, VideoTarget()).is_config_complete is False
-        assert make_task(0, VideoTarget()).is_config_complete is False
+        assert make_task(1, None).is_config_complete is False
+        assert make_task(0, None).is_config_complete is False
 
     def test_draft_initial_status(self):
         assert make_draft(1, TARGET).initial_status is TaskStatus.PENDING
-        assert make_draft(1, VideoTarget()).initial_status is TaskStatus.UNCONFIGURED
-        assert make_draft(0, VideoTarget()).initial_status is TaskStatus.UNCONFIGURED
+        assert make_draft(1, None).initial_status is TaskStatus.UNCONFIGURED
+        assert make_draft(0, None).initial_status is TaskStatus.UNCONFIGURED

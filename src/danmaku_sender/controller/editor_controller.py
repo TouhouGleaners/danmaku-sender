@@ -55,7 +55,7 @@ class EditorController(QObject):
     @property
     def has_video_context(self) -> bool:
         """是否拥有关联的视频目标（BVID/CID）"""
-        return self.task.target.is_assigned
+        return self.task.target is not None
 
     @property
     def is_dirty(self) -> bool:

@@ -8,7 +8,6 @@ from xml.dom import minidom
 from danmaku_sender.types.models.common import (
     TaskMeta,
     UnsentDanmakusRecord,
-    VideoTarget,
 )
 from danmaku_sender.types.models.danmaku import Danmaku
 from danmaku_sender.types.models.queue import TaskConfig, TaskDraft
@@ -96,7 +95,6 @@ class DanmakuXml:
             raise ValueError("文件中没有弹幕")
 
         task = TaskDraft(
-            target=VideoTarget(),
             danmakus=danmakus,
             config=config,
             meta=TaskMeta(xml_path=xml_path),

@@ -127,15 +127,11 @@ class _QueueMapper:
         """
         slot = task.slot
         meta = task.meta
-        bvid = None if slot is None else slot.target.bvid
-        cid = None if slot is None else slot.target.cid
-        if (bvid is None) != (cid is None):
-            raise QueueStorageError("目标字段不成对：bvid 与 cid 必须成对有值或成对为空")
         return {
             "task_id": task.task_id,
             "position": position,
-            "bvid": bvid,
-            "cid": cid,
+            "bvid": None if slot is None else slot.target.bvid,
+            "cid": None if slot is None else slot.target.cid,
             "video_title": meta.video_title,
             "part_page": meta.part_page,
             "part_title": meta.part_title,
@@ -211,10 +207,11 @@ class _QueueMapper:
         Returns:
             Task: 组装完成的领域任务对象。
         """
+        bvid, cid = row.bvid, row.cid
         return Task(
             task_id=row.task_id,
-            slot=None if row.bvid is None else TargetSlot(
-                target=VideoTarget(bvid=row.bvid, cid=row.cid),
+            slot=None if bvid is None or cid is None else TargetSlot(
+                target=VideoTarget(bvid=bvid, cid=cid),
                 video_title=row.video_title,
                 part_page=row.part_page,
                 part_title=row.part_title,

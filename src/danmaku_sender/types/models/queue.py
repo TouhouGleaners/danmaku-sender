@@ -57,68 +57,6 @@ class TaskConfig:
 
 
 @dataclass(frozen=True, kw_only=True)
-class TaskDefinition:
-    """不可变任务定义。
-
-    过渡期保留：Task 已换抽屉存储（见 :class:`Task`），本类经 ``Task.definition``
-    垫片拼装返回，随拆桥一并退役。
-
-    Attributes:
-        task_id (str): 任务唯一标识。
-        target (VideoTarget): 发送目标；未指定时为空壳。
-        meta (TaskMeta): 任务描述性资料。
-        danmakus (tuple[Danmaku, ...]): 弹幕清单。
-        config (TaskConfig): 发送节奏。
-    """
-    task_id: str
-    target: VideoTarget
-    meta: TaskMeta = field(default_factory=TaskMeta)
-    danmakus: tuple[Danmaku, ...] = ()
-    config: TaskConfig
-
-    @property
-    def total(self) -> int:
-        return len(self.danmakus)
-
-    @property
-    def display_string(self) -> str:
-        """日志显示：视频标题 → BVID → 未指定。"""
-        return self.meta.video_title or self.target.bvid or "未指定视频目标"
-
-    @property
-    def is_config_complete(self) -> bool:
-        """配置是否齐备可发：弹幕与视频目标都在。"""
-        return self.total > 0 and self.target.is_assigned
-
-    @property
-    def missing_config_text(self) -> str:
-        """缺失配置项的一句话说明；齐备时返回空字符串。"""
-        parts: list[str] = []
-        if self.total <= 0:
-            parts.append("未导入弹幕")
-        if not self.target.is_assigned:
-            parts.append("未指定视频目标")
-        return "，且".join(parts)
-
-
-@dataclass(frozen=True)
-class TaskExecution:
-    """任务运行时。
-
-    过渡期保留：Task 已换抽屉存储（见 :class:`Task`），本类经 ``Task.execution``
-    垫片拼装返回，随拆桥一并退役。
-
-    Attributes:
-        status (TaskStatus): 当前任务状态。
-        error_msg (str): 失败或中止原因；空字符串表示没有错误。
-        attempted (int): 续传游标，已结算的条数（含失败与查重跳过）。
-    """
-    status: TaskStatus = TaskStatus.PENDING
-    error_msg: str = ""
-    attempted: int = 0
-
-
-@dataclass(frozen=True, kw_only=True)
 class TargetSlot:
     """选定的分P：寻址键与展示资料同生共死。
 
@@ -202,12 +140,12 @@ class Task:
     options: SendOptions
     state: TaskState
 
-    # ── 快捷读法 ──────────────────────────────────
+    # ── 过渡快捷读法（调用点按此读，别名随 TaskDraft 一并退役） ──
 
     @property
-    def target(self) -> VideoTarget:
-        """目标寻址键；未配置目标时为空壳（拆桥时改空值语义）。"""
-        return VideoTarget() if self.slot is None else self.slot.target
+    def target(self) -> VideoTarget | None:
+        """目标寻址键；未配置目标时为 None。"""
+        return None if self.slot is None else self.slot.target
 
     @property
     def meta(self) -> TaskMeta:
@@ -252,7 +190,7 @@ class Task:
         """日志显示：视频标题 → BVID → 未指定。"""
         if self.slot is None:
             return "未指定视频目标"
-        return self.slot.video_title or self.slot.target.bvid or "未指定视频目标"
+        return self.slot.video_title or self.slot.target.bvid
 
     @property
     def is_config_complete(self) -> bool:
@@ -273,39 +211,11 @@ class Task:
             parts.append("未指定视频目标")
         return "，且".join(parts)
 
-    # ── 过渡垫片（拆桥时随 TaskDefinition / TaskExecution 一并退役） ──
-
-    @property
-    def definition(self) -> TaskDefinition:
-        """过渡垫片：抽屉拼回旧的任务定义，供未迁调用点读取。"""
-        slot = self.slot
-        return TaskDefinition(
-            task_id=self.task_id,
-            target=VideoTarget() if slot is None else slot.target,
-            meta=self.meta,
-            danmakus=self.pack.items,
-            config=self.options.pacing,
-        )
-
-    @property
-    def execution(self) -> TaskExecution:
-        """过渡垫片：抽屉拼回旧的运行状态，供未迁调用点读取。"""
-        return TaskExecution(
-            status=self.state.status,
-            error_msg=self.state.error_msg,
-            attempted=self.state.cursor,
-        )
-
-    @property
-    def attempted(self) -> int:
-        """过渡垫片：续传游标（旧名）。"""
-        return self.state.cursor
-
     def to_draft(self) -> "TaskDraft":
         """拷贝为可变编辑沙盒（详情弹窗 / 构建弹窗用）"""
         slot = self.slot
         return TaskDraft(
-            target=VideoTarget() if slot is None else replace(slot.target),
+            target=None if slot is None else replace(slot.target),
             meta=TaskMeta(
                 video_title="" if slot is None else slot.video_title,
                 part_page=None if slot is None else slot.part_page,
@@ -315,10 +225,11 @@ class Task:
             ),
             danmakus=list(self.pack.items),
             config=self.options.pacing,
+            allow_duplicates=self.options.allow_duplicates,
             task_id=self.task_id,
             status=self.state.status,
             error_msg=self.state.error_msg,
-            attempted=self.state.cursor,
+            cursor=self.state.cursor,
         )
 
 
@@ -329,14 +240,15 @@ class TaskDraft:
     仅用于「组装 → 入队」与「详情弹窗编辑」。入队后由 QueueState 拆成
     四个抽屉（见 :class:`Task`），本对象不再代表队列中的真实任务。
     """
-    target: VideoTarget = field(default_factory=VideoTarget)
+    target: VideoTarget | None = None
     meta: TaskMeta = field(default_factory=TaskMeta)
     danmakus: list[Danmaku] = field(default_factory=list)
     config: TaskConfig
+    allow_duplicates: bool = False
     task_id: str = field(default_factory=lambda: uuid.uuid4().hex)
     status: TaskStatus = TaskStatus.PENDING
     error_msg: str = ""
-    attempted: int = 0
+    cursor: int = 0
 
     @property
     def total(self) -> int:
@@ -345,12 +257,14 @@ class TaskDraft:
     @property
     def display_string(self) -> str:
         """日志显示：视频标题 → BVID → 未指定。"""
-        return self.meta.video_title or self.target.bvid or "未指定视频目标"
+        if self.target is None:
+            return "未指定视频目标"
+        return self.meta.video_title or self.target.bvid
 
     @property
     def is_config_complete(self) -> bool:
         """配置是否齐备可发：弹幕与视频目标都在。"""
-        return self.total > 0 and self.target.is_assigned
+        return self.total > 0 and self.target is not None
 
     @property
     def missing_config_text(self) -> str:
@@ -358,7 +272,7 @@ class TaskDraft:
         parts: list[str] = []
         if self.total <= 0:
             parts.append("未导入弹幕")
-        if not self.target.is_assigned:
+        if self.target is None:
             parts.append("未指定视频目标")
         return "，且".join(parts)
 
@@ -367,33 +281,20 @@ class TaskDraft:
         """按配置完整性给出的新建状态：齐备为待发，否则为未配置。"""
         return TaskStatus.PENDING if self.is_config_complete else TaskStatus.UNCONFIGURED
 
-    def to_definition(self) -> TaskDefinition:
-        """打成不可变任务定义（target/meta 拷贝，config 本就冻结，弹幕收成 tuple）"""
-        return TaskDefinition(
-            task_id=self.task_id,
-            target=replace(self.target),
-            meta=replace(self.meta),
-            danmakus=tuple(self.danmakus),
-            config=self.config,
-        )
-
     def to_task(self) -> Task:
         """打成不可变任务：目标资料进槽、来源进弹幕包、节奏与开关进选项。"""
+        target = self.target
         meta = self.meta
         return Task(
             task_id=self.task_id,
-            slot=None if not self.target.is_assigned else TargetSlot(
-                target=replace(self.target),
+            slot=None if target is None else TargetSlot(
+                target=replace(target),
                 video_title=meta.video_title,
                 part_page=meta.part_page,
                 part_title=meta.part_title,
                 duration_ms=meta.part_duration_ms,
             ),
             pack=DanmakuPack(items=tuple(self.danmakus), source_path=meta.xml_path),
-            options=SendOptions(pacing=self.config),
-            state=TaskState(
-                status=self.status,
-                cursor=self.attempted,
-                error_msg=self.error_msg,
-            ),
+            options=SendOptions(pacing=self.config, allow_duplicates=self.allow_duplicates),
+            state=TaskState(status=self.status, cursor=self.cursor, error_msg=self.error_msg),
         )
