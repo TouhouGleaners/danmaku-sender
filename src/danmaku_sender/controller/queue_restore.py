@@ -27,7 +27,7 @@ class QueueRestorer:
         """
         loaded = store.load_all()
         normalized = [cls._normalize(task) for task in loaded]
-        changed = [new for old, new in zip(loaded, normalized) if new.execution != old.execution]
+        changed = [new for old, new in zip(loaded, normalized) if new.state != old.state]
         cls._write_back(store, changed)
         queue_state.restore_tasks(normalized)
 
@@ -43,16 +43,16 @@ class QueueRestorer:
         Returns:
             Task: 状态修正后的任务；无需修正时返回原对象。
         """
-        execution = task.execution
-        if execution.status is TaskStatus.RUNNING:
-            return replace(task, execution=replace(execution, status=TaskStatus.PAUSED))
+        state = task.state
+        if state.status is TaskStatus.RUNNING:
+            return replace(task, state=replace(state, status=TaskStatus.PAUSED))
 
         status, error = QueueState.aligned_status(
-            execution.status, execution.error_msg, task.definition.is_config_complete
+            state.status, state.error_msg, task.is_config_complete
         )
-        if status is execution.status and error == execution.error_msg:
+        if status is state.status and error == state.error_msg:
             return task
-        return replace(task, execution=replace(execution, status=status, error_msg=error))
+        return replace(task, state=replace(state, status=status, error_msg=error))
 
     @staticmethod
     def _write_back(store: QueueStore, changed: list[Task]) -> None:
@@ -68,16 +68,16 @@ class QueueRestorer:
             return
 
         for task in changed:
-            execution = task.execution
+            state = task.state
             try:
                 store.update_task_state(
-                    task.definition.task_id,
-                    status=execution.status,
-                    cursor=execution.attempted,
+                    task.task_id,
+                    status=state.status,
+                    cursor=state.cursor,
                     burst_count=0,
-                    error=execution.error_msg or None,
+                    error=state.error_msg or None,
                 )
             except QueueStorageError:
-                logger.exception(f"启动修正写入失败 [task_id={task.definition.task_id}]")
+                logger.exception(f"启动修正写入失败 [task_id={task.task_id}]")
 
         logger.info(f"启动时已修正 {len(changed)} 个任务状态并写回数据库")

@@ -94,7 +94,7 @@ class QueueSendWorker(WorkerThread):
             if outcome is _RunOutcome.ABORTED and not self.stop_event.is_set():
                 for task in unhandled:
                     if task.status is TaskStatus.PENDING:
-                        self.taskSkipped.emit(task.definition.task_id, "致命错误，队列中止")
+                        self.taskSkipped.emit(task.task_id, "致命错误，队列中止")
         finally:
             if outcome is not _RunOutcome.COMPLETED or self.stop_event.is_set():
                 self.queueAborted.emit()
@@ -119,7 +119,7 @@ class QueueSendWorker(WorkerThread):
                         return _RunOutcome.STOPPED, unhandled
 
                     if task.status is TaskStatus.UNCONFIGURED:
-                        self.taskSkipped.emit(task.definition.task_id, task.definition.missing_config_text)
+                        self.taskSkipped.emit(task.task_id, task.missing_config_text)
                         continue
 
                     if task.status is not TaskStatus.PENDING:
@@ -149,45 +149,47 @@ class QueueSendWorker(WorkerThread):
         Returns:
             bool: 可继续返回 True，致命错误需中止队列返回 False。
         """
-        definition = task.definition
-        task_id = definition.task_id
+        task_id = task.task_id
         self.taskStarted.emit(task_id, idx)
-        logger.info(f"[{idx + 1}/{total}] 开始发送: {definition.display_string}")
+        logger.info(f"[{idx + 1}/{total}] 开始发送: {task.display_string}")
 
         future_tasks = self.tasks[idx + 1:]
 
         def progress_emitter(attempted: int, task_total: int, eta: float):
-            queue_eta = self._calc_queue_eta(attempted, task_total, definition.config, future_tasks, self.queue_config)
+            queue_eta = self._calc_queue_eta(attempted, task_total, task.config, future_tasks, self.queue_config)
             self.queueProgressUpdated.emit(idx, total, queue_eta)
             self.taskProgressUpdated.emit(task_id, attempted, task_total, eta)
 
-        ctx = SendingContext(total=len(definition.danmakus), target=definition.target)
+        slot = task.slot
+        assert slot is not None  # 发包任务必有目标，未配置的在上一层已跳过
+        target = slot.target
+        ctx = SendingContext(total=task.total, target=target)
         try:
             pipeline = SendPipeline(self.auth, self.network, self.history_manager)
             job = SendJob(
-                task_id=definition.task_id,
-                target=definition.target,
-                danmakus=list(definition.danmakus),  # Danmaku 不可变，无需克隆
-                config=definition.config,
+                task_id=task_id,
+                target=target,
+                danmakus=list(task.danmakus),  # Danmaku 不可变，无需克隆
+                config=task.config,
                 queue_config=self.queue_config,
                 stop_event=self.stop_event,
-                start_index=task.attempted,
+                start_index=task.cursor,
             )
             ctx = pipeline.execute(job, progress_emitter=progress_emitter)
 
             if ctx.fatal_error_occurred:
                 self.taskFailed.emit(task_id, ctx.fatal_error_msg, ctx)
-                logger.error(f"致命错误，队列中止于: {definition.display_string} - {ctx.fatal_error_msg}")
+                logger.error(f"致命错误，队列中止于: {task.display_string} - {ctx.fatal_error_msg}")
                 return False
 
             # COMPLETED / PAUSED 由 Controller 根据 ctx 在主线程判定落账
             self.taskCompleted.emit(task_id, ctx)
-            logger.info(f"[{idx + 1}/{total}] 发送完成: {definition.display_string}")
+            logger.info(f"[{idx + 1}/{total}] 发送完成: {task.display_string}")
             return True
 
         except Exception as e:
             self.taskFailed.emit(task_id, str(e), ctx)
-            logger.error(f"[{idx + 1}/{total}] 发送失败: {definition.display_string} - {e}")
+            logger.error(f"[{idx + 1}/{total}] 发送失败: {task.display_string} - {e}")
             return True  # 单任务异常不阻断队列，继续下一个
 
     @staticmethod
@@ -231,6 +233,6 @@ class QueueSendWorker(WorkerThread):
             # 与上一个任务之间的间隔
             queue_eta += queue_config.delay_between_tasks
             # 断点续传下后续任务也可能带着游标，从它接着估，不是从 0
-            queue_eta += _task_eta(s.attempted, s.definition.total, s.definition.config)
+            queue_eta += _task_eta(s.cursor, s.total, s.config)
 
         return queue_eta

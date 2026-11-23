@@ -1,7 +1,15 @@
-from collections.abc import Callable
+from collections.abc import Callable, Sequence
 from enum import IntEnum
+from typing import ClassVar
 
-from PySide6.QtCore import QAbstractTableModel, QMimeData, QModelIndex, QSize, Qt
+from PySide6.QtCore import (
+    QAbstractTableModel,
+    QMimeData,
+    QModelIndex,
+    QPersistentModelIndex,
+    QSize,
+    Qt,
+)
 from PySide6.QtGui import QBrush, QColor, QPainter
 from PySide6.QtWidgets import (
     QApplication,
@@ -27,12 +35,12 @@ class QueueCol(IntEnum):
 class ProgressBarDelegate(QStyledItemDelegate):
     """在表格单元格中绘制进度条"""
 
-    def paint(self, painter: QPainter, option: QStyleOptionViewItem, index: QModelIndex):
+    def paint(self, painter: QPainter, option: QStyleOptionViewItem, index: QModelIndex | QPersistentModelIndex):
         task: Task | None = index.data(Qt.ItemDataRole.UserRole)
         if task is None:
             return super().paint(painter, option, index)
 
-        progress = int((task.attempted / task.total) * 100) if task.total > 0 else 0
+        progress = int((task.cursor / task.total) * 100) if task.total > 0 else 0
 
         bar = QStyleOptionProgressBar()
         bar.rect = option.rect
@@ -40,20 +48,20 @@ class ProgressBarDelegate(QStyledItemDelegate):
         bar.maximum = 100
         bar.progress = progress
         if task.total > 0:
-            pct = int((task.attempted / task.total) * 100)
-            bar.text = f"{task.attempted}/{task.total} {pct}%"
+            pct = int((task.cursor / task.total) * 100)
+            bar.text = f"{task.cursor}/{task.total} {pct}%"
         else:
             bar.text = ""
         bar.textVisible = True
 
         match task.status:
             case TaskStatus.COMPLETED:
-                if task.attempted >= task.total:
+                if task.cursor >= task.total:
                     bar.progress = 100
                     bar.text = f"{task.total}/{task.total} 100%"
                 else:
-                    pct = int((task.attempted / task.total) * 100) if task.total > 0 else 0
-                    bar.text = f"{task.attempted}/{task.total} {pct}%"
+                    pct = int((task.cursor / task.total) * 100) if task.total > 0 else 0
+                    bar.text = f"{task.cursor}/{task.total} {pct}%"
             case TaskStatus.FAILED:
                 bar.text = "失败"
             case TaskStatus.SKIPPED:
@@ -67,7 +75,7 @@ class ProgressBarDelegate(QStyledItemDelegate):
 
         QApplication.style().drawControl(QStyle.ControlElement.CE_ProgressBar, bar, painter)
 
-    def sizeHint(self, option: QStyleOptionViewItem, index: QModelIndex) -> QSize:
+    def sizeHint(self, option: QStyleOptionViewItem, index: QModelIndex | QPersistentModelIndex) -> QSize:
         return QSize(120, 24)
 
 
@@ -85,7 +93,7 @@ class QueueTableView(QTableView):
 
 
 class QueueTableModel(QAbstractTableModel):
-    HEADERS = ["序号", "视频标题", "分P", "弹幕数", "状态", "进度"]
+    HEADERS: ClassVar[list[str]] = ["序号", "视频标题", "分P", "弹幕数", "状态", "进度"]
 
     def __init__(self, parent=None):
         super().__init__(parent)
@@ -137,18 +145,18 @@ class QueueTableModel(QAbstractTableModel):
 
     # --- Qt Methods ---
 
-    def rowCount(self, parent=QModelIndex()):
+    def rowCount(self, parent: QModelIndex | QPersistentModelIndex = QModelIndex()):
         return len(self._tasks)
 
-    def columnCount(self, parent=QModelIndex()):
+    def columnCount(self, parent: QModelIndex | QPersistentModelIndex = QModelIndex()):
         return len(self.HEADERS)
 
-    def headerData(self, section, orientation, role):
+    def headerData(self, section, orientation, role: int = Qt.ItemDataRole.DisplayRole):
         if orientation == Qt.Orientation.Horizontal and role == Qt.ItemDataRole.DisplayRole:
             return self.HEADERS[section]
         return None
 
-    def data(self, index: QModelIndex, role=Qt.ItemDataRole.DisplayRole):
+    def data(self, index: QModelIndex | QPersistentModelIndex, role: int = Qt.ItemDataRole.DisplayRole):
         if not index.isValid():
             return None
 
@@ -217,7 +225,7 @@ class QueueTableModel(QAbstractTableModel):
     def supportedDropActions(self) -> Qt.DropAction:
         return Qt.DropAction.MoveAction
 
-    def flags(self, index: QModelIndex) -> Qt.ItemFlag:
+    def flags(self, index: QModelIndex | QPersistentModelIndex) -> Qt.ItemFlag:
         if not index.isValid():
             return Qt.ItemFlag.ItemIsDropEnabled if not self.queue_running else Qt.ItemFlag.NoItemFlags
         default = super().flags(index)
@@ -231,13 +239,13 @@ class QueueTableModel(QAbstractTableModel):
     def mimeTypes(self) -> list[str]:
         return ["application/x-queue-task-row"]
 
-    def mimeData(self, indexes: list[QModelIndex]) -> QMimeData:
-        rows = sorted(set(idx.row() for idx in indexes))
+    def mimeData(self, indexes: Sequence[QModelIndex]) -> QMimeData:
+        rows = sorted({idx.row() for idx in indexes})
         mime = QMimeData()
         mime.setData("application/x-queue-task-row", ",".join(str(r) for r in rows).encode())
         return mime
 
-    def dropMimeData(self, data: QMimeData, action: Qt.DropAction, row: int, col: int, parent: QModelIndex) -> bool:
+    def dropMimeData(self, data: QMimeData, action: Qt.DropAction, row: int, col: int, parent: QModelIndex | QPersistentModelIndex) -> bool:
         if action != Qt.DropAction.MoveAction:
             return False
 

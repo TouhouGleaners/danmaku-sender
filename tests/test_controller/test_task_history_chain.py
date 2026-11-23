@@ -10,9 +10,9 @@ from danmaku_sender.config import ApiAuthConfig, NetworkPolicy, SenderConfig
 from danmaku_sender.infra.persistence.history_manager import HistoryManager
 from danmaku_sender.service.sender import SendJob, SendPipeline
 from danmaku_sender.service.sender import pipeline as pipeline_mod
-from danmaku_sender.types.models.common import TaskMeta, VideoTarget
+from danmaku_sender.types.models.common import VideoTarget
 from danmaku_sender.types.models.danmaku import Danmaku
-from danmaku_sender.types.models.queue import TaskDefinition, TaskStatus
+from danmaku_sender.types.models.queue import TargetSlot, TaskStatus
 
 TARGET_CID = 1001
 TARGET = VideoTarget(bvid="BV1xx", cid=TARGET_CID)
@@ -41,16 +41,11 @@ def test_send_record_verify_share_task_id(tmp_path, monkeypatch):
     monkeypatch.setattr(pipeline_mod, "BiliApiClient", StubClient)
     hm = HistoryManager(tmp_path / "history.db")
 
-    definition = TaskDefinition(
-        task_id=TASK_ID,
-        target=TARGET,
-        meta=TaskMeta(video_title="冒烟视频"),
-        danmakus=(Danmaku(msg="a", progress=1000), Danmaku(msg="b", progress=2000)),
-        config=SenderConfig.PacingConfig(min_delay=0.1, max_delay=0.2).to_task_config(),
-    )
+    slot = TargetSlot(target=TARGET, video_title="冒烟视频")
+    danmakus = (Danmaku(msg="a", progress=1000), Danmaku(msg="b", progress=2000))
 
     # 1) 任务开始：写任务记录
-    hm.upsert_task(definition, TaskStatus.RUNNING)
+    hm.upsert_task(TASK_ID, slot, None, TaskStatus.RUNNING)
 
     # 2) 发送：每条成功弹幕存证，带上同一个 task_id
     pipeline = SendPipeline(
@@ -61,15 +56,15 @@ def test_send_record_verify_share_task_id(tmp_path, monkeypatch):
     job = SendJob(
         task_id=TASK_ID,
         target=TARGET,
-        danmakus=list(definition.danmakus),
-        config=definition.config,
+        danmakus=list(danmakus),
+        config=SenderConfig.PacingConfig(min_delay=0.1, max_delay=0.2).to_task_config(),
         queue_config=SenderConfig.QueueConfig(),
         stop_event=threading.Event(),
     )
     pipeline.execute(job)
 
     # 3) 任务结束：状态落账
-    hm.upsert_task(definition, TaskStatus.COMPLETED)
+    hm.upsert_task(TASK_ID, slot, None, TaskStatus.COMPLETED)
 
     conn = sqlite3.connect(tmp_path / "history.db")
     evidence = conn.execute(

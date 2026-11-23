@@ -15,7 +15,7 @@ from danmaku_sender.types.models.common import (
     VideoTarget,
 )
 from danmaku_sender.types.models.danmaku import Danmaku
-from danmaku_sender.types.models.queue import TaskDefinition, TaskStatus
+from danmaku_sender.types.models.queue import TargetSlot, TaskStatus
 
 from .migrations import LegacyBackfill, SchemaMigration
 from .orm_models import SentDanmaku, TaskRecord, db
@@ -123,39 +123,42 @@ class HistoryManager:
             logger.exception(f"存证写入失败 [dmid={dmid}]")
             raise HistoryStorageError(f"弹幕存证写入失败 [dmid={dmid}]: {e}", original_error=e) from e
 
-    def upsert_task(self, definition: TaskDefinition, status: TaskStatus) -> None:
+    def upsert_task(self, task_id: str, slot: TargetSlot, source_path: Path | None, status: TaskStatus) -> None:
         """写入或更新一条任务记录。
 
         发送开始时调用；已写入的记录不删除，仅更新任务状态。
 
         Args:
-            definition (TaskDefinition): 任务定义，提供身份与描述。
+            task_id (str): 任务标识。
+            slot (TargetSlot): 选定的分P，提供寻址键与展示身份。
+            source_path (Path | None): 弹幕来源文件。
             status (TaskStatus): 当前任务状态，按 ``TaskStatus.name`` 写入。
         """
-        meta = definition.meta
+        target = slot.target
+        xml_path = str(source_path) if source_path is not None else None
         try:
             (
                 TaskRecord
                     .insert(
-                        task_id=definition.task_id,
-                        bvid=definition.target.bvid,
-                        cid=definition.target.cid,
-                        video_title=meta.video_title,
-                        part_page=meta.part_page,
-                        part_title=meta.part_title,
-                        xml_path=str(meta.xml_path) if meta.xml_path is not None else None,
+                        task_id=task_id,
+                        bvid=target.bvid,
+                        cid=target.cid,
+                        video_title=slot.video_title,
+                        part_page=slot.part_page,
+                        part_title=slot.part_title,
+                        xml_path=xml_path,
                         created_at=time.time(),
                         status=status.name,
                     )
                     .on_conflict(
                         conflict_target=[TaskRecord.task_id],
                         update={
-                            TaskRecord.bvid: definition.target.bvid,
-                            TaskRecord.cid: definition.target.cid,
-                            TaskRecord.video_title: meta.video_title,
-                            TaskRecord.part_page: meta.part_page,
-                            TaskRecord.part_title: meta.part_title,
-                            TaskRecord.xml_path: str(meta.xml_path) if meta.xml_path is not None else None,
+                            TaskRecord.bvid: target.bvid,
+                            TaskRecord.cid: target.cid,
+                            TaskRecord.video_title: slot.video_title,
+                            TaskRecord.part_page: slot.part_page,
+                            TaskRecord.part_title: slot.part_title,
+                            TaskRecord.xml_path: xml_path,
                             TaskRecord.status: status.name,
                         },
                     )

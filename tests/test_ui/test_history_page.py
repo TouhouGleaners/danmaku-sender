@@ -4,23 +4,21 @@
 """
 import pytest
 
-from danmaku_sender.config import SenderConfig, Settings
+from danmaku_sender.config import Settings
 from danmaku_sender.controller.concurrency import PoolTask
 from danmaku_sender.infra.persistence.history_manager import HistoryManager
 from danmaku_sender.state import AppState
-from danmaku_sender.types.models.common import DanmakuStatus, TaskMeta, VideoTarget
-from danmaku_sender.types.models.danmaku import Danmaku
-from danmaku_sender.types.models.queue import TaskDefinition, TaskStatus
+from danmaku_sender.types.models.common import DanmakuStatus, VideoTarget
+from danmaku_sender.types.models.queue import TargetSlot, TaskStatus
 from danmaku_sender.ui.views.history.page import HistoryPage
 
 
-def _definition(task_id: str) -> TaskDefinition:
-    return TaskDefinition(
-        task_id=task_id,
+def _task_slot() -> TargetSlot:
+    return TargetSlot(
         target=VideoTarget(bvid="BV1xx", cid=1001),
-        meta=TaskMeta(video_title="标题", part_page=1, part_title="分P"),
-        danmakus=(Danmaku(msg="x", progress=0),),
-        config=SenderConfig.PacingConfig(min_delay=0.1, max_delay=0.2).to_task_config(),
+        video_title="标题",
+        part_page=1,
+        part_title="分P",
     )
 
 
@@ -55,7 +53,7 @@ def sync_pool(monkeypatch):
 class TestHistoryDrillDown:
     def test_tasks_fetched_populates_tree(self, page):
         widget, hm = page
-        hm.upsert_task(_definition("t1"), TaskStatus.COMPLETED)
+        hm.upsert_task("t1", _task_slot(), None, TaskStatus.COMPLETED)
 
         widget._refresh_data()
 
@@ -65,7 +63,7 @@ class TestHistoryDrillDown:
 
     def test_selecting_task_refreshes_with_task_id(self, page):
         widget, hm = page
-        hm.upsert_task(_definition("t1"), TaskStatus.COMPLETED)
+        hm.upsert_task("t1", _task_slot(), None, TaskStatus.COMPLETED)
         widget._refresh_data()
 
         calls: list = []
@@ -78,7 +76,7 @@ class TestHistoryDrillDown:
 
     def test_selecting_task_shows_summary(self, page):
         widget, hm = page
-        hm.upsert_task(_definition("t1"), TaskStatus.COMPLETED)
+        hm.upsert_task("t1", _task_slot(), None, TaskStatus.COMPLETED)
         widget._refresh_data()
 
         widget._bridge.treeRowPicked.emit(_task_row(widget))
@@ -95,7 +93,7 @@ class TestHistoryDrillDown:
 
     def test_selecting_group_leaves_detail_alone(self, page):
         widget, hm = page
-        hm.upsert_task(_definition("t1"), TaskStatus.COMPLETED)
+        hm.upsert_task("t1", _task_slot(), None, TaskStatus.COMPLETED)
         widget._refresh_data()
 
         calls: list = []

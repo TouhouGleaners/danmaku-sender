@@ -101,7 +101,7 @@ class TestRoundTrip:
 
     def test_items_round_trip_in_order(self, store):
         store.add_task(make_task("t1", msgs=("c", "a", "b")))
-        assert [dm.msg for dm in store.load_all()[0].definition.danmakus] == ["c", "a", "b"]
+        assert [dm.msg for dm in store.load_all()[0].danmakus] == ["c", "a", "b"]
 
     def test_failures_round_trip(self, store):
         store.add_task(make_task("t1", msgs=("a", "b")))
@@ -119,8 +119,8 @@ class TestRoundTrip:
         reopened = QueueStore(db_path)
         try:
             task = reopened.load_all()[0]
-            assert (task.execution.status, task.execution.attempted) == (TaskStatus.PAUSED, 9)
-            assert [dm.msg for dm in task.definition.danmakus] == ["a"]
+            assert (task.status, task.cursor) == (TaskStatus.PAUSED, 9)
+            assert [dm.msg for dm in task.danmakus] == ["a"]
         finally:
             reopened.close()
 
@@ -135,7 +135,7 @@ class TestUpdateTask:
 
         task = store.load_all()[0]
         assert task.meta.video_title == "新标题"
-        assert (task.status, task.attempted) == (TaskStatus.PAUSED, 3), "状态与进度按新值写入"
+        assert (task.status, task.cursor) == (TaskStatus.PAUSED, 3), "状态与进度按新值写入"
 
     def test_update_without_replace_keeps_payload_and_failures(self, store):
         store.add_task(make_task("t1", msgs=("a", "b")))
@@ -154,7 +154,7 @@ class TestUpdateTask:
         store.update_task(make_task("t1", status=TaskStatus.PENDING, msgs=("x", "y", "z")), items_replaced=True)
 
         task = store.load_all()[0]
-        assert (task.status, task.attempted, task.error_msg) == (TaskStatus.PENDING, 0, "")
+        assert (task.status, task.cursor, task.error_msg) == (TaskStatus.PENDING, 0, "")
         assert queue_task_rows()[0].burst_count == 0
         assert queue_failure_rows("t1") == []
         assert [dm.msg for dm in task.danmakus] == ["x", "y", "z"]
@@ -169,7 +169,7 @@ class TestRecordResult:
         store.add_task(make_task("t1", msgs=("a",)))
         store.record_result("t1", 0, status=TaskStatus.FAILED, cursor=1, burst_count=0, error="网络异常", failure_reason="网络异常")
         task = store.load_all()[0]
-        assert (task.status, task.attempted, task.error_msg) == (TaskStatus.FAILED, 1, "网络异常")
+        assert (task.status, task.cursor, task.error_msg) == (TaskStatus.FAILED, 1, "网络异常")
         assert queue_failure_rows("t1") == [(0, "网络异常")]
 
     def test_success_clears_stale_failure(self, store):
@@ -192,7 +192,7 @@ class TestTaskStateUpdate:
 
         store.update_task_state("t1", status=TaskStatus.FAILED, cursor=5, burst_count=0, error=None)
         task = store.load_all()[0]
-        assert (task.status, task.attempted, task.error_msg) == (TaskStatus.FAILED, 5, ""), "显式传 None 即清空错误"
+        assert (task.status, task.cursor, task.error_msg) == (TaskStatus.FAILED, 5, ""), "显式传 None 即清空错误"
         assert queue_task_rows()[0].burst_count == 0
 
     def test_update_state_never_touches_structure(self, store):
@@ -215,7 +215,7 @@ class TestResetTasks:
         store.reset_tasks(["t1"], status=TaskStatus.PENDING, error=None)
 
         task = store.load_all()[0]
-        assert (task.status, task.attempted, task.error_msg) == (TaskStatus.PENDING, 0, "")
+        assert (task.status, task.cursor, task.error_msg) == (TaskStatus.PENDING, 0, "")
         assert queue_task_rows()[0].burst_count == 0
         assert queue_failure_rows("t1") == []
 
@@ -282,25 +282,25 @@ class TestLoadAll:
 
         tasks = store.load_all()
 
-        assert [t.definition.task_id for t in tasks] == ["t1", "t2"]
-        assert [dm.msg for dm in tasks[0].definition.danmakus] == ["a", "b", "c"]
-        assert (tasks[0].execution.status, tasks[0].execution.attempted) == (TaskStatus.PAUSED, 3)
-        assert tasks[1].definition.meta.video_title == "二号"
+        assert [t.task_id for t in tasks] == ["t1", "t2"]
+        assert [dm.msg for dm in tasks[0].danmakus] == ["a", "b", "c"]
+        assert (tasks[0].status, tasks[0].cursor) == (TaskStatus.PAUSED, 3)
+        assert tasks[1].meta.video_title == "二号"
 
     def test_load_all_round_trips_danmaku_fields(self, store):
         store.add_task(make_task("t1", msgs=("a",)))
-        dm = store.load_all()[0].definition.danmakus[0]
+        dm = store.load_all()[0].danmakus[0]
         assert (dm.msg, dm.progress, dm.mode, dm.fontsize, dm.color) == ("a", 0, 1, 25, 16777215)
 
     def test_load_all_keeps_empty_list_empty(self, store):
         """清单本来就是空的任务不硬塞弹幕"""
         store.add_task(make_task("t1"))
-        assert store.load_all()[0].definition.danmakus == ()
+        assert store.load_all()[0].danmakus == ()
 
     def test_load_all_keeps_unassigned_target(self, store):
         store.add_task(make_task("t1", bvid=None, cid=None))
         task = store.load_all()[0]
-        assert (task.definition.target.bvid, task.definition.target.cid) == (None, None)
+        assert (task.target.bvid, task.target.cid) == (None, None)
 
 
 class TestReplace:
@@ -446,7 +446,7 @@ class TestStartupSelfHeal:
         reopened = QueueStore.open(db_path)
 
         task = reopened.load_all()[0]
-        assert (task.status, task.attempted) == (TaskStatus.PAUSED, 7)
+        assert (task.status, task.cursor) == (TaskStatus.PAUSED, 7)
         assert queue_task_rows()[0].burst_count == 0
         reopened.close()
 
@@ -467,7 +467,7 @@ class TestStartupSelfHeal:
 
         assert not list(tmp_path.glob("queue.db.corrupt-*"))
         task = reopened.load_all()[0]
-        assert (task.status, task.attempted) == (TaskStatus.RUNNING, 5), "写失败就保持原样"
+        assert (task.status, task.cursor) == (TaskStatus.RUNNING, 5), "写失败就保持原样"
         assert queue_task_rows()[0].burst_count == 2
         assert "启动自愈写入失败" in caplog.text
         reopened.close()
