@@ -11,12 +11,14 @@ import pytest
 from danmaku_sender.config import ApiAuthConfig, NetworkPolicy, SenderConfig
 from danmaku_sender.controller.sender.workers import QueueSendWorker
 from danmaku_sender.infra.persistence.history_manager import HistoryManager
-from danmaku_sender.types.models.common import TaskMeta, VideoTarget
+from danmaku_sender.types.models.common import VideoTarget
 from danmaku_sender.types.models.queue import (
+    DanmakuPack,
+    SendOptions,
+    TargetSlot,
     Task,
     TaskConfig,
-    TaskDefinition,
-    TaskExecution,
+    TaskState,
     TaskStatus,
 )
 
@@ -53,15 +55,15 @@ class Record:
 
 def _task(task_id: str) -> Task:
     return Task(
-        definition=TaskDefinition(
-            task_id=task_id,
-            target=VideoTarget(bvid="BV1", cid=1),
-            meta=TaskMeta(video_title="标题"),
-            config=TaskConfig(
+        task_id=task_id,
+        slot=TargetSlot(target=VideoTarget(bvid="BV1", cid=1), video_title="标题"),
+        pack=DanmakuPack(),
+        options=SendOptions(
+            pacing=TaskConfig(
                 min_delay=0.1, max_delay=0.1, burst_enabled=False, burst_size=0, rest_min=0.0, rest_max=0.0
-            ),
+            )
         ),
-        execution=TaskExecution(status=TaskStatus.PENDING),
+        state=TaskState(status=TaskStatus.PENDING),
     )
 
 

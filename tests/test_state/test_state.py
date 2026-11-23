@@ -649,12 +649,13 @@ class TestQueueState:
         view = qs.get_task_by_id(t.task_id)
         assert view is not None
         draft = view.to_draft()
-        draft.meta = replace(draft.meta, part_title="改个标题")
+        # 展示资料随槽同生共死，无目标任务存不住；探针走弹幕包的来源路径
+        draft.meta = replace(draft.meta, xml_path=Path("keep.xml"))
         qs.apply_edit(t.task_id, draft)
         view = qs.get_task_by_id(t.task_id)
         assert view is not None
         assert view.status is TaskStatus.SKIPPED
-        assert view.meta.part_title == "改个标题"
+        assert view.meta.xml_path == Path("keep.xml"), "编辑内容要落上"
 
     def test_apply_edit_emits_status_then_data_on_flip(self):
         """状态翻转：先 taskStatusChanged 再 taskDataChanged"""

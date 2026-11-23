@@ -28,13 +28,15 @@ from peewee import (
 )
 
 from danmaku_sender.types.exceptions.exceptions import QueueStorageError
-from danmaku_sender.types.models.common import TaskMeta, VideoTarget
+from danmaku_sender.types.models.common import VideoTarget
 from danmaku_sender.types.models.danmaku import Danmaku
 from danmaku_sender.types.models.queue import (
+    DanmakuPack,
+    SendOptions,
+    TargetSlot,
     Task,
     TaskConfig,
-    TaskDefinition,
-    TaskExecution,
+    TaskState,
     TaskStatus,
 )
 from danmaku_sender.utils.file_utils import backup_corrupt_file
@@ -114,7 +116,7 @@ class _QueueMapper:
     def to_row_values(task: Task, position: int) -> dict:
         """将领域任务转换为 queue_task 表的列字典。
 
-        注：``allow_duplicates`` 与 ``burst_count`` 尚未接入当前任务模型，暂默认写入 0。
+        注：``burst_count`` 尚未接入当前任务模型，暂默认写入 0。
 
         Args:
             task (Task): 待转换的领域任务对象。
@@ -122,36 +124,34 @@ class _QueueMapper:
 
         Returns:
             dict: 对应数据库表列的键值映射。
-
-        Raises:
-            QueueStorageError: 目标字段不成对（bvid 与 cid 未同时存在或同时为空）。
         """
-        definition = task.definition
-        execution = task.execution
-        meta = definition.meta
-        if (definition.target.bvid is None) != (definition.target.cid is None):
+        slot = task.slot
+        meta = task.meta
+        bvid = None if slot is None else slot.target.bvid
+        cid = None if slot is None else slot.target.cid
+        if (bvid is None) != (cid is None):
             raise QueueStorageError("目标字段不成对：bvid 与 cid 必须成对有值或成对为空")
         return {
-            "task_id": definition.task_id,
+            "task_id": task.task_id,
             "position": position,
-            "bvid": definition.target.bvid,
-            "cid": definition.target.cid,
+            "bvid": bvid,
+            "cid": cid,
             "video_title": meta.video_title,
             "part_page": meta.part_page,
             "part_title": meta.part_title,
             "duration_ms": meta.part_duration_ms,
             "source_path": str(meta.xml_path) if meta.xml_path else None,
-            "min_delay": definition.config.min_delay,
-            "max_delay": definition.config.max_delay,
-            "burst_enabled": int(definition.config.burst_enabled),
-            "burst_size": definition.config.burst_size,
-            "rest_min": definition.config.rest_min,
-            "rest_max": definition.config.rest_max,
-            "allow_duplicates": 0,
-            "status": execution.status.name,
-            "cursor": execution.attempted,
+            "min_delay": task.config.min_delay,
+            "max_delay": task.config.max_delay,
+            "burst_enabled": int(task.config.burst_enabled),
+            "burst_size": task.config.burst_size,
+            "rest_min": task.config.rest_min,
+            "rest_max": task.config.rest_max,
+            "allow_duplicates": int(task.options.allow_duplicates),
+            "status": task.status.name,
+            "cursor": task.cursor,
             "burst_count": 0,
-            "error": execution.error_msg or None,
+            "error": task.error_msg or None,
         }
 
     @staticmethod
@@ -212,18 +212,20 @@ class _QueueMapper:
             Task: 组装完成的领域任务对象。
         """
         return Task(
-            definition=TaskDefinition(
-                task_id=row.task_id,
+            task_id=row.task_id,
+            slot=None if row.bvid is None else TargetSlot(
                 target=VideoTarget(bvid=row.bvid, cid=row.cid),
-                meta=TaskMeta(
-                    video_title=row.video_title,
-                    part_page=row.part_page,
-                    part_title=row.part_title,
-                    part_duration_ms=row.duration_ms,
-                    xml_path=Path(row.source_path) if row.source_path else None,
-                ),
-                danmakus=tuple(danmakus),
-                config=TaskConfig(
+                video_title=row.video_title,
+                part_page=row.part_page,
+                part_title=row.part_title,
+                duration_ms=row.duration_ms,
+            ),
+            pack=DanmakuPack(
+                items=tuple(danmakus),
+                source_path=Path(row.source_path) if row.source_path else None,
+            ),
+            options=SendOptions(
+                pacing=TaskConfig(
                     min_delay=row.min_delay,
                     max_delay=row.max_delay,
                     burst_enabled=bool(row.burst_enabled),
@@ -231,11 +233,12 @@ class _QueueMapper:
                     rest_min=row.rest_min,
                     rest_max=row.rest_max,
                 ),
+                allow_duplicates=bool(row.allow_duplicates),
             ),
-            execution=TaskExecution(
+            state=TaskState(
                 status=TaskStatus[row.status],
+                cursor=row.cursor,
                 error_msg=row.error or "",
-                attempted=row.cursor,
             ),
         )
 
@@ -319,11 +322,11 @@ class QueueStore:
                 current = _QueueTask.select(fn.MAX(_QueueTask.position)).scalar()
                 at = 0 if current is None else current + 1
                 _QueueTask.insert(**_QueueMapper.to_row_values(task, at)).execute()
-                for batch in _QueueMapper.to_item_batches(task.definition.task_id, task.definition.danmakus):
+                for batch in _QueueMapper.to_item_batches(task.task_id, task.danmakus):
                     _QueueItem.insert_many(batch).execute()
         except Exception as e:
-            logger.exception("队列任务写入失败 [task_id=%s]", task.definition.task_id)
-            raise QueueStorageError(f"队列任务写入失败 [{task.definition.task_id}]", original_error=e) from e
+            logger.exception("队列任务写入失败 [task_id=%s]", task.task_id)
+            raise QueueStorageError(f"队列任务写入失败 [{task.task_id}]", original_error=e) from e
 
     def insert_task(self, task: Task, at: int) -> None:
         """将新任务插入指定位置，后续任务依次后移，单事务执行。
@@ -340,11 +343,11 @@ class QueueStore:
                 for r in _QueueTask.select().where(_QueueTask.position >= at):
                     _QueueTask.update(position=r.position + 1).where(_QueueTask.task_id == r.task_id).execute()
                 _QueueTask.insert(**_QueueMapper.to_row_values(task, at)).execute()
-                for batch in _QueueMapper.to_item_batches(task.definition.task_id, task.definition.danmakus):
+                for batch in _QueueMapper.to_item_batches(task.task_id, task.danmakus):
                     _QueueItem.insert_many(batch).execute()
         except Exception as e:
-            logger.exception("队列任务插入失败 [task_id=%s]", task.definition.task_id)
-            raise QueueStorageError(f"队列任务插入失败 [{task.definition.task_id}]", original_error=e) from e
+            logger.exception("队列任务插入失败 [task_id=%s]", task.task_id)
+            raise QueueStorageError(f"队列任务插入失败 [{task.task_id}]", original_error=e) from e
 
     def update_task(self, task: Task, *, items_replaced: bool = False) -> None:
         """更新既有任务的配置、目标与运行状态，保持原队列位置不变。
@@ -359,7 +362,7 @@ class QueueStore:
         Raises:
             QueueStorageError: 任务不存在、目标字段不成对或数据库写入失败。
         """
-        task_id = task.definition.task_id
+        task_id = task.task_id
         try:
             with queue_db.atomic():
                 old = _QueueTask.get_or_none(_QueueTask.task_id == task_id)
@@ -369,7 +372,7 @@ class QueueStore:
                 if items_replaced:
                     _QueueItem.delete().where(_QueueItem.task_id == task_id).execute()
                     _QueueFailure.delete().where(_QueueFailure.task_id == task_id).execute()
-                    for batch in _QueueMapper.to_item_batches(task_id, task.definition.danmakus):
+                    for batch in _QueueMapper.to_item_batches(task_id, task.danmakus):
                         _QueueItem.insert_many(batch).execute()
         except QueueStorageError:
             raise
@@ -398,7 +401,7 @@ class QueueStore:
                 _QueueItem.delete().where(_QueueItem.task_id == old_task_id).execute()
                 _QueueFailure.delete().where(_QueueFailure.task_id == old_task_id).execute()
                 _QueueTask.insert(**_QueueMapper.to_row_values(task, old.position)).execute()
-                for batch in _QueueMapper.to_item_batches(task.definition.task_id, task.definition.danmakus):
+                for batch in _QueueMapper.to_item_batches(task.task_id, task.danmakus):
                     _QueueItem.insert_many(batch).execute()
         except QueueStorageError:
             raise

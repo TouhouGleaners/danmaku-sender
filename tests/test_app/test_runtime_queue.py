@@ -5,13 +5,15 @@ import pytest
 from danmaku_sender.app.runtime import Runtime
 from danmaku_sender.config.app_meta import AppInfo
 from danmaku_sender.infra.persistence.queue_store import QueueStore
-from danmaku_sender.types.models.common import TaskMeta, VideoTarget
+from danmaku_sender.types.models.common import VideoTarget
 from danmaku_sender.types.models.danmaku import Danmaku
 from danmaku_sender.types.models.queue import (
+    DanmakuPack,
+    SendOptions,
+    TargetSlot,
     Task,
     TaskConfig,
-    TaskDefinition,
-    TaskExecution,
+    TaskState,
     TaskStatus,
 )
 from tests.conftest import queue_task_rows
@@ -29,14 +31,13 @@ def queue_db(tmp_path, monkeypatch):
 def _seed_running_row(store: QueueStore) -> None:
     store.add_task(
         Task(
-            definition=TaskDefinition(
-                task_id="t1",
-                target=VideoTarget(bvid="BV1", cid=1),
-                meta=TaskMeta(video_title="标题"),
-                danmakus=(Danmaku(msg="a", progress=0),),
-                config=TaskConfig(min_delay=9.5, max_delay=10.5, burst_enabled=False, burst_size=0, rest_min=0.0, rest_max=0.0),
+            task_id="t1",
+            slot=TargetSlot(target=VideoTarget(bvid="BV1", cid=1), video_title="标题"),
+            pack=DanmakuPack(items=(Danmaku(msg="a", progress=0),)),
+            options=SendOptions(
+                pacing=TaskConfig(min_delay=9.5, max_delay=10.5, burst_enabled=False, burst_size=0, rest_min=0.0, rest_max=0.0)
             ),
-            execution=TaskExecution(status=TaskStatus.RUNNING, attempted=7),
+            state=TaskState(status=TaskStatus.RUNNING, cursor=7),
         )
     )
     store.update_task_state("t1", status=TaskStatus.RUNNING, cursor=7, burst_count=3, error=None)
