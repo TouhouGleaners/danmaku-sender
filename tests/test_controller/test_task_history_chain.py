@@ -14,7 +14,8 @@ from danmaku_sender.types.models.common import TaskMeta, VideoTarget
 from danmaku_sender.types.models.danmaku import Danmaku
 from danmaku_sender.types.models.queue import TaskDefinition, TaskStatus
 
-TARGET = VideoTarget(bvid="BV1xx", cid=1001)
+TARGET_CID = 1001
+TARGET = VideoTarget(bvid="BV1xx", cid=TARGET_CID)
 TASK_ID = "任务-冒烟"
 
 
@@ -86,8 +87,9 @@ def test_send_record_verify_share_task_id(tmp_path, monkeypatch):
 
     # 5) 任务级历史：任务记录与存证能对上，存活统计看得见
     record = hm.get_task(TASK_ID)
+    assert record is not None
     assert record["status"] == "COMPLETED"
     assert record["video_title"] == "冒烟视频"
 
-    total, verified, lost = hm.get_stats(TARGET.cid)
+    total, verified, lost = hm.get_stats(TARGET_CID)
     assert (total, verified, lost) == (2, 2, 0)

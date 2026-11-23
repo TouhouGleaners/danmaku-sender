@@ -24,10 +24,13 @@ from danmaku_sender.types.models.common import (
 )
 from danmaku_sender.types.models.danmaku import Danmaku
 from danmaku_sender.types.models.queue import (
+    DanmakuPack,
+    SendOptions,
+    TargetSlot,
     Task,
     TaskDefinition,
     TaskDraft,
-    TaskExecution,
+    TaskState,
     TaskStatus,
 )
 
@@ -270,9 +273,19 @@ class SenderController(QObject):
         aligned_status, aligned_error = QueueState.aligned_status(
             status, error_msg, definition.is_config_complete
         )
+        meta = definition.meta
         return Task(
-            definition=definition,
-            execution=TaskExecution(status=aligned_status, error_msg=aligned_error, attempted=cursor),
+            task_id=definition.task_id,
+            slot=None if not definition.target.is_assigned else TargetSlot(
+                target=definition.target,
+                video_title=meta.video_title,
+                part_page=meta.part_page,
+                part_title=meta.part_title,
+                duration_ms=meta.part_duration_ms,
+            ),
+            pack=DanmakuPack(items=definition.danmakus, source_path=meta.xml_path),
+            options=SendOptions(pacing=definition.config),
+            state=TaskState(status=aligned_status, error_msg=aligned_error, cursor=cursor),
         )
 
     @classmethod

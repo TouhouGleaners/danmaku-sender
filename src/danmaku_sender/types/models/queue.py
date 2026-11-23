@@ -1,6 +1,7 @@
 import uuid
 from dataclasses import dataclass, field, replace
 from enum import Enum
+from pathlib import Path
 
 from .common import TaskMeta, VideoTarget
 from .danmaku import Danmaku
@@ -59,10 +60,15 @@ class TaskConfig:
 class TaskDefinition:
     """不可变任务定义。
 
-    Worker 仅持有不可变任务副本，与主线程的后续变更隔离。
-    config 为入队时固化的发送节奏，无需防御性拷贝。
-    danmakus 为不可变元组；
-    SendPipeline 需持有独立副本（见 SendJob 构造），不得向本对象回填 dmid。
+    过渡期保留：Task 已换抽屉存储（见 :class:`Task`），本类经 ``Task.definition``
+    垫片拼装返回，随拆桥一并退役。
+
+    Attributes:
+        task_id (str): 任务唯一标识。
+        target (VideoTarget): 发送目标；未指定时为空壳。
+        meta (TaskMeta): 任务描述性资料。
+        danmakus (tuple[Danmaku, ...]): 弹幕清单。
+        config (TaskConfig): 发送节奏。
     """
     task_id: str
     target: VideoTarget
@@ -86,11 +92,7 @@ class TaskDefinition:
 
     @property
     def missing_config_text(self) -> str:
-        """缺失配置项的一句话说明；齐备时返回空字符串。
-
-        表格提示、任务详情与 Worker 跳过原因共用这套文案，
-        保证「缺什么」在各界面与日志里说法一致。
-        """
+        """缺失配置项的一句话说明；齐备时返回空字符串。"""
         parts: list[str] = []
         if self.total <= 0:
             parts.append("未导入弹幕")
@@ -101,7 +103,10 @@ class TaskDefinition:
 
 @dataclass(frozen=True)
 class TaskExecution:
-    """任务运行时（仅主线程 QueueState 可写）
+    """任务运行时。
+
+    过渡期保留：Task 已换抽屉存储（见 :class:`Task`），本类经 ``Task.execution``
+    垫片拼装返回，随拆桥一并退役。
 
     Attributes:
         status (TaskStatus): 当前任务状态。
@@ -113,83 +118,206 @@ class TaskExecution:
     attempted: int = 0
 
 
-@dataclass(frozen=True)
-class Task:
-    """队列任务条目：由不可变任务定义与不可变运行状态组成。
+@dataclass(frozen=True, kw_only=True)
+class TargetSlot:
+    """选定的分P：寻址键与展示资料同生共死。
 
-    全字段只读，所有变更均通过构造新实例替换；跨线程传递时天然隔离，无需额外拷贝。
+    换目标整槽换掉；任务未配置目标时整个抽屉为 None，不造空壳。
+
+    Attributes:
+        target (VideoTarget): 纯寻址键，只做寻址与相等比较。
+        video_title (str): 视频标题。
+        part_page (int | None): 第几 P（1-based），未指定为 None。
+        part_title (str): 分P标题。
+        duration_ms (int | None): 分P总时长（毫秒），未知为 None。
     """
-    definition: TaskDefinition
-    execution: TaskExecution
+    target: VideoTarget
+    video_title: str = ""
+    part_page: int | None = None
+    part_title: str = ""
+    duration_ms: int | None = None
 
-    # ── 任务定义的快捷读法 ───────────────────────────
+
+@dataclass(frozen=True, kw_only=True)
+class DanmakuPack:
+    """发什么：弹幕清单及其来源。
+
+    换清单 / 换文件只动这格。
+
+    Attributes:
+        items (tuple[Danmaku, ...]): 弹幕清单，按发送顺序。
+        source_path (Path | None): 导入的弹幕文件路径；无文件来源时为 None。
+    """
+    items: tuple[Danmaku, ...] = ()
+    source_path: Path | None = None
 
     @property
-    def task_id(self) -> str:
-        return self.definition.task_id
+    def total(self) -> int:
+        return len(self.items)
+
+
+@dataclass(frozen=True, kw_only=True)
+class SendOptions:
+    """怎么发：节奏与查重开关，对应发送配置对话框的整页。
+
+    Attributes:
+        pacing (TaskConfig): 发送节奏。
+        allow_duplicates (bool): 是否允许重复发送（为 True 时发送前不查重）。
+    """
+    pacing: TaskConfig
+    allow_duplicates: bool = False
+
+
+@dataclass(frozen=True, kw_only=True)
+class TaskState:
+    """发到哪了：一趟发送的运行状态，逐条结算换新。
+
+    Attributes:
+        status (TaskStatus): 当前任务状态。
+        cursor (int): 续传游标，已结算的条数（含失败与查重跳过）。
+        error_msg (str): 失败或中止原因；空字符串表示没有错误。
+    """
+    status: TaskStatus = TaskStatus.PENDING
+    cursor: int = 0
+    error_msg: str = ""
+
+
+@dataclass(frozen=True, kw_only=True)
+class Task:
+    """队列任务条目：一张不可变的单，四个抽屉各管一摊。
+
+    全字段只读，所有变更均通过构造新实例替换；跨线程传递时天然隔离，无需额外拷贝。
+
+    Attributes:
+        task_id (str): 任务标识。
+        slot (TargetSlot | None): 选定的分P；未配置目标时为 None。
+        pack (DanmakuPack): 弹幕包。
+        options (SendOptions): 发送选项。
+        state (TaskState): 运行状态。
+    """
+    task_id: str
+    slot: TargetSlot | None
+    pack: DanmakuPack
+    options: SendOptions
+    state: TaskState
+
+    # ── 快捷读法 ──────────────────────────────────
 
     @property
     def target(self) -> VideoTarget:
-        return self.definition.target
+        """目标寻址键；未配置目标时为空壳（拆桥时改空值语义）。"""
+        return VideoTarget() if self.slot is None else self.slot.target
 
     @property
     def meta(self) -> TaskMeta:
-        return self.definition.meta
+        """展示与溯源资料的拼装视图（槽 + 弹幕包来源）。"""
+        slot = self.slot
+        return TaskMeta(
+            video_title="" if slot is None else slot.video_title,
+            part_page=None if slot is None else slot.part_page,
+            part_title="" if slot is None else slot.part_title,
+            part_duration_ms=None if slot is None else slot.duration_ms,
+            xml_path=self.pack.source_path,
+        )
 
     @property
     def danmakus(self) -> tuple[Danmaku, ...]:
-        return self.definition.danmakus
+        return self.pack.items
 
     @property
     def config(self) -> TaskConfig:
         """发送节奏参数（冻结，直接给出即可）。"""
-        return self.definition.config
+        return self.options.pacing
 
     @property
     def total(self) -> int:
-        return self.definition.total
+        return self.pack.total
+
+    @property
+    def status(self) -> TaskStatus:
+        return self.state.status
+
+    @property
+    def error_msg(self) -> str:
+        return self.state.error_msg
+
+    @property
+    def cursor(self) -> int:
+        """续传游标，已结算的条数。"""
+        return self.state.cursor
 
     @property
     def display_string(self) -> str:
-        return self.definition.display_string
+        """日志显示：视频标题 → BVID → 未指定。"""
+        if self.slot is None:
+            return "未指定视频目标"
+        return self.slot.video_title or self.slot.target.bvid or "未指定视频目标"
 
     @property
     def is_config_complete(self) -> bool:
         """配置是否齐备可发：弹幕与视频目标都在。"""
-        return self.definition.is_config_complete
+        return self.slot is not None and self.total > 0
 
     @property
     def missing_config_text(self) -> str:
-        """缺失配置项的一句话说明；齐备时返回空字符串。"""
-        return self.definition.missing_config_text
+        """缺失配置项的一句话说明；齐备时返回空字符串。
 
-    # ── 运行时的快捷读法 ───────────────────────────
+        表格提示、任务详情与 Worker 跳过原因共用这套文案，
+        保证「缺什么」在各界面与日志里说法一致。
+        """
+        parts: list[str] = []
+        if self.total <= 0:
+            parts.append("未导入弹幕")
+        if self.slot is None:
+            parts.append("未指定视频目标")
+        return "，且".join(parts)
+
+    # ── 过渡垫片（拆桥时随 TaskDefinition / TaskExecution 一并退役） ──
 
     @property
-    def status(self) -> TaskStatus:
-        return self.execution.status
+    def definition(self) -> TaskDefinition:
+        """过渡垫片：抽屉拼回旧的任务定义，供未迁调用点读取。"""
+        slot = self.slot
+        return TaskDefinition(
+            task_id=self.task_id,
+            target=VideoTarget() if slot is None else slot.target,
+            meta=self.meta,
+            danmakus=self.pack.items,
+            config=self.options.pacing,
+        )
 
     @property
-    def error_msg(self) -> str:
-        return self.execution.error_msg
+    def execution(self) -> TaskExecution:
+        """过渡垫片：抽屉拼回旧的运行状态，供未迁调用点读取。"""
+        return TaskExecution(
+            status=self.state.status,
+            error_msg=self.state.error_msg,
+            attempted=self.state.cursor,
+        )
 
     @property
     def attempted(self) -> int:
-        return self.execution.attempted
+        """过渡垫片：续传游标（旧名）。"""
+        return self.state.cursor
 
     def to_draft(self) -> "TaskDraft":
         """拷贝为可变编辑沙盒（详情弹窗 / 构建弹窗用）"""
-        definition = self.definition
-        execution = self.execution
+        slot = self.slot
         return TaskDraft(
-            target=replace(definition.target),
-            meta=replace(definition.meta),
-            danmakus=list(definition.danmakus),
-            config=definition.config,
-            task_id=definition.task_id,
-            status=execution.status,
-            error_msg=execution.error_msg,
-            attempted=execution.attempted,
+            target=VideoTarget() if slot is None else replace(slot.target),
+            meta=TaskMeta(
+                video_title="" if slot is None else slot.video_title,
+                part_page=None if slot is None else slot.part_page,
+                part_title="" if slot is None else slot.part_title,
+                part_duration_ms=None if slot is None else slot.duration_ms,
+                xml_path=self.pack.source_path,
+            ),
+            danmakus=list(self.pack.items),
+            config=self.options.pacing,
+            task_id=self.task_id,
+            status=self.state.status,
+            error_msg=self.state.error_msg,
+            attempted=self.state.cursor,
         )
 
 
@@ -198,7 +326,7 @@ class TaskDraft:
     """构造期 / 编辑沙盒 DTO。
 
     仅用于「组装 → 入队」与「详情弹窗编辑」。入队后由 QueueState 拆成
-    TaskDefinition + TaskExecution，本对象不再代表队列中的真实任务。
+    四个抽屉（见 :class:`Task`），本对象不再代表队列中的真实任务。
     """
     target: VideoTarget = field(default_factory=VideoTarget)
     meta: TaskMeta = field(default_factory=TaskMeta)
@@ -246,4 +374,25 @@ class TaskDraft:
             meta=replace(self.meta),
             danmakus=tuple(self.danmakus),
             config=self.config,
+        )
+
+    def to_task(self) -> Task:
+        """打成不可变任务：目标资料进槽、来源进弹幕包、节奏与开关进选项。"""
+        meta = self.meta
+        return Task(
+            task_id=self.task_id,
+            slot=None if not self.target.is_assigned else TargetSlot(
+                target=replace(self.target),
+                video_title=meta.video_title,
+                part_page=meta.part_page,
+                part_title=meta.part_title,
+                duration_ms=meta.part_duration_ms,
+            ),
+            pack=DanmakuPack(items=tuple(self.danmakus), source_path=meta.xml_path),
+            options=SendOptions(pacing=self.config),
+            state=TaskState(
+                status=self.status,
+                cursor=self.attempted,
+                error_msg=self.error_msg,
+            ),
         )
