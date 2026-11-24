@@ -259,9 +259,10 @@ class MonitorPage(QWidget):
         """
         rows = []
         for task in self.state.workspace.queue_state.tasks:
-            bvid, cid = task.target.bvid, task.target.cid
-            if bvid is None or cid is None:  # 没有核销目标，不占一行
+            target = task.target
+            if target is None:  # 没有核销目标，不占一行
                 continue
+            bvid, cid = target.bvid, target.cid
             name = task.display_string
             if task.meta.part_title:
                 name = f"{name} - {task.meta.part_title}"

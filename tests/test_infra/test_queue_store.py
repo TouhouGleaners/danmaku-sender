@@ -3,9 +3,11 @@
 from pathlib import Path
 
 import pytest
+from peewee import IntegrityError
 
 from danmaku_sender.infra.persistence.queue_store import (
     QueueStore,
+    _QueueMapper,
     _QueueRecovery,
     _QueueTask,
 )
@@ -89,6 +91,18 @@ class TestRoundTrip:
         task = make_task("t1", bvid=None, cid=None)
         store.add_task(task)
         assert store.load_all() == [task]
+
+    def test_half_pair_row_rejected_by_db(self, store):
+        """半配目标行被 CHECK 约束拒收：数据库层锁死同有值或同为空"""
+        with pytest.raises(IntegrityError):
+            _QueueTask.insert(task_id="t1", position=0, bvid="BV1xx", cid=None).execute()
+
+    def test_half_pair_row_raises_on_load(self, store):
+        """老库遗留的半配行读取时显式报错，不得静默当未配置"""
+        dirty = _QueueTask(task_id="t1", position=0, bvid="BV1xx", cid=None)
+
+        with pytest.raises(QueueStorageError):
+            _QueueMapper.to_task(dirty, ())
 
     def test_status_round_trips_as_enum(self, store):
         store.add_task(make_task("t1", status=TaskStatus.PAUSED))
