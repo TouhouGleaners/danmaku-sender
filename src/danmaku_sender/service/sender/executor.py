@@ -54,8 +54,6 @@ class DanmakuExecutor:
     def _send(self, target: VideoTarget, danmaku: Danmaku) -> BiliSendResponse:
         """内部发包: 不捕获异常"""
         bvid, cid = target.bvid, target.cid
-        if bvid is None or cid is None:
-            raise ValueError("发包需要已指定的目标（bvid 与 cid 都在）")
 
         params = danmaku.to_api_params()
         resp_json = self.api_client.post_danmaku(cid, bvid, params)

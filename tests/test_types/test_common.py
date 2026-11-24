@@ -1,19 +1,5 @@
-"""common 模型单元测试 — VideoTarget, TaskMeta, DanmakuStatus"""
-from danmaku_sender.types.models.common import TaskMeta, VideoTarget
-
-
-class TestVideoTarget:
-    def test_is_assigned_needs_bvid_and_cid(self):
-        assert not VideoTarget().is_assigned
-        assert not VideoTarget(bvid="BV1xx411c7mD").is_assigned
-        assert not VideoTarget(cid=1001).is_assigned
-        assert VideoTarget(bvid="BV1xx411c7mD", cid=1001).is_assigned
-
-    def test_unset_is_all_none(self):
-        tv = VideoTarget()
-        assert tv.bvid is None
-        assert tv.cid is None
-        assert not tv.is_assigned
+"""common 模型单元测试 — TaskMeta"""
+from danmaku_sender.types.models.common import TaskMeta
 
 
 class TestTaskMeta:

@@ -89,15 +89,13 @@ class HistoryManager:
             is_visible_api (bool): API 是否回执可见。
 
         Raises:
-            ValueError: dmid 缺失，或目标未指定。
+            ValueError: dmid 缺失。
             HistoryStorageError: 写入失败。
         """
         if not dmid:
             raise ValueError("存证必须提供有效的 dmid")
 
         bvid, cid = target.bvid, target.cid
-        if bvid is None or cid is None:
-            raise ValueError("存证需要已指定的目标（bvid 与 cid 都在）")
 
         try:
             (
@@ -427,9 +425,6 @@ class HistoryManager:
             MonitorStats: 总数、已验证、待验证、已丢失。
         """
         cid = target.cid
-        if cid is None:
-            return MonitorStats(total=0, verified=0, pending=0, lost=0)
-
         total, verified, lost = self.get_stats(cid, baseline)
         pending = total - verified - lost
         return MonitorStats(

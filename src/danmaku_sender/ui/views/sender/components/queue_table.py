@@ -185,7 +185,7 @@ class QueueTableModel(QAbstractTableModel):
             case QueueCol.TITLE:
                 return task.display_string
             case QueueCol.PART:
-                if not task.target.is_assigned:
+                if task.target is None:
                     return "—"
                 meta = task.meta
                 if meta.part_title:

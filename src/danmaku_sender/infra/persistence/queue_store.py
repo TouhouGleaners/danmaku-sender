@@ -14,14 +14,18 @@ import logging
 import time
 from collections.abc import Iterator, Sequence
 from pathlib import Path
+from typing import ClassVar
 
 from peewee import (
+    SQL,
     CharField,
+    Check,
     CompositeKey,
     DatabaseProxy,
     FloatField,
     IntegerField,
     Model,
+    NodeList,
     SqliteDatabase,
     TextField,
     fn,
@@ -75,6 +79,9 @@ class _QueueTask(Model):
     class Meta:
         table_name = "queue_task"
         database = queue_db
+        constraints: ClassVar[list[SQL | NodeList]] = [
+            Check("(bvid IS NULL AND cid IS NULL) OR (bvid IS NOT NULL AND cid IS NOT NULL)"),
+        ]
 
 
 class _QueueItem(Model):
@@ -127,15 +134,11 @@ class _QueueMapper:
         """
         slot = task.slot
         meta = task.meta
-        bvid = None if slot is None else slot.target.bvid
-        cid = None if slot is None else slot.target.cid
-        if (bvid is None) != (cid is None):
-            raise QueueStorageError("目标字段不成对：bvid 与 cid 必须成对有值或成对为空")
         return {
             "task_id": task.task_id,
             "position": position,
-            "bvid": bvid,
-            "cid": cid,
+            "bvid": None if slot is None else slot.target.bvid,
+            "cid": None if slot is None else slot.target.cid,
             "video_title": meta.video_title,
             "part_page": meta.part_page,
             "part_title": meta.part_title,
@@ -210,16 +213,28 @@ class _QueueMapper:
 
         Returns:
             Task: 组装完成的领域任务对象。
+
+        Raises:
+            QueueStorageError: 行里的目标字段不成对（bvid 与 cid 未同时存在或同时为空）。
         """
-        return Task(
-            task_id=row.task_id,
-            slot=None if row.bvid is None else TargetSlot(
-                target=VideoTarget(bvid=row.bvid, cid=row.cid),
+        bvid, cid = row.bvid, row.cid
+        if bvid is None and cid is None:
+            slot = None
+        elif bvid is not None and cid is not None:
+            slot = TargetSlot(
+                target=VideoTarget(bvid=bvid, cid=cid),
                 video_title=row.video_title,
                 part_page=row.part_page,
                 part_title=row.part_title,
                 duration_ms=row.duration_ms,
-            ),
+            )
+        else:
+            # 半配行是脏数据：静默当未配置等于把数据损坏伪装成正常
+            raise QueueStorageError(f"目标字段不成对：bvid 与 cid 必须成对有值或成对为空 [{row.task_id}]")
+
+        return Task(
+            task_id=row.task_id,
+            slot=slot,
             pack=DanmakuPack(
                 items=tuple(danmakus),
                 source_path=Path(row.source_path) if row.source_path else None,

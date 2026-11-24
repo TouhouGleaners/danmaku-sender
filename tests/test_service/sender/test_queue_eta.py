@@ -16,7 +16,12 @@ from danmaku_sender.types.models.queue import (
 )
 
 
-def _task(task_id: str, status: TaskStatus = TaskStatus.PENDING, cursor: int = 0, total: int = 2) -> Task:
+def _task(
+    task_id: str,
+    status: TaskStatus = TaskStatus.PENDING,
+    cursor: int = 0,
+    total: int = 2,
+) -> Task:
     """构造最小可用的任务。
 
     弹幕数默认 2：DelayManager.calc_eta 的契约是「最后一条发完不产生延时」，
@@ -27,13 +32,11 @@ def _task(task_id: str, status: TaskStatus = TaskStatus.PENDING, cursor: int = 0
         task_id=task_id,
         slot=TargetSlot(target=VideoTarget(bvid="BV1", cid=1)),
         pack=DanmakuPack(items=tuple(Danmaku(msg="x", progress=0) for _ in range(total))),
-        options=SendOptions(
-            pacing=TaskConfig(
-                min_delay=1.0, max_delay=1.0,
-                burst_enabled=False, burst_size=3,
-                rest_min=1.0, rest_max=1.0,
-            ),
-        ),
+        options=SendOptions(pacing=TaskConfig(
+            min_delay=1.0, max_delay=1.0,
+            burst_enabled=False, burst_size=3,
+            rest_min=1.0, rest_max=1.0,
+        )),
         state=TaskState(status=status, cursor=cursor),
     )
 
@@ -50,9 +53,9 @@ class TestCalcQueueEta:
         """
         queue_config = SenderConfig.QueueConfig(delay_between_tasks=100.0)
         future = (
-            _task("t2", TaskStatus.COMPLETED),
-            _task("t3", TaskStatus.FAILED),
-            _task("t4", TaskStatus.SKIPPED),
+            _task("t2", status=TaskStatus.COMPLETED),
+            _task("t3", status=TaskStatus.FAILED),
+            _task("t4", status=TaskStatus.SKIPPED),
         )
         assert _eta(future, queue_config) == _eta((), queue_config)
 
@@ -63,17 +66,17 @@ class TestCalcQueueEta:
         """
         queue_config = SenderConfig.QueueConfig(delay_between_tasks=100.0)
         trailing_done = (
-            _task("t2", TaskStatus.PENDING),
-            _task("t3", TaskStatus.COMPLETED),
+            _task("t2", status=TaskStatus.PENDING),
+            _task("t3", status=TaskStatus.COMPLETED),
         )
-        only_pending = (_task("t2", TaskStatus.PENDING),)
+        only_pending = (_task("t2", status=TaskStatus.PENDING),)
         assert _eta(trailing_done, queue_config) == _eta(only_pending, queue_config)
 
     def test_one_gap_per_pending_task(self):
         """每个待发任务前算一次间隔：每多一个待发任务，增量相同。"""
         queue_config = SenderConfig.QueueConfig(delay_between_tasks=100.0)
-        first = _task("t2", TaskStatus.PENDING)
-        second = _task("t3", TaskStatus.PENDING)
+        first = _task("t2", status=TaskStatus.PENDING)
+        second = _task("t3", status=TaskStatus.PENDING)
 
         base = _eta((), queue_config)
         one = _eta((first,), queue_config)
@@ -86,8 +89,8 @@ class TestCalcQueueEta:
     def test_future_task_eta_resumes_from_cursor(self):
         """续传后待发任务也可能带着游标，ETA 从游标起估，不算前半段。"""
         queue_config = SenderConfig.QueueConfig(delay_between_tasks=0.0)
-        fresh = _task("t2", TaskStatus.PENDING, total=4)
-        resumed = _task("t2", TaskStatus.PENDING, cursor=2, total=4)
+        fresh = _task("t2", status=TaskStatus.PENDING, total=4)
+        resumed = _task("t2", status=TaskStatus.PENDING, cursor=2, total=4)
 
         # total=4：从 0 起还剩 3 次延时，从游标 2 起只剩 2 次
         assert _eta((fresh,), queue_config) == pytest.approx(3.0)

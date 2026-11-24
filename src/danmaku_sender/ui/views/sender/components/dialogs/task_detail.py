@@ -132,7 +132,7 @@ class TaskDetailDialog(QDialog):
         self._bv_input = QLineEdit()
         self._bv_input.setPlaceholderText("输入BV号或视频链接")
         target = self.origin.target
-        self._bv_input.setText(target.bvid or "")
+        self._bv_input.setText(target.bvid if target else "")
         self._fetch_btn = QPushButton("获取视频信息")
         self._fetch_btn.setFixedWidth(100)
         bv_row.addWidget(self._bv_input)
@@ -164,7 +164,7 @@ class TaskDetailDialog(QDialog):
 
         task = self.origin
         target = task.target
-        target_assigned = target.is_assigned
+        target_assigned = target is not None
         if target_assigned:
             meta = task.meta
             url = f"https://www.bilibili.com/video/{target.bvid}"
@@ -318,9 +318,9 @@ class TaskDetailDialog(QDialog):
         part = next((p for p in self._video_info.parts if p.page == page), None) if self._video_info else None
 
         target = self.origin.target
-        cid = part.cid if part else target.cid
+        cid = part.cid if part else (target.cid if target else None)
         title = self._video_info.title if self._video_info else self.origin.meta.video_title
-        bvid = self._video_info.bvid if self._video_info else target.bvid
+        bvid = self._video_info.bvid if self._video_info else (target.bvid if target else None)
         part_text = self._part_combo.currentText()
 
         self._detail_title.setText(title or bvid or "")
