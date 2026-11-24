@@ -123,6 +123,11 @@ class TestValidationConfig:
         assert cfg.enabled is False
 
 
+def _cids(qs: "QueueState") -> list[int | None]:
+    """各任务的目标 CID 清单；未配置目标为 None。"""
+    return [t.target.cid if t.target else None for t in qs.tasks]
+
+
 def make_task(
     cid: int = 1,
     status: TaskStatus = TaskStatus.PENDING,
@@ -147,7 +152,7 @@ def make_incomplete_task(
 ) -> TaskDraft:
     """拖入 XML 建的任务：没定视频目标，弹幕可配。"""
     return TaskDraft(
-        target=VideoTarget(),
+        target=None,
         danmakus=[Danmaku(msg=f"m{i}", progress=i) for i in range(danmaku_count)],
         config=SenderConfig.PacingConfig().to_task_config(),
         status=status,
@@ -214,9 +219,9 @@ class TestQueueState:
         for t in (t1, t2, t3):
             qs.add_task(t)
         qs.move_task(t3.task_id, RelativePosition.ABOVE)
-        assert [t.target.cid for t in qs.tasks] == [1, 3, 2]
+        assert _cids(qs) == [1, 3, 2]
         qs.move_task(t1.task_id, RelativePosition.ABOVE)  # 已在顶端，顺序不变
-        assert [t.target.cid for t in qs.tasks] == [1, 3, 2]
+        assert _cids(qs) == [1, 3, 2]
 
     def test_move_non_movable_task(self):
         qs = QueueState()
@@ -225,7 +230,7 @@ class TestQueueState:
         qs.add_task(done)
         qs.add_task(other)
         qs.move_task(done.task_id, RelativePosition.BELOW)  # 已完成任务不可移动
-        assert [t.target.cid for t in qs.tasks] == [1, 2]
+        assert _cids(qs) == [1, 2]
 
     def test_relative_position_rejects_unknown(self):
         """非法的相对位置当场拒绝，不得静默按某一支处理"""
@@ -237,7 +242,7 @@ class TestQueueState:
             qs.move_task(t1.task_id, 999)  # type: ignore[arg-type]
         with pytest.raises(ValueError):
             qs.insert_task(make_task(3), t1.task_id, 999)  # type: ignore[arg-type]
-        assert [t.target.cid for t in qs.tasks] == [1, 2], "被拒的调用不得改动队列"
+        assert _cids(qs) == [1, 2], "被拒的调用不得改动队列"
 
     def test_reset_queue_semantics(self):
         """重置：移除已完成、失败转待发；跳过/未配置保留，其余不动"""
@@ -259,7 +264,7 @@ class TestQueueState:
             TaskStatus.PENDING,
             TaskStatus.PAUSED,
         ]
-        assert [t.target.cid for t in qs.tasks] == [2, 3, 4, 5, 6]
+        assert _cids(qs) == [2, 3, 4, 5, 6]
 
     def test_reset_queue_clears_failed_runtime(self):
         """失败转待发要清零进度与错误信息，不能把旧账带进新一轮"""
@@ -497,7 +502,9 @@ class TestQueueState:
         assert qs.get_task_by_id(t.task_id) is None
         replacement = qs.tasks[0]
         assert replacement.task_id != t.task_id
-        assert replacement.target.cid == 2
+        target = replacement.target
+        assert target is not None
+        assert target.cid == 2
 
     def test_reorder_tasks_by_ids(self):
         qs = QueueState()
@@ -505,14 +512,14 @@ class TestQueueState:
         for t in (t1, t2, t3):
             qs.add_task(t)
         qs.reorder_tasks([t3.task_id, t1.task_id, t2.task_id])
-        assert [v.target.cid for v in qs.tasks] == [3, 1, 2]
+        assert _cids(qs) == [3, 1, 2]
 
     def test_reorder_tasks_rejects_mismatch(self):
         qs = QueueState()
         t1 = make_task(1)
         qs.add_task(t1)
         qs.reorder_tasks(["nope"])
-        assert [v.target.cid for v in qs.tasks] == [1]
+        assert _cids(qs) == [1]
 
     def test_view_config_is_frozen(self):
         """任务参数是冻结类型：经 Task.config 改写在类型层就不可能"""
@@ -620,7 +627,7 @@ class TestQueueState:
         view = qs.get_task_by_id(t.task_id)
         assert view is not None
         draft = view.to_draft()
-        draft.target = VideoTarget()
+        draft.target = None
         qs.apply_edit(t.task_id, draft)
         # 拆掉已指定的目标也算换任务，task_id 已另立
         view = qs.tasks[0]
@@ -649,13 +656,12 @@ class TestQueueState:
         view = qs.get_task_by_id(t.task_id)
         assert view is not None
         draft = view.to_draft()
-        # 展示资料随槽同生共死，无目标任务存不住；探针走弹幕包的来源路径
-        draft.meta = replace(draft.meta, xml_path=Path("keep.xml"))
+        draft.meta = replace(draft.meta, xml_path=Path("new.xml"))
         qs.apply_edit(t.task_id, draft)
         view = qs.get_task_by_id(t.task_id)
         assert view is not None
         assert view.status is TaskStatus.SKIPPED
-        assert view.meta.xml_path == Path("keep.xml"), "编辑内容要落上"
+        assert view.meta.xml_path == Path("new.xml")
 
     def test_apply_edit_emits_status_then_data_on_flip(self):
         """状态翻转：先 taskStatusChanged 再 taskDataChanged"""

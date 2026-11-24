@@ -58,11 +58,9 @@ def _task(task_id: str) -> Task:
         task_id=task_id,
         slot=TargetSlot(target=VideoTarget(bvid="BV1", cid=1), video_title="标题"),
         pack=DanmakuPack(),
-        options=SendOptions(
-            pacing=TaskConfig(
-                min_delay=0.1, max_delay=0.1, burst_enabled=False, burst_size=0, rest_min=0.0, rest_max=0.0
-            )
-        ),
+        options=SendOptions(pacing=TaskConfig(
+            min_delay=0.1, max_delay=0.1, burst_enabled=False, burst_size=0, rest_min=0.0, rest_max=0.0
+        )),
         state=TaskState(status=TaskStatus.PENDING),
     )
 

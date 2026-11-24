@@ -160,9 +160,8 @@ class QueueSendWorker(WorkerThread):
             self.queueProgressUpdated.emit(idx, total, queue_eta)
             self.taskProgressUpdated.emit(task_id, attempted, task_total, eta)
 
-        slot = task.slot
-        assert slot is not None  # 发包任务必有目标，未配置的在上一层已跳过
-        target = slot.target
+        target = task.target
+        assert target is not None  # 发包任务必有目标，未配置的在上一层已跳过
         ctx = SendingContext(total=task.total, target=target)
         try:
             pipeline = SendPipeline(self.auth, self.network, self.history_manager)

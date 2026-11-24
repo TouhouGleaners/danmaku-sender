@@ -12,10 +12,16 @@ from danmaku_sender.service.sender import SendJob, SendPipeline
 from danmaku_sender.service.sender import pipeline as pipeline_mod
 from danmaku_sender.types.models.common import VideoTarget
 from danmaku_sender.types.models.danmaku import Danmaku
-from danmaku_sender.types.models.queue import TargetSlot, TaskStatus
+from danmaku_sender.types.models.queue import (
+    DanmakuPack,
+    SendOptions,
+    TargetSlot,
+    Task,
+    TaskState,
+    TaskStatus,
+)
 
-TARGET_CID = 1001
-TARGET = VideoTarget(bvid="BV1xx", cid=TARGET_CID)
+TARGET = VideoTarget(bvid="BV1xx", cid=1001)
 TASK_ID = "任务-冒烟"
 
 
@@ -42,10 +48,16 @@ def test_send_record_verify_share_task_id(tmp_path, monkeypatch):
     hm = HistoryManager(tmp_path / "history.db")
 
     slot = TargetSlot(target=TARGET, video_title="冒烟视频")
-    danmakus = (Danmaku(msg="a", progress=1000), Danmaku(msg="b", progress=2000))
+    task = Task(
+        task_id=TASK_ID,
+        slot=slot,
+        pack=DanmakuPack(items=(Danmaku(msg="a", progress=1000), Danmaku(msg="b", progress=2000))),
+        options=SendOptions(pacing=SenderConfig.PacingConfig(min_delay=0.1, max_delay=0.2).to_task_config()),
+        state=TaskState(),
+    )
 
     # 1) 任务开始：写任务记录
-    hm.upsert_task(TASK_ID, slot, None, TaskStatus.RUNNING)
+    hm.upsert_task(TASK_ID, slot, task.pack.source_path, TaskStatus.RUNNING)
 
     # 2) 发送：每条成功弹幕存证，带上同一个 task_id
     pipeline = SendPipeline(
@@ -56,15 +68,15 @@ def test_send_record_verify_share_task_id(tmp_path, monkeypatch):
     job = SendJob(
         task_id=TASK_ID,
         target=TARGET,
-        danmakus=list(danmakus),
-        config=SenderConfig.PacingConfig(min_delay=0.1, max_delay=0.2).to_task_config(),
+        danmakus=list(task.danmakus),
+        config=task.config,
         queue_config=SenderConfig.QueueConfig(),
         stop_event=threading.Event(),
     )
     pipeline.execute(job)
 
     # 3) 任务结束：状态落账
-    hm.upsert_task(TASK_ID, slot, None, TaskStatus.COMPLETED)
+    hm.upsert_task(TASK_ID, slot, task.pack.source_path, TaskStatus.COMPLETED)
 
     conn = sqlite3.connect(tmp_path / "history.db")
     evidence = conn.execute(
@@ -86,5 +98,5 @@ def test_send_record_verify_share_task_id(tmp_path, monkeypatch):
     assert record["status"] == "COMPLETED"
     assert record["video_title"] == "冒烟视频"
 
-    total, verified, lost = hm.get_stats(TARGET_CID)
+    total, verified, lost = hm.get_stats(TARGET.cid)
     assert (total, verified, lost) == (2, 2, 0)

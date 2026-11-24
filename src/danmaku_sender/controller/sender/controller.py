@@ -175,7 +175,7 @@ class SenderController(QObject):
         if view is None or not view.status.is_editable:
             return
         # 未指定目标时填上是补配置，不算换任务；改掉已指定的目标即另立新任务
-        replaced = view.target.is_assigned and source.target != view.target
+        replaced = view.target is not None and source.target != view.target
         new_id = uuid.uuid4().hex if replaced else task_id
         list_changed = tuple(source.danmakus) != view.danmakus
         incoming = replace(source.to_task(), task_id=new_id)
@@ -287,7 +287,7 @@ class SenderController(QObject):
         Returns:
             Task: 转换后的任务对象。
         """
-        return cls._built(draft.to_task(), draft.status, draft.error_msg, draft.attempted)
+        return cls._built(draft.to_task(), draft.status, draft.error_msg, draft.cursor)
 
     # endregion
 

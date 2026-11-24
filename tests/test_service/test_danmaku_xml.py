@@ -5,7 +5,7 @@ import pytest
 
 from danmaku_sender.config import SenderConfig
 from danmaku_sender.service.danmaku_xml import DanmakuXml
-from danmaku_sender.types.models.common import UnsentDanmakusRecord, VideoTarget
+from danmaku_sender.types.models.common import UnsentDanmakusRecord
 from danmaku_sender.types.models.danmaku import Danmaku
 from danmaku_sender.types.models.queue import TaskStatus
 
@@ -65,7 +65,7 @@ class TestLoadTask:
         task = DanmakuXml.load_task(path, config)
 
         assert task is not None
-        assert task.target == VideoTarget()
+        assert task.target is None, "未指定目标不造空壳"
         assert task.total == 2
         assert task.meta.xml_path == path
         assert task.config == config
