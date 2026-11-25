@@ -8,9 +8,9 @@ from danmaku_sender.types.models.danmaku import Danmaku
 from danmaku_sender.types.models.queue import (
     DanmakuPack,
     SendOptions,
-    TargetSlot,
     Task,
     TaskConfig,
+    TaskInfo,
     TaskState,
     TaskStatus,
 )
@@ -30,7 +30,8 @@ def _task(
     """
     return Task(
         task_id=task_id,
-        slot=TargetSlot(target=VideoTarget(bvid="BV1", cid=1)),
+        target=VideoTarget(bvid="BV1", cid=1),
+        info=TaskInfo(),
         pack=DanmakuPack(items=tuple(Danmaku(msg="x", progress=0) for _ in range(total))),
         options=SendOptions(pacing=TaskConfig(
             min_delay=1.0, max_delay=1.0,

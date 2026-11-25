@@ -4,6 +4,7 @@
 关库重开再水合，队列原样回来。
 """
 
+from dataclasses import replace
 from pathlib import Path
 
 import pytest
@@ -14,9 +15,16 @@ from danmaku_sender.infra.persistence.history_manager import HistoryManager
 from danmaku_sender.infra.persistence.queue_store import QueueStore
 from danmaku_sender.state import AppState
 from danmaku_sender.types.exceptions.exceptions import QueueStorageError
-from danmaku_sender.types.models.common import RelativePosition, TaskMeta, VideoTarget
+from danmaku_sender.types.models.common import RelativePosition, VideoTarget
 from danmaku_sender.types.models.danmaku import Danmaku
-from danmaku_sender.types.models.queue import TaskDraft, TaskStatus
+from danmaku_sender.types.models.queue import (
+    DanmakuPack,
+    SendOptions,
+    Task,
+    TaskInfo,
+    TaskState,
+    TaskStatus,
+)
 from tests.conftest import queue_failure_rows, queue_item_count, queue_task_rows
 
 TARGET = VideoTarget(bvid="BV1xx411c7mD", cid=1001)
@@ -34,31 +42,32 @@ def env(tmp_path):
     store.close()
 
 
-def make_draft(task_id: str, *, target: VideoTarget = TARGET, title: str = "标题", msgs=("a", "b")) -> TaskDraft:
-    return TaskDraft(
-        target=target,
-        meta=TaskMeta(video_title=title),
-        danmakus=[Danmaku(msg=m, progress=idx * 1000) for idx, m in enumerate(msgs)],
-        config=SenderConfig.PacingConfig(min_delay=0.1, max_delay=0.1).to_task_config(),
+def make_task(task_id: str, *, target: VideoTarget = TARGET, title: str = "标题", msgs=("a", "b")) -> Task:
+    return Task(
         task_id=task_id,
+        target=target,
+        info=TaskInfo(video_title=title),
+        pack=DanmakuPack(items=tuple(Danmaku(msg=m, progress=idx * 1000) for idx, m in enumerate(msgs))),
+        options=SendOptions(pacing=SenderConfig.PacingConfig(min_delay=0.1, max_delay=0.1).to_task_config()),
+        state=TaskState(),
     )
 
 
 class TestStructureWriteThrough:
     def test_add_persists_row_and_items(self, env):
         _, store, controller = env
-        controller.add_task(make_draft("t1"))
+        controller.add_task(make_task("t1"))
 
         task = store.load_all()[0]
-        assert (task.task_id, task.meta.video_title, task.status) == ("t1", "标题", TaskStatus.PENDING)
+        assert (task.task_id, task.info.video_title, task.status) == ("t1", "标题", TaskStatus.PENDING)
         assert [dm.msg for dm in task.danmakus] == ["a", "b"]
 
     def test_insert_lands_in_slot(self, env):
         _, store, controller = env
-        controller.add_task(make_draft("t1", msgs=("a",)))
-        controller.add_task(make_draft("t3", msgs=("c",)))
+        controller.add_task(make_task("t1", msgs=("a",)))
+        controller.add_task(make_task("t3", msgs=("c",)))
 
-        controller.insert_task(make_draft("t2", msgs=("b",)), ref_task_id="t1", position=RelativePosition.BELOW)
+        controller.insert_task(make_task("t2", msgs=("b",)), ref_task_id="t1", position=RelativePosition.BELOW)
 
         assert [t.task_id for t in store.load_all()] == ["t1", "t2", "t3"]
         assert [r.position for r in queue_task_rows()] == [0, 1, 2]
@@ -66,7 +75,7 @@ class TestStructureWriteThrough:
     def test_move_and_reorder_persist_order(self, env):
         _, store, controller = env
         for task_id in ("t1", "t2", "t3"):
-            controller.add_task(make_draft(task_id, msgs=(task_id,)))
+            controller.add_task(make_task(task_id, msgs=(task_id,)))
 
         controller.move_task("t1", RelativePosition.BELOW)
         assert [t.task_id for t in store.load_all()] == ["t2", "t1", "t3"]
@@ -76,8 +85,8 @@ class TestStructureWriteThrough:
 
     def test_remove_deletes_rows(self, env):
         _, store, controller = env
-        controller.add_task(make_draft("t1"))
-        controller.add_task(make_draft("t2", msgs=("x",)))
+        controller.add_task(make_task("t1"))
+        controller.add_task(make_task("t2", msgs=("x",)))
 
         controller.remove_task("t1")
 
@@ -86,8 +95,8 @@ class TestStructureWriteThrough:
 
     def test_clear_all_empties_store(self, env):
         _, store, controller = env
-        controller.add_task(make_draft("t1"))
-        controller.add_task(make_draft("t2", msgs=("x",)))
+        controller.add_task(make_task("t1"))
+        controller.add_task(make_task("t2", msgs=("x",)))
 
         controller.clear_all()
 
@@ -97,30 +106,28 @@ class TestStructureWriteThrough:
 class TestEditWriteThrough:
     def test_config_only_edit_keeps_items_and_progress(self, env):
         state, store, controller = env
-        controller.add_task(make_draft("t1"))
+        controller.add_task(make_task("t1"))
         controller._on_task_progress("t1", 1, 2, 0.0)
 
         view = state.workspace.queue_state.get_task_by_id("t1")
         assert view is not None
-        draft = view.to_draft()
-        draft.meta = TaskMeta(video_title="新标题")
-        controller.apply_edit("t1", draft)
+        source = replace(view, info=TaskInfo(video_title="新标题"))
+        controller.apply_edit("t1", source)
 
         task = store.load_all()[0]
-        assert task.meta.video_title == "新标题"
+        assert task.info.video_title == "新标题"
         assert task.cursor == 1, "清单没变，进度不倒退"
         assert [dm.msg for dm in task.danmakus] == ["a", "b"]
 
     def test_new_list_resets_cursor(self, env):
         state, store, controller = env
-        controller.add_task(make_draft("t1"))
+        controller.add_task(make_task("t1"))
         controller._on_task_progress("t1", 1, 2, 0.0)
 
         view = state.workspace.queue_state.get_task_by_id("t1")
         assert view is not None
-        draft = view.to_draft()
-        draft.danmakus = [Danmaku(msg="x", progress=0)]
-        controller.apply_edit("t1", draft)
+        source = replace(view, pack=DanmakuPack(items=(Danmaku(msg="x", progress=0),)))
+        controller.apply_edit("t1", source)
 
         task = store.load_all()[0]
         assert task.cursor == 0
@@ -128,13 +135,12 @@ class TestEditWriteThrough:
 
     def test_retarget_replaces_row(self, env):
         state, store, controller = env
-        controller.add_task(make_draft("t1"))
+        controller.add_task(make_task("t1"))
 
         view = state.workspace.queue_state.get_task_by_id("t1")
         assert view is not None
-        draft = view.to_draft()
-        draft.target = OTHER_TARGET
-        controller.apply_edit("t1", draft)
+        source = replace(view, target=OTHER_TARGET)
+        controller.apply_edit("t1", source)
 
         tasks = store.load_all()
         assert len(tasks) == 1, "旧任务不得残留在库里"
@@ -147,7 +153,7 @@ class TestEditWriteThrough:
     def test_assign_same_list_keeps_payload_and_failures(self, env):
         """清单没变时弹幕与失败记录原样保留，来源文件的修改照常写入数据库"""
         _, store, controller = env
-        controller.add_task(make_draft("t1"))
+        controller.add_task(make_task("t1"))
         store.record_result("t1", 0, status=TaskStatus.FAILED, cursor=1, burst_count=0, error="网络错误", failure_reason="网络错误")
 
         controller.assign_danmakus(
@@ -157,13 +163,13 @@ class TestEditWriteThrough:
         )
 
         task = store.load_all()[0]
-        assert str(task.meta.xml_path) == "new.xml", "来源文件的修改要写入数据库"
+        assert str(task.pack.source_path) == "new.xml", "来源文件的修改要写入数据库"
         assert [dm.msg for dm in task.danmakus] == ["a", "b"]
         assert queue_failure_rows("t1"), "清单没变，失败记录不得被清掉"
 
     def test_assign_new_list_replaces_items(self, env):
         _, store, controller = env
-        controller.add_task(make_draft("t1"))
+        controller.add_task(make_task("t1"))
         controller._on_task_progress("t1", 1, 2, 0.0)
 
         controller.assign_danmakus("t1", [Danmaku(msg="x", progress=0)])
@@ -175,7 +181,7 @@ class TestEditWriteThrough:
     def test_assign_completing_config_keeps_store_in_sync(self, env):
         """补全弹幕后状态翻成待发：库里与内存同一取值"""
         state, store, controller = env
-        controller.add_task(make_draft("t1", msgs=()))
+        controller.add_task(make_task("t1", msgs=()))
 
         controller.assign_danmakus("t1", [Danmaku(msg="a", progress=0)])
 
@@ -196,7 +202,7 @@ class TestStoreFailure:
         monkeypatch.setattr(store, "add_task", boom)
 
         with pytest.raises(QueueStorageError):
-            controller.add_task(make_draft("t1"))
+            controller.add_task(make_task("t1"))
 
         assert state.workspace.queue_state.is_empty
 
@@ -204,7 +210,7 @@ class TestStoreFailure:
 class TestRunStateWriteThrough:
     def test_progress_mirrors_cursor(self, env):
         _, store, controller = env
-        controller.add_task(make_draft("t1"))
+        controller.add_task(make_task("t1"))
 
         controller._on_task_started("t1", 0)
         controller._on_task_progress("t1", 2, 2, 0.0)
@@ -214,7 +220,7 @@ class TestRunStateWriteThrough:
 
     def test_reset_progress_zeroes_cursor(self, env):
         _, store, controller = env
-        controller.add_task(make_draft("t1"))
+        controller.add_task(make_task("t1"))
         controller._on_task_progress("t1", 1, 2, 0.0)
 
         controller.reset_progress("t1")
@@ -223,8 +229,8 @@ class TestRunStateWriteThrough:
 
     def test_reset_queue_removes_completed_and_revives_failed(self, env):
         _, store, controller = env
-        controller.add_task(make_draft("t1", msgs=("a",)))
-        controller.add_task(make_draft("t2", msgs=("x",)))
+        controller.add_task(make_task("t1", msgs=("a",)))
+        controller.add_task(make_task("t2", msgs=("x",)))
         controller._on_task_started("t1", 0)
         controller._on_task_completed("t1", None)
         controller._on_task_started("t2", 1)
@@ -243,8 +249,8 @@ class TestRestartRoundTrip:
         state = AppState()
         store = QueueStore(db_path)
         controller = SenderController(state, Settings(), HistoryManager(tmp_path / "history.db"), store)
-        controller.add_task(make_draft("t1"))
-        controller.insert_task(make_draft("t2", msgs=("x",)), ref_task_id="t1", position=RelativePosition.BELOW)
+        controller.add_task(make_task("t1"))
+        controller.insert_task(make_task("t2", msgs=("x",)), ref_task_id="t1", position=RelativePosition.BELOW)
         controller._on_task_started("t1", 0)
         controller._on_task_progress("t1", 1, 2, 0.0)
         store.close()

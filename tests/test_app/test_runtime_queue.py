@@ -10,9 +10,9 @@ from danmaku_sender.types.models.danmaku import Danmaku
 from danmaku_sender.types.models.queue import (
     DanmakuPack,
     SendOptions,
-    TargetSlot,
     Task,
     TaskConfig,
+    TaskInfo,
     TaskState,
     TaskStatus,
 )
@@ -32,7 +32,8 @@ def _seed_running_row(store: QueueStore) -> None:
     store.add_task(
         Task(
             task_id="t1",
-            slot=TargetSlot(target=VideoTarget(bvid="BV1", cid=1), video_title="标题"),
+            target=VideoTarget(bvid="BV1", cid=1),
+            info=TaskInfo(video_title="标题"),
             pack=DanmakuPack(items=(Danmaku(msg="a", progress=0),)),
             options=SendOptions(pacing=TaskConfig(min_delay=9.5, max_delay=10.5, burst_enabled=False, burst_size=0, rest_min=0.0, rest_max=0.0)),
             state=TaskState(status=TaskStatus.RUNNING, cursor=7),

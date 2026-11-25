@@ -3,6 +3,8 @@
 任务进入发送管线时写 task_record，终态时更新状态，供按任务对账。
 """
 
+from dataclasses import replace
+
 import pytest
 from PySide6.QtCore import QObject, Signal
 
@@ -13,9 +15,16 @@ from danmaku_sender.infra.persistence.history_manager import HistoryManager
 from danmaku_sender.infra.persistence.queue_store import QueueStore
 from danmaku_sender.service.sender.context import SendingContext
 from danmaku_sender.state import AppState
-from danmaku_sender.types.models.common import TaskMeta, VideoTarget
+from danmaku_sender.types.models.common import VideoTarget
 from danmaku_sender.types.models.danmaku import Danmaku
-from danmaku_sender.types.models.queue import TaskDraft, TaskStatus
+from danmaku_sender.types.models.queue import (
+    DanmakuPack,
+    SendOptions,
+    Task,
+    TaskInfo,
+    TaskState,
+    TaskStatus,
+)
 
 TARGET = VideoTarget(bvid="BV1xx411c7mD", cid=1001)
 
@@ -61,14 +70,15 @@ def env(tmp_path, monkeypatch):
 
 
 def _enqueue(controller: SenderController, task_id: str) -> str:
-    draft = TaskDraft(
-        target=TARGET,
-        meta=TaskMeta(video_title="标题"),
-        danmakus=[Danmaku(msg="a", progress=1000)],
-        config=SenderConfig.PacingConfig(min_delay=0.1, max_delay=0.1).to_task_config(),
+    task = Task(
         task_id=task_id,
+        target=TARGET,
+        info=TaskInfo(video_title="标题"),
+        pack=DanmakuPack(items=(Danmaku(msg="a", progress=1000),)),
+        options=SendOptions(pacing=SenderConfig.PacingConfig(min_delay=0.1, max_delay=0.1).to_task_config()),
+        state=TaskState(),
     )
-    controller.add_task(draft)
+    controller.add_task(task)
     return task_id
 
 
@@ -164,15 +174,14 @@ class TestTaskRecordLifecycle:
         controller.reset_queue()
         view = state.workspace.queue_state.get_task_by_id(task_id)
         assert view is not None
-        draft = view.to_draft()
-        draft.target = VideoTarget(bvid="BV2xx", cid=2002)
-        controller.apply_edit(task_id, draft)
+        source = replace(view, target=VideoTarget(bvid="BV2xx", cid=2002))
+        controller.apply_edit(task_id, source)
         new_id = state.workspace.queue_state.tasks[0].task_id
         assert new_id != task_id, "改目标应另立新 task_id"
 
         _start_round(controller)
         controller._on_task_started(new_id, 0)
-        controller._on_task_completed(new_id, SendingContext(total=1, target=draft.target))
+        controller._on_task_completed(new_id, SendingContext(total=1, target=source.target))
 
         assert _task_record(hm, task_id)["cid"] == 1001
         assert _task_record(hm, new_id)["cid"] == 2002

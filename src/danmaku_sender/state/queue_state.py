@@ -14,7 +14,6 @@ from danmaku_sender.types.models.danmaku import Danmaku
 from danmaku_sender.types.models.queue import (
     DanmakuPack,
     Task,
-    TaskDraft,
     TaskState,
     TaskStatus,
 )
@@ -245,13 +244,13 @@ class QueueState(QObject):
         self.tasksChanged.emit()
         logger.info(f"队列已恢复: {len(self._tasks)} 个任务")
 
-    def add_task(self, task: TaskDraft):
-        """添加任务到队列末尾（入队瞬间打成不可变任务）。
+    def add_task(self, task: Task):
+        """添加任务到队列末尾。
 
         入队时按配置完整性对齐状态，
-        不信任草稿自带的 status——配置残缺的任务不可能以待发进队。
+        不信任构造方自带的 status——配置残缺的任务不可能以待发进队。
         """
-        record = self._sync_config_status(task.to_task())
+        record = self._sync_config_status(task)
         self._tasks.append(record)
         self.tasksChanged.emit()
         logger.info(
@@ -259,21 +258,21 @@ class QueueState(QObject):
             f"{record.display_string} ({record.total} 条弹幕)"
         )
 
-    def insert_task(self, task: TaskDraft, ref_task_id: str, position: RelativePosition = RelativePosition.BELOW):
+    def insert_task(self, task: Task, ref_task_id: str, position: RelativePosition = RelativePosition.BELOW):
         """在参考任务上方/下方插入；参考不存在时追加到末尾。
 
         这是队列插入的唯一公开入口，调用方不接触绝对索引。
-        入队时按配置完整性对齐状态，不信任草稿自带的 status。
+        入队时按配置完整性对齐状态，不信任构造方自带的 status。
 
         Args:
-            task (TaskDraft): 任务草稿，入队时打成不可变任务。
+            task (Task): 任务。
             ref_task_id (str): 参考任务标识。
             position (RelativePosition): 插在参考任务的哪一侧，默认 BELOW。
 
         Raises:
             ValueError: position 不是 ABOVE / BELOW。
         """
-        record = self._sync_config_status(task.to_task())
+        record = self._sync_config_status(task)
 
         self._tasks.insert(self.insert_index_for(ref_task_id, position), record)
 
@@ -396,7 +395,7 @@ class QueueState(QObject):
         self.taskDataChanged.emit(task_id)
         logger.info(f"已分配弹幕: {task_id} ({record.total} 条)")
 
-    def apply_edit(self, task_id: str, source: TaskDraft, new_id: str | None = None):
+    def apply_edit(self, task_id: str, source: Task, new_id: str | None = None):
         """应用任务详情弹窗的修改结果。
 
         若任务处于不可编辑状态则忽略修改并记录警告。
@@ -418,7 +417,7 @@ class QueueState(QObject):
         replaced = old_target is not None and source.target != old_target
         if new_id is None:
             new_id = uuid.uuid4().hex if replaced else task_id
-        incoming = replace(source.to_task(), task_id=new_id)
+        incoming = replace(source, task_id=new_id)
         state = replace(record.state, status=source.status, error_msg=source.error_msg)
         if new_id != task_id or incoming.danmakus != record.danmakus:
             # 换任务或换弹幕列表，旧游标都不再指得准：前者换了目标视频，后者会指进新列表的中段

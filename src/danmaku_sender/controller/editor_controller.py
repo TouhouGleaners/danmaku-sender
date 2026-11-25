@@ -165,7 +165,7 @@ class EditorController(QObject):
         如果任务有关联的视频目标，使用视频时长进行时间越界检查；
         否则跳过时间检查。
         """
-        duration = self.task.meta.part_duration_ms
+        duration = self.task.info.duration_ms
 
         config = self.settings.validation_config
         self.session.validate(duration_ms=duration, config=config)
