@@ -9,16 +9,15 @@ from danmaku_sender.controller.concurrency import PoolTask
 from danmaku_sender.infra.persistence.history_manager import HistoryManager
 from danmaku_sender.state import AppState
 from danmaku_sender.types.models.common import DanmakuStatus, VideoTarget
-from danmaku_sender.types.models.queue import TargetSlot, TaskStatus
+from danmaku_sender.types.models.queue import TaskInfo, TaskStatus
 from danmaku_sender.ui.views.history.page import HistoryPage
 
 
-def _task_slot() -> TargetSlot:
-    return TargetSlot(
-        target=VideoTarget(bvid="BV1xx", cid=1001),
-        video_title="标题",
-        part_page=1,
-        part_title="分P",
+def _task_target_info() -> tuple[VideoTarget, TaskInfo]:
+    """构造 upsert_task 的目标与资料参数。"""
+    return (
+        VideoTarget(bvid="BV1xx", cid=1001),
+        TaskInfo(video_title="标题", part_page=1, part_title="分P"),
     )
 
 
@@ -53,7 +52,7 @@ def sync_pool(monkeypatch):
 class TestHistoryDrillDown:
     def test_tasks_fetched_populates_tree(self, page):
         widget, hm = page
-        hm.upsert_task("t1", _task_slot(), None, TaskStatus.COMPLETED)
+        hm.upsert_task("t1", *_task_target_info(), None, TaskStatus.COMPLETED)
 
         widget._refresh_data()
 
@@ -63,7 +62,7 @@ class TestHistoryDrillDown:
 
     def test_selecting_task_refreshes_with_task_id(self, page):
         widget, hm = page
-        hm.upsert_task("t1", _task_slot(), None, TaskStatus.COMPLETED)
+        hm.upsert_task("t1", *_task_target_info(), None, TaskStatus.COMPLETED)
         widget._refresh_data()
 
         calls: list = []
@@ -76,7 +75,7 @@ class TestHistoryDrillDown:
 
     def test_selecting_task_shows_summary(self, page):
         widget, hm = page
-        hm.upsert_task("t1", _task_slot(), None, TaskStatus.COMPLETED)
+        hm.upsert_task("t1", *_task_target_info(), None, TaskStatus.COMPLETED)
         widget._refresh_data()
 
         widget._bridge.treeRowPicked.emit(_task_row(widget))
@@ -93,7 +92,7 @@ class TestHistoryDrillDown:
 
     def test_selecting_group_leaves_detail_alone(self, page):
         widget, hm = page
-        hm.upsert_task("t1", _task_slot(), None, TaskStatus.COMPLETED)
+        hm.upsert_task("t1", *_task_target_info(), None, TaskStatus.COMPLETED)
         widget._refresh_data()
 
         calls: list = []

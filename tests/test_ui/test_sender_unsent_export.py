@@ -2,6 +2,8 @@
 
 任务无论完成还是失败，未发出的弹幕都要登记进导出清单。
 """
+import uuid
+
 import pytest
 
 from danmaku_sender.config import SenderConfig, Settings
@@ -11,7 +13,13 @@ from danmaku_sender.service.sender.context import SendingContext
 from danmaku_sender.state import AppState
 from danmaku_sender.types.models.common import VideoTarget
 from danmaku_sender.types.models.danmaku import Danmaku
-from danmaku_sender.types.models.queue import TaskDraft
+from danmaku_sender.types.models.queue import (
+    DanmakuPack,
+    SendOptions,
+    Task,
+    TaskInfo,
+    TaskState,
+)
 from danmaku_sender.ui.views.sender.page import SenderPage
 
 TARGET = VideoTarget(bvid="BV1xx411c7mD", cid=1001)
@@ -37,13 +45,16 @@ def make_ctx(dms: list[Danmaku]) -> SendingContext:
 
 def enqueue_task(state: AppState, dms: list[Danmaku]) -> str:
     """建一条带弹幕的任务，返回 task_id。"""
-    draft = TaskDraft(
+    task = Task(
+        task_id=uuid.uuid4().hex,
         target=TARGET,
-        danmakus=dms,
-        config=SenderConfig.PacingConfig(min_delay=0.1, max_delay=0.1).to_task_config(),
+        info=TaskInfo(),
+        pack=DanmakuPack(items=tuple(dms)),
+        options=SendOptions(pacing=SenderConfig.PacingConfig(min_delay=0.1, max_delay=0.1).to_task_config()),
+        state=TaskState(),
     )
-    state.workspace.queue_state.add_task(draft)
-    return draft.task_id
+    state.workspace.queue_state.add_task(task)
+    return task.task_id
 
 
 class TestUnsentExport:

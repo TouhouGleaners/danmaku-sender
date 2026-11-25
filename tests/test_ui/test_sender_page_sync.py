@@ -1,14 +1,23 @@
 """SenderPage 表格行与最新 Task 实例的同步验证。"""
 
+import uuid
+
 import pytest
 
 from danmaku_sender.config import SenderConfig, Settings
 from danmaku_sender.infra.persistence.history_manager import HistoryManager
 from danmaku_sender.infra.persistence.queue_store import QueueStore
 from danmaku_sender.state import AppState
-from danmaku_sender.types.models.common import TaskMeta, VideoTarget
+from danmaku_sender.types.models.common import VideoTarget
 from danmaku_sender.types.models.danmaku import Danmaku
-from danmaku_sender.types.models.queue import TaskDraft, TaskStatus
+from danmaku_sender.types.models.queue import (
+    DanmakuPack,
+    SendOptions,
+    Task,
+    TaskInfo,
+    TaskState,
+    TaskStatus,
+)
 from danmaku_sender.ui.views.sender.page import SenderPage
 
 
@@ -26,14 +35,16 @@ def page(qapp, tmp_path):
 
 def _enqueue(page: SenderPage) -> str:
     """入队一条配置齐备的任务，返回 task_id。"""
-    draft = TaskDraft(
+    task = Task(
+        task_id=uuid.uuid4().hex,
         target=VideoTarget(bvid="BV1xx411c7mD", cid=1001),
-        meta=TaskMeta(video_title="标题"),
-        danmakus=[Danmaku(msg="a", progress=0), Danmaku(msg="b", progress=1000)],
-        config=SenderConfig.PacingConfig().to_task_config(),
+        info=TaskInfo(video_title="标题"),
+        pack=DanmakuPack(items=(Danmaku(msg="a", progress=0), Danmaku(msg="b", progress=1000))),
+        options=SendOptions(pacing=SenderConfig.PacingConfig().to_task_config()),
+        state=TaskState(),
     )
-    page.sender_controller.add_task(draft)
-    return draft.task_id
+    page.sender_controller.add_task(task)
+    return task.task_id
 
 
 class TestRowSync:

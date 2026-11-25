@@ -1,4 +1,5 @@
 """状态与配置模型单元测试 — GlobalConfig, SenderConfig, MonitorConfig, ValidationConfig, QueueState"""
+import uuid
 from dataclasses import FrozenInstanceError, replace
 from pathlib import Path
 
@@ -14,7 +15,14 @@ from danmaku_sender.config import (
 from danmaku_sender.state import QueueState
 from danmaku_sender.types.models.common import RelativePosition, VideoTarget
 from danmaku_sender.types.models.danmaku import Danmaku
-from danmaku_sender.types.models.queue import TaskDraft, TaskStatus
+from danmaku_sender.types.models.queue import (
+    DanmakuPack,
+    SendOptions,
+    Task,
+    TaskInfo,
+    TaskState,
+    TaskStatus,
+)
 
 
 class TestGlobalConfig:
@@ -132,30 +140,34 @@ def make_task(
     cid: int = 1,
     status: TaskStatus = TaskStatus.PENDING,
     danmaku_count: int = 1,
-) -> TaskDraft:
+) -> Task:
     """构造一条任务。默认带弹幕，是配置齐备的正常任务。
 
     配置残缺的任务会被 QueueState 对齐状态，所以要构造「缺弹幕」的用例
-    必须显式传 ``danmaku_count=0``，别指望草稿自带的 status 能蒙混过关。
+    必须显式传 ``danmaku_count=0``，别指望构造方自带的 status 能蒙混过关。
     """
-    return TaskDraft(
+    return Task(
+        task_id=uuid.uuid4().hex,
         target=VideoTarget(bvid=f"BV{cid:03d}", cid=cid),
-        danmakus=[Danmaku(msg=f"m{i}", progress=i) for i in range(danmaku_count)],
-        config=SenderConfig.PacingConfig().to_task_config(),
-        status=status,
+        info=TaskInfo(),
+        pack=DanmakuPack(items=tuple(Danmaku(msg=f"m{i}", progress=i) for i in range(danmaku_count))),
+        options=SendOptions(pacing=SenderConfig.PacingConfig().to_task_config()),
+        state=TaskState(status=status),
     )
 
 
 def make_incomplete_task(
     danmaku_count: int = 0,
     status: TaskStatus = TaskStatus.UNCONFIGURED,
-) -> TaskDraft:
+) -> Task:
     """拖入 XML 建的任务：没定视频目标，弹幕可配。"""
-    return TaskDraft(
+    return Task(
+        task_id=uuid.uuid4().hex,
         target=None,
-        danmakus=[Danmaku(msg=f"m{i}", progress=i) for i in range(danmaku_count)],
-        config=SenderConfig.PacingConfig().to_task_config(),
-        status=status,
+        info=TaskInfo(),
+        pack=DanmakuPack(items=tuple(Danmaku(msg=f"m{i}", progress=i) for i in range(danmaku_count))),
+        options=SendOptions(pacing=SenderConfig.PacingConfig().to_task_config()),
+        state=TaskState(status=status),
     )
 
 
@@ -399,9 +411,8 @@ class TestQueueState:
         qs.update_task_progress(t.task_id, 5, 10)
         view = qs.get_task_by_id(t.task_id)
         assert view is not None
-        draft = view.to_draft()
-        draft.danmakus = [Danmaku(msg="x", progress=0)]
-        qs.apply_edit(t.task_id, draft)
+        source = replace(view, pack=DanmakuPack(items=(Danmaku(msg="x", progress=0),)))
+        qs.apply_edit(t.task_id, source)
         view = qs.get_task_by_id(t.task_id)
         assert view is not None
         assert view.cursor == 0
@@ -414,9 +425,8 @@ class TestQueueState:
         qs.update_task_progress(t.task_id, 5, 10)
         view = qs.get_task_by_id(t.task_id)
         assert view is not None
-        draft = view.to_draft()
-        draft.target = VideoTarget(bvid="BV999", cid=999)
-        qs.apply_edit(t.task_id, draft)
+        source = replace(view, target=VideoTarget(bvid="BV999", cid=999))
+        qs.apply_edit(t.task_id, source)
         new_view = qs.tasks[0]  # 换目标另立新 task_id，按新任务查
         assert new_view.task_id != t.task_id
         assert new_view.cursor == 0
@@ -455,7 +465,7 @@ class TestQueueState:
         view = qs.get_task_by_id(t.task_id)
         assert view is not None
         assert view.total == 1
-        assert view.meta.xml_path == Path("a.xml")
+        assert view.pack.source_path == Path("a.xml")
         assert view.status == TaskStatus.PENDING  # UNCONFIGURED → PENDING
 
     def test_apply_edit_refused_when_running(self):
@@ -464,12 +474,11 @@ class TestQueueState:
         t = make_task(1)
         qs.add_task(t)
         qs.update_task_status(t.task_id, TaskStatus.RUNNING)
-        draft = make_task(99)
-        draft.meta = replace(draft.meta, part_title="hacked")
-        qs.apply_edit(t.task_id, draft)
+        source = replace(make_task(99), info=TaskInfo(part_title="hacked"))
+        qs.apply_edit(t.task_id, source)
         view = qs.get_task_by_id(t.task_id)
         assert view is not None
-        assert view.meta.part_title != "hacked"
+        assert view.info.part_title != "hacked"
 
     def test_apply_edit_rebuilds_spec(self):
         qs = QueueState()
@@ -477,15 +486,17 @@ class TestQueueState:
         qs.add_task(t)
         view = qs.get_task_by_id(t.task_id)
         assert view is not None
-        draft = view.to_draft()
-        draft.meta = replace(draft.meta, part_title="新标题")
-        draft.danmakus = [Danmaku(msg="x", progress=1000)]
-        qs.apply_edit(t.task_id, draft)
+        source = replace(
+            view,
+            info=replace(view.info, part_title="新标题"),
+            pack=DanmakuPack(items=(Danmaku(msg="x", progress=1000),)),
+        )
+        qs.apply_edit(t.task_id, source)
         view = qs.get_task_by_id(t.task_id)
         assert view is not None
-        assert view.meta.part_title == "新标题"
+        assert view.info.part_title == "新标题"
         assert view.total == 1
-        assert view.task_id == t.task_id  # id 不被沙盒覆盖
+        assert view.task_id == t.task_id  # id 不被修改稿覆盖
 
     def test_apply_edit_reassigning_target_renews_id(self):
         """改目标即换任务：另立新 id，旧 id 不再代表改过目标的任务"""
@@ -494,10 +505,9 @@ class TestQueueState:
         qs.add_task(t)
         view = qs.get_task_by_id(t.task_id)
         assert view is not None
-        draft = view.to_draft()
-        draft.target = VideoTarget(bvid="BV002", cid=2)
+        source = replace(view, target=VideoTarget(bvid="BV002", cid=2))
 
-        qs.apply_edit(t.task_id, draft)
+        qs.apply_edit(t.task_id, source)
 
         assert qs.get_task_by_id(t.task_id) is None
         replacement = qs.tasks[0]
@@ -538,8 +548,7 @@ class TestQueueState:
 
         qs = QueueState()
         dm = Danmaku(msg="hi", progress=0)
-        t = make_task(1)
-        t.danmakus = [dm]
+        t = replace(make_task(1), pack=DanmakuPack(items=(dm,)))
         qs.add_task(t)
 
         snap = qs.snapshots({TaskStatus.PENDING})[0]
@@ -596,9 +605,8 @@ class TestQueueState:
         qs.update_task_status(t.task_id, TaskStatus.UNCONFIGURED, "未指定视频目标")
         view = qs.get_task_by_id(t.task_id)
         assert view is not None
-        draft = view.to_draft()
-        draft.target = VideoTarget(bvid="BV1xx411c7mD", cid=1001)
-        qs.apply_edit(t.task_id, draft)
+        source = replace(view, target=VideoTarget(bvid="BV1xx411c7mD", cid=1001))
+        qs.apply_edit(t.task_id, source)
         view = qs.get_task_by_id(t.task_id)
         assert view is not None
         assert view.status is TaskStatus.PENDING
@@ -612,9 +620,8 @@ class TestQueueState:
         qs.assign_danmakus(t.task_id, [Danmaku(msg="hi", progress=0)], xml_path=Path("a.xml"))
         view = qs.get_task_by_id(t.task_id)
         assert view is not None
-        draft = view.to_draft()
-        draft.danmakus = []
-        qs.apply_edit(t.task_id, draft)
+        source = replace(view, pack=DanmakuPack())
+        qs.apply_edit(t.task_id, source)
         view = qs.get_task_by_id(t.task_id)
         assert view is not None
         assert view.status is TaskStatus.UNCONFIGURED
@@ -626,9 +633,8 @@ class TestQueueState:
         qs.assign_danmakus(t.task_id, [Danmaku(msg="hi", progress=0)], xml_path=Path("a.xml"))
         view = qs.get_task_by_id(t.task_id)
         assert view is not None
-        draft = view.to_draft()
-        draft.target = None
-        qs.apply_edit(t.task_id, draft)
+        source = replace(view, target=None)
+        qs.apply_edit(t.task_id, source)
         # 拆掉已指定的目标也算换任务，task_id 已另立
         view = qs.tasks[0]
         assert view.status is TaskStatus.UNCONFIGURED
@@ -641,9 +647,8 @@ class TestQueueState:
         qs.update_task_status(t.task_id, TaskStatus.SKIPPED, "未指定视频目标")
         view = qs.get_task_by_id(t.task_id)
         assert view is not None
-        draft = view.to_draft()
-        draft.target = VideoTarget(bvid="BV1xx411c7mD", cid=1001)
-        qs.apply_edit(t.task_id, draft)
+        source = replace(view, target=VideoTarget(bvid="BV1xx411c7mD", cid=1001))
+        qs.apply_edit(t.task_id, source)
         view = qs.get_task_by_id(t.task_id)
         assert view is not None
         assert view.status is TaskStatus.PENDING
@@ -655,13 +660,12 @@ class TestQueueState:
         qs.update_task_status(t.task_id, TaskStatus.SKIPPED, "未指定视频目标")
         view = qs.get_task_by_id(t.task_id)
         assert view is not None
-        draft = view.to_draft()
-        draft.meta = replace(draft.meta, xml_path=Path("new.xml"))
-        qs.apply_edit(t.task_id, draft)
+        source = replace(view, pack=replace(view.pack, source_path=Path("new.xml")))
+        qs.apply_edit(t.task_id, source)
         view = qs.get_task_by_id(t.task_id)
         assert view is not None
         assert view.status is TaskStatus.SKIPPED
-        assert view.meta.xml_path == Path("new.xml")
+        assert view.pack.source_path == Path("new.xml")
 
     def test_apply_edit_emits_status_then_data_on_flip(self):
         """状态翻转：先 taskStatusChanged 再 taskDataChanged"""
@@ -673,9 +677,8 @@ class TestQueueState:
         qs.taskDataChanged.connect(lambda tid: events.append("data"))
         view = qs.get_task_by_id(t.task_id)
         assert view is not None
-        draft = view.to_draft()
-        draft.target = VideoTarget(bvid="BV1xx411c7mD", cid=1001)
-        qs.apply_edit(t.task_id, draft)
+        source = replace(view, target=VideoTarget(bvid="BV1xx411c7mD", cid=1001))
+        qs.apply_edit(t.task_id, source)
         assert events == ["status", "data"]
 
     def test_apply_edit_emits_data_only_without_flip(self):
@@ -687,16 +690,14 @@ class TestQueueState:
         qs.taskDataChanged.connect(lambda tid: events.append("data"))
         view = qs.get_task_by_id(t.task_id)
         assert view is not None
-        draft = view.to_draft()
-        draft.meta = replace(draft.meta, part_title="改个标题")
-        qs.apply_edit(t.task_id, draft)
+        source = replace(view, info=replace(view.info, part_title="改个标题"))
+        qs.apply_edit(t.task_id, source)
         assert events == ["data"]
 
     def test_sendable_danmaku_count_excludes_unconfigured(self):
         """未配置任务的弹幕不进发送进度分母"""
         qs = QueueState()
-        ready = make_task(1)
-        ready.danmakus = [Danmaku(msg="a", progress=0), Danmaku(msg="b", progress=1)]
+        ready = make_task(1, danmaku_count=2)
         qs.add_task(ready)
         qs.add_task(make_incomplete_task(danmaku_count=5))
         assert qs.total_danmaku_count == 7
@@ -715,7 +716,7 @@ class TestQueueState:
         assert qs.sendable_danmaku_count == 1
 
     def test_add_task_never_leaves_incomplete_pending(self):
-        """入队时按配置完整性对齐状态，不信任草稿自带的 status"""
+        """入队时按配置完整性对齐状态，不信任构造方自带的 status"""
         qs = QueueState()
         lying = make_task(1, TaskStatus.PENDING, danmaku_count=0)
         qs.add_task(lying)
@@ -723,8 +724,8 @@ class TestQueueState:
         assert view is not None
         assert view.status is TaskStatus.UNCONFIGURED
 
-    def test_add_task_promotes_complete_draft(self):
-        """配置齐备的草稿即便标着未配置，入队即转待发"""
+    def test_add_task_promotes_complete_task(self):
+        """配置齐备的任务即便标着未配置，入队即转待发"""
         qs = QueueState()
         stale = make_task(1, TaskStatus.UNCONFIGURED)
         qs.add_task(stale)

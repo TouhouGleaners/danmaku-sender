@@ -187,10 +187,10 @@ class QueueTableModel(QAbstractTableModel):
             case QueueCol.PART:
                 if task.target is None:
                     return "—"
-                meta = task.meta
-                if meta.part_title:
-                    return f"P{meta.part_page} - {meta.part_title}"
-                return f"P{meta.part_page}"
+                info = task.info
+                if info.part_title:
+                    return f"P{info.part_page} - {info.part_title}"
+                return f"P{info.part_page}"
             case QueueCol.COUNT:
                 return str(len(task.danmakus))
             case QueueCol.STATUS:

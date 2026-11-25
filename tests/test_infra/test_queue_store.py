@@ -17,9 +17,9 @@ from danmaku_sender.types.models.danmaku import Danmaku
 from danmaku_sender.types.models.queue import (
     DanmakuPack,
     SendOptions,
-    TargetSlot,
     Task,
     TaskConfig,
+    TaskInfo,
     TaskState,
     TaskStatus,
 )
@@ -46,11 +46,11 @@ def make_task(
     error: str = "",
     msgs: tuple[str, ...] = (),
 ) -> Task:
-    """构造领域任务，弹幕清单随 ``msgs`` 带入；``bvid``/``cid`` 任一为 None 即未配置目标，不建目标槽。"""
+    """构造领域任务，弹幕清单随 ``msgs`` 带入；``bvid``/``cid`` 任一为 None 即未配置目标。"""
     return Task(
         task_id=task_id,
-        slot=None if bvid is None or cid is None else TargetSlot(
-            target=VideoTarget(bvid=bvid, cid=cid),
+        target=None if bvid is None or cid is None else VideoTarget(bvid=bvid, cid=cid),
+        info=TaskInfo(
             video_title=title,
             part_page=part_page,
             part_title=part_title,
@@ -143,7 +143,7 @@ class TestUpdateTask:
         store.update_task(make_task("t1", title="新标题", status=TaskStatus.PAUSED, cursor=3))
 
         task = store.load_all()[0]
-        assert task.meta.video_title == "新标题"
+        assert task.info.video_title == "新标题"
         assert (task.status, task.cursor) == (TaskStatus.PAUSED, 3), "状态与进度按新值写入"
 
     def test_update_without_replace_keeps_payload_and_failures(self, store):
@@ -208,7 +208,7 @@ class TestTaskStateUpdate:
         store.add_task(make_task("t1", msgs=("a", "b")))
         store.update_task_state("t1", status=TaskStatus.FAILED, cursor=1, burst_count=0, error="网络异常")
         task = store.load_all()[0]
-        assert task.meta.video_title == "标题"
+        assert task.info.video_title == "标题"
         assert len(task.danmakus) == 2
 
     def test_update_state_missing_row_raises(self, store):
@@ -294,7 +294,7 @@ class TestLoadAll:
         assert [t.task_id for t in tasks] == ["t1", "t2"]
         assert [dm.msg for dm in tasks[0].danmakus] == ["a", "b", "c"]
         assert (tasks[0].status, tasks[0].cursor) == (TaskStatus.PAUSED, 3)
-        assert tasks[1].meta.video_title == "二号"
+        assert tasks[1].info.video_title == "二号"
 
     def test_load_all_round_trips_danmaku_fields(self, store):
         store.add_task(make_task("t1", msgs=("a",)))
@@ -322,7 +322,7 @@ class TestReplace:
         tasks = store.load_all()
         assert [t.task_id for t in tasks] == ["t9", "t2"]
         assert queue_task_rows()[0].position == 0
-        assert tasks[0].meta.video_title == "新"
+        assert tasks[0].info.video_title == "新"
         assert [dm.msg for dm in tasks[0].danmakus] == ["x", "y"]
         assert queue_item_count("t1") == 0
 

@@ -67,7 +67,7 @@ class TestLoadTask:
         assert task is not None
         assert task.target is None, "未指定目标不造空壳"
         assert task.total == 2
-        assert task.meta.xml_path == path
+        assert task.pack.source_path == path
         assert task.config == config
         assert task.status is TaskStatus.UNCONFIGURED
 

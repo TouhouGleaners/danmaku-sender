@@ -37,9 +37,9 @@ from danmaku_sender.types.models.danmaku import Danmaku
 from danmaku_sender.types.models.queue import (
     DanmakuPack,
     SendOptions,
-    TargetSlot,
     Task,
     TaskConfig,
+    TaskInfo,
     TaskState,
     TaskStatus,
 )
@@ -132,18 +132,18 @@ class _QueueMapper:
         Returns:
             dict: 对应数据库表列的键值映射。
         """
-        slot = task.slot
-        meta = task.meta
+        target = task.target
+        info = task.info
         return {
             "task_id": task.task_id,
             "position": position,
-            "bvid": None if slot is None else slot.target.bvid,
-            "cid": None if slot is None else slot.target.cid,
-            "video_title": meta.video_title,
-            "part_page": meta.part_page,
-            "part_title": meta.part_title,
-            "duration_ms": meta.part_duration_ms,
-            "source_path": str(meta.xml_path) if meta.xml_path else None,
+            "bvid": None if target is None else target.bvid,
+            "cid": None if target is None else target.cid,
+            "video_title": info.video_title,
+            "part_page": info.part_page,
+            "part_title": info.part_title,
+            "duration_ms": info.duration_ms,
+            "source_path": str(task.pack.source_path) if task.pack.source_path else None,
             "min_delay": task.config.min_delay,
             "max_delay": task.config.max_delay,
             "burst_enabled": int(task.config.burst_enabled),
@@ -219,22 +219,22 @@ class _QueueMapper:
         """
         bvid, cid = row.bvid, row.cid
         if bvid is None and cid is None:
-            slot = None
+            target = None
         elif bvid is not None and cid is not None:
-            slot = TargetSlot(
-                target=VideoTarget(bvid=bvid, cid=cid),
-                video_title=row.video_title,
-                part_page=row.part_page,
-                part_title=row.part_title,
-                duration_ms=row.duration_ms,
-            )
+            target = VideoTarget(bvid=bvid, cid=cid)
         else:
             # 半配行是脏数据：静默当未配置等于把数据损坏伪装成正常
             raise QueueStorageError(f"目标字段不成对：bvid 与 cid 必须成对有值或成对为空 [{row.task_id}]")
 
         return Task(
             task_id=row.task_id,
-            slot=slot,
+            target=target,
+            info=TaskInfo(
+                video_title=row.video_title,
+                part_page=row.part_page,
+                part_title=row.part_title,
+                duration_ms=row.duration_ms,
+            ),
             pack=DanmakuPack(
                 items=tuple(danmakus),
                 source_path=Path(row.source_path) if row.source_path else None,

@@ -3,21 +3,32 @@
 凭证缺失与队列无可执行任务是两种独立的未满足条件；PAUSED 属于可启动范围。
 """
 
+import uuid
+
 from danmaku_sender.config import Settings
 from danmaku_sender.controller.sender import SenderController
 from danmaku_sender.infra.persistence.history_manager import HistoryManager
 from danmaku_sender.infra.persistence.queue_store import QueueStore
 from danmaku_sender.state import AppState
 from danmaku_sender.types.models.common import StartReadiness, VideoTarget
-from danmaku_sender.types.models.queue import TaskDraft, TaskStatus
+from danmaku_sender.types.models.queue import (
+    DanmakuPack,
+    SendOptions,
+    Task,
+    TaskInfo,
+    TaskState,
+    TaskStatus,
+)
 
 
-def _task(status: TaskStatus) -> TaskDraft:
-    return TaskDraft(
+def _task(status: TaskStatus) -> Task:
+    return Task(
+        task_id=uuid.uuid4().hex,
         target=VideoTarget(bvid="BV1", cid=1),
-        danmakus=[],
-        config=Settings().sender_config.pacing.to_task_config(),
-        status=status,
+        info=TaskInfo(),
+        pack=DanmakuPack(),
+        options=SendOptions(pacing=Settings().sender_config.pacing.to_task_config()),
+        state=TaskState(status=status),
     )
 
 
