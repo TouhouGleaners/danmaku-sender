@@ -53,7 +53,7 @@ class SendMode(Enum):
 class VideoTarget:
     """发送/核销的目标：以 BVID+CID 定位的某个分P，纯寻址键。
 
-    字段必填；「未配置目标」由外层的空槽表达（``Task.slot is None``），不造空壳。
+    字段必填；「未配置目标」由外层的空值表达（``Task.target is None``），不造空壳。
 
     Attributes:
         bvid (str): 视频 BVID。
@@ -61,24 +61,6 @@ class VideoTarget:
     """
     bvid: str
     cid: int
-
-
-@dataclass(frozen=True)
-class TaskMeta:
-    """任务的描述性资料：展示、校验与溯源。
-
-    Attributes:
-        video_title (str): 视频标题。
-        part_page (int | None): 第几 P（1-based），未指定为 None。
-        part_title (str): 分P标题。
-        part_duration_ms (int | None): 分P时长（毫秒），未知为 None。
-        xml_path (Path | None): 弹幕文件来自哪。
-    """
-    video_title: str = ""
-    part_page: int | None = None
-    part_title: str = ""
-    part_duration_ms: int | None = None
-    xml_path: Path | None = None
 
 
 class MonitorStats(TypedDict):

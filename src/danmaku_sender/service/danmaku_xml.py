@@ -1,16 +1,22 @@
 """B 站弹幕 XML 的解析与导出。"""
 
 import logging
+import uuid
 import xml.etree.ElementTree as ET
 from pathlib import Path
 from xml.dom import minidom
 
-from danmaku_sender.types.models.common import (
-    TaskMeta,
-    UnsentDanmakusRecord,
-)
+from danmaku_sender.types.models.common import UnsentDanmakusRecord
 from danmaku_sender.types.models.danmaku import Danmaku
-from danmaku_sender.types.models.queue import TaskConfig, TaskDraft
+from danmaku_sender.types.models.queue import (
+    DanmakuPack,
+    SendOptions,
+    Task,
+    TaskConfig,
+    TaskInfo,
+    TaskState,
+    TaskStatus,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -67,15 +73,15 @@ class DanmakuXml:
         return dmids
 
     @staticmethod
-    def load_task(xml_path: Path, config: TaskConfig) -> TaskDraft:
-        """读取本地 XML 文件并组装成一条未指定视频目标的任务草稿。
+    def load_task(xml_path: Path, config: TaskConfig) -> Task:
+        """读取本地 XML 文件并组装成一条未指定视频目标的任务。
 
         Args:
             xml_path: XML 文件路径。
             config: 入队时定死的发送节奏快照。
 
         Returns:
-            TaskDraft: 任务草稿，状态为 UNCONFIGURED。
+            Task: 任务，状态为 UNCONFIGURED。
 
         Raises:
             FileNotFoundError: 文件不存在。
@@ -94,13 +100,14 @@ class DanmakuXml:
         if not danmakus:
             raise ValueError("文件中没有弹幕")
 
-        task = TaskDraft(
-            danmakus=danmakus,
-            config=config,
-            meta=TaskMeta(xml_path=xml_path),
+        return Task(
+            task_id=uuid.uuid4().hex,
+            target=None,
+            info=TaskInfo(),
+            pack=DanmakuPack(items=tuple(danmakus), source_path=xml_path),
+            options=SendOptions(pacing=config),
+            state=TaskState(status=TaskStatus.UNCONFIGURED),
         )
-        task.status = task.initial_status
-        return task
 
     @staticmethod
     def export_unsent(records: list[UnsentDanmakusRecord], filepath: Path) -> None:

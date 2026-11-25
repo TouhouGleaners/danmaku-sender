@@ -1062,7 +1062,7 @@ class SenderPage(QWidget):
     @staticmethod
     def _unsent_label(task: Task) -> str:
         """导出文件名的主体：优先用导入的 XML 文件名，其次视频标题"""
-        xml_path = task.meta.xml_path
+        xml_path = task.pack.source_path
         return xml_path.stem if xml_path is not None else task.display_string
 
     @Slot()

@@ -264,8 +264,8 @@ class MonitorPage(QWidget):
                 continue
             bvid, cid = target.bvid, target.cid
             name = task.display_string
-            if task.meta.part_title:
-                name = f"{name} - {task.meta.part_title}"
+            if task.info.part_title:
+                name = f"{name} - {task.info.part_title}"
             rows.append(MonitorRow(
                 bvid=bvid,
                 cid=cid,

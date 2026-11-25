@@ -1,3 +1,4 @@
+import uuid
 from pathlib import Path
 
 from PySide6.QtCore import Slot
@@ -20,8 +21,15 @@ from danmaku_sender.controller.video_controller import VideoController
 from danmaku_sender.service.danmaku_xml import DanmakuXml
 from danmaku_sender.state import AppState
 from danmaku_sender.types.exceptions.exceptions import QueueStorageError
-from danmaku_sender.types.models.common import RelativePosition, TaskMeta, VideoTarget
-from danmaku_sender.types.models.queue import TaskDraft
+from danmaku_sender.types.models.common import RelativePosition, VideoTarget
+from danmaku_sender.types.models.queue import (
+    DanmakuPack,
+    SendOptions,
+    Task,
+    TaskInfo,
+    TaskState,
+    TaskStatus,
+)
 from danmaku_sender.types.models.video import VideoInfo
 from danmaku_sender.utils.string_utils import parse_bilibili_link
 
@@ -237,19 +245,19 @@ class TaskBuilderDialog(QDialog):
                 QMessageBox.warning(self, "解析失败", f"弹幕文件解析失败:\n{e}")
                 return
 
-        task = TaskDraft(
+        task = Task(
+            task_id=uuid.uuid4().hex,
             target=target,
-            meta=TaskMeta(
+            info=TaskInfo(
                 video_title=self._video_info.title,
                 part_page=part.page,
                 part_title=part.title,
-                part_duration_ms=part.duration * 1000,  # 秒转毫秒
-                xml_path=xml_path,
+                duration_ms=part.duration * 1000,  # 秒转毫秒
             ),
-            danmakus=danmakus,
-            config=self.settings.sender_config.pacing.to_task_config(),
+            pack=DanmakuPack(items=tuple(danmakus), source_path=xml_path),
+            options=SendOptions(pacing=self.settings.sender_config.pacing.to_task_config()),
+            state=TaskState(status=TaskStatus.PENDING),
         )
-        task.status = task.initial_status
 
         try:
             if self._ref_task_id is None:

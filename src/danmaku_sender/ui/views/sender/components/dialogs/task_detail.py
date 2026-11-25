@@ -26,7 +26,7 @@ from danmaku_sender.controller.video_controller import VideoController
 from danmaku_sender.service.danmaku_xml import DanmakuXml
 from danmaku_sender.state import AppState
 from danmaku_sender.types.models.common import VideoTarget
-from danmaku_sender.types.models.queue import Task
+from danmaku_sender.types.models.queue import DanmakuPack, Task, TaskInfo
 from danmaku_sender.types.models.video import VideoInfo
 from danmaku_sender.ui.framework.form_binder import DraftFormBinder
 from danmaku_sender.ui.framework.number_box import DoubleNumberBox, NumberBox
@@ -43,7 +43,7 @@ class TaskDetailDialog(QDialog):
 
     Attributes:
         origin: 原始任务的只读视图，仅用于展示。
-        editing: 保存时提交的 ``TaskDraft``，在用户点击「保存」时组装完成。
+        editing: 编辑中的 ``Task`` 副本，在用户点击「保存」时组装完成。
     """
 
     def __init__(
@@ -65,7 +65,7 @@ class TaskDetailDialog(QDialog):
         """
         super().__init__(parent)
         self.origin = task                  # 只读视图
-        self.editing = task.to_draft()      # 保存载荷（保存那一刻才组装完）
+        self.editing = task                 # 编辑中的任务副本，保存那一刻产出新 Task
         self._video_info: VideoInfo | None = None
         self._pending_part_page: int | None = None
         self._selected_file: Path | None = None
@@ -146,8 +146,8 @@ class TaskDetailDialog(QDialog):
         file_row = QHBoxLayout()
         self._file_input = QLineEdit()
         self._file_input.setReadOnly(True)
-        if self.origin.meta.xml_path is not None:
-            self._file_input.setText(str(self.origin.meta.xml_path))
+        if self.origin.pack.source_path is not None:
+            self._file_input.setText(str(self.origin.pack.source_path))
         elif self.origin.danmakus:
             self._file_input.setText(f"已加载 {len(self.origin.danmakus)} 条弹幕")
         self._file_btn = QPushButton("选择文件")
@@ -166,13 +166,13 @@ class TaskDetailDialog(QDialog):
         target = task.target
         target_assigned = target is not None
         if target_assigned:
-            meta = task.meta
+            info = task.info
             url = f"https://www.bilibili.com/video/{target.bvid}"
-            if meta.part_page is not None:
-                url += f"?p={meta.part_page}"
-            title_text = meta.video_title or target.bvid
+            if info.part_page is not None:
+                url += f"?p={info.part_page}"
+            title_text = info.video_title or target.bvid
             bvid_text = target.bvid
-            part_text = f"P{meta.part_page} - {meta.part_title}" if meta.part_title else f"P{meta.part_page}"
+            part_text = f"P{info.part_page} - {info.part_title}" if info.part_title else f"P{info.part_page}"
             cid_text = str(target.cid)
         else:
             url = "—"
@@ -216,10 +216,10 @@ class TaskDetailDialog(QDialog):
     def _load_task_info(self):
         """预填当前任务的分P信息"""
         task = self.origin
-        meta = task.meta
-        if meta.part_page is not None:
-            label = f"P{meta.part_page} - {meta.part_title}" if meta.part_title else f"P{meta.part_page}"
-            self._part_combo.addItem(label, userData=meta.part_page)
+        info = task.info
+        if info.part_page is not None:
+            label = f"P{info.part_page} - {info.part_title}" if info.part_title else f"P{info.part_page}"
+            self._part_combo.addItem(label, userData=info.part_page)
             self._part_combo.setCurrentIndex(0)
 
     @Slot()
@@ -277,7 +277,7 @@ class TaskDetailDialog(QDialog):
         else:
             target_index = next(
                 (i for i in range(self._part_combo.count())
-                 if self._part_combo.itemData(i) == self.origin.meta.part_page),
+                 if self._part_combo.itemData(i) == self.origin.info.part_page),
                 0
             )
             self._part_combo.setCurrentIndex(target_index)
@@ -319,7 +319,7 @@ class TaskDetailDialog(QDialog):
 
         target = self.origin.target
         cid = part.cid if part else (target.cid if target else None)
-        title = self._video_info.title if self._video_info else self.origin.meta.video_title
+        title = self._video_info.title if self._video_info else self.origin.info.video_title
         bvid = self._video_info.bvid if self._video_info else (target.bvid if target else None)
         part_text = self._part_combo.currentText()
 
@@ -337,13 +337,20 @@ class TaskDetailDialog(QDialog):
         齐备与否由 QueueState 按配置完整性对齐状态。
         """
         self._apply_target_changes()
-        self._apply_danmaku_changes()
+        try:
+            self._apply_danmaku_changes()
+        except ValueError as e:
+            QMessageBox.warning(self, "解析失败", str(e))
+            return
 
         # 读取控件值并构造 PacingConfig（pydantic 校验，含跨字段规则），
         # 再冻结成任务参数快照
         try:
             collected = DraftFormBinder.collect(self, SenderConfig.PacingConfig)
-            self.editing.config = collected.to_task_config()
+            self.editing = replace(
+                self.editing,
+                options=replace(self.editing.options, pacing=collected.to_task_config()),
+            )
         except ValidationError as e:
             rest = DraftFormBinder.show_errors(self, e)
             if rest:
@@ -363,24 +370,25 @@ class TaskDetailDialog(QDialog):
         if not part or not part.cid:
             return
 
-        self.editing.target = VideoTarget(
-            bvid=self._video_info.bvid,
-            cid=part.cid,
-        )
-        # 时长是弹幕时间越界校验的依据；先拖 XML 后补目标的任务全靠这里补上，
-        # 否则 duration 停在 None，编辑器的时间检查会被静默跳过
-        self.editing.meta = replace(
-            self.editing.meta,
-            video_title=self._video_info.title,
-            part_page=part.page,
-            part_title=part.title,
-            part_duration_ms=part.duration * 1000,
+        # 换地址整份换资料（同生共死）；时长是弹幕时间越界校验的依据，
+        # 先拖 XML 后补目标的任务全靠这里补上，否则 duration 停在 None，
+        # 编辑器的时间检查会被静默跳过
+        self.editing = replace(
+            self.editing,
+            target=VideoTarget(bvid=self._video_info.bvid, cid=part.cid),
+            info=TaskInfo(
+                video_title=self._video_info.title,
+                part_page=part.page,
+                part_title=part.title,
+                duration_ms=part.duration * 1000,
+            ),
         )
 
-    def _apply_danmaku_changes(self):
+    def _apply_danmaku_changes(self) -> None:
         """将选定的 XML 文件解析进编辑沙盒。
 
-        解析失败或文件中没有弹幕时弹窗报错并放弃这次保存。
+        Raises:
+            ValueError: 文件解析失败或其中没有弹幕，调用方放弃这次保存。
         """
         if not self._selected_file:
             return
@@ -388,15 +396,15 @@ class TaskDetailDialog(QDialog):
         try:
             danmakus = DanmakuXml.parse_file(self._selected_file)
         except Exception as e:
-            QMessageBox.warning(self, "解析失败", f"弹幕文件解析失败:\n{e}")
-            return
+            raise ValueError(f"弹幕文件解析失败:\n{e}") from e
 
         if not danmakus:
-            QMessageBox.warning(self, "解析失败", "弹幕文件为空。")
-            return
+            raise ValueError("弹幕文件为空。")
 
-        self.editing.danmakus = danmakus
-        self.editing.meta = replace(self.editing.meta, xml_path=self._selected_file)
+        self.editing = replace(
+            self.editing,
+            pack=DanmakuPack(items=tuple(danmakus), source_path=self._selected_file),
+        )
 
     # --- 配置编辑 ---
 

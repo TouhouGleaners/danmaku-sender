@@ -26,7 +26,6 @@ from danmaku_sender.types.models.danmaku import Danmaku
 from danmaku_sender.types.models.queue import (
     DanmakuPack,
     Task,
-    TaskDraft,
     TaskState,
     TaskStatus,
 )
@@ -96,18 +95,18 @@ class SenderController(QObject):
 
     # region 队列结构命令（UI 只发命令，先写入数据库再更新内存状态）
 
-    def add_task(self, task: TaskDraft) -> None:
+    def add_task(self, task: Task) -> None:
         """追加任务至队列末尾，先写入数据库再更新内存状态。
 
         Args:
-            task: 任务草稿。
+            task: 任务。
         """
         self.queue_store.add_task(self._built_task(task))
         self.state.workspace.queue_state.add_task(task)
 
     def insert_task(
         self,
-        task: TaskDraft,
+        task: Task,
         ref_task_id: str,
         position: RelativePosition = RelativePosition.BELOW,
     ) -> None:
@@ -159,7 +158,7 @@ class SenderController(QObject):
         self.queue_store.reorder_tasks(task_ids)
         self.state.workspace.queue_state.reorder_tasks(task_ids)
 
-    def apply_edit(self, task_id: str, source: TaskDraft) -> None:
+    def apply_edit(self, task_id: str, source: Task) -> None:
         """应用任务详情的编辑结果，先写入数据库再更新内存状态。
 
         若原有已指定的发送目标被修改，则视为创建新任务并重新生成 task_id，以避免同一 task_id跨视频记录导致后续历史对账错位；
@@ -167,7 +166,7 @@ class SenderController(QObject):
 
         Args:
             task_id: 原任务标识。
-            source: 编辑结果草稿。
+            source: 编辑结果。
         """
         queue_state = self.state.workspace.queue_state
         view = queue_state.get_task_by_id(task_id)
@@ -178,7 +177,7 @@ class SenderController(QObject):
         replaced = view.target is not None and source.target != view.target
         new_id = uuid.uuid4().hex if replaced else task_id
         list_changed = tuple(source.danmakus) != view.danmakus
-        incoming = replace(source.to_task(), task_id=new_id)
+        incoming = replace(source, task_id=new_id)
         built = self._built(
             incoming,
             source.status,
@@ -278,16 +277,16 @@ class SenderController(QObject):
         )
 
     @classmethod
-    def _built_task(cls, draft: TaskDraft) -> Task:
-        """将任务草稿转换为待持久化的 Task 对象。
+    def _built_task(cls, task: Task) -> Task:
+        """对齐任务状态，给出待持久化的 Task 对象。
 
         Args:
-            draft: 任务草稿。
+            task: 任务。
 
         Returns:
-            Task: 转换后的任务对象。
+            Task: 状态已对齐的待持久化任务对象。
         """
-        return cls._built(draft.to_task(), draft.status, draft.error_msg, draft.cursor)
+        return cls._built(task, task.status, task.error_msg, task.cursor)
 
     # endregion
 
@@ -463,12 +462,12 @@ class SenderController(QObject):
             status (TaskStatus): 落账的任务状态。
         """
         snapshot = self._task_snapshots.get(task_id)
-        if snapshot is None or snapshot.slot is None:
+        if snapshot is None or snapshot.target is None:
             logger.warning(f"任务记录落账跳过：没有任务 [{task_id}] 的任务快照")
             return
         try:
             self.history_manager.upsert_task(
-                snapshot.task_id, snapshot.slot, snapshot.pack.source_path, status
+                snapshot.task_id, snapshot.target, snapshot.info, snapshot.pack.source_path, status
             )
         except Exception:
             logger.exception(f"任务记录落账失败 [task_id={task_id}]")
