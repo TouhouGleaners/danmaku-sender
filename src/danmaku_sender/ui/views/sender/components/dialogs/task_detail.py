@@ -337,7 +337,11 @@ class TaskDetailDialog(QDialog):
         齐备与否由 QueueState 按配置完整性对齐状态。
         """
         self._apply_target_changes()
-        self._apply_danmaku_changes()
+        try:
+            self._apply_danmaku_changes()
+        except ValueError as e:
+            QMessageBox.warning(self, "解析失败", str(e))
+            return
 
         # 读取控件值并构造 PacingConfig（pydantic 校验，含跨字段规则），
         # 再冻结成任务参数快照
@@ -380,10 +384,11 @@ class TaskDetailDialog(QDialog):
             ),
         )
 
-    def _apply_danmaku_changes(self):
+    def _apply_danmaku_changes(self) -> None:
         """将选定的 XML 文件解析进编辑沙盒。
 
-        解析失败或文件中没有弹幕时弹窗报错并放弃这次保存。
+        Raises:
+            ValueError: 文件解析失败或其中没有弹幕，调用方放弃这次保存。
         """
         if not self._selected_file:
             return
@@ -391,12 +396,10 @@ class TaskDetailDialog(QDialog):
         try:
             danmakus = DanmakuXml.parse_file(self._selected_file)
         except Exception as e:
-            QMessageBox.warning(self, "解析失败", f"弹幕文件解析失败:\n{e}")
-            return
+            raise ValueError(f"弹幕文件解析失败:\n{e}") from e
 
         if not danmakus:
-            QMessageBox.warning(self, "解析失败", "弹幕文件为空。")
-            return
+            raise ValueError("弹幕文件为空。")
 
         self.editing = replace(
             self.editing,
